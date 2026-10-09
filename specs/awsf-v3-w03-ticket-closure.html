@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: AWSF v3 W03 — Ticket closure</title>
+<style>
+/* W03 deep plan: the v3 spine's stylesheet as W01 and W02 carry it, unchanged. AWSF dashboard "Forest" palette, mirrored from dashboard/src/styles/dashboard.css
+   and dashboard/src/theme.ts so the plan reads as part of the product it plans.
+   Dark is the default; light follows the reader's colour scheme. The review layer
+   reuses --bg / --fg / --muted / --accent. Mermaid mirrors the same hex values. */
+:root {
+  --bg:#051F20; --panel:#0B2B26; --panel-2:#163832; --border:#235347;
+  --dim:#8EB69B; --text:#DAF1DE;
+  --green:#71D6A0; --red:#FF8278; --blue:#74BDE8; --amber:#E4B75F;
+  --cyan:#62C2AA; --purple:#A8C7B5; --violet:#8AAFA4; --accent:#ADB9EE; --select-all:#C9A6DD;
+
+  --panel-3:color-mix(in srgb, var(--bg) 64%, var(--panel));
+  --border-soft:color-mix(in srgb, var(--border) 34%, transparent);
+  --surface:linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, var(--panel-2)),
+            color-mix(in srgb, var(--panel-3) 98%, var(--bg)));
+
+  --sans:"Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+  --mono:ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --radius:16px;
+
+  /* aliases the review layer reads */
+  --fg:var(--text); --muted:var(--dim);
+  --maxw:1120px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:#DAF1DE; --panel:#EAF7EE; --panel-2:#C6E4CF; --border:#8EB69B;
+    --dim:#235347; --text:#051F20;
+    --green:#16683F; --red:#A3332F; --blue:#1D5E86; --amber:#714907;
+    --cyan:#176E66; --purple:#5B4768; --violet:#4F6574; --accent:#454A87; --select-all:#6B4A86;
+  }
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+main { max-width:var(--maxw); margin:0 auto; padding:44px 16px 160px; }
+h1,h2,h3,h4,h5 { line-height:1.25; font-weight:650; letter-spacing:-.01em; }
+h1 { font-size:32px; margin:0 0 8px; }
+h2 { font-size:23px; margin:56px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+h3 { font-size:19px; margin:32px 0 8px; }
+h4 { font-size:16px; margin:22px 0 8px; color:var(--accent); }
+h5 { font-size:12px; margin:0 0 6px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
+p { margin:0 0 14px; }
+a { color:var(--accent); }
+::selection { background:color-mix(in srgb, var(--accent) 35%, transparent); }
+strong { font-weight:650; }
+em { color:var(--dim); }
+small, .muted { color:var(--dim); }
+
+code { font-family:var(--mono); font-size:.84em; background:var(--panel-2); border:1px solid var(--border-soft);
+  border-radius:6px; padding:1px 5px; }
+pre { background:var(--panel); border:1px solid var(--border-soft); border-radius:12px; padding:14px 16px;
+  overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.55; }
+pre code { background:none; border:none; padding:0; }
+
+table { width:100%; border-collapse:collapse; margin:12px 0 18px; font-size:14px; display:block; overflow-x:auto; }
+th, td { padding:8px 10px; border:1px solid var(--border-soft); text-align:left; vertical-align:top; }
+th { background:var(--panel-2); color:var(--dim); font-weight:600; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
+td.num { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+
+.sub { color:var(--dim); margin:0 0 6px; }
+.meta { margin:14px 0 0; font-size:14px; }
+.meta summary { cursor:pointer; color:var(--dim); font-family:var(--mono); font-size:13px; }
+.meta dl { display:grid; grid-template-columns:130px 1fr; gap:6px 14px; margin:12px 0 0; padding:14px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius); }
+.meta dt { color:var(--accent); font-family:var(--mono); font-size:12px; }
+.meta dd { margin:0; color:var(--dim); font-family:var(--mono); font-size:12px; overflow-wrap:anywhere; }
+
+figure { margin:26px 0; text-align:center; }
+figure svg, figure .mermaid { max-width:100%; height:auto; }
+figure .mermaid { background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:18px 12px; overflow-x:auto; color:var(--dim); font-size:13px; }
+figcaption { color:var(--dim); font-size:14px; margin-top:10px; }
+
+.card { background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:14px 18px; margin:14px 0; font-size:15px; }
+.card.rule { border-left:3px solid var(--accent); }
+.card.warn { border-left:3px solid var(--amber); }
+
+.tag { display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.05em; text-transform:uppercase;
+  padding:1px 7px; border-radius:999px; margin-right:6px; border:1px solid var(--border); color:var(--dim); }
+.tag.new { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, transparent); }
+.files ul { list-style:none; padding:0; }
+.files li { padding:5px 0; border-bottom:1px solid var(--border-soft); font-size:15px; }
+
+/* Phase chips: free hues only, never a status colour. */
+.chip { display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  padding:2px 9px; border-radius:999px; margin-left:8px; vertical-align:2px; border:1px solid currentColor; }
+.chip.pa { color:var(--cyan); } .chip.pb { color:var(--purple); }
+.chip.pc { color:var(--violet); } .chip.pd { color:var(--accent); }
+.xlabel { font-family:var(--mono); font-size:12px; color:var(--dim); margin-left:6px; vertical-align:2px; }
+
+.phase { background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius);
+  padding:22px 22px 16px; margin:28px 0; }
+.phase > h3 { margin-top:0; }
+.status { color:var(--dim); }
+.deep-plan { margin:2px 0 12px; font-size:14px; font-family:var(--mono); }
+.deep-plan a { text-decoration:none; border-bottom:1px dotted var(--accent); }
+.deep-plan .muted { font-family:var(--sans); font-style:italic; }
+.taskmeta { font-size:14px; }
+.taskmeta th { width:150px; text-transform:none; letter-spacing:0; font-size:13px; }
+.checklist { list-style:none; padding:0; margin:8px 0 14px; }
+.checklist li { padding:4px 0; font-size:15px; }
+.checklist li .status { margin-right:6px; }
+.loop { border:1px dashed var(--border); border-radius:12px; padding:10px 14px; margin:14px 0 4px; font-size:14px; }
+.gate { font-family:var(--mono); color:var(--accent); }
+.waiting { color:var(--amber); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+
+#questionables details, #amendments details { background:var(--surface); border:1px solid var(--border-soft);
+  border-radius:12px; padding:10px 14px; margin:10px 0; }
+#questionables summary, #amendments summary { cursor:pointer; font-weight:600; font-size:15px; }
+.qa-answer { margin:10px 0 2px; font-size:15px; color:var(--dim); }
+.qdecided { color:var(--green); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+.decided { margin:10px 0 0; padding:8px 12px; font-size:15px; border-left:3px solid var(--green); border-radius:0 8px 8px 0; background:color-mix(in srgb, var(--green) 8%, transparent); }
+.qa-answer.rec { color:var(--text); border-left:3px solid var(--accent); padding-left:10px; }
+
+@media (max-width:720px) {
+  .meta dl { grid-template-columns:1fr; }
+  h1 { font-size:26px; }
+  .phase { padding:16px 14px 10px; }
+}
+
+/* W01 additions: milestone tags, open Questionables, the identifier spine. */
+.wtag { display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+  padding:1px 7px; border-radius:999px; margin-left:8px; vertical-align:2px; border:1px solid var(--border); color:var(--dim); }
+.wtag.raise { color:var(--amber); border-color:color-mix(in srgb, var(--amber) 45%, transparent); }
+.qopen { color:var(--amber); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+.qdone { color:var(--green); font-family:var(--mono); font-size:11px; letter-spacing:.06em; margin-right:6px; }
+dl.spine dt { margin-top:10px; } dl.spine dd { margin:4px 0 0 0; font-size:15px; }
+section.phase .sub { font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== HEADER + UPDATABLE METADATA ===== -->
+  <header>
+    <h1>Plan: AWSF v3 W03 — Ticket closure</h1>
+    <p class="sub">A landed task's plan markers and ticket state move together in one owner-confirmed commit that can change nothing else, a light-tier task closes the same way, and a new plan set enters the repository only as new files. That last part is what lets the factory author its own deep plans and retires gate GM.</p>
+    <p class="sub"><strong>This is a deep plan for spine workstream W03.</strong> Authoring it wrote no code, called no provider, changed no protected path and moved no marker. Every marker below starts <code>[]</code>.</p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-10-09</dd>
+        <dt>modified</dt>     <dd>2026-10-09 (authored, awaiting owner review), 2026-10-09 (owner review applied: W03-Q1–Q9 decided), 2026-10-09 (deep plan approved by the owner)</dd>
+        <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-09 approval Amendment and its commit; authoring base e93e5de</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
+        <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
+        <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M3 → W03, gates GA and GM, decisions 7 and 8, Q11, Notes), ./tickets/awsf-v3-plan/W03.md (the meta-prompt this plan answers), ./awsf-v2-plan-build-prompts.md (§ T15, v2 W15's fixed first task and why a widened write scope is not the answer), ./awsf-v3-w02-trap-suite.html (the trap contract, TR-16, the doctor markers row, the 2026-10-08 handoff to W03), ./awsf-v3-intent.md (X3, decision 8), ./awsf-v3-assessment-and-direction.md (Q14), ../AGENTS.md (invariants 2, 8, 11 and 12)</dd>
+        <dt>forward refs</dt> <dd>./awsf-v3-w03-ticket-closure-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v3-w03-ticket-closure/ (README, T01–T15)</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <pre class="mermaid">
+flowchart LR
+  L["Landed attempt<br/>sealed ticket selection"] --> P["Closure proposal<br/>rows, states"]
+  P --> O{"Owner confirms<br/>at the terminal"}
+  O --> D["Delta check<br/>status tokens and states only"]
+  D -->|"any other byte"| R["Refused"]
+  D --> C["One commit<br/>plan and tickets agree"]
+    </pre>
+    <figcaption>Closure in one line. The landing is the evidence, the owner is the decision, and a byte-level check stands between them and the commit.</figcaption>
+  </figure>
+
+  <!-- ===== IN PLAIN LANGUAGE ===== -->
+  <section id="plain-language">
+    <h2>In Plain Language</h2>
+    <p>This section explains the whole plan without technical vocabulary. Everything after it says the same things precisely, for the people and machines building it.</p>
+
+    <h3>What this is about</h3>
+    <p>The owner's software factory works from written plans. Each plan lists jobs, and each job has a matching card that says what was asked and whether it is finished. The plan and its cards must always agree, and when a job is finished both are ticked in the same change. Today nothing in the factory can tick them. Every finished job is ticked later, by hand, by the owner. When the owner is busy, finished work sits for days with its boxes empty, and the plans stop telling the truth about the code. The factory also cannot write a new plan, so every new plan is written in a manual session outside the factory's own records.</p>
+
+    <h3>Why now</h3>
+    <p>The owner decided that the factory, not manual sessions, should build most of its own changes, and that small jobs should not need a full plan. Neither holds while the factory can neither tick its own boxes nor add a plan. Several later pieces of work also assume the plans are accurate, such as the one that decides which old plans a steering program may stop reading.</p>
+
+    <h3>What we are building</h3>
+    <p>Think of a building inspector's sign-off. The contractor finishes a job and the client accepts the keys. The inspector then stamps the permit with "complete" in the boxes for that job. The stamp can only fill boxes. It cannot rewrite what the permit asked for, add a room, or remove a requirement. If anyone changed the permit after work began, the stamp is refused, because the work was judged against different words. The client watches every stamp and says yes or no to each box. First, before any stamp exists, the permit office is locked so that no contractor can edit a permit at all. A small job gets a one-page work order instead of a full permit, stamped the same way. New permits can still be filed, but only as new pages, never as edits to existing ones, and each new page waits for the client's approval like any other delivery.</p>
+
+    <h3>How we will know it worked</h3>
+    <p>After a finished job is accepted, one step ticks its boxes and its card together, the factory's own consistency check passes, and a comparison of before and after shows nothing changed except ticks. Any attempt to change a requirement, a card's instructions or a plan's promises in that step is refused. A small job with only a card is ticked the same way. A new plan written by the factory arrives as new files only and waits for the owner. The last job in this plan is ticked by this same step. Some things are deliberately not part of it: deciding that work is done (the owner still decides), marking a job as failed, and changing what any plan asks for.</p>
+  </section>
+
+  <!-- ===== PURPOSE ===== -->
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Build ticket closure and the light tier from the spine's W03 block, and give new plan sets a create-only way in, so that W03's <code>[x]</code> retires gate GM. Promoted from v2's declared W15. The property fixed regardless of design: <strong>whatever closes a ticket cannot change what that ticket asked for.</strong></p>
+    <table>
+      <thead><tr><th>Spine target this moves</th><th>Baseline</th><th>v3 target</th><th>W03's share</th></tr></thead>
+      <tbody>
+        <tr><td>Factory share of AWSF code commits</td><td class="num">8%</td><td class="num">≥ 50%</td><td>deep-plan authoring and every landing's bookkeeping stop being manual sessions; a light-tier task needs no hand-written plan</td></tr>
+        <tr><td>Plans that match the code</td><td>closed by hand, late</td><td>closed at landing</td><td>every landed task with a ticket has a closure record; K1 can refuse the next start until it does (W03-Q3)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== PROBLEM ===== -->
+  <section id="problem">
+    <h2>Problem</h2>
+    <p><strong>v2 W15's contradiction still holds.</strong> Read on 2026-10-09 at <code>e93e5de</code>:</p>
+    <ul>
+      <li><strong>No role can write a plan.</strong> <code>awsf.config.yaml</code>: builder <code>core/src/**</code>, <code>core/test/**</code>, <code>dashboard/**</code>, <code>prompts/**</code>, <code>docs/cheatsheet.html</code>; documenter <code>README.md</code>, <code>docs/**</code>; intake <code>specs/tickets/**</code>; every other role <code>[]</code>. Every ticket prompt still requires the plan marker and the ticket <code>state</code> to move in one commit.</li>
+      <li><strong>Nothing in <code>core/src</code> flips either.</strong> <code>core/src/cli/commands/land.ts</code> (362 lines) transitions AWAITING_OWNER → LANDING → LANDED, fast-forwards and writes the run report. It reads no plan and writes nothing under <code>specs/</code>. Every closure so far is an owner bookkeeping commit; W18 M5 sat on <code>main</code> with its markers open until one on 2026-10-02.</li>
+      <li><strong>The only fence in front of the plans is the write glob.</strong> <code>specs/*.html</code> is absent from <code>policy.protected_paths</code>. <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> checks that plan and tickets <em>agree</em>: coverage, milestone, marker against state, checklist against state, Section B byte equality, backward and finished dependencies, vocabularies and the identifier spine. It never checks that either is <em>unchanged</em>. A writer that edits an acceptance row, a declaration and a prompt consistently passes it.</li>
+      <li><strong>Intake already reaches every ticket set.</strong> Its <code>specs/tickets/**</code> covers the plan-paired sets as well as its own flat <code>specs/tickets/Tnn.md</code> store. The fence would catch a changed prompt or title, but not a changed <code>depends_on</code> (it checks direction only), a <code>todo</code> moved to <code>wip</code> or <code>failed</code>, or an edited Handoff.</li>
+      <li><strong>A landing does not know its ticket.</strong> Only a shift seals a ticket selection (<code>sealShiftSelection</code>, <code>core/src/cli/commands/shift.ts:174</code>). Every other attempt carries <code>planRef</code> alone, so doctor's markers row reports it as <code>unmapped (no usable ticket selection)</code> (<code>core/src/doctor/markers.ts</code>).</li>
+      <li><strong>The factory cannot add a plan either.</strong> Authoring a deep plan writes a new <code>specs/&lt;stem&gt;.html</code>, its build prompts and its ticket set. No role can, so every deep plan in this spine is a manual exception under GM. Closure alone does not change that; see "Corrections for the spine".</li>
+    </ul>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  A["Candidate lands"] --> B["Markers stay open"]
+  B --> C["Owner edits plan<br/>and ticket by hand"]
+  C -.->|"forgotten"| D["Plan drifts<br/>from code"]
+  C --> E["Extra commit on main<br/>full suite at next start"]
+      </pre>
+      <figcaption>Today's bookkeeping. Every landing is followed by a hand-written commit, and nothing checks that it changed only what it claims.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== SOLUTION ===== -->
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>Seven milestones. The fence stands before any mechanism exists, the property is proven before the act that relies on it, and the act exists before the paths that use it.</p>
+    <ul>
+      <li><strong>M1, the fence first.</strong> T01, fixed in advance: the owner adds <code>specs/*.html</code> to <code>policy.protected_paths</code> under GA. T02 (W03-Q2): the owner protects the rest of every plan set, <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code>, in a separate commit. Intake keeps its flat store.</li>
+      <li><strong>M2, closure is boring.</strong> The agreement rules move into <code>core/src</code> so the fence and closure share one implementation. A pure closure delta accepts a change only when it alters status-token values and ticket <code>state</code> values, and an asked-for comparison refuses when a ticket's ask changed after the work began. Both are proven over every registered plan before anything uses them.</li>
+      <li><strong>M3, a landing knows its tickets.</strong> <code>awsf new --plan &lt;stem&gt; --ticket &lt;id&gt;</code> seals a selection on any plan attempt, as a shift already does.</li>
+      <li><strong>M4, the closure act.</strong> <code>awsf close</code>, an owner act at the owner's terminal. It proposes the rows of the landed attempt's tickets, and the owner confirms each one. It derives ticket states and milestone markers, rolls up to the spine when a deep plan completes, checks the delta and agreement, and commits once. It writes a closure record in the journal. The owner wires the verb into the CLI and the guard at G03-C.</li>
+      <li><strong>M5, the light tier.</strong> A flat intake ticket is a task with no deep plan (W03-Q5). It starts with <code>awsf new --ticket</code> and closes through the same act, which changes its <code>state</code> line only. Intake can create and refine a ticket and can never move its state.</li>
+      <li><strong>M6, create-only admission.</strong> A host step writes a new plan set as new files only, with every marker <code>[]</code> and every state <code>todo</code>. design-to-plan's <code>plan-render</code> moves onto it, and a <code>plan-author</code> recipe uses it, so deep plans can be authored through the factory (W03-Q7).</li>
+      <li><strong>M7, GM retired.</strong> The closing record, with W03's own tasks closed by <code>awsf close</code>.</li>
+    </ul>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  M1["M1 fence<br/>owner commits"] --> M2["M2 delta,<br/>agreement"]
+  M1 --> M3["M3 selection"]
+  M2 --> M4["M4 awsf close"]
+  M3 --> M4
+  M4 --> GC{"G03-C<br/>owner wires verb"}
+  GC --> M4b["M4 status, doctor,<br/>K1"]
+  M4 --> M5["M5 light tier"]
+  M2 --> M6["M6 admission,<br/>plan-author"]
+  M4b --> M7["M7 GM retired"]
+  M5 --> M7
+  M6 --> M7
+      </pre>
+      <figcaption>M3 and M6 can start once M1 lands. Nothing writes a plan until M4, and nothing creates one until M6.</figcaption>
+    </figure>
+
+    <h3>Decisions already taken</h3>
+    <p>These are constraints this plan applies. It reopens none of them.</p>
+    <ul>
+      <li><strong>The fixed first task (v2 W15, carried by the spine).</strong> <code>specs/*.html</code> becomes protected by an owner commit before any closure mechanism is built. Path policy rejects a protected path independently of the write globs (<code>evaluatePathPolicy</code>, <code>core/src/policy/path-policy.ts:113</code>), so this fence holds even against a glob widened later.</li>
+      <li><strong>No widened write glob, at any width.</strong> A writer of <code>specs/**</code> can change a plan and its tickets consistently and pass the fence. A writer of <code>specs/tickets/**</code> alone cannot close anything, because the fence requires the plan's checklist to move with the state. No task in this plan widens a role's <code>writes</code>.</li>
+      <li><strong>Closure changes markers and ticket states only, in one commit</strong> (the W03 prompt). A closing commit writes no Amendment, no Handoff, no metadata and no prose. The narrative stays an owner commit when the owner wants one; the evidence is the journal (invariant 10).</li>
+      <li><strong>Closure records a landing; it never decides that work is done</strong> (spine). Every row it moves is shown to the owner and confirmed.</li>
+      <li><strong>Decision 7 and gate GM.</strong> This plan's authoring is a manual, logged exception (Amendments). Its implementation tasks default to managed execution under K1, except M1, which is owner work.</li>
+      <li><strong>Decision 8.</strong> A light tier: a task with no deep plan, closed by the same path.</li>
+      <li><strong>Gate GA.</strong> Every protected-path or invariant change is the owner's commit, proposed one at a time, before the build that needs it.</li>
+      <li><strong>Landing stays human-only</strong> (decision 4), and no model emits an owner act (decision 14). <code>awsf close</code> is an owner act; a driver prepares it and never runs it.</li>
+    </ul>
+
+    <h3>Closure, defined</h3>
+    <div class="card rule">
+      <h5>A closing commit is a substitution, nothing more</h5>
+      Let <em>before</em> be the closure's parent and <em>after</em> the closing commit. The commit is a closure only if: (1) the changed paths are registered plan files, their paired ticket files, or flat light tickets, and no path is added, removed, renamed or re-moded; (2) in a plan file, replacing every <code>&lt;code class="status"&gt;[v]&lt;/code&gt;</code> value with a placeholder makes <em>before</em> and <em>after</em> byte-identical, and every <em>after</em> value is one of <code>""</code>, <code>wip</code>, <code>x</code>; (3) in a ticket file, replacing the frontmatter <code>state:</code> value the same way makes them byte-identical, and the <em>after</em> value is <code>todo</code>, <code>wip</code> or <code>done</code>; (4) the <em>after</em> tree passes the invariant-12 agreement checks. Closure never writes <code>[f]</code> or <code>failed</code>; those stay owner bookkeeping.
+    </div>
+    <div class="card rule">
+      <h5>What a ticket asked for</h5>
+      For a plan ticket: its build prompt block, <code>title</code>, <code>milestone</code>, <code>depends_on</code> and <code>serves</code>; its task's checklist row texts with status tokens masked; and the plan's declarations. For a light ticket: every frontmatter field except <code>state</code>, and its body. Closure compares these at the attempt's recorded base and at canonical HEAD, resolving files through the registered plan source and never through a sealed path (W02's handoff to W03). Any difference refuses closure, because the work was judged against a different ask. Handoff sections are excluded: they record findings, not the ask.
+    </div>
+  </section>
+
+  <!-- ===== RELEVANT FILES ===== -->
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag">existing</span> <code>awsf.config.yaml</code> — every role's <code>writes</code> and <code>policy.protected_paths</code>; protected, changed only by T01, T02 and G03-W</li>
+      <li><span class="tag">existing</span> <code>core/test/unit/meta/ticket-plan-sync.test.ts</code> — the invariant-12 fence; T03 moves its rules into <code>core/src</code> and keeps it as the caller</li>
+      <li><span class="tag">existing</span> <code>core/src/registry/plan-source.ts</code> — <code>parseAwsfPlanHtmlV1</code> and <code>resolvePlanSources</code>, the one parser and the registered pairing</li>
+      <li><span class="tag">existing</span> <code>core/src/persistence/plan-ticket-body.ts</code>, <code>core/src/persistence/ticket-store.ts</code>, <code>core/src/contracts/ticket.ts</code> — plan-ticket parsing and digests; the flat light store and <code>awsf.ticket/v1</code></li>
+      <li><span class="tag">existing</span> <code>core/src/cli/commands/shift.ts</code>, <code>core/src/contracts/shift-selection-record.ts</code> — the sealed selection T06 generalizes</li>
+      <li><span class="tag">existing</span> <code>core/src/cli/commands/land.ts</code>, <code>core/src/git/land.ts</code> — read only: closure follows a landing and changes neither</li>
+      <li><span class="tag">existing</span> <code>core/src/cli/main.ts</code>, <code>core/src/lifecycle/next-steps.ts</code> — the owner-act arms <code>boundary-claims</code> derives from, and K2; wired at G03-C</li>
+      <li><span class="tag">existing</span> <code>core/src/doctor/markers.ts</code>, <code>core/src/doctor/repository.ts</code> — W02's open-markers row, which T09 makes read closure records</li>
+      <li><span class="tag">existing</span> <code>core/src/preflight/fields.ts</code>, <code>core/src/preflight/suite.ts</code> — K1's fields; the suite rows must sit at exactly the base (line 419), and T09's K1 field per W03-Q3</li>
+      <li><span class="tag">existing</span> <code>core/src/cli/commands/production-run.ts</code> — <code>plan-render</code>'s host write and its <code>noProtectedPaths</code> check (around 770–830), and intake's ticket gate (around 1008)</li>
+      <li><span class="tag">existing</span> <code>core/src/registry/plan-render.ts</code>, <code>core/src/workflow/recipes/design-to-plan.ts</code> — the host-rendered plan set T12 moves onto admission</li>
+      <li><span class="tag">existing</span> <code>core/src/gates/git-diff.ts</code> — <code>noProtectedPaths</code> and its capability exemption, where admission's create-only capability is checked</li>
+      <li><span class="tag">existing</span> <code>core/test/journeys/five-stage.test.ts</code> — two tests T01 turns red (Notes, "Measured while authoring")</li>
+      <li><span class="tag">existing</span> <code>docs/driving/marimba/delegation-guard.sh</code>, <code>docs/driving/marimba/marimba-guard-rules.mts</code> and the driving docs — the owner-act lists; protected, changed at G03-C</li>
+      <li><span class="tag">existing</span> <code>AGENTS.md</code> — invariant 12, amended at G03-I if W03-Q5 takes the flat store</li>
+      <li><span class="tag">existing</span> <code>core/src/traps/catalogue.ts</code> — T09's K1 field is a trap under W02's contract</li>
+    </ul>
+
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>specs/awsf-v3-w03-ticket-closure.html</code> — this plan</li>
+      <li><span class="tag new">new</span> <code>specs/awsf-v3-w03-ticket-closure-build-prompts.md</code> and <code>specs/tickets/awsf-v3-w03-ticket-closure/</code> (README, T01–T15) — the execution surface</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/plan-agreement.ts</code> — the invariant-12 rules as one pure module (T03)</li>
+      <li><span class="tag new">new</span> <code>core/src/closure/delta.ts</code>, <code>core/src/closure/asked-for.ts</code> — the closure delta and the asked-for comparison (T04)</li>
+      <li><span class="tag new">new</span> <code>core/src/closure/propose.ts</code>, <code>core/src/cli/commands/close.ts</code>, <code>core/src/contracts/closure-record.ts</code> — the act and its journal record (T07, T08)</li>
+      <li><span class="tag new">new</span> <code>core/src/registry/plan-admission.ts</code> — create-only materialization of a new plan set (T12)</li>
+      <li><span class="tag new">new</span> <code>core/src/workflow/recipes/plan-author.ts</code>, <code>prompts/plan-author/</code> — the plan-author recipe (T13)</li>
+      <li><span class="tag new">new</span> <code>core/test/unit/closure/</code>, <code>core/test/journeys/closure.test.ts</code>, <code>core/test/journeys/plan-author.test.ts</code> — the proofs (T05, T10, T14)</li>
+    </ul>
+  </section>
+
+  <!-- ===== IDENTIFIER SPINE ===== -->
+  <section id="spine">
+    <h2>Identifier Spine</h2>
+    <p>Identifiers are unique within this plan. Every declaration is served by at least one task, and each ticket's <code>serves</code> mirrors its task's set. The invariant-12 fence compares them.</p>
+    <dl class="spine">
+      <dt><code class="inv">INV-1</code></dt>
+      <dd><strong>Closure is boring.</strong> A closing commit differs from its parent only in status-token values inside registered plan files and the state value of ticket files, as "Closure, defined" states. No other byte, file, mode or path changes, and the result passes the agreement checks.</dd>
+      <dt><code class="inv">INV-2</code></dt>
+      <dd><strong>What a ticket asked for is fixed.</strong> Closure refuses when a selected ticket's ask, its task's row texts or the plan's declarations differ between the attempt's base and canonical HEAD.</dd>
+      <dt><code class="inv">INV-3</code></dt>
+      <dd><strong>Closure records evidence and never decides.</strong> Every row it moves is shown and confirmed by the owner. Evidence is a LANDED attempt whose sealed selection names the ticket, or an owner commit reachable from HEAD. No marker moves for work not landed, and closure never writes a failed marker or state.</dd>
+      <dt><code class="inv">INV-4</code></dt>
+      <dd><strong>No factory phase edits a plan set.</strong> No role's writes reach a plan, its build prompts or a paired ticket set. A new plan set enters only by create-only admission, with every marker idle and every state todo, and no factory phase modifies an existing protected path.</dd>
+      <dt><code class="inv">INV-5</code></dt>
+      <dd><strong>Closure is the owner's act.</strong> Interactive terminal, actor human, never under a lease, never by the Delegate or a driver. It commits with the checkout's own identity, a fixed message and no trailer; it compares and swaps HEAD, and never resets, forces or pushes.</dd>
+      <dt><code class="inv">INV-6</code></dt>
+      <dd><strong>One agreement implementation.</strong> The invariant-12 fence, closure and admission call the same rules in core/src, so they cannot disagree about what "agree" means.</dd>
+      <dt><code class="inv">INV-7</code></dt>
+      <dd><strong>The journal is the evidence store.</strong> Selections, closure records and admission records are journal events projected by the projector. No migration, no committed record file, no name matching manifest or receipt.</dd>
+      <dt><code class="ac">AC-1</code></dt>
+      <dd>Plan files are a protected path by owner commit before any other W03 task lands, and, per W03-Q2, build prompts and paired ticket sets too, with every suite green after each commit.</dd>
+      <dt><code class="ac">AC-2</code></dt>
+      <dd>The closure delta accepts every status-token and state flip on every registered plan and refuses every other single-byte change, and the asked-for comparison refuses every change to an ask, proven over the real corpus.</dd>
+      <dt><code class="ac">AC-3</code></dt>
+      <dd>Every attempt created against a plan can carry a sealed ticket selection, so a landing maps to its tickets without inference, and doctor's markers row maps it.</dd>
+      <dt><code class="ac">AC-4</code></dt>
+      <dd>awsf close closes a landed task's confirmed rows, its ticket state, its milestone marker and, when a deep plan completes, the owner-selected spine rows and spine ticket state, in one commit the fence accepts; it refuses every condition its journeys name, and status, doctor and K2 read its record.</dd>
+      <dt><code class="ac">AC-5</code></dt>
+      <dd>A light-tier ticket starts without a plan and closes by the same act, changing only its state line, and intake can never move a state.</dd>
+      <dt><code class="ac">AC-6</code></dt>
+      <dd>A new plan set enters only as new files through admission, design-to-plan is green under the protected paths, and a deep plan authored by the plan-author recipe on the stub route lands and has its spine row closed by awsf close.</dd>
+      <dt><code class="ac">AC-7</code></dt>
+      <dd>GM is retired: W03's own tasks are closed by awsf close, every suite is green, and the handoffs for W09 and later deep-plan sessions are recorded.</dd>
+    </dl>
+  </section>
+
+  <!-- ===== EXECUTION ===== -->
+  <section id="execution">
+    <h2>Execution, owner gates and fences</h2>
+    <p><strong>M1 is owner work.</strong> T01 and T02 are owner-authored commits under GA. A session may prepare each diff and its evidence, and the owner commits it. <strong>M2–M7 are managed by default</strong> (decision 7). Each ticket runs as one <code>build-review</code> attempt, so a provider other than the builder's reviews it. <code>awsf new</code> derives the tier, and K1 binds every start: the driver runs <code>awsf preflight</code>, the owner runs <code>awsf confirm</code>, then <code>awsf start</code>. External prerequisites must have landed. In an owner-approved accumulating shift, a selected predecessor is satisfied by its host-committed, gate-passing head in the same worktree. Once T06 lands, every attempt for a W03 ticket is created with <code>--plan awsf-v3-w03-ticket-closure --ticket Tnn</code>, so its landing can be closed by the act it helped build.</p>
+
+    <table>
+      <thead><tr><th>Milestone</th><th>Tickets</th><th>How</th><th>Before it starts</th></tr></thead>
+      <tbody>
+        <tr><td>M1 the fence</td><td>T01, T02</td><td>owner commits under GA</td><td>owner approval of this plan</td></tr>
+        <tr><td>M2 closure is boring</td><td>T03–T05</td><td>managed, build-review per ticket or one shift</td><td>T01 landed</td></tr>
+        <tr><td>M3 selection</td><td>T06</td><td>managed, build-review</td><td>T01 landed</td></tr>
+        <tr><td>M4 the act</td><td>T07–T10</td><td>managed, build-review per ticket</td><td>T04 and T06 landed; G03-C between T08 and T09</td></tr>
+        <tr><td>M5 light tier</td><td>T11</td><td>managed, build-review</td><td>T07 landed; G03-I landed</td></tr>
+        <tr><td>M6 admission</td><td>T12–T14</td><td>managed, build-review per ticket</td><td>T02 and T03 landed; G03-W after T13</td></tr>
+        <tr><td>M7 GM retired</td><td>T15</td><td>managed, build-review</td><td>everything above, and G03-W</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Who writes what</h3>
+    <table>
+      <thead><tr><th>Actor</th><th>Writes</th><th>Never</th></tr></thead>
+      <tbody>
+        <tr><td>Builder (managed)</td><td><code>core/src/**</code> outside protected paths, <code>core/test/**</code>, <code>dashboard/**</code>, <code>prompts/**</code>, <code>docs/cheatsheet.html</code></td><td><code>specs/**</code>, <code>package.json</code>, <code>AGENTS.md</code>, <code>awsf.config.yaml</code>, <code>awsf.project.yaml</code>, <code>core/src/state/**</code>, <code>core/src/policy/**</code>, <code>core/src/observability/migrations/**</code>, <code>core/src/execution/transport-broker.ts</code>, <code>docs/driving/**</code></td></tr>
+        <tr><td>Intake (managed)</td><td>flat light tickets <code>specs/tickets/Tnn.md</code>: create with <code>todo</code>, refine with state unchanged</td><td>a paired ticket set (protected after T02), any state change</td></tr>
+        <tr><td>Host</td><td>gates, candidate commits, selections, admission of new plan sets (create-only, M6)</td><td>landing, closure, any modification of an existing protected path</td></tr>
+        <tr><td>Owner</td><td>T01, T02, G03-C, G03-I, G03-W; every <code>awsf confirm</code>, <code>land</code> and <code>close</code>; any narrative Amendment</td><td>—</td></tr>
+        <tr><td>Marimba, Delegate</td><td>nothing in the repository; the driver prepares <code>awsf close</code> as it prepares <code>land</code></td><td><code>awsf close</code> and every other owner act; no lease covers it</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Owner gates</h3>
+    <div class="card rule">
+      <h5>T01 — <code>specs/*.html</code> protected, the fixed first task</h5>
+      <strong>Change.</strong> <code>policy.protected_paths</code> gains <code>specs/*.html</code>. <strong>Blocks today.</strong> Nothing: no role writes a plan. That absence is the whole point. The write glob is the only fence, and this workstream is the first that will want to touch plans, so the fence must be standing before it builds. <strong>Replacement guarantee.</strong> Path policy refuses the path whatever the write globs say; the five-stage journey's adjustment names T12 as the task that restores design-to-plan under the shipped config. <strong>Cost, measured.</strong> <code>plan-render</code> refuses its own output (<code>no_protected_paths/specs/five-stage-plan.html: matches a protected path</code>), so design-to-plan cannot complete until T12 (W03-Q9). The five-stage journey and its W11 file-list test go red and must be adjusted in the same commit. Every K1 preflight after it re-measures the suite, because the configuration changed. <strong>Alternative.</strong> None that keeps the order: deferring the line until admission exists is what v2 W15 forbade.
+    </div>
+    <div class="card rule">
+      <h5>T02 — the rest of every plan set protected, a separate commit (W03-Q2)</h5>
+      <strong>Change.</strong> <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code> join <code>policy.protected_paths</code>. Verified with <code>matchesPathGlob</code>: <code>specs/tickets/*/**</code> matches <code>specs/tickets/awsf-v3-plan/W03.md</code> and not <code>specs/tickets/T01.md</code>, so intake keeps its flat store. <strong>Blocks today.</strong> Intake's <code>specs/tickets/**</code> reaches every paired set. <strong>Replacement guarantee.</strong> Closure (an owner act) and admission (create-only) are the only writers of paired sets. <strong>Cost.</strong> design-to-plan's ticket and prompt outputs are refused as well until T12. <strong>Alternative.</strong> Narrow intake's writes to <code>specs/tickets/T*.md</code>: one config line, but a later widening would undo it, which is what a protected path prevents.
+    </div>
+    <div class="card rule">
+      <h5>G03-C — <code>close</code> wired as an owner act, after T08 and before T09</h5>
+      The <code>boundary-claims</code> fence derives the owner acts from <code>main.ts</code> arms that construct <code>processOwnerTerminal()</code>, and requires <code>delegation-guard.sh</code> and every driving document that lists owner acts to list exactly that set. A builder cannot add the arm without the protected lists, and the owner cannot add the lists without the arm, so both go in one owner commit, as G01-C did for <code>confirm</code> (<code>f5c566a</code>). It covers: the <code>close</code> arm in <code>core/src/cli/main.ts</code> calling T07's <code>closeCommand</code>; <code>delegation-guard.sh</code>; <code>OWNER_ACTS</code> in <code>marimba-guard-rules.mts</code>; the driving skill, <code>owner_acts.md</code> and <code>gotchas.md</code>; the owner actor for <code>close</code> in <code>core/src/lifecycle/next-steps.ts</code>; and <code>docs/cheatsheet.html</code> and <code>README.md</code>. Every suite runs green before the commit.
+    </div>
+    <div class="card warn">
+      <h5>G03-I — invariant 12 names the light tier (W03-Q5 took the flat store), before T11</h5>
+      Invariant 12 says every ticket set belongs to exactly one plan. The flat intake store has none, and the fence only checks ticket directories. The amendment says: the flat store under the plans root is the light tier, it belongs to no plan, its tickets close only through <code>awsf close</code>, and the agreement module checks its vocabularies. Cost: one sentence in <code>AGENTS.md</code>. Alternative: W03-Q5's other options.
+    </div>
+    <div class="card warn">
+      <h5>G03-W — the plan-author role and workflow, after T13</h5>
+      <strong>Change.</strong> <code>agents</code> gains <code>plan-author</code> with <code>writes: []</code> and a tool profile that can write only its session-runtime output, and <code>workflows.enabled</code> gains <code>plan-author</code>; design-to-plan returns to <code>workflows.enabled</code> if W03-Q9 removed it. <strong>Blocks today.</strong> The config is protected. <strong>Replacement guarantee.</strong> T13 lands the code half on test configurations first. The role writes no repository path, so no write glob widens. <strong>Cost.</strong> One role. <strong>Alternative.</strong> Reuse <code>planner</code>, whose read-only profile cannot write session output at all.
+    </div>
+    <p><strong>Not needed.</strong> No migration: selections, closure and admission records ride journal events through <code>projector.ts</code>. No change to <code>core/src/state/**</code>: closure follows LANDED and adds no lifecycle edge. No change to <code>land.ts</code> or its confirmation (W03-Q1).</p>
+    <p><strong>Owner-side, named and not ticketed.</strong> Running <code>awsf close</code> after each landing. Narrative Amendments, when wanted, as separate owner commits. Closing pre-W03 landings is optional: they predate T09's cut.</p>
+
+    <h3>Fences this plan meets</h3>
+    <table>
+      <thead><tr><th>Fence</th><th>Where W03 meets it</th><th>Resolution</th></tr></thead>
+      <tbody>
+        <tr><td>ticket-plan-sync (invariant 12)</td><td>every closure; admission</td><td>T03 makes the fence and closure one implementation; T05 proves closure output always passes it</td></tr>
+        <tr><td>boundary-claims, owner-act-spellings, marimba-guard</td><td>a new owner act</td><td>G03-C wires arm, guard and documents in one owner commit</td></tr>
+        <tr><td>no-destructive-paths, no-land-route, publish-fence (invariant 8)</td><td>the closing commit</td><td>HEAD compare-and-swap; no reset, force, delete or push; nothing in a route or recipe reaches it</td></tr>
+        <tr><td>no-agent-coauthor (invariant 11)</td><td>the closing commit's identity and message</td><td>the checkout's configured identity, refused when unset; fixed message, no trailer</td></tr>
+        <tr><td>child-process-fence, no-shell-true (invariants 3, 4)</td><td>Git calls in closure and admission</td><td>through the existing Git runner and broker, argv arrays only</td></tr>
+        <tr><td>sqlite-write-fence (invariant 6), junk-drawer (invariant 10)</td><td>closure and admission records</td><td>journal events projected by <code>projector.ts</code>; names <code>closure-record</code>, <code>plan-admission</code></td></tr>
+        <tr><td>trap-catalogue (W02)</td><td>T09's K1 field</td><td>a catalogue entry at the next free id, a test, a marker pair and a mutant</td></tr>
+        <tr><td>K1 write-boundary (TR-16)</td><td>these tickets' DO blocks in a shift</td><td>every DO path token is a builder-writable path; owner tickets name protected paths and are never selected into a shift</td></tr>
+        <tr><td>cheatsheet-reconciliation, doc-reconciliation</td><td><code>awsf new --ticket</code>, <code>awsf close</code></td><td>the builder updates the cheatsheet with each flag; the verb's driving documents land at G03-C</td></tr>
+        <tr><td>dependency-allowlist (invariant 7)</td><td>everything</td><td>no package</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== IMPLEMENTATION PHASES ===== -->
+  <div id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute every milestone and task in order, top to bottom, subject to each ticket's <code>depends_on</code>.</p>
+    <p>Status markers: <code>[]</code> idle · <code>[wip]</code> in progress · <code>[x]</code> complete · <code>[f]</code> failed. All start as <code>[]</code>. No builder writes them. Until G03-C lands, the owner moves a task's rows and its ticket's <code>state</code> together in one bookkeeping commit (invariants 2 and 12). From G03-C on, the owner runs <code>awsf close</code> instead. A milestone stays <code>[wip]</code> until every task in it is <code>[x]</code>. Only task 15's closure earns the spine's W03 marker, with <code>tickets/awsf-v3-plan/W03.md</code>, and retires GM.</p>
+
+    <!-- ================= M1 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M1: The fence stands first <span class="wtag">owner</span> <span class="wtag raise">GA</span></h3>
+      <p>Two owner commits, one at a time, each with every suite green before it is made. Nothing else in W03 starts until T01 has landed.</p>
+
+      <h4>1. Owner amendment: <code>specs/*.html</code> in <code>policy.protected_paths</code></h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf.config.yaml</code>'s <code>policy.protected_paths</code> gains <code>specs/*.html</code>, and nothing else in that list changes</li>
+        <li><code class="status">[]</code> The two five-stage tests it turns red are adjusted in the same commit: the W11 file-list check exempts plan files a later amendment protected, and the five-stage design-to-plan stage runs on a test configuration without <code>specs/*.html</code>, with a comment naming T12 as the task that removes the exemption</li>
+        <li><code class="status">[]</code> W03-Q9 applied: design-to-plan is removed from <code>workflows.enabled</code> in the same commit, or kept with its trap named</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0 on the commit's content, counts recorded</li>
+        <li><code class="status">[]</code> A builder-shaped write to a plan file is refused by path policy with <code>protected-path</code>, shown by a test or a recorded check against the committed config</li>
+      </ul>
+
+      <h4>2. Owner amendment: build prompts and paired ticket sets protected</h4>
+      <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Per W03-Q2: <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code> join <code>policy.protected_paths</code> in a commit of their own</li>
+        <li><code class="status">[]</code> Intake's flat <code>specs/tickets/Tnn.md</code> path is still writable and every paired set is not, shown by a recorded <code>matchesPathGlob</code> check</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0 on the commit's content</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not start any other W03 task until T01 has landed.</strong> A fence written by the session doing the widening is weaker than one already standing.</div>
+    </section>
+
+    <!-- ================= M2 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M2: Closure is boring <span class="wtag">managed</span></h3>
+      <p>The property, built and proven before the act that relies on it. Everything here is pure and offline.</p>
+      <figure>
+        <pre class="mermaid">
+flowchart LR
+  B["before bytes"] --> M["mask status tokens<br/>and state values"]
+  A["after bytes"] --> M
+  M -->|"identical"| G["agreement checks<br/>on after tree"]
+  M -->|"differ"| R["refuse: path, offset"]
+  G -->|"pass"| OK["a closure"]
+  G -->|"fail"| R
+        </pre>
+        <figcaption>The delta check. Masking, then byte equality, then the same agreement rules the fence runs.</figcaption>
+      </figure>
+
+      <h4>3. The agreement rules as one module</h4>
+      <p class="sub">Serves <code class="serves">INV-6</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/registry/plan-agreement.ts</code>: every rule <code>ticket-plan-sync.test.ts</code> asserts, as pure functions over parsed plans, tickets and Section B blocks, returning violations with the plan label</li>
+        <li><code class="status">[]</code> The meta-test calls the module, keeps its test names and failure messages, and reads files only to feed it</li>
+        <li><code class="status">[]</code> On the real corpus the meta-test passes with the same test count, and planted drifts (a prompt byte, a duplicate task number, a done ticket under an idle milestone) still fail it</li>
+      </ul>
+
+      <h4>4. The closure delta and the asked-for comparison</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/closure/delta.ts</code>: given before and after file maps, accepts only what "Closure, defined" accepts and returns each token change with its path, task and row; any other difference refuses with the path and the first differing offset and context</li>
+        <li><code class="status">[]</code> <code>core/src/closure/asked-for.ts</code>: the ask of a plan ticket and of a light ticket, as "What a ticket asked for" defines it, compared between two trees; Handoff sections are excluded</li>
+        <li><code class="status">[]</code> Neither module reads a file, a clock or the environment</li>
+      </ul>
+
+      <h4>5. Testing Strategy for M2</h4>
+      <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-6</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Over every registered plan and its tickets: each single status-token flip and each ticket state flip is accepted by the delta; the agreement result of the flipped tree matches what the fence's rules say</li>
+        <li><code class="status">[]</code> Over the same corpus: a one-byte change in an acceptance row, a declaration statement, a Section B prompt, a ticket prompt, <code>title</code>, <code>depends_on</code>, <code>serves</code>, <code>milestone</code>, a Handoff, a metadata row, or an added or removed file is refused</li>
+        <li><code class="status">[]</code> A token value outside the vocabulary, <code>[f]</code>, <code>failed</code>, and a flip that breaks agreement are refused</li>
+        <li><code class="status">[]</code> The asked-for comparison refuses each ask change and ignores Handoff edits and status flips</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+      </ul>
+      <div class="loop">🔁 <strong>Closure must be boring.</strong> If a test finds a closing change that says anything new, the delta is wrong, not the test.</div>
+    </section>
+
+    <!-- ================= M3 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M3: A landing knows its tickets <span class="wtag">managed</span></h3>
+      <p>Closure maps a landing to tickets only through a sealed selection, never through a task name, a request's words or a directory. Testing shares the task.</p>
+
+      <h4>6. A sealed ticket selection on any plan attempt</h4>
+      <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-7</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf new --plan &lt;stem&gt; --ticket &lt;id&gt;[,&lt;id&gt;...]</code> seals id, registered path and file digest for a non-shift attempt, the way <code>sealShiftSelection</code> does; a shift keeps its milestone selection unchanged</li>
+        <li><code class="status">[]</code> Refused before the attempt exists: <code>--ticket</code> naming a ticket outside the stem's registered set, a duplicate id, or <code>--ticket</code> on a shift</li>
+        <li><code class="status">[]</code> <code>awsf status</code> and <code>--json</code> show the selection; doctor's markers row maps such an attempt instead of reporting it unmapped</li>
+        <li><code class="status">[]</code> Unit tests for each refusal and a journey through <code>main</code> on the stub route; <code>npm run test:unit</code>, <code>typecheck</code> and <code>lint</code> exit 0; the cheatsheet lists the flag</li>
+      </ul>
+    </section>
+
+    <!-- ================= M4 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M4: The closure act <span class="wtag">managed</span> <span class="wtag raise">gate G03-C</span></h3>
+      <p><code>awsf close</code> is an owner act like <code>land</code>, and it follows a landing. It never runs inside <code>land</code> (W03-Q1).</p>
+      <figure>
+        <pre class="mermaid">
+sequenceDiagram
+  participant O as Owner terminal
+  participant C as awsf close
+  participant G as Canonical checkout
+  participant J as Journal
+  O->>C: close task#attempt
+  C->>G: LANDED, clean, candidate in HEAD, ask unchanged
+  C->>O: rows, states, spine rows
+  O->>C: confirm each
+  C->>C: delta and agreement on after tree
+  C->>G: write, commit, HEAD compare-and-swap
+  C->>G: re-check committed diff
+  C->>J: closure record
+        </pre>
+        <figcaption>One act, one commit. Every refusal happens before a byte is written.</figcaption>
+      </figure>
+
+      <h4>7. <code>closeCommand</code>: propose, confirm, check, commit, record</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code> · <code class="serves">INV-5</code> · <code class="serves">INV-7</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/cli/commands/close.ts</code>, unwired until G03-C: refuses a non-human actor and a non-interactive terminal first, then an attempt that is not LANDED, has no selection, whose candidate is not an ancestor of canonical HEAD, whose checkout is dirty, or whose selected tickets' ask changed since its base (T04)</li>
+        <li><code class="status">[]</code> <code>core/src/closure/propose.ts</code>: for each selected ticket, its task's rows with current markers; for a shift, only tickets the host recorded as built in the landed candidate, the rest listed as not closable</li>
+        <li><code class="status">[]</code> The owner confirms all rows or chooses row by row; ticket state derives from the rows (all complete is done, otherwise wip) and the milestone marker from its tasks; the owner may leave every row open, which is still a closure record</li>
+        <li><code class="status">[]</code> The after bytes are built by token substitution only; T04's delta and T03's agreement pass on the after tree before any write; the owner sees every path and row, old and new value, before the final confirmation</li>
+        <li><code class="status">[]</code> One commit with the checkout's configured identity, refused when unset, and a fixed message <code>chore(specs): close &lt;stem&gt; &lt;ids&gt; after &lt;short candidate&gt;</code> with no trailer; HEAD is compared and swapped, never reset or forced, nothing is pushed; the committed diff is re-checked by the delta</li>
+        <li><code class="status">[]</code> A closure record in the attempt's journal (<code>core/src/contracts/closure-record.ts</code>): rows closed, rows left open, the commit, and before and after blob ids; projected through <code>projector.ts</code>; an interrupted closure is detected from its intent and either finished or reported, never repeated</li>
+      </ul>
+
+      <h4>8. Spine roll-up, approvals and owner rows</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-3</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> When a closure leaves every milestone of a deep plan complete, it finds the spine section that links to that plan, offers that workstream's rows for the owner to choose, derives the spine ticket's state and marker, and writes them in the same commit</li>
+        <li><code class="status">[]</code> A spine ticket selected by a plan-admission attempt closes its "authored and approved" row when that attempt lands (used by M6)</li>
+        <li><code class="status">[]</code> Per W03-Q6: <code>close --commit &lt;sha&gt;</code> closes owner-gate rows on the evidence of a commit reachable from HEAD, with the owner choosing the rows; recorded as a project-level closure record</li>
+        <li><code class="status">[]</code> Unit tests over fixture spines and deep plans for each roll-up case and each refusal</li>
+      </ul>
+
+      <h4>9. Status, doctor, K2 and K1 read closure</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-7</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> After G03-C: <code>awsf next --json</code> lists <code>close</code> for a LANDED attempt with a selection and no closure record, as an owner act the driver prepares</li>
+        <li><code class="status">[]</code> <code>awsf status</code> shows the closure: closed, open by the owner's choice, or not closed; doctor's markers row reads closure records and separates the three</li>
+        <li><code class="status">[]</code> Per W03-Q3: a K1 field refuses DRAFT→PREPARED while any attempt in the project that landed after the field's cut has a selection and no closure record, as a trap at the next free id with its test, marker pair and mutant</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+      </ul>
+
+      <h4>10. Testing Strategy for M4</h4>
+      <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-5</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/test/journeys/closure.test.ts</code>: a fixture project with a plan and tickets, a build-review attempt with a selection on the stub route, landed, then closed through <code>main</code>; the fixture's fence passes on the result and the commit's diff is markers and states only</li>
+        <li><code class="status">[]</code> Refusal journeys, each leaving the checkout byte-identical: non-interactive, wrong actor, not LANDED, no selection, candidate not in HEAD, dirty checkout, ask changed, unset identity, HEAD moved during confirmation</li>
+        <li><code class="status">[]</code> A shift journey closes several tickets in one commit and rolls a completed fixture deep plan up to its fixture spine</li>
+        <li><code class="status">[]</code> No closure path calls push, reset, a forced update or a branch delete, shown by the existing invariant-8 fences passing over the new code</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+      </ul>
+      <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked, including G03-C.</strong> T09 cannot list an owner act the CLI does not have.</div>
+    </section>
+
+    <!-- ================= M5 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M5: The light tier <span class="wtag">managed</span> <span class="wtag raise">gate G03-I</span></h3>
+      <p>Decision 8: a task with no deep plan, closed by the same path. Per W03-Q5 it is a flat intake ticket. Testing shares the task.</p>
+
+      <h4>11. Light tickets start, close and keep their state out of intake's reach</h4>
+      <p class="sub">Serves <code class="serves">AC-5</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>awsf new --ticket Tnn</code> without <code>--plan</code> seals a flat light ticket from the plans root's ticket store, with its digest</li>
+        <li><code class="status">[]</code> <code>awsf close</code> on its LANDED attempt changes only that file's <code>state</code> line, under the same delta and asked-for rules; a light ticket has no rows, so the owner confirms the state</li>
+        <li><code class="status">[]</code> Intake's gate refuses a new ticket whose state is not <code>todo</code> and a refine that changes <code>state</code></li>
+        <li><code class="status">[]</code> The agreement module checks the flat store's vocabularies and dependency cycles</li>
+        <li><code class="status">[]</code> A journey: <code>awsf ticket new</code> on the stub route, a build-review attempt with <code>--ticket</code>, landed and closed; refusal tests for each rule; <code>npm run test:unit</code>, <code>test:journeys</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+      </ul>
+    </section>
+
+    <!-- ================= M6 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M6: Create-only admission <span class="wtag">managed</span> <span class="wtag raise">gate G03-W</span></h3>
+      <p>The other half of GM. A plan set enters as new files only, so nothing that admits a plan can change one that exists (W03-Q7).</p>
+
+      <h4>12. Plan admission, and design-to-plan on it</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-4</code> · <code class="serves">INV-6</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/registry/plan-admission.ts</code>: for one new stem, writes exactly the plan, its build prompts, its ticket README and its tickets; refuses any path that exists at the base and any other path; every marker <code>[]</code>, every state <code>todo</code></li>
+        <li><code class="status">[]</code> Tickets are derived by the host from Section B and a frontmatter table, so prompt equality holds by construction; the parser and T03's agreement pass on the admitted set before commit</li>
+        <li><code class="status">[]</code> The candidate's <code>no_protected_paths</code> gate accepts exactly the admitted, newly created paths through an admission capability; a modified existing protected path is still refused</li>
+        <li><code class="status">[]</code> design-to-plan's <code>plan-render</code> uses admission; T01's five-stage exemption is removed and the journey passes under the shipped protected paths</li>
+        <li><code class="status">[]</code> An admission record in the journal; unit tests for each refusal; <code>npm run test:unit</code>, <code>test:journeys</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+      </ul>
+
+      <h4>13. The plan-author recipe, code half</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/src/workflow/recipes/plan-author.ts</code>: an author phase that writes the plan, its build prompts and a ticket table into its session-runtime output, then host admission (T12), then a cross-provider review; the owner's landing is the plan's approval</li>
+        <li><code class="status">[]</code> <code>prompts/plan-author/</code> carries the repository's plan grammar, the identifier spine rules, Section B equality and the "authoring earns no marker" rule</li>
+        <li><code class="status">[]</code> The attempt is created with <code>--plan &lt;spine&gt; --ticket &lt;Wnn&gt;</code>, so its landing is closed by T08's approval path</li>
+        <li><code class="status">[]</code> Runs on test configurations that declare the role; the shipped config is the owner's at G03-W</li>
+      </ul>
+
+      <h4>14. Testing Strategy for M6</h4>
+      <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-4</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>core/test/journeys/plan-author.test.ts</code>: on the stub route, a fixture spine ticket's deep plan is authored, admitted, reviewed and landed; <code>awsf close</code> then closes the spine's authored-and-approved row and moves the fixture spine ticket to <code>wip</code></li>
+        <li><code class="status">[]</code> A scripted author that also emits a change to an existing plan, an existing stem, a non-idle marker or a non-todo state is refused before commit</li>
+        <li><code class="status">[]</code> The five-stage journey passes under the shipped protected paths</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+      </ul>
+    </section>
+
+    <!-- ================= M7 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M7: GM retired <span class="wtag">managed</span> <span class="wtag raise">retires gate GM</span></h3>
+      <p><strong>W03's <code>[x]</code> retires gate GM, and nothing earlier does.</strong> Testing shares the task.</p>
+
+      <h4>15. The closing record, and the workstream's closing duties</h4>
+      <p class="sub">Serves <code class="serves">AC-7</code></p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Every W03 task landed from G03-C on was closed with <code>awsf close</code>, and each closure record's commit passes the delta when re-checked</li>
+        <li><code class="status">[]</code> T01, T02, G03-C, G03-W and, per W03-Q5, G03-I landed</li>
+        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:contract</code>, <code>test:sim</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0, each run alone</li>
+        <li><code class="status">[]</code> The closing record for the owner: each task's final state, landing and closure SHAs, gate counts, decisions taken, surprises, and the handoff findings for W09 and for every later deep-plan session</li>
+      </ul>
+      <div class="loop">🔁 <strong>GM retires here and nowhere else.</strong> This task's own landing is closed by <code>awsf close</code>, which rolls W03 up to the spine.</div>
+    </section>
+  </div>
+
+  <!-- ===== GLOBAL VALIDATION ===== -->
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <p>Run these to validate the whole workstream. All are offline.</p>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan and its tickets agree, through the shared module</li>
+      <li><code class="status">[]</code> <code>node --experimental-strip-types --test "core/test/unit/closure/**/*.test.ts"</code> — the delta and asked-for rules hold over the real corpus</li>
+      <li><code class="status">[]</code> <code>npm run test:journeys</code> — closure, light tier, admission, plan-author and five-stage journeys green</li>
+      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code> and <code>npm run test:traps</code> — green, counts recorded against the base</li>
+      <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      <li><code class="status">[]</code> <code>git show --stat</code> on every W03 closing commit — only plan and ticket files, and the delta accepts it</li>
+    </ul>
+    <div class="loop">🔁 <strong>The workstream is not complete until every box is checked and every command passes.</strong> A step that cannot be completed is marked <code>[f]</code> with its reason.</div>
+  </section>
+
+  <!-- ===== QUESTIONABLES ===== -->
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <p>Nine decisions were the owner's. The owner took the recommendation on each, 2026-10-09. The fixed first task, the no-widening rule and "markers and states only" are decided by the prompt and not reopened.</p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  Q2["Q2 second fence"] --> M1
+  Q9["Q9 design-to-plan gap"] --> M1
+  Q1["Q1 where closure runs"] --> M4
+  Q3["Q3 drift refusal"] --> M4
+  Q4["Q4 suite reuse"] --> M4
+  Q6["Q6 owner rows"] --> M4
+  Q5["Q5 light home"] --> M5
+  Q7["Q7 creation path"] --> M6
+  Q8["Q8 GM proof"] --> M7
+      </pre>
+      <figcaption>Where each decision lands. Q2 and Q9 shape T01 and T02; the rest land with their milestone.</figcaption>
+    </figure>
+
+    <details data-review-options="A separate owner act, awsf close, after land (recommended)|A second confirmation inside awsf land|The candidate carries its own closure commit">
+      <summary><span class="qdecided">DECIDED</span> W03-Q1 — Where does closure run?</summary>
+      <p class="decided"><b>Decided 2026-10-09:</b> closure runs as a separate owner act, <code>awsf close</code>, after <code>awsf land</code>; <code>land.ts</code> and its confirmation stay unchanged. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> a separate owner act, <code>awsf close</code>, run after <code>awsf land</code>. <code>land.ts</code> and its confirmation stay unchanged. The owner chooses rows with the landed code in front of them. The act also serves owner-gate rows, deep-plan approvals and light tickets, none of which is a candidate's landing.</p>
+      <p class="qa-answer">Inside <code>land</code>: one sitting instead of two, at the cost of changing the most guarded act. A failed closure after the fast-forward leaves a LANDED attempt with a half-done second step. In the candidate: the host appends a markers-only commit before review, so landing and closure are atomic and no commit follows the landing (no stranding, no suite re-run, W03-Q4). But the host must guess which rows the landing earns before the owner judges. Rows such as "G02-S recorded" would be marked by a landing that did not earn them. And the owner cannot accept the code while declining the closure. An extra commit after landing strands any candidate already based on the landed one. W03-Q3's refusal prevents that order.</p>
+    </details>
+
+    <details data-review-options="Protect build prompts and paired ticket sets in a second owner commit, T02 (recommended)|Narrow intake's writes to specs/tickets/T*.md instead|No second amendment">
+      <summary><span class="qdecided">DECIDED</span> W03-Q2 — Does the fence cover the rest of each plan set?</summary>
+      <p class="decided"><b>Decided 2026-10-09:</b> T02 stays: <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code> are protected in a second owner commit after T01. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> T02, a separate owner commit after T01, adds <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code>. The prompt fixes T01 at <code>specs/*.html</code>, and GA proposes one change at a time, so this is its own task. A plan's build prompts are fenced today by the write globs alone, as plans were. Intake's <code>specs/tickets/**</code> reaches every paired set, and the sync fence does not see a changed <code>depends_on</code>, a moved <code>todo</code> or an edited Handoff.</p>
+      <p class="qa-answer">Narrowing intake's glob closes today's reach with one line, and any later widening reopens it silently, which is what v2 W15 warned about. No amendment leaves paired tickets behind the same single fence plans had before T01.</p>
+    </details>
+
+    <details data-review-options="K1 refuses a start while a landing after the cut has no closure record (recommended)|Doctor and awsf next report it; nothing refuses|Neither">
+      <summary><span class="qdecided">DECIDED</span> W03-Q3 — What stops a landing from going unclosed?</summary>
+      <p class="decided"><b>Decided 2026-10-09:</b> a K1 field (T09) refuses DRAFT→PREPARED while any landing after the field's cut has a ticket selection and no closure record; a closure that leaves rows open counts. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> a K1 field. DRAFT→PREPARED refuses while any attempt in the project that landed after the field's cut has a ticket selection and no closure record. A closure that leaves every row open still counts, so a row waiting on an owner gate (T04 waiting on G02-L) does not block. This fixes the order as land, then close, then the next start, so a closure commit never strands a candidate. The cut excludes every landing before T09, so history needs no backfill. It is a trap under W02's contract.</p>
+      <p class="qa-answer">Reporting only (doctor's markers row, <code>awsf next</code>) is softer and lets the W18 M5 drift happen again when the owner is busy. Without either, closure is optional and plans drift as they do today. A refusal also means one more K1 field that can stop a start, and its message must name the attempt to close.</p>
+    </details>
+
+    <details data-review-options="Strict: the next preflight re-runs the suite (recommended)|Reuse the landing's rows when the delta proves the commit is a closure|Avoid the commit: closure in the candidate (Q1, option 3)">
+      <summary><span class="qdecided">DECIDED</span> W03-Q4 — Does a closure commit cost a full suite at the next start?</summary>
+      <p class="decided"><b>Decided 2026-10-09:</b> strict; after a closure commit the next preflight re-runs every gate, as after today's bookkeeping commits. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> strict, as today. K1's suite field accepts gate rows only at exactly the base SHA (<code>core/src/preflight/fields.ts:419</code>). So the next preflight after any commit on top of a landing re-runs every gate: unit 180 s at <code>e93e5de</code>, journeys about 1,220 s, plus traps, typecheck and lint. Today's manual bookkeeping commits already pay this. W03 adds no new cost, and it adds no new rule that could let a red base through.</p>
+      <p class="qa-answer">Reusing the landing's rows when the delta proves a markers-only commit saves that time per landing. It is sound only if no gate reads a status token or a ticket state outside the sync fence. <code>k1-forensics-map</code>, <code>doc-reconciliation</code> and <code>shift-not-a-ticket-workflow</code> read real plan or ticket files today, and nobody has shown they ignore markers. Taking it needs a fence that inventories every such reader. Closure in the candidate avoids the commit and carries W03-Q1's costs.</p>
+    </details>
+
+    <details data-review-options="The flat intake store, with an invariant-12 amendment (recommended)|Journal-only light tasks: nothing committed|A generated one-task plan per light task">
+      <summary><span class="qdecided">DECIDED</span> W03-Q5 — Where does a light-tier task live?</summary>
+      <p class="decided"><b>Decided 2026-10-09:</b> the flat intake store is the light tier; G03-I amends invariant 12 before T11. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> the flat intake store, <code>specs/tickets/Tnn.md</code> under <code>awsf.ticket/v1</code>. It already exists, has <code>awsf ticket new/refine/list/show</code> and the backlog, and carries <code>outcome</code> and <code>acceptance</code> rows, so "closure cannot change what it asked for" has something to protect. It needs G03-I, because invariant 12 says every ticket set belongs to exactly one plan. Its ids are <code>T00</code>–<code>T99</code> and none is used today; widening the id is a contract change for when it fills.</p>
+      <p class="qa-answer">Journal-only light tasks commit nothing and have nothing to drift, and the ask then lives only in the attempt's request, out of the backlog and out of review. A generated one-task plan keeps invariant 12's letter with no amendment, at four committed files per small change, against decision 8's aim of lighter planning (specs are 92.8k lines against 56.4k in <code>core/src</code>).</p>
+    </details>
+
+    <details data-review-options="awsf close --commit closes owner rows on a reachable commit (recommended)|Owner rows stay manual bookkeeping commits|Plan grammar marks owner rows, closed with their gate">
+      <summary><span class="qdecided">DECIDED</span> W03-Q6 — How do owner-gate rows close, such as "G02-S recorded"?</summary>
+      <p class="decided"><b>Decided 2026-10-09:</b> <code>awsf close --commit &lt;sha&gt;</code> closes owner-gate rows on a commit reachable from HEAD, recorded as a project-level closure record. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> <code>awsf close --commit &lt;sha&gt;</code>. The evidence is a commit reachable from HEAD, the owner chooses the rows, and the same delta, agreement and asked-for checks apply. It is recorded as a project-level closure record. Every row then moves through one checked path, including the rows owners close most often.</p>
+      <p class="qa-answer">Manual bookkeeping for owner rows keeps the act smaller and leaves an unchecked path beside the checked one, which is the drift this workstream removes. A grammar marker on owner rows lets a closure skip them automatically, and it changes the plan format that every existing plan would have to adopt.</p>
+    </details>
+
+    <details data-review-options="Yes: W03 builds create-only admission and the plan-author recipe, M6 (recommended)|No: retire GM for bookkeeping only, by spine amendment|Only design-to-plan's structured render, no plan-author">
+      <summary><span class="qdecided">DECIDED</span> W03-Q7 — Does W03 build the creation path that retiring GM needs?</summary>
+      <p class="decided"><b>Decided 2026-10-09:</b> W03 builds create-only admission and the plan-author recipe (M6), so W03's <code>[x]</code> retires GM in fact. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> yes, M6. The spine says W03's <code>[x]</code> retires GM and lets later deep plans be authored through the factory. Closure moves markers, but authoring writes new files, which no role can write and T01 protects. Without a creation path, GM's retirement would be nominal. Create-only admission keeps INV-4: nothing that admits a plan can modify one. design-to-plan needs the same step anyway to work after T01.</p>
+      <p class="qa-answer">Bookkeeping-only retirement keeps W03 small, leaves deep plans as manual sessions, and needs a spine amendment that rewrites GM. design-to-plan alone needs no new role. Its rendered format lacks Questionables, Notes and the review layer the owner reviews plans with, so it would not replace plan-sota sessions.</p>
+    </details>
+
+    <details data-review-options="Stub journeys plus W03's own tasks closed by awsf close (recommended)|Also a live factory-authored deep plan before W03 is complete">
+      <summary><span class="qdecided">DECIDED</span> W03-Q8 — What proves GM is retired?</summary>
+      <p class="decided"><b>Decided 2026-10-09:</b> T14's stub-route journey plus W03's own landings closed by <code>awsf close</code>; the first live factory-authored deep plan is the next spine session's work. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> T14's stub-route journey, which authors, admits, lands and closes a fixture deep plan, plus W03's own landings closed by <code>awsf close</code> from G03-C on. The first live factory-authored deep plan is the next spine session's work. If it fails, that session falls back to a logged manual exception, which is today's state.</p>
+      <p class="qa-answer">A live authoring before W03 closes proves the recipe on a real provider and real plan size. It spends quota, and it ties W03's marker to another workstream's deep plan. The plan-author output for a W02-sized plan is about 2,500 lines of plan and prompts before tickets, which only a live run measures.</p>
+    </details>
+
+    <details data-review-options="Remove design-to-plan from workflows.enabled in T01, restore at G03-W (recommended)|Keep it enabled and name the trap">
+      <summary><span class="qdecided">DECIDED</span> W03-Q9 — What happens to design-to-plan between T01 and T12?</summary>
+      <p class="decided"><b>Decided 2026-10-09:</b> T01 removes design-to-plan from <code>workflows.enabled</code>; G03-W restores it once T12 has moved <code>plan-render</code> onto admission. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
+      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> T01 removes <code>design-to-plan</code> from <code>workflows.enabled</code>, so <code>awsf new</code> refuses it before any spend, and G03-W restores it once T12 has moved <code>plan-render</code> onto admission. Measured at <code>e93e5de</code> with T01 applied: <code>plan-render</code> fails its <code>no_protected_paths</code> gate after the designer, architecture-reviewer and planner phases have run.</p>
+      <p class="qa-answer">Keeping it enabled leaves a run that spends its designer, review and planner calls and then blocks, which is exactly the after-spend stop W02's trap suite exists to prevent. The five-stage journey uses its own configuration, so either way T01's commit adjusts it.</p>
+    </details>
+  </section>
+
+  <!-- ===== NOTES ===== -->
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>The pre-check: no role widened into <code>specs/</code></h3>
+    <p>The prompt's first instruction. v2 W15 was declared in <code>62572f8</code> on 2026-08-28. <code>git log -G'writes:' -- awsf.config.yaml</code> shows two changes to any role's <code>writes</code> since then. <code>3d224c7</code> (2026-09-01) gave the documenter <code>docs/**</code> and protected <code>docs/driving/**</code> in the same commit. <code>ebd03c6</code> (2026-09-27) gave the builder <code>docs/cheatsheet.html</code>. Neither reaches <code>specs/</code>. Intake's <code>specs/tickets/**</code> dates from <code>5250894</code> (2026-08-16), before the declaration. In code, only two host paths write under <code>specs/</code>: intake's flat ticket (<code>production-run.ts</code>, around 1008) and design-to-plan's <code>plan-render</code> (<code>4f6f8cb</code>, 2026-08-23, also before the declaration). No widening happened, so authoring proceeded.</p>
+
+    <h3>Measured while authoring</h3>
+    <ul>
+      <li><code>npm run test:unit</code> at <code>e93e5de</code> in a fresh worktree: 3171/3171, exit 0, 180 s.</li>
+      <li><code>matchesPathGlob</code> (<code>core/src/policy/path-policy.ts</code>): <code>specs/*.html</code> matches <code>specs/awsf-v3-plan.html</code> and no <code>.md</code> file. <code>specs/*-build-prompts.md</code> matches <code>specs/awsf-v3-plan-build-prompts.md</code>. <code>specs/tickets/*/**</code> matches <code>specs/tickets/awsf-v3-plan/W03.md</code> and not <code>specs/tickets/T01.md</code>. None matches <code>specs/design/awsf-v3-plan/frame-index.json</code>.</li>
+      <li>With <code>specs/*.html</code> added to a scratch copy of the config, <code>five-stage.test.ts</code> and <code>production-runner.test.ts</code> were run, and two five-stage tests failed. "The W11 changed-file list touches no protected path from the loaded config" now finds <code>specs/awsf-v2-plan.html</code>, <code>specs/awsf-v2-w05-design-to-plan.html</code> and <code>specs/awsf-v2-w11-five-stage-ladder.html</code>. "A throwaway project travels all five captured stages" fails with <code>PhaseGateFailure: phase plan-render reached a terminal gate failure at correction round 0; failed checks: no_protected_paths/specs/five-stage-plan.html: matches a protected path</code>. Every <code>production-runner.test.ts</code> test passed: 111 tests across the two files, 109 passing. The config was restored afterwards.</li>
+      <li>v2 W15's prompt says <code>specs/*.html</code> "leaves intake's <code>specs/tickets/**</code> untouched", which holds. It does not mention <code>plan-render</code>, which predates it and which the amendment breaks.</li>
+      <li><code>boundary-claims.test.ts</code> derives the owner acts from <code>main.ts</code> arms that construct <code>processOwnerTerminal()</code> and requires <code>delegation-guard.sh</code> to deny exactly that set. G01-C (<code>f5c566a</code>) changed <code>main.ts</code>, <code>next-steps.ts</code>, the guard and five driving documents in one owner commit. G03-C follows it.</li>
+      <li>K1's write-boundary scan (TR-16) treats every word with a <code>/</code> or a dotted extension in a selected ticket's DO block as a path (<code>extractPathTokens</code>, <code>core/src/preflight/fields.ts:174</code>). Every DO block in this plan's builder tickets was checked against it: each path token is builder-writable.</li>
+    </ul>
+
+    <h3>Corrections for the spine, not applied here</h3>
+    <p>This session writes only new files, so the owner applies these in the approving commit if wanted.</p>
+    <ul>
+      <li><strong>GM conflates closure and creation.</strong> GM says deep plans are manual "until W03 lands a closure path". Closure moves markers, and authoring creates files, which no role can write and T01 protects. W03-Q7 decides whether W03 also builds creation. The spine's W03 scope and checklist name only closure and the light tier.</li>
+      <li><strong>"Before any closure mechanism is designed."</strong> The W03 prompt says designed; the spine's checklist row says built. This plan designs the mechanism and orders T01 before anything is built, which is the only reading a deep plan can satisfy.</li>
+      <li><strong>The spine's "not yet authored" labels</strong> under each workstream are prose, not markers, so closure will not move them. They go stale the moment a deep plan is admitted. The owner either edits them in the approval commit, as today, or removes them in favour of the forward-refs row.</li>
+    </ul>
+
+    <h3>Handoff findings, dated 2026-10-09</h3>
+    <p><strong>For W09 (what counts as a closed spec).</strong> A spec is closed when every milestone marker is <code>[x]</code> (or <code>[f]</code> with its recorded reason), every ticket is <code>done</code> (or <code>failed</code>), and, after W03, every landing that selected one of its tickets has a closure record. Read markers through <code>parseAwsfPlanHtmlV1</code> and the shared agreement module, never by regex. A v2 spec closed by hand before W03 has no closure records. Its markers are the only evidence, and their Amendments say who moved them. The v2 spine's parked workstreams (W09, W10) are open by marker and closed by decision, so W09 needs the spine Amendment as a second source, not markers alone.</p>
+    <p><strong>For every later deep-plan session (authoring through the factory once GM is retired).</strong> Create the attempt with <code>--workflow plan-author --plan awsf-v3-plan --ticket Wnn</code>, under K1 like any run. The author writes the plan, its build prompts and a ticket table into session output. The host admits them as new files only, and the cross-provider reviewer reads them. The owner reviews the admitted plan before landing, using its review layer and an exported <code>plan-sota-review v1</code> block. A returned block means a rework or a new attempt, never an edit after landing. Landing is the approval. <code>awsf close</code> then moves the spine's authored-and-approved row and the spine ticket to <code>wip</code>. Changes to an existing plan (applying a review, correcting a row) are not admission and not closure: they stay owner commits. The fixed traps still apply: do not name a path outside a shift builder's reach in a DO block, do not key a frame index by bare ticket id across plans (W02's 2026-10-07 Amendment), and do not run the planner's read-only profile as the author.</p>
+
+    <h3>Risks</h3>
+    <table>
+      <thead><tr><th>Risk</th><th>Why it is real</th><th>What this plan does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>R1: the delta is too loose</strong></td><td>A regex that masks more than status tokens lets a closure say something new.</td><td>T04 masks only the exact token grammar the parser reads; T05 mutates every other byte class over the real corpus.</td></tr>
+        <tr><td><strong>R2: closure strands a candidate</strong></td><td>Land is fast-forward only, and a commit on <code>main</code> strands a candidate based below it.</td><td>W03-Q3 orders land, close, start; closure refuses a candidate not in HEAD.</td></tr>
+        <tr><td><strong>R3: the closing commit carries the wrong identity</strong></td><td>The host commits for the first time on the owner's checkout.</td><td>The checkout's identity, refused when unset; no trailer; <code>no-agent-coauthor</code> scans history.</td></tr>
+        <tr><td><strong>R4: admission becomes a back door</strong></td><td>A create-only exemption in a protected-path gate is still an exemption.</td><td>Scoped to one new stem's exact paths, absent at base, all markers idle; any modification refused; INV-4.</td></tr>
+        <tr><td><strong>R5: plan-author output is too large</strong></td><td>A W02-sized plan and prompts are about 2,500 lines.</td><td>Session-runtime files instead of an envelope string; tickets derived by the host; W03-Q8 names the live measurement.</td></tr>
+        <tr><td><strong>R6: design-to-plan is unavailable for a while</strong></td><td>T01 breaks it until T12.</td><td>W03-Q9 refuses it before spend.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>What closure does not cover</h3>
+    <ul>
+      <li>Deciding that work is done. The owner confirms every row.</li>
+      <li>Failed markers and states. A failure is not a landing, so <code>[f]</code> and <code>failed</code> stay owner bookkeeping.</li>
+      <li>Amendments, Handoffs, metadata and the spine's prose. Closure changes markers and states only.</li>
+      <li>Changing any plan. Review edits and corrections stay owner commits.</li>
+    </ul>
+
+    <h3>Rejected while authoring</h3>
+    <ul>
+      <li><strong>A widened write glob into <code>specs/</code>, at any width.</strong> The sync fence checks agreement, never immutability. A glob covering only <code>specs/tickets/**</code> cannot close a task, because the plan's checklist must move with the state.</li>
+      <li><strong>Authoring through a protected grant.</strong> A grant lifts only the protected-path reason. <code>evaluatePathPolicy</code> still requires the write globs, so a grant for a plan file also needs a role whose writes reach <code>specs/</code>.</li>
+      <li><strong>A host-written Amendment line in the closing commit.</strong> The prompt limits closure to markers and states, and the journal is the evidence store.</li>
+      <li><strong>Inferring a landing's ticket from the task id or the request.</strong> Doctor's markers row already refuses to, and closure keeps that rule.</li>
+      <li><strong>Closure for cancelled or blocked attempts.</strong> It would move markers for work not landed.</li>
+    </ul>
+  </section>
+
+  <!-- ===== AMENDMENTS ===== -->
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <details open>
+      <summary>2026-10-09 — Authored in a direct session, a logged exception under gate GM</summary>
+      <p>No factory role can write <code>specs/*.html</code>, so this deep plan, its build prompts and its ticket set were authored in a manual session (spine gate GM, Q11's direct-session rule) on the branch <code>v3-w03-ticket-closure-plan</code> in a separate worktree at <code>e93e5de</code>, while the owner drove a W02 run on <code>main</code>. It wrote only new files under <code>specs/</code>, called no provider and moved no marker. It ran tests in its own worktree, including one measurement with <code>specs/*.html</code> added to the config, which was reverted. The pre-check found no role's <code>writes</code> widened into <code>specs/</code> since v2 W15 was declared. The ticket/plan sync fence passed 15/15 with the new set, and failed as expected on a planted prompt drift in T07 and a duplicate task number, both reverted. Every builder ticket's DO block passed K1's write-boundary tokenizer (TR-16) against the builder's writes and the protected paths after T02. <code>npm run test:unit</code>: 3171/3171, exit 0, the same count as the base. Nine Questionables (W03-Q1–W03-Q9) await the owner. Built on: anthropic:claude-opus-5-5.</p>
+    <details open>
+      <summary>2026-10-09 — Owner review applied: W03-Q1–Q9 decided as recommended</summary>
+      <p>A <code>plan-sota-review v1</code> block exported 2026-10-09T06:47Z carried nine verdicts, no proposed statuses and no annotations. Every verdict took the recommended option, so no task, field, gate, dependency or identifier changed. Recorded: closure is a separate owner act, <code>awsf close</code>, after <code>land</code> (Q1); T02 protects build prompts and paired ticket sets in its own owner commit (Q2); a K1 field refuses a start while a landing after its cut is unclosed (Q3); a closure commit keeps K1's suite strict (Q4); the flat intake store is the light tier, with G03-I amending invariant 12 (Q5); <code>awsf close --commit</code> closes owner-gate rows (Q6); W03 builds create-only admission and the plan-author recipe (Q7); stub journeys plus W03's own closures prove GM retired (Q8); T01 takes design-to-plan out of <code>workflows.enabled</code> until G03-W (Q9). Section A of the build prompts and the ticket README now record the decisions as taken. Section B and the tickets are unchanged, since their prompts already assume these options. No marker moved; approval of the deep plan, which moves the spine's W03 marker to <code>[wip]</code>, is a separate owner act. Built on: anthropic:claude-opus-5-5.</p>
+    </details>
+    <details open>
+      <summary>2026-10-09 — Owner approval of the deep plan and factory-managed implementation</summary>
+      <p>The owner approved this deep plan, its build prompts and its ticket set. W03-Q1–Q9 remain decided as recommended. The spine's W03 marker and ticket state move together to <code>[wip]</code> and <code>wip</code> in the approval commit, which also commits this plan for the first time. No implementation checklist row is marked complete by approval. Work starts with T01, the owner's protected-path commit, before any other task; M2–M7 then follow the Execution section. Built on: anthropic:claude-opus-5-5.</p>
+    </details>
+  </section>
+
+</main>
+
+<!-- ===== PLAN-SOTA REVIEW LAYER v1 — FIXED MACHINERY, COPY VERBATIM =====
+     Not a placeholder: reproduce this <style> + <script> pair exactly in every plan.
+     Annotations, Questionable verdicts, and proposed phase statuses persist to
+     localStorage (key: plan filename). The browser NEVER writes this file; canonical
+     []/[wip]/[x]/[f] markers stay agent-owned. Export produces a `plan-sota-review v1`
+     block (clipboard + visible box) and, when running under Lavish Editor, queues it
+     once via window.lavish.queuePrompt(). -->
+<style>
+  .rv-btn { font: 600 11px/1 system-ui, sans-serif; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--muted, #8884); background: transparent; color: var(--fg, inherit);
+    cursor: pointer; opacity: .55; vertical-align: middle; margin-left: 8px; }
+  .rv-btn:hover { opacity: 1; border-color: var(--accent, #7c6cf0); }
+  .rv-btn.rv-on { opacity: 1; background: var(--accent, #7c6cf0); color: var(--bg, #fff); border-color: transparent; }
+  .rv-note-box { display: block; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent, #7c6cf0);
+    border-radius: 8px; font-size: 13px; min-height: 1.5em; background: color-mix(in srgb, var(--accent, #7c6cf0) 6%, transparent); outline: none; }
+  .rv-note-box:empty::before { content: attr(data-ph); opacity: .5; font-style: italic; }
+  .rv-note-box[hidden] { display: none; }
+  .rv-verdict { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 2px; }
+  .rv-verdict-tag { font: 700 10px/1 system-ui, sans-serif; letter-spacing: .08em; opacity: .6; margin-right: 2px; }
+  .rv-status-chip { font: 600 11px/1 ui-monospace, monospace; margin-left: 10px; padding: 3px 9px;
+    border-radius: 999px; border: 1px dotted var(--muted, #8884); background: transparent;
+    color: var(--fg, inherit); cursor: pointer; opacity: .6; }
+  .rv-status-chip:hover { opacity: 1; }
+  .rv-status-chip.rv-on { opacity: 1; border-style: solid; border-color: var(--accent, #7c6cf0); color: var(--accent, #7c6cf0); }
+  #rv-drawer { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font: 13px/1.45 system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #rv-pill { font: 700 12px/1 system-ui, sans-serif; padding: 10px 16px; border-radius: 999px; border: none;
+    cursor: pointer; background: var(--accent, #7c6cf0); color: var(--bg, #fff); box-shadow: 0 4px 16px #0004; }
+  #rv-panel { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--muted, #8884); background: var(--bg, #fff);
+    color: var(--fg, inherit); box-shadow: 0 8px 32px #0005; }
+  #rv-panel h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #rv-list { margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; }
+  #rv-list li { padding: 3px 0; border-bottom: 1px solid #8882; overflow-wrap: anywhere; }
+  #rv-out { width: 100%; min-height: 140px; margin-top: 10px; font: 11px/1.5 ui-monospace, monospace;
+    border: 1px solid var(--muted, #8884); border-radius: 8px; padding: 8px; background: transparent; color: inherit; }
+  #rv-msg { font-size: 11px; opacity: .75; margin-top: 6px; }
+  @media print { #rv-drawer { display: none; } }
+</style>
+<script>
+(function () {
+  'use strict';
+  var FILE = decodeURIComponent(location.pathname.split('/').pop() || 'plan.html');
+  var KEY = 'plan-sota-review:' + FILE;
+  var LEGACY_KEY = 'planf3-review:' + FILE; // pre-rename state; read once, never written
+  var PROPOSE = ['', '[]', '[wip]', '[x]', '[f]'];
+  var state = { a: {}, v: {}, s: {} }, persisted = true;
+  try { state = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || 'null') || state; } catch (e) { persisted = false; }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); persisted = true; }
+    catch (e) { persisted = false; }
+    refresh();
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (tag === 'button') { n.type = 'button'; n.setAttribute('data-lavish-action', ''); }
+    return n;
+  }
+  function clean(t) { return String(t || '').replace(/\|/g, '/').replace(/\s*\r?\n\s*/g, ' >> ').trim(); }
+  var registry = []; // {key, label, kind: 'section'|'phase'|'q'}
+
+  function noteBox(key, host, placeholder) {
+    var box = el('div', 'rv-note-box');
+    box.contentEditable = 'true';
+    box.setAttribute('data-ph', placeholder || 'Type your note for the agent…');
+    box.hidden = !(state.a[key]);
+    if (state.a[key]) box.textContent = state.a[key];
+    box.addEventListener('input', function () {
+      var t = box.textContent.trim();
+      if (t) state.a[key] = t; else delete state.a[key];
+      save();
+    });
+    host.appendChild(box);
+    return box;
+  }
+  function annotable(key, label, heading, host, kind) {
+    registry.push({ key: key, label: label, kind: kind });
+    var box = noteBox(key, host);
+    heading.insertAdjacentElement('afterend', box);
+    var btn = el('button', 'rv-btn' + (state.a[key] ? ' rv-on' : ''), '✎ note');
+    btn.addEventListener('click', function () {
+      box.hidden = !box.hidden;
+      if (!box.hidden) box.focus();
+    });
+    heading.appendChild(btn);
+    box.addEventListener('input', function () { btn.classList.toggle('rv-on', !!state.a[key]); });
+  }
+
+  // Sections
+  Array.prototype.forEach.call(document.querySelectorAll('main > section[id]'), function (sec) {
+    var h = sec.querySelector('h2'); if (!h) return;
+    annotable('#' + sec.id, h.textContent.trim(), h, sec, 'section');
+  });
+  // Phases: annotation + proposed-status chip
+  Array.prototype.forEach.call(document.querySelectorAll('#phases .phase'), function (ph, i) {
+    var h = ph.querySelector('h3'); if (!h) return;
+    var key = 'phase-' + (i + 1);
+    var label = h.textContent.replace(/^\s*\[[^\]]*\]\s*/, '').trim();
+    annotable(key, label, h, ph, 'phase');
+    var chip = el('button', 'rv-status-chip' + (state.s[key] ? ' rv-on' : ''));
+    chip.textContent = state.s[key] ? 'propose ' + state.s[key] : 'propose…';
+    chip.title = 'Cycle a PROPOSED status (exported as feedback — the file marker is only changed by the agent)';
+    chip.addEventListener('click', function () {
+      var next = PROPOSE[(PROPOSE.indexOf(state.s[key] || '') + 1) % PROPOSE.length];
+      if (next) state.s[key] = next; else delete state.s[key];
+      chip.textContent = next ? 'propose ' + next : 'propose…';
+      chip.classList.toggle('rv-on', !!next);
+      save();
+    });
+    h.appendChild(chip);
+  });
+  // Questionables: verdict / option buttons + note
+  Array.prototype.forEach.call(document.querySelectorAll('#questionables details'), function (d, i) {
+    var key = 'q-' + (i + 1);
+    var summary = d.querySelector('summary');
+    var label = summary ? summary.textContent.trim().slice(0, 120) : key;
+    registry.push({ key: key, label: label, kind: 'q' });
+    var opts = (d.getAttribute('data-review-options') || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!opts.length) opts = ['APPROVE', 'REJECT', 'REVISE', 'DEFER'];
+    var row = el('div', 'rv-verdict');
+    row.appendChild(el('span', 'rv-verdict-tag', 'YOUR CALL'));
+    opts.forEach(function (opt) {
+      var b = el('button', 'rv-btn' + ((state.v[key] || {}).c === opt ? ' rv-on' : ''), opt);
+      b.addEventListener('click', function () {
+        if ((state.v[key] || {}).c === opt) { delete state.v[key]; }
+        else { state.v[key] = { c: opt }; }
+        Array.prototype.forEach.call(row.querySelectorAll('.rv-btn'), function (x) {
+          x.classList.toggle('rv-on', x.textContent === ((state.v[key] || {}).c || null));
+        });
+        qbox.hidden = !state.v[key] && !state.a[key];
+        save();
+      });
+      row.appendChild(b);
+    });
+    d.appendChild(row);
+    var qbox = noteBox(key, d, 'Why / what to change instead…');
+    if (state.v[key]) qbox.hidden = false;
+  });
+
+  // Drawer
+  var drawer = el('div'); drawer.id = 'rv-drawer';
+  var panel = el('div'); panel.id = 'rv-panel'; panel.hidden = true;
+  var pill = el('button'); pill.id = 'rv-pill';
+  pill.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+  var list = el('ul'); list.id = 'rv-list';
+  var actions = el('div');
+  var exportBtn = el('button', 'rv-btn rv-on', 'Export Feedback');
+  var clearBtn = el('button', 'rv-btn', 'Clear review');
+  var out = el('textarea'); out.id = 'rv-out'; out.readOnly = true; out.hidden = true;
+  var msg = el('div'); msg.id = 'rv-msg';
+  var head = el('h4', null, 'Review — pending feedback');
+  actions.appendChild(exportBtn); actions.appendChild(clearBtn);
+  panel.appendChild(head); panel.appendChild(list); panel.appendChild(actions);
+  panel.appendChild(out); panel.appendChild(msg);
+  drawer.appendChild(panel); drawer.appendChild(pill);
+  document.body.appendChild(drawer);
+
+  function findLabel(key) {
+    for (var i = 0; i < registry.length; i++) if (registry[i].key === key) return registry[i].label;
+    return key;
+  }
+  function refresh() {
+    var n = Object.keys(state.a).length + Object.keys(state.v).length + Object.keys(state.s).length;
+    pill.textContent = '✎ Review (' + n + ')';
+    list.textContent = '';
+    Object.keys(state.v).forEach(function (k) { list.appendChild(el('li', null, '[verdict] ' + findLabel(k) + ' → ' + state.v[k].c)); });
+    Object.keys(state.s).forEach(function (k) { list.appendChild(el('li', null, '[status] ' + findLabel(k) + ' → propose ' + state.s[k])); });
+    Object.keys(state.a).forEach(function (k) { list.appendChild(el('li', null, '[note] ' + findLabel(k) + ': ' + state.a[k].slice(0, 90))); });
+    if (!n) list.appendChild(el('li', null, 'Nothing yet — click ✎ note on any section, a verdict on a Questionable, or propose… on a phase.'));
+    if (!persisted) msg.textContent = '⚠ localStorage unavailable — review state lives only in this tab.';
+  }
+  function buildExport() {
+    var L = ['plan-sota-review v1', 'plan: ' + FILE, 'title: ' + clean(document.title), 'exported: ' + new Date().toISOString(), ''];
+    var vk = Object.keys(state.v), sk = Object.keys(state.s), ak = Object.keys(state.a);
+    L.push('## verdicts');
+    vk.length ? vk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.v[k].c) + ' | note: ' + (clean(state.a[k]) || '-'));
+    }) : L.push('- (none)');
+    L.push('', '## statuses');
+    sk.length ? sk.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | propose ' + state.s[k]);
+    }) : L.push('- (none)');
+    L.push('', '## annotations');
+    var solo = ak.filter(function (k) { return !state.v[k]; });
+    solo.length ? solo.forEach(function (k) {
+      L.push('- ' + k + ' | ' + clean(findLabel(k)) + ' | ' + clean(state.a[k]));
+    }) : L.push('- (none)');
+    return L.join('\n');
+  }
+  exportBtn.addEventListener('click', function () {
+    var text = buildExport();
+    out.hidden = false; out.value = text;
+    out.focus(); out.select();
+    function done(m) { msg.textContent = m; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done('Copied — paste it into your next agent session.'); },
+        function () { done('Clipboard blocked — copy from the box below.'); });
+    } else {
+      try { done(document.execCommand('copy') ? 'Copied — paste it into your next agent session.' : 'Clipboard blocked — copy from the box below.'); }
+      catch (e) { done('Clipboard blocked — copy from the box below.'); }
+    }
+    if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+      window.lavish.queuePrompt(text, { tag: 'plan-sota-review', queueKey: 'plan-sota-review' });
+      msg.textContent += ' Also queued to the agent via Lavish.';
+    }
+  });
+  clearBtn.addEventListener('click', function () {
+    if (!confirm('Clear all review state for this plan?')) return;
+    state = { a: {}, v: {}, s: {} };
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    location.reload();
+  });
+  refresh();
+})();
+</script>
+
+<!-- Mermaid runtime — renders every <pre class="mermaid"> block. Only external reference in the file. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  // Mirrors the :root palette: Forest dark by default, Forest light when the reader prefers it.
+  const light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  const p = light
+    ? { bg: '#DAF1DE', panel: '#EAF7EE', panel2: '#C6E4CF', border: '#8EB69B', dim: '#235347', text: '#051F20' }
+    : { bg: '#051F20', panel: '#0B2B26', panel2: '#163832', border: '#235347', dim: '#8EB69B', text: '#DAF1DE' };
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      background: p.bg,
+      primaryColor: p.panel2,
+      primaryBorderColor: p.border,
+      primaryTextColor: p.text,
+      textColor: p.text,
+      lineColor: p.dim,
+      secondaryColor: p.panel,
+      tertiaryColor: p.panel,
+      fontFamily: '"Segoe UI", "Helvetica Neue", system-ui, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
