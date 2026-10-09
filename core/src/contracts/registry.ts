@@ -45,6 +45,7 @@ import { ReviewContextSchema, REVIEW_CONTEXT_SCHEMA_ID, type ReviewContext } fro
 import { ReviewOutputSchema, REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "./review-output.ts";
 import { ScoutOutputSchema, SCOUT_OUTPUT_SCHEMA_ID, type ScoutOutput } from "./scout-output.ts";
 import { ShiftManifestSchema, SHIFT_MANIFEST_SCHEMA_ID } from "./shift-selection-record.ts";
+import { TicketSelectionSchema, TICKET_SELECTION_SCHEMA_ID } from "./ticket-selection-record.ts";
 import { TestOutputSchema, TEST_OUTPUT_SCHEMA_ID, type TestOutput } from "./test-output.ts";
 import { TrapsReadoutSchema, TRAPS_READOUT_SCHEMA_ID } from "./traps-readout.ts";
 import { DoctorReadoutSchema, DOCTOR_READOUT_SCHEMA_ID } from "./doctor-readout.ts";
@@ -109,6 +110,7 @@ export const ENVELOPE_SCHEMA_IDS = Object.keys(ENVELOPE_SCHEMAS) as EnvelopeSche
  */
 export const RECORD_SCHEMAS = {
   [SHIFT_MANIFEST_SCHEMA_ID]: ShiftManifestSchema,
+  [TICKET_SELECTION_SCHEMA_ID]: TicketSelectionSchema,
   [ATTRIBUTION_RECORD_V1_SCHEMA_ID]: AttributionRecordV1Schema,
   [ATTRIBUTION_RECORD_SCHEMA_ID]: AttributionRecordSchema,
   [PROVING_GROUND_ITEM_SCHEMA_ID]: ProvingGroundItemSchema,

@@ -705,6 +705,9 @@ npm run awsf -- land TASK</pre>
     <li><code>group</code></li>
   </ul>
 
+  <h3>Plan ticket selection</h3>
+  <p><code>awsf new &lt;task&gt; &lt;request&gt; --plan &lt;stem&gt; --ticket &lt;id&gt;[,&lt;id&gt;...]</code> seals the named plan tickets, their registered paths and whole-file digests on the attempt. <code>--ticket</code> is repeatable. Unknown or duplicate ids, a missing <code>--plan</code>, and <code>--ticket</code> on a shift are refused before an attempt exists. Shifts still select whole milestones with <code>--milestone</code>. Read the selection with <code>awsf status &lt;task&gt;</code> or <code>awsf status &lt;task&gt; --json</code>.</p>
+
   <h3>Trap coverage</h3>
   <p><code>awsf traps [--json] [--state-root PATH]</code> reads every registered project's non-prove BLOCKED and CANCELLED attempts whose terminal transition is after the cut. JSON is the <code>awsf.traps/v1</code> readout: catalogue counts, four coverage lists, the next free trap id and the newest landed attempt's traps gate measurement per project. It exits 1 while any stop is unlinked or names a missing trap, otherwise 0. It reports and never repairs: no writes, lock, owner terminal or trap-layer execution.</p>
   <pre>npm run awsf -- traps --json</pre>

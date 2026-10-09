@@ -127,6 +127,8 @@ export interface AttemptStatus {
    * from it and the ticket files it names, and refuses when a byte moved.
    */
   readonly shift?: import("../../contracts/shift-selection-record.ts").ShiftManifest | null;
+  /** Explicit non-shift plan selection, carried by journal revisions and retries. */
+  readonly ticketSelection?: import("../../contracts/ticket-selection-record.ts").TicketSelection | null;
   /**
    * The proving-ground replay this attempt measures, recorded once at creation
    * and absent on every other workflow. Its worktree starts at `baseSha`, and

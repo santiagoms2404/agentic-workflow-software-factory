@@ -6,6 +6,7 @@
 export * from "./typebox.ts";
 export * from "./ticket.ts";
 export * from "./shift-selection-record.ts";
+export * from "./ticket-selection-record.ts";
 export * from "./attribution-record.ts";
 export * from "./next-steps.ts";
 export * from "./driver-preflight.ts";

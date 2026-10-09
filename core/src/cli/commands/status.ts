@@ -196,6 +196,11 @@ function pidIsLive(pid: number): boolean {
  */
 export function formatAttemptSelection(status: AttemptStatus): readonly string[] {
   const lines: string[] = [];
+  if (status.ticketSelection != null) {
+    const selection = status.ticketSelection;
+    lines.push(`Tickets: ${selection.plan} ${selection.tickets.map(ticket => ticket.id).join(",")} — sealed as ${selection.selectionDigest}`);
+    for (const ticket of selection.tickets) lines.push(`  ${ticket.id}: ${ticket.path} sha256=${ticket.digest}`);
+  }
   for (const [phaseId, selected] of Object.entries(status.routeOverrides)) {
     lines.push(`Route override: ${formatRouteOverride(phaseId, selected)}`);
   }

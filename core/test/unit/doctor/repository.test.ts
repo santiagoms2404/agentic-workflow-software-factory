@@ -138,6 +138,19 @@ test("registered plan root wins over adjacent or sealed ticket paths; done, miss
   assert.doesNotMatch(rows.markers.detail.join("\n"), /T01=/);
 });
 
+test("a single-attempt selection maps through the registered plan exactly like a shift, without trusting sealed paths", async t => {
+  const world = setup(t);
+  attempt(world, "selected", "LANDED", null, { planRef: "synthetic-plan", ticketSelection: {
+    plan: "synthetic-plan", tickets: [{ id: "T01", path: "wrong-path.md" }],
+  } });
+  const before = snapshot(world.root);
+  const rows = await gatherRepositoryRows({ cwd: world.repository, stateRoot: world.stateRoot,
+    env: { ...process.env } as Record<string, string>, config: world.measuredConfig });
+  assert.match(rows.markers.detail[0]!, /open selected tickets=1; unmapped=0/);
+  assert.match(rows.markers.detail.join("\n"), /synthetic\/selected#1: synthetic-plan\/T01=todo/);
+  assert.deepEqual(snapshot(world.root), before);
+});
+
 test("baseline absent, foreign, clean, ahead and missing seed measurements remain read-only diagnostics", async t => {
   const world = setup(t);
   const input = { cwd: world.repository, stateRoot: world.stateRoot, env: { ...process.env } as Record<string, string>, config: world.measuredConfig };

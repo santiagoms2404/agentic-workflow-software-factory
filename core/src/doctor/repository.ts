@@ -148,12 +148,13 @@ export async function gatherRepositoryRows(input: RepositoryInput): Promise<Repo
     const label = `${attempt.project}/${attempt.taskId}#${attempt.attempt}`;
     const plan = attempt.planRef!;
     const source = sources.find(source => basename(source.planPath, ".html") === plan);
-    if (attempt.shift == null || attempt.shift.plan !== plan || attempt.shift.tickets.length === 0) {
+    const selection = attempt.shift ?? attempt.ticketSelection;
+    if (selection == null || selection.plan !== plan || selection.tickets.length === 0) {
       markerFacts.push({ attempt: label, plan, tickets: null });
       continue;
     }
     const tickets: NonNullable<MarkerFact["tickets"]>[number][] = [];
-    for (const selected of attempt.shift.tickets) {
+    for (const selected of selection.tickets) {
       const key = `${plan}/${selected.id}`;
       if (!ticketStates.has(key)) {
         let state: NonNullable<MarkerFact["tickets"]>[number]["state"] = "not measured";

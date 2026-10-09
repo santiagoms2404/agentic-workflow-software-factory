@@ -34,6 +34,7 @@ import { renderAttemptNextAction, renderDegradationAdvice } from "../lifecycle/r
 import { nextCommand } from "./commands/next.ts";
 import { preflightCommand, renderPreflightLines } from "./commands/preflight.ts";
 import { newCommand } from "./commands/new.ts";
+import { sealPlanTicketSelection } from "./commands/ticket-selection.ts";
 import { PlanRefUnknown, resolvePlanRef } from "./commands/plan-ref.ts";
 import { relateCommand } from "./commands/relate.ts";
 import { publishCommand } from "./commands/publish.ts";
@@ -91,6 +92,7 @@ interface ParsedArgs {
    * as one flat list before that split runs.
    */
   readonly milestones: readonly string[];
+  readonly tickets: readonly string[];
   /** Repeatable: `awsf preflight`'s three driver inputs, each kept in the order written. */
   readonly where: readonly string[];
   readonly read: readonly string[];
@@ -105,6 +107,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   const files: string[] = [];
   const routes: string[] = [];
   const milestones: string[] = [];
+  const tickets: string[] = [];
   const lists = { where: [] as string[], read: [] as string[], consulted: [] as string[] };
   let noTrap: ParsedArgs["noTrap"];
   for (let index = 0; index < args.length; index += 1) {
@@ -133,6 +136,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       else if (key === "route") routes.push(value);
       else if (key === "file") files.push(value);
       else if (key === "milestone") milestones.push(value);
+      else if (key === "ticket") tickets.push(value);
       else if (Object.hasOwn(lists, key)) lists[key as keyof typeof lists].push(value);
       else flags[key] = value;
       continue;
@@ -157,11 +161,12 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     else if (key === "route") routes.push(value);
     else if (key === "file") files.push(value);
     else if (key === "milestone") milestones.push(value);
+    else if (key === "ticket") tickets.push(value);
     else if (Object.hasOwn(lists, key)) lists[key as keyof typeof lists].push(value);
     else flags[key] = value;
     index += 1;
   }
-  return { positionals, flags, repositories, routes, files, milestones, ...lists,
+  return { positionals, flags, repositories, routes, files, milestones, tickets, ...lists,
     ...(noTrap === undefined ? {} : { noTrap }) };
 }
 
@@ -273,6 +278,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const command = argv[0];
     if (command === undefined) throw new Error(USAGE);
     const parsed = parseArgs(argv.slice(1));
+    if (parsed.tickets.length > 0 && command !== "new") throw new Error("--ticket is supported only by awsf new");
     const stateRoot = parsed.flags["state-root"] === undefined
       ? resolveStateRoot(env)
       : resolve(parsed.flags["state-root"]);
@@ -622,6 +628,10 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       );
       const { workflow } = selection;
       let { tier } = selection;
+      if (parsed.tickets.length > 0) {
+        if (workflow === SHIFT_WORKFLOW_ID) throw new Error("--ticket cannot select a shift; use --milestone");
+        if (parsed.flags.plan === undefined) throw new Error("--ticket requires --plan (light tickets are not supported yet)");
+      }
       // A shift seals its selection here, from `--plan` and `--milestone`,
       // and the attempt stores the manifest (Q5). Its tier is derived from
       // the selected tickets, so a `--tier` that disagrees is refused before
@@ -645,10 +655,14 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const planRef = parsed.flags.plan === undefined
         ? undefined
         : await resolvePlanRef({ repository: cwd, stateRoot, project, stem: parsed.flags.plan });
+      const ticketSelection = parsed.tickets.length === 0 ? undefined : await sealPlanTicketSelection(
+        { repository: cwd, stateRoot, project, stem: planRef! }, parsed.tickets,
+      );
       const result = await newCommand({
         stateRoot,
         project,
         taskId,
+        ...(ticketSelection === undefined ? {} : { ticketSelection }),
         ...(parsed.flags.continues === undefined ? {} : { continuesTask: parsed.flags.continues }),
         ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
         // Resolved against the catalog BEFORE the attempt exists, so a task is
@@ -669,6 +683,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       if (shift !== undefined) {
         out(`Shift: ${shift.plan} ${shift.milestones.join(",")}, ${String(shift.tickets.length)} ticket(s) sealed as ${shift.manifestDigest}.`);
       }
+      if (ticketSelection !== undefined) out(`Tickets: ${ticketSelection.plan} ${ticketSelection.tickets.map(ticket => ticket.id).join(",")} sealed as ${ticketSelection.selectionDigest}.`);
       if (result.status.groupId !== null) out(`Group: ${result.status.groupId} — this run is recorded as part of that driving session.`);
       if (result.status.planRef !== null) out(`Plan: ${result.status.planRef} — this run is recorded against that registered plan.`);
       for (const [phaseId, selected] of Object.entries(routeOverrides)) {
@@ -818,7 +833,8 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         return result.confirmed && result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
       case "status":
-        for (const line of await statusCommand(located.attemptDir, { evidence: parsed.flags.evidence === "true" })) out(line);
+        if (parsed.flags.json === "true") out(JSON.stringify(await readAttempt(located.attemptDir)));
+        else for (const line of await statusCommand(located.attemptDir, { evidence: parsed.flags.evidence === "true" })) out(line);
         return 0;
       case "watch":
         await watchCommand({ attemptDir: located.attemptDir, pollMs: config.observability.poll_ms, write: out });

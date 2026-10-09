@@ -763,6 +763,7 @@ async function fixture(
   routeOverrides: PhaseRouteOverrides = {},
   /** Edits the configuration file itself, which `awsf preflight` and `awsf start` read; `configure` must agree with it. */
   editConfigText: (text: string) => string = (text) => text,
+  selectedTicket?: { plan: string; id: string },
 ) {
   const root = mkdtempSync(join(tmpdir(), "awsf-production-runner-"));
   const canonical = join(root, "canonical");
@@ -788,9 +789,22 @@ async function fixture(
   mkdirSync(resolve(sharedPrompt, ".."), { recursive: true });
   writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const projection = createDashboardProjection(stateRoot);
-  const created = await newCommand({ stateRoot, project: config.project.slug, taskId: `fixture-${workflow}`, repository: canonical,
-    request: request ?? k1RequestFor("write one bounded source", workflow, config.agents),
-    workflow, tier, routeOverrides, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
+  const taskId = `fixture-${workflow}`;
+  const taskRequest = request ?? k1RequestFor("write one bounded source", workflow, config.agents);
+  let created;
+  if (selectedTicket === undefined) {
+    created = await newCommand({ stateRoot, project: config.project.slug, taskId, repository: canonical,
+      request: taskRequest, workflow, tier, routeOverrides, configSnapshotJson: JSON.stringify(config), projectRecord: projection.project });
+  } else {
+    await writePlacement(stateRoot, config.project.slug, { version: "awsf.placement/v1", project: config.project.slug,
+      repositories: { app: { path: canonical } } });
+    const lines: string[] = [];
+    assert.equal(await cliMain({ argv: ["new", taskId, taskRequest, "--workflow", workflow, "--plan", selectedTicket.plan,
+      "--ticket", selectedTicket.id, "--config", configPath, "--state-root", stateRoot], cwd: canonical,
+      writeOut: line => lines.push(line), writeError: line => lines.push(line) }), 0, lines.join("\n"));
+    const attemptDir = join(stateRoot, "projects", config.project.slug, "tasks", taskId, "1");
+    created = { attemptDir, status: await readAttempt(attemptDir) };
+  }
   // scout, plan and design-to-plan need every call their ceiling allows, so
   // `awsf start` refuses their unfundable correction round. Take the owner's
   // own remedy — which is also what proves the remedy works.
@@ -812,6 +826,41 @@ async function fixture(
   await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath, preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
   return { root, canonical, stateRoot, config, configPath, projection, created };
 }
+
+test("selected plan attempt is created and landed through main on the scripted stub route, then selection reads back", async () => {
+  const plan = "selected-plan";
+  const world = await fixture("build", 0, config => config, 1, undefined, canonical => {
+    const directory = join(canonical, "plans", "tickets", plan);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(join(canonical, "awsf.project.yaml"), "version: awsf.project/v1\nproject: {slug: agentic-workflow-software-factory}\nrepositories:\n  app: {role: plan, default_branch: main}\nplans: {root: plans, format: awsf-plan-html/v1}\n");
+    writeFileSync(join(canonical, "plans", `${plan}.html`), "<title>Selected plan</title>\n");
+    writeFileSync(join(directory, "T01.md"), "---\nid: T01\ntitle: Selected source\nmilestone: M1\nstate: todo\ndepends_on: []\n---\n## Build prompt\nWrite a bounded source.\n");
+    git(canonical, "add", ".");
+    git(canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: register selected plan");
+  }, {}, text => text, { plan, id: "T01" });
+  try {
+    const prepared = await readAttempt(world.created.attemptDir);
+    const selection = prepared.ticketSelection;
+    assert.ok(selection);
+    const status = await runProductionCommand({ attemptDir: world.created.attemptDir, stateRoot: world.stateRoot,
+      config: world.config, configPath: world.configPath, projectRecord: world.projection.project,
+      infrastructure: { adapterFor: (_entry, id) => new ScriptedAdapter(id, prepared.worktree!, () => {}), createBroker: fakeBroker } });
+    assert.equal(status.lifecycleState, "AWAITING_OWNER", status.blocker?.detail);
+    const lines: string[] = [];
+    const invoke = (args: string[]) => cliMain({ argv: [...args, "--config", world.configPath, "--state-root", world.stateRoot],
+      cwd: world.canonical, writeOut: line => lines.push(line), writeError: line => lines.push(line),
+      terminal: { interactive: true, write: () => {}, confirm: async () => true } });
+    assert.equal(await invoke(["land", status.taskId]), 0, lines.join("\n"));
+    assert.equal((await readAttempt(world.created.attemptDir)).lifecycleState, "LANDED");
+    lines.length = 0;
+    assert.equal(await invoke(["status", status.taskId, "--json"]), 0);
+    assert.deepEqual(JSON.parse(lines.join("\n")).ticketSelection, selection);
+    lines.length = 0;
+    assert.equal(await invoke(["status", status.taskId]), 0);
+    assert.match(lines.join("\n"), /Tickets: selected-plan T01/);
+    assert.equal(git(world.canonical, "rev-parse", "HEAD"), status.candidateSha);
+  } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+});
 
 for (const workflow of ["build", "plan-build-test", "simple-sdlc"] as const) {
   test(`A2 exact protected grant completes ${workflow} with one consumption, verified candidate and separate final approval`, async () => {

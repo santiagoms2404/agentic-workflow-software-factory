@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { assertTicketSelection, type TicketSelection } from "../../contracts/ticket-selection-record.ts";
 import { resolve } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { assertCandidateSeed, type CandidateSeed } from "../../contracts/candidate-seed.ts";
@@ -30,6 +31,8 @@ export interface NewCommandOptions {
   readonly seed?: CandidateSeed;
   /** The sealed selection a `shift` compiles from. Required for a shift and refused for anything else. */
   readonly shift?: ShiftManifest;
+  /** Explicit plan tickets for a non-shift attempt, journaled at creation. */
+  readonly ticketSelection?: TicketSelection;
   /** The replay a `prove` attempt measures. Required for prove and refused for anything else. */
   readonly replay?: ReplayRecord;
   /**
@@ -97,6 +100,11 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
   if (options.shift !== undefined && (!Value.Check(ShiftManifestSchema, options.shift) || shiftManifestDigest(options.shift) !== options.shift.manifestDigest)) {
     throw new Error("shift selection is not a sealed awsf.shift-manifest/v1");
   }
+  if (options.ticketSelection !== undefined) {
+    assertTicketSelection(options.ticketSelection);
+    if (options.workflow === SHIFT_WORKFLOW_ID) throw new Error("--ticket cannot select a shift; use --milestone");
+    if (options.planRef !== options.ticketSelection.plan) throw new Error("--ticket requires its registered --plan");
+  }
   if ((options.workflow === PROVE_WORKFLOW_ID) !== (options.replay !== undefined)) {
     throw new Error(`workflow ${JSON.stringify(options.workflow)} ${options.replay === undefined ? "requires a replay record, which only `awsf prove` creates" : "cannot carry a replay record"}`);
   }
@@ -135,6 +143,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     candidateSha: null,
     ...(options.seed === undefined ? {} : { seed: options.seed }),
     ...(options.shift === undefined ? {} : { shift: options.shift }),
+    ...(options.ticketSelection === undefined ? {} : { ticketSelection: options.ticketSelection }),
     ...(options.replay === undefined ? {} : { replay: options.replay }),
     phase: null,
     budget: {
