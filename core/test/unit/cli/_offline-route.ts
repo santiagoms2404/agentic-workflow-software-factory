@@ -65,15 +65,17 @@ export interface FixtureConfigOptions {
 }
 
 /**
- * The shipped config protects `specs/*.html` (W03 task 1), and design-to-plan's
- * host `plan-render` phase writes a new plan file, so under the shipped policy
- * it refuses its own output at `no_protected_paths`. These fixtures exercise
- * that phase, so they drop the one glob. W03 task 12 moves `plan-render` onto
+ * The shipped config protects every plan set: plan files (W03 task 1), build
+ * prompts and paired ticket sets (W03 task 2). design-to-plan's host
+ * `plan-render` phase writes a new plan set, so under the shipped policy it
+ * refuses its own output at `no_protected_paths`. These fixtures exercise that
+ * phase, so they drop those globs. W03 task 12 moves `plan-render` onto
  * create-only admission and removes this exemption.
  */
 export const PLAN_FILES_GLOB = "specs/*.html";
+export const PLAN_SET_GLOBS: readonly string[] = [PLAN_FILES_GLOB, "specs/*-build-prompts.md", "specs/tickets/*/**"];
 export function withoutPlanProtection(config: AwsfConfig): AwsfConfig {
-  return { ...config, policy: { ...config.policy, protected_paths: config.policy.protected_paths.filter((glob) => glob !== PLAN_FILES_GLOB) } };
+  return { ...config, policy: { ...config.policy, protected_paths: config.policy.protected_paths.filter((glob) => !PLAN_SET_GLOBS.includes(glob)) } };
 }
 
 export function fixtureConfig(options: FixtureConfigOptions = {}): AwsfConfig {

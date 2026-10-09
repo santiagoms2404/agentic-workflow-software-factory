@@ -155,6 +155,8 @@ policy:
     - core/src/execution/transport-broker.ts
     - docs/driving/**
     - specs/*.html
+    - specs/*-build-prompts.md
+    - specs/tickets/*/**
   protected_operations: [credential-access, external-mutation, delete, migration, release-cutover, credit-billed-model]
 
 observability:
