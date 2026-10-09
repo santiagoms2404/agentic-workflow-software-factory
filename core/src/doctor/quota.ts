@@ -44,13 +44,17 @@ export function quotaRow(routes: readonly ProjectQuotaRoute[], result: QuotaProb
   const readout = buildQuotaReadout({ routes, probeResult: result, defaultThreshold: stop?.default ?? null,
     ...(stop?.by_adapter === undefined ? {} : { thresholdsByAdapter: stop.by_adapter }) });
   const low = readout.rows.some(row => row.verdict === "below" || row.effectivePercentRemaining === 0)
-    || result.readout.providers.some(provider => provider.scopes.some(scope => scope.rejected));
+    || result.readout.providers.some(provider => provider.scopes.some(scope => scope.rejected || scope.effectivePercentRemaining === 0));
+  const unmeasuredResets = result.readout.providers.flatMap(provider => provider.scopes
+    .filter(scope => scope.windowId === null || scope.resetsAt === null || scope.minutesToReset === null)
+    .map(scope => `provider=${provider.provider}; scope=${scope.scope}; binding window or reset not measured`));
   return {
-    status: result.availability === "unavailable" ? "finding" : low ? "warn" : "ok",
+    status: result.availability === "unavailable" ? "finding" : low || unmeasuredResets.length > 0 ? "warn" : "ok",
     detail: [
       `probe=${result.availability}${result.failure === null ? "" : ` (${result.failure.reasonCode})`}; latency=${latencyMs} ms`,
       ...renderQuotaReadout(readout),
       ...diagnostics,
+      ...unmeasuredResets,
       ...result.readout.providers.flatMap(provider => provider.scopes.map(scope =>
         `provider=${provider.provider}; scope=${scope.scope}; binding window=${scope.windowId ?? "not measured"}; reset=${scope.resetsAt ?? "not measured"}; rejected=${scope.rejected}; ${scope.effectivePercentRemaining === null ? "not measured" : scope.effectivePercentRemaining === 0 ? "exhausted" : "not exhausted"}`)),
     ],

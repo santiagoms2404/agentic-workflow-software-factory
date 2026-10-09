@@ -1106,7 +1106,7 @@ test("the CLI routes awsf review, requires --reason, and reports the declined ca
       cwd: fixture.canonical, terminal: terminal(false), writeOut: (line) => out.push(line), writeError: (line) => errors.push(line),
     });
     assert.equal(declined, 1);
-    assert.match(out.join("\n"), /Replacement review declined; state remains AWAITING_OWNER and no call was spent/);
+    assert.match(out.join("\n"), /Replacement review declined; state remains AWAITING_OWNER and no call was spent/, `errors[]: ${JSON.stringify(errors)}`);
     assert.equal((await readAttempt(fixture.attemptDir)).revision, fixture.status.revision);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
