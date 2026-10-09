@@ -55,6 +55,9 @@ export interface PhaseEvidenceRecord {
 
 /** Canonical production evidence carried by one attempt-journal record. */
 export type AttemptEvidence =
+  | { readonly type: "closure-intent"; readonly intent: import("../contracts/closure-record.ts").ClosureIntent }
+  | { readonly type: "closure-prepared"; readonly record: import("../contracts/closure-record.ts").ClosureRecord }
+  | { readonly type: "closure-record"; readonly record: import("../contracts/closure-record.ts").ClosureRecord }
   | { readonly type: "protected-commit-intent"; readonly intent: import("../git/protected-commit.ts").ProtectedCommitIntent }
   /**
    * The identity of one `index.lock` at the moment its creator finished writing

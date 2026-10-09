@@ -432,6 +432,16 @@ function projectPhaseRoute(db: DatabaseSync, sessionId: string, phaseId: string)
 
 function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: number, evidence: AttemptEvidence): void {
   switch (evidence.type) {
+    case "closure-intent":
+    case "closure-prepared":
+    case "closure-record":
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json, started_at)
+        VALUES (?, ?, NULL, ?, ?, 'notice', ?, ?, ?)`)
+        .run(`${sessionId}:${evidence.type}:${sourceSeq}`, sessionId, sourceSeq, sourceSeq, evidence.type,
+          stringifyRedacted(evidence.type === "closure-intent" ? evidence.intent : evidence.record),
+          evidence.type === "closure-intent" ? evidence.intent.at : evidence.record.at);
+      return;
     case "phase-accepted":
     case "phase-result-ready":
     case "resume-activation":
