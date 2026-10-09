@@ -352,7 +352,7 @@ flowchart TB
 
     <!-- ================= W02 ================= -->
     <section class="phase">
-      <h3><code class="status">[wip]</code> Milestone M2: W02 — Trap suite <span class="chip pa">Phase A</span><span class="xlabel">X2</span></h3>
+      <h3><code class="status">[x]</code> Milestone M2: W02 — Trap suite <span class="chip pa">Phase A</span><span class="xlabel">X2</span></h3>
       <p class="deep-plan"><a href="awsf-v3-w02-trap-suite.html">Deep plan: AWSF v3 W02 — Trap suite</a> <span class="muted">authored and approved by the owner, 2026-10-07</span></p>
       <p><em>Exists because every past stop should become a refusal with a test, and because a regression can land through a layer no gate runs.</em> Its completion is gate GR.</p>
       <h4>2. W02 — Trap suite</h4>
@@ -370,10 +370,10 @@ flowchart TB
       </div>
       <ul class="checklist">
         <li><code class="status">[x]</code> Deep plan <code>awsf-v3-w02-trap-suite.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> Q2 applied as decided, and Q13's journeys gate (landed 2026-10-02) still green</li>
-        <li><code class="status">[]</code> Every catalogued trap is refused before any provider call, and a removed refusal turns its trap red</li>
-        <li><code class="status">[]</code> <code>awsf doctor</code> reports Git storage, provider CLIs, quota, stale branches and open markers on landed work</li>
-        <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code>, which opens gate GR</li>
+        <li><code class="status">[x]</code> Q2 applied as decided, and Q13's journeys gate (landed 2026-10-02) still green</li>
+        <li><code class="status">[x]</code> Every catalogued trap is refused before any provider call, and a removed refusal turns its trap red</li>
+        <li><code class="status">[x]</code> <code>awsf doctor</code> reports Git storage, provider CLIs, quota, stale branches and open markers on landed work</li>
+        <li><code class="status">[x]</code> The deep plan's own milestones all reach <code>[x]</code>, which opens gate GR</li>
       </ul>
       <div class="loop">🔁 <strong>GR opens here and nowhere else.</strong> Seven workstreams wait on this marker, so it must mean what decision 13 says.</div>
     </section>
@@ -984,6 +984,10 @@ stateDiagram-v2
   <!-- ===== AMENDMENTS ===== -->
   <section id="amendments">
     <h2>Amendments</h2>
+    <details open>
+      <summary>2026-10-09 — W02 closed; gate GR opens</summary>
+      <p>All six milestones of <code>awsf-v3-w02-trap-suite.html</code> reached <code>[x]</code>, and its Validation checklist passed at <code>a5fa440</code>. Every catalogued trap (TR-01–TR-20) is refused before any provider call, and its removed refusal turns it red. <code>awsf traps</code> exits 0 on the owner's state roots with no unlinked stop since the 2026-10-07T23:59:59Z cut. <code>awsf doctor</code> names every environment and repository row. The deep plan's 2026-10-09 Amendment holds the closing record. W02 moves to <code>[x]</code> and <code>W02.md</code> to <code>done</code> in this commit, which opens gate GR for the workstreams that wait on it. Returned handoffs are recorded in W03, W05–W08 and W10–W14.</p>
+    </details>
     <details open>
       <summary>2026-10-07 — W02 deep plan approved</summary>
       <p>The owner approved <code>awsf-v3-w02-trap-suite.html</code>, its build prompts and its sixteen-ticket set. Its eight Questionables (W02-Q1–Q8) remain decided as recommended on 2026-10-07, including the catalogue's cut at 2026-10-07 over every registered project's non-prove stops. W02 moves to <code>[wip]</code>, with its spine ticket moving to <code>wip</code> in this same commit. Only the authored-and-approved checklist row is complete; no implementation acceptance is claimed, and gate GR stays closed until W02's final milestone lands. Implementation remains factory-managed by default, under K1, subject to the deep plan's owner gates G02-S, G02-L, G02-D and the optional G02-Q.</p>

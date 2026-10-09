@@ -149,8 +149,8 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-07</dd>
-        <dt>modified</dt>     <dd>2026-10-07 (authored, awaiting owner review), 2026-10-07 (owner review applied: W02-Q1–Q8 decided), 2026-10-07 (deep plan approved by the owner), 2026-10-07 (ticketFrames added to the design index), 2026-10-07 (T01 landed; G02-S recorded; M1 complete), 2026-10-08 (M2 shift landed: T02 and T03 done, T04 awaiting G02-L), 2026-10-08 (G02-L landed; M2 complete), 2026-10-08 (M3 shift landed: T05–T07 done; M3 complete), 2026-10-08 (G02-D landed: driving documents carry the trap link), 2026-10-08 (readout memory fix landed), 2026-10-08 (M4+M5 shift landed: T08–T15 done; M4 and M5 complete), 2026-10-09 (review-diff delivery and the F1, D1 and F3 fixes landed)</dd>
-        <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-07 approval Amendment and its commit; authoring base e32e892, committed on 60d01d5; T01 candidate 20dba5c, landed by fast-forward; G02-S in the owner commit after it; M2 shift a952bc6, 6ba4a0e, 234fea6, landed by fast-forward; bookkeeping and G02-L as two owner commits after it; M3 shift c0c0007, 6ef0f6f, b2710fe, landed by fast-forward; bookkeeping and G02-D as two owner commits after it; readout memory fix 179ad2f, landed by fast-forward; M4+M5 shift ba06988, 15cc20e, 2291f86, 7aecb37, 10098c4, 8c4dfdc, b8697b4, eb83e97, landed by fast-forward; bookkeeping as one owner commit after it; review-diff delivery 14451de, 4366ece and the F1/D1/F3 fixes 6844ae5, each landed by fast-forward; bookkeeping as one owner commit after them</dd>
+        <dt>modified</dt>     <dd>2026-10-07 (authored, awaiting owner review), 2026-10-07 (owner review applied: W02-Q1–Q8 decided), 2026-10-07 (deep plan approved by the owner), 2026-10-07 (ticketFrames added to the design index), 2026-10-07 (T01 landed; G02-S recorded; M1 complete), 2026-10-08 (M2 shift landed: T02 and T03 done, T04 awaiting G02-L), 2026-10-08 (G02-L landed; M2 complete), 2026-10-08 (M3 shift landed: T05–T07 done; M3 complete), 2026-10-08 (G02-D landed: driving documents carry the trap link), 2026-10-08 (readout memory fix landed), 2026-10-08 (M4+M5 shift landed: T08–T15 done; M4 and M5 complete), 2026-10-09 (review-diff delivery and the F1, D1 and F3 fixes landed), 2026-10-09 (M6 landed: T16 done; M6 and the Validation checklist complete; the workstream is closed and gate GR opens)</dd>
+        <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-07 approval Amendment and its commit; authoring base e32e892, committed on 60d01d5; T01 candidate 20dba5c, landed by fast-forward; G02-S in the owner commit after it; M2 shift a952bc6, 6ba4a0e, 234fea6, landed by fast-forward; bookkeeping and G02-L as two owner commits after it; M3 shift c0c0007, 6ef0f6f, b2710fe, landed by fast-forward; bookkeeping and G02-D as two owner commits after it; readout memory fix 179ad2f, landed by fast-forward; M4+M5 shift ba06988, 15cc20e, 2291f86, 7aecb37, 10098c4, 8c4dfdc, b8697b4, eb83e97, landed by fast-forward; bookkeeping as one owner commit after it; review-diff delivery 14451de, 4366ece and the F1/D1/F3 fixes 6844ae5, each landed by fast-forward; bookkeeping as one owner commit after them; M6 shift a5fa440, landed by fast-forward; closing bookkeeping as one owner commit after it</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M2 → W02, gate GR, Questionables Q2 and Q13, Notes), ./tickets/awsf-v3-plan/W02.md (the meta-prompt this plan answers, Handoff C1–C8), ./awsf-v3-w01-driver-checks.html (K1's fields, the cause vocabulary, the forensics map, the 2026-10-07 closing Amendment), ./awsf-v3-intent.md (Terms K5, decision 13), ./awsf-v3-assessment-and-direction.md ("To prevent future friction"), ../AGENTS.md (invariants 3, 4, 6 and 10), ./design/awsf-v3-plan/frame-index.json (workstreamFrames.W02: mp-s3-blocked, mp-s5-checks), the machine-local forensics draft ~/marimba-lab/forensics/2026-10-01-stops.md (not committed)</dd>
@@ -664,18 +664,18 @@ flowchart LR
 
     <!-- ================= M6 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M6: GR — the catalogue holds at the cut and after it <span class="wtag">managed</span> <span class="wtag raise">opens gate GR</span></h3>
+      <h3><code class="status">[x]</code> Milestone M6: GR — the catalogue holds at the cut and after it <span class="wtag">managed</span> <span class="wtag raise">opens gate GR</span></h3>
       <p><strong>W02's <code>[x]</code> opens gate GR, and nothing earlier does.</strong> Its condition, from decision 13: the trap suite refuses every known trap. "Known" is the catalogue at the cut plus every stop since it, each linked to a trap or a recorded reason. Seven workstreams wait on this marker, so it is earned only by the closing record below. Testing shares the task.</p>
 
       <h4>16. The GR record, and the workstream's closing duties</h4>
       <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code> · <code class="serves">INV-4</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>npm run test:traps</code> green: every catalogued trap refused before any provider call, every mutant red, the count recorded</li>
-        <li><code class="status">[]</code> <code>awsf traps</code> on the owner's state roots exits 0: every stop since the cut is linked, none to a missing trap. The owner's attributions that make it so are owner acts, done before this ticket's candidate is judged</li>
-        <li><code class="status">[]</code> <code>awsf doctor</code> on the owner's machine reports every M5 row by name; its findings are listed for the owner, not fixed</li>
-        <li><code class="status">[]</code> G02-L and G02-D landed, and G02-Q if W02-Q7 took a threshold</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code>, <code>npm run test:journeys</code>, <code>npm run test:traps</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0, each run alone</li>
-        <li><code class="status">[]</code> The closing record for the owner's Amendment: each task's final state, landing SHAs, gate counts, the catalogue's size by trap and by no-trap kind, decisions taken, surprises, and the handoff findings for W05–W08 and W10–W14</li>
+        <li><code class="status">[x]</code> <code>npm run test:traps</code> green: every catalogued trap refused before any provider call, every mutant red, the count recorded</li>
+        <li><code class="status">[x]</code> <code>awsf traps</code> on the owner's state roots exits 0: every stop since the cut is linked, none to a missing trap. The owner's attributions that make it so are owner acts, done before this ticket's candidate is judged</li>
+        <li><code class="status">[x]</code> <code>awsf doctor</code> on the owner's machine reports every M5 row by name; its findings are listed for the owner, not fixed</li>
+        <li><code class="status">[x]</code> G02-L and G02-D landed, and G02-Q if W02-Q7 took a threshold</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code>, <code>npm run test:journeys</code>, <code>npm run test:traps</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0, each run alone</li>
+        <li><code class="status">[x]</code> The closing record for the owner's Amendment: each task's final state, landing SHAs, gate counts, the catalogue's size by trap and by no-trap kind, decisions taken, surprises, and the handoff findings for W05–W08 and W10–W14</li>
       </ul>
       <div class="loop">🔁 <strong>GR opens here and nowhere else.</strong> If a stop after the cut names a trap that does not exist yet, this task waits for that trap, or the owner re-links the stop with a reason.</div>
     </section>
@@ -686,13 +686,13 @@ flowchart LR
     <h2>Validation Commands</h2>
     <p>Run these to validate the whole workstream. All are offline except the two read-only commands on the owner's state roots.</p>
     <ul class="checklist">
-      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan and its tickets agree</li>
-      <li><code class="status">[]</code> <code>node --experimental-strip-types --test core/test/unit/meta/trap-catalogue.test.ts</code> — catalogue, tests and markers agree, and every stop code is covered</li>
-      <li><code class="status">[]</code> <code>npm run test:traps</code> — every trap refused, every mutant red</li>
-      <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code> and <code>npm run test:journeys</code> — green, counts recorded against the base</li>
-      <li><code class="status">[]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
-      <li><code class="status">[]</code> <code>awsf traps</code> — exits 0 on the owner's state roots</li>
-      <li><code class="status">[]</code> <code>awsf doctor --json</code> — names every row of AC-5</li>
+      <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/ticket-plan-sync.test.ts</code> — this plan and its tickets agree</li>
+      <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/meta/trap-catalogue.test.ts</code> — catalogue, tests and markers agree, and every stop code is covered</li>
+      <li><code class="status">[x]</code> <code>npm run test:traps</code> — every trap refused, every mutant red</li>
+      <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run test:contract</code>, <code>npm run test:sim</code> and <code>npm run test:journeys</code> — green, counts recorded against the base</li>
+      <li><code class="status">[x]</code> <code>npm run typecheck</code> and <code>npm run lint</code> — exit 0</li>
+      <li><code class="status">[x]</code> <code>awsf traps</code> — exits 0 on the owner's state roots</li>
+      <li><code class="status">[x]</code> <code>awsf doctor --json</code> — names every row of AC-5</li>
     </ul>
     <div class="loop">🔁 <strong>The workstream is not complete until every box is checked and every command passes.</strong> A step that cannot be completed is marked <code>[f]</code> with its reason.</div>
   </section>
@@ -947,6 +947,56 @@ flowchart LR
       <p>F1 was misdiagnosed in the M4+M5 Amendment. The shapes it named never reached the skip at <code>production-run.ts:1696</code>: the probe already marked a scope with no minute figure semantics-unresolved, so the probe was unavailable, nothing refused, and the run spent. The fix keeps the probe known for any scope with a percentage or a rejection (<code>core/src/quota/probe.ts:255</code>) and runs TR-14 before the binding-window skip. With no measured window or reset, <code>ProductionQuotaRefused</code> now names the provider and scope and says the window and reset were not measured. Six new TR-14 shapes (rejected or 0%, each with unknown runway, no single binding window, or a missing reset) refuse before spend with the attempt PREPARED; TR-15 still needs a measured minute figure, and an unavailable probe still does not refuse. D1: a disabled adapter's executable stays in the executables row's detail, marked disabled, and never makes the row a finding; an enabled adapter, git, bwrap or quota-axi that does not resolve still does. F3, found by the review-diff review: a resume instruction at a review phase whose retained context predates delivery now composes its prompt from the delivered context, so its digest matches the launch.</p>
       <p>Beyond the gates (3171 unit, 373 journeys, 76 traps, typecheck and lint at 6844ae5), the driving session ran each new test on an exported copy of 4366ece carrying the candidate's tests: the six TR-14 shapes, the two D1 tests and the F3 legacy-context journey failed there and passed on 6844ae5. test:contract ran 151 and the TR-14 own-mutant still turns red. Doctor from 6844ae5, run against a copy of the owner's state root, reported the executables row ok with the disabled <code>agy</code> in its detail and changed no file. It still exits 1 for storage (DrvFs 0777) and a stale Codex quota probe. The trap catalogue is unchanged: 20 traps, 48 no-trap seeds, next free id TR-21.</p>
       <p>Still open. The journeys flake at <code>replacement-review.test.ts:1091</code>: the builder could not establish its cause and left the test unchanged, as the request required. The review notes that empty stdout means the command threw into <code>errors[]</code>, which the test never prints. R1 (low): widening the probe also makes doctor rate a known percentage with an unmeasured reset as an ok quota row where it was a finding, and no test pins that. F3's instruction path writes the delivery before the owner confirms, and a review that had already retried would still be refused at resume, failing closed. Every M4 and M5 row holds as written.</p>
+    </details>
+    <details open>
+      <summary>2026-10-09 — M6 landed; the workstream is closed and gate GR opens</summary>
+      <p><strong>How M6 was built.</strong> T16 landed as one shift over M6 (a5fa440; builder codex/openai-codex/gpt-6.1-sol at high, reviewer claude/anthropic/claude-opus-5-5 at medium; 3 of 5 calls). The extra call was a correction: the first envelope listed the builder's own evidence logs as report artifacts it does not own, and failed <code>envelope_valid</code>. Since T16's duties alone change no file, and a candidate with no diff fails <code>head_advanced</code> after spend (seed 38), the request also gave it the two findings the follow-ups left open. R1: doctor's quota row now warns, never a finding, when a known probe has a scope whose binding window or reset is not measured, and names the provider and scope; an unavailable probe stays a finding. FLAKE: the stdout assertion of <code>replacement-review.test.ts</code>'s declined-review test now carries <code>errors[]</code> in its failure message. Nothing it asserts changed, and the cause is still not established. The review accepted with no findings. Its limitations say the builder's closing record was not in its evidence: a shift review context does not carry the builder's notes. The driving session therefore checked the record against the repository. Every SHA it cites exists, is an ancestor of a5fa440 and matches its ticket, and its catalogue counts match the real readout. The R1 tests fail 4 of 6 on e93e5de and pass 6 of 6 on a5fa440.</p>
+      <p><strong>Closing record.</strong> Final states and landing SHAs, all done:</p>
+      <ul>
+        <li>M1: T01 20dba5c, T02 a952bc6, T03 6ba4a0e, with G02-S 8ad6c3a;</li>
+        <li>M2: T04 234fea6, with G02-L 1ad623c;</li>
+        <li>M3: T05 c0c0007, T06 6ef0f6f (readout memory fix 179ad2f), T07 b2710fe, with G02-D 0322676;</li>
+        <li>M4: T08 ba06988, T09 15cc20e (scope correction 6844ae5), T10 2291f86, T11 7aecb37, T12 10098c4;</li>
+        <li>M5: T13 8c4dfdc (disabled-adapter correction 6844ae5, R1 a5fa440), T14 b8697b4, T15 eb83e97;</li>
+        <li>M6: T16 a5fa440;</li>
+        <li>follow-ups: review-diff delivery 14451de and 4366ece.</li>
+      </ul>
+      <p>G02-Q was not required: W02-Q7 took no threshold, and <code>routing.quota_stop</code> is unset.</p>
+      <p>Gate counts at a5fa440:</p>
+      <ul>
+        <li>the host's gates: 3177 unit, 373 journeys, 76 traps, typecheck and lint;</li>
+        <li>run on an exported copy by the driving session: test:contract 151 and test:sim 98;</li>
+        <li>at the base: 3171 unit.</li>
+      </ul>
+      <p>Earlier recorded heads: T01 3071 unit and 19 traps; M2 3090 and 44; M3 3105 unit, 149 contract, 98 simulation and 365 journeys; M4+M5 at eb83e97 3151, 149, 98, 369 and 70; 6844ae5 3171 unit, 151 contract, 373 journeys and 76 traps.</p>
+      <p>The catalogue: 20 traps (TR-01–TR-20), 62 ledger seeds, 14 of them assigned to traps and 48 no-trap seeds (fixed 4, after-spend 25, owner 3, unexplained 9, not-a-stop 7). PENDING is empty and the next free id is TR-21. The 76 trap-layer tests are 55 trap-specific tests, among them 20 source mutants that each turn red, plus 21 population and replay tests; TR-14 holds 11 of them, including the six scope shapes added by 6844ae5.</p>
+      <p>Decisions as taken, all on 2026-10-07:</p>
+      <ul>
+        <li>W02-Q1: the cut is 2026-10-07T23:59:59Z, over every registered project's non-prove stops.</li>
+        <li>W02-Q2: a hermetic catalogue fence in test:unit, plus <code>awsf traps</code> exiting 1 over the journal while a stop is unlinked or names a missing trap.</li>
+        <li>W02-Q3: non-owner causes name a trap or a no-trap reason.</li>
+        <li>W02-Q4: source mutants run on every trap-layer run, with no shipped bypass.</li>
+        <li>W02-Q5: a separate traps landing gate, G02-L, at 600 s.</li>
+        <li>W02-Q6: only run-stopping conditions are findings, and incomplete measurements warn.</li>
+        <li>W02-Q7: an exhausted or rejected known scope always refuses, a threshold refuses only when configured, and an unavailable probe never refuses.</li>
+        <li>W02-Q8: login is read from <code>quota-axi</code> status, never by starting a provider CLI.</li>
+      </ul>
+      <p><strong>Acceptance on the owner's machine,</strong> run by the driving session from a5fa440:</p>
+      <ul>
+        <li><code>awsf traps</code> on the owner's state roots exits 0: 0 stops since the cut, none unlinked and none naming a missing trap. smart-health-platform has no landed attempt, so its traps are not measured.</li>
+        <li><code>awsf doctor --json</code> emits <code>awsf.doctor/v1</code> naming all eleven rows: existing, jev, storage, executables, providers, quota, coverage, branches, worktrees, baseline and markers.</li>
+        <li>Doctor exits 1 on two findings, listed for the owner and not fixed: storage (the DrvFs 0777 signature) and quota (a stale Codex probe, now with its unmeasured reset named). Executables is ok, with the disabled <code>agy</code> in its detail.</li>
+        <li>Neither command changed the repository.</li>
+      </ul>
+      <p><strong>Surprises.</strong></p>
+      <ul>
+        <li>The M4+M5 Amendment got F1's cause wrong. A scope with no minute figure made the probe unavailable before the binding-window skip was reached; 6844ae5 fixed it in the probe.</li>
+        <li>The M4+M5 review read 95,845 of 299,501 diff characters until 14451de and 4366ece delivered the full diff as read-only files. The F1/D1 review proved delivery live by quoting the index token. A partial Read still counts as a read.</li>
+        <li>The readout's memory bound (C2) was fixed by 179ad2f: 122 s and a 1567 MB peak on the 2.0 GB copy, at the default heap. Memory still grows with the largest single journal.</li>
+        <li>Of C5, F1, D1 and partial review diffs are closed, and the journeys flake remains open with its cause unknown.</li>
+        <li>A shift review cannot judge a ticket whose deliverable is a written record, because the builder's notes never reach it.</li>
+      </ul>
+      <p>The returned handoffs for W03, W05–W08 and W10–W14 are recorded in those spine tickets. Every M1–M6 row holds as written or as reworded by an earlier Amendment.</p>
     </details>
   </section>
 
