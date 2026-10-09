@@ -169,36 +169,81 @@ function parsedTask(
  * mandatory is the trigger for a new plan format id.
  */
 export function parseAwsfPlanHtmlV1(html: string, plan: string): ParsedAwsfPlan {
-  const milestones = [...html.matchAll(/<h3><code class="status">\[([^\]]*)\]<\/code> Milestone (M\d+):/g)];
-  if (milestones.length === 0) throw new PlanGrammarMismatchError(plan);
+  const layout = scanAwsfPlanHtmlV1(html);
+  if (layout.milestones.length === 0) throw new PlanGrammarMismatchError(plan);
 
   const declarations = parseDeclarations(html, plan);
-  const tasks: ParsedPlanTask[] = [];
-  for (const [index, milestone] of milestones.entries()) {
-    const start = milestone.index;
-    // Bound the final milestone at its section so plan-wide checklists cannot
-    // become part of its final task and create false ticket-state drift.
-    const closing = html.indexOf("</section>", start);
-    const end = Math.min(milestones[index + 1]?.index ?? html.length, closing === -1 ? html.length : closing);
-    const block = html.slice(start, end);
-    const heads = [...block.matchAll(/<h4>(\d+)\./g)];
-    for (const [headIndex, head] of heads.entries()) {
-      const slice = block.slice(head.index, heads[headIndex + 1]?.index ?? block.length);
-      const checklist = [...slice.matchAll(/<code class="status">\[([^\]]*)\]<\/code>/g)]
-        .map((match) => match[1] ?? "");
-      tasks.push(parsedTask(
-        Number(head[1]),
-        milestone[2] ?? "",
-        milestone[1] ?? "",
-        Object.freeze(checklist),
-        parseServes(slice, plan),
-      ));
-    }
-  }
-  const parsed = tasks.filter((task) => task.number > 0);
+  const parsed = layout.tasks.map((task) => parsedTask(
+    task.number,
+    task.milestone,
+    task.milestoneMarker,
+    Object.freeze(task.tokens.map((token) => token.value)),
+    parseServes(html.slice(task.start, task.end), plan),
+  )).filter((task) => task.number > 0);
   if (parsed.length === 0) throw new PlanGrammarMismatchError(plan);
   Object.defineProperty(parsed, "declarations", { value: declarations, enumerable: false });
   return Object.freeze(parsed) as ParsedAwsfPlan;
+}
+
+/** Character spans of exactly the tokens consumed by the v1 parser. */
+export interface PlanStatusToken {
+  readonly start: number;
+  readonly end: number;
+  readonly valueStart: number;
+  readonly valueEnd: number;
+  readonly value: string;
+  readonly milestone: string;
+  /** null identifies a milestone heading rather than a task row. */
+  readonly taskNumber: number | null;
+  /** Zero-based in the task's parser checklist; null for a milestone. */
+  readonly rowIndex: number | null;
+}
+
+export interface PlanTaskSlice {
+  readonly number: number;
+  readonly milestone: string;
+  readonly milestoneMarker: string;
+  readonly start: number;
+  readonly end: number;
+  readonly tokens: readonly PlanStatusToken[];
+}
+
+/** Shared by parsing and closure: no plan-wide example or checklist is masked. */
+export function scanAwsfPlanHtmlV1(html: string): {
+  readonly milestones: readonly PlanStatusToken[];
+  readonly tasks: readonly PlanTaskSlice[];
+} {
+  const heads = [...html.matchAll(/<h3><code class="status">\[([^\]]*)\]<\/code> Milestone (M\d+):/g)];
+  const milestones: PlanStatusToken[] = [];
+  const tasks: PlanTaskSlice[] = [];
+  const token = (start: number, valueStart: number, value: string, milestone: string,
+    taskNumber: number | null, rowIndex: number | null): PlanStatusToken => Object.freeze({
+    start, end: valueStart + value.length + "]</code>".length,
+    valueStart, valueEnd: valueStart + value.length, value, milestone, taskNumber, rowIndex,
+  });
+  for (const [index, head] of heads.entries()) {
+    const start = head.index;
+    const milestone = head[2] ?? "";
+    const marker = head[1] ?? "";
+    milestones.push(token(start + "<h3>".length, start + '<h3><code class="status">['.length,
+      marker, milestone, null, null));
+    // The same section bound applies to every milestone, not only the last.
+    const closing = html.indexOf("</section>", start);
+    const end = Math.min(heads[index + 1]?.index ?? html.length, closing === -1 ? html.length : closing);
+    const block = html.slice(start, end);
+    const taskHeads = [...block.matchAll(/<h4>(\d+)\./g)];
+    for (const [taskIndex, taskHead] of taskHeads.entries()) {
+      const number = Number(taskHead[1]);
+      const taskStart = start + taskHead.index;
+      const taskEnd = start + (taskHeads[taskIndex + 1]?.index ?? block.length);
+      const tokens = [...html.slice(taskStart, taskEnd).matchAll(/<code class="status">\[([^\]]*)\]<\/code>/g)]
+        .map((match, rowIndex) => token(taskStart + match.index,
+          taskStart + match.index + '<code class="status">['.length, match[1] ?? "", milestone, number, rowIndex));
+      tasks.push(Object.freeze({ number, milestone, milestoneMarker: marker,
+        start: taskStart, end: taskEnd, tokens: Object.freeze(tokens) }));
+    }
+  }
+  return Object.freeze({ milestones: Object.freeze(milestones), tasks: Object.freeze(tasks) });
 }
 
 function checkoutRoot(start: string): string {
