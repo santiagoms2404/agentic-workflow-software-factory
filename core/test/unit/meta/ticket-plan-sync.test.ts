@@ -5,7 +5,13 @@ import { basename, dirname, join } from "node:path";
 import { parse } from "yaml";
 import { TICKET_TASK_CLASSES } from "../../../src/contracts/ticket.ts";
 import { loadCatalog } from "../../../src/registry/catalog.ts";
-import { isPlanIdentifierClaim, spineCoverage } from "../../../src/registry/plan-spine.ts";
+import {
+  planAgreement,
+  validTaskClass,
+  type AgreementTicket,
+  type PlanAgreementInput,
+  type PlanAgreementRule,
+} from "../../../src/registry/plan-agreement.ts";
 import {
   parseAwsfPlanHtmlV1,
   resolvePlanSources,
@@ -31,18 +37,8 @@ import { repoRoot } from "./_walk.ts";
 const ROOT = repoRoot();
 const CATALOG = join(ROOT, "awsf.project.yaml");
 
-const STATES = ["todo", "wip", "done", "failed"];
-const TIERS = [0, 1, 2];
-const WORKFLOWS = ["scout", "plan", "build", "plan-build-test", "build-review", "simple-sdlc", "intake"];
-
 /** `T01` for a task plan, `W01` for a spine whose units are workstreams. */
 const TICKET_FILE = /^[TW]\d\d\.md$/;
-const TICKET_ID = /^[TW]\d\d$/;
-
-// Spine dependencies order deep-plan authoring, while their states track build
-// completion. G1 deliberately reverses this one build edge after both plans are
-// authored: W06 closes before W05 adds its new roles.
-const COMPLETION_DEPENDENCY_EXCEPTIONS = new Set(["awsf-v2-plan/W06->W05"]);
 
 interface PlanSet {
   /** What every failure message names, so a red test says WHICH plan drifted. */
@@ -94,25 +90,11 @@ function planSets(): PlanSet[] {
   return sets;
 }
 
-interface Ticket {
-  id: string;
-  number: number;
-  title: string;
-  milestone: string;
-  tier: number | undefined;
-  state: string;
-  depends_on: string[];
-  workflow: string | undefined;
-  task_class: unknown;
-  serves: string[] | undefined;
-  prompt: string;
-}
-
 function planTasks(set: PlanSet): ParsedAwsfPlan {
   return parseAwsfPlanHtmlV1(readFileSync(set.plan, "utf8"), set.label);
 }
 
-function tickets(set: PlanSet): Ticket[] {
+function tickets(set: PlanSet): AgreementTicket[] {
   return readdirSync(set.tickets)
     .filter((name) => TICKET_FILE.test(name))
     .sort()
@@ -153,146 +135,61 @@ function sectionBPrompts(set: PlanSet): Map<number, { title: string; prompt: str
   return out;
 }
 
-function identifierSpineViolations(set: PlanSet) {
-  const parsed = planTasks(set);
-  const planTickets = tickets(set);
-  const ticketIdByNumber = new Map(planTickets.map((ticket) => [ticket.number, ticket.id]));
-  return spineCoverage(
-    { label: set.label, declarations: parsed.declarations },
-    parsed.map((task) => ({
-      id: ticketIdByNumber.get(task.number) ?? `T${String(task.number).padStart(2, "0")}`,
-      serves: task.serves,
-    })),
-    planTickets.map((ticket) => ({ id: ticket.id, serves: ticket.serves })),
-    set.knownStems,
-  );
+function agreementInput(set: PlanSet): PlanAgreementInput {
+  return {
+    label: set.label,
+    plan: planTasks(set),
+    tickets: tickets(set),
+    sectionB: sectionBPrompts(set),
+    knownStems: set.knownStems,
+  };
+}
+
+function checkRule(rule: PlanAgreementRule): void {
+  for (const set of planSets()) {
+    const offenders = planAgreement(agreementInput(set), rule)
+      .map((violation) => violation.message);
+    // Coverage historically printed the individual diagnostic as the assertion
+    // message; the other rules printed the plan label and diagnostic array.
+    if (rule === "TICKET_COVERAGE") {
+      for (const message of offenders) assert.deepEqual([message], [], message);
+    } else {
+      assert.deepEqual(offenders, [], set.label);
+    }
+  }
 }
 
 test("tickets cover a contiguous prefix of the plan's tasks, with no orphans", () => {
-  for (const set of planSets()) {
-    const numbers = tickets(set).map((t) => t.number);
-    const highest = Math.max(...numbers);
-    const expected = Array.from({ length: highest }, (_, i) => i + 1);
-    assert.deepEqual(numbers, expected, "ticket ids must be T01..Tnn with no gaps");
-
-    const uncovered = planTasks(set)
-      .filter((t) => t.number <= highest && !numbers.includes(t.number))
-      .map((t) => t.number);
-    assert.deepEqual(uncovered, [], "a plan task below the highest ticket has no ticket");
-
-    const orphans = numbers.filter((n) => !planTasks(set).some((t) => t.number === n));
-    assert.deepEqual(orphans, [], "a ticket names a task the plan does not have");
-  }
+  checkRule("TICKET_COVERAGE");
 });
 
 test("each ticket's milestone matches the plan block its task lives in", () => {
-  for (const set of planSets()) {
-    const byNumber = new Map(planTasks(set).map((t) => [t.number, t]));
-    const offenders = tickets(set)
-      .filter((t) => byNumber.get(t.number)?.milestone !== t.milestone)
-      .map((t) => `${set.label}/${t.id}: ticket says ${t.milestone}, plan says ${byNumber.get(t.number)?.milestone}`);
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("MILESTONE");
 });
 
 test("ticket state agrees with its milestone's marker", () => {
-  for (const set of planSets()) {
-    const byNumber = new Map(planTasks(set).map((t) => [t.number, t]));
-    const offenders: string[] = [];
-    for (const ticket of tickets(set)) {
-      const marker = byNumber.get(ticket.number)?.milestoneMarker;
-      if (marker === "x" && ticket.state !== "done") {
-        offenders.push(`${set.label}/${ticket.id}: milestone ${ticket.milestone} is [x] but ticket is ${ticket.state}`);
-      }
-      if (marker === "" && ticket.state === "done") {
-        offenders.push(`${set.label}/${ticket.id}: milestone ${ticket.milestone} is [] but ticket is done`);
-      }
-    }
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("MILESTONE_STATE");
 });
 
 test("every plan task carries a checklist", () => {
-  for (const set of planSets()) {
-    // Without one, a ticket's state can only be checked against its milestone
-    // marker — a blind spot for any task alone in an unfinished milestone. Nine
-    // tasks were missing one on 2026-08-06; this keeps them from coming back.
-    const barren = planTasks(set)
-      .filter((t) => t.checklist.length === 0)
-      .map((t) => `${set.label}: task ${t.number} (${t.milestone}) has no checklist to check state against`);
-    assert.deepEqual(barren, [], set.label);
-  }
+  checkRule("CHECKLIST");
 });
 
 test("ticket state agrees with its task's own checklist", () => {
-  for (const set of planSets()) {
-    const byNumber = new Map(planTasks(set).map((t) => [t.number, t]));
-    const offenders: string[] = [];
-    for (const ticket of tickets(set)) {
-      const checklist = byNumber.get(ticket.number)?.checklist ?? [];
-      if (checklist.length === 0) continue; // guarded by the test above
-      const allChecked = checklist.every((mark) => mark === "x");
-      if (allChecked && ticket.state !== "done") {
-        offenders.push(`${set.label}/${ticket.id}: every plan checklist box is [x] but ticket is ${ticket.state}`);
-      }
-      if (!allChecked && ticket.state === "done") {
-        offenders.push(`${set.label}/${ticket.id}: ticket is done but the plan still has unchecked boxes`);
-      }
-    }
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("CHECKLIST_STATE");
 });
 
 test("each ticket carries its Section B build prompt byte-identically", () => {
-  for (const set of planSets()) {
-    const source = sectionBPrompts(set);
-    const offenders: string[] = [];
-    for (const ticket of tickets(set)) {
-      const block = source.get(ticket.number);
-      if (!block) {
-        offenders.push(`${set.label}/${ticket.id}: no Section B block in awsf-plan-build-prompts.md`);
-        continue;
-      }
-      if (block.prompt !== ticket.prompt) offenders.push(`${set.label}/${ticket.id}: build prompt has drifted from Section B`);
-      if (block.title !== ticket.title) offenders.push(`${set.label}/${ticket.id}: title differs from its Section B heading`);
-    }
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("PROMPT");
 });
 
 test("depends_on points only backwards at tickets that exist", () => {
-  for (const set of planSets()) {
-    const all = tickets(set);
-    const ids = new Set(all.map((t) => t.id));
-    const offenders: string[] = [];
-    for (const ticket of all) {
-      for (const dep of ticket.depends_on) {
-        if (!ids.has(dep)) offenders.push(`${set.label}/${ticket.id}: depends on ${dep}, which does not exist`);
-        else if (dep >= ticket.id) offenders.push(`${set.label}/${ticket.id}: depends on ${dep}, which is not earlier`);
-      }
-    }
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("DEPENDENCIES");
 });
 
 test("a done ticket never waits on unfinished work except at the declared G1 inversion", () => {
-  for (const set of planSets()) {
-    const all = tickets(set);
-    const stateOf = new Map(all.map((t) => [t.id, t.state]));
-    const offenders = all
-      .filter((t) => t.state === "done")
-      .flatMap((t) => t.depends_on
-        .filter((dep) => stateOf.get(dep) !== "done")
-        .filter((dep) => stateOf.get(dep) === "failed"
-          || !COMPLETION_DEPENDENCY_EXCEPTIONS.has(`${set.label}/${t.id}->${dep}`))
-        .map((dep) => `${set.label}/${t.id} is done but ${dep} is ${stateOf.get(dep)}`));
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("COMPLETED_DEPENDENCIES");
 });
-
-function validTaskClass(value: unknown): boolean {
-  return value === undefined || (typeof value === "string" && (TICKET_TASK_CLASSES as readonly string[]).includes(value));
-}
 
 test("the task-class fence rejects unknown and non-string values without coercion", () => {
   for (const value of TICKET_TASK_CLASSES) assert.equal(validTaskClass(value), true);
@@ -303,72 +200,23 @@ test("the task-class fence rejects unknown and non-string values without coercio
 });
 
 test("frontmatter values stay inside their vocabularies", () => {
-  for (const set of planSets()) {
-    const offenders: string[] = [];
-    for (const ticket of tickets(set)) {
-      if (!STATES.includes(ticket.state)) offenders.push(`${set.label}/${ticket.id}: state "${ticket.state}"`);
-      // `tier`, `workflow`, and `serves` are optional: the plan skill's own rule
-      // is to omit a field when a plan defines no such vocabulary rather than
-      // invent one. Present-but-wrong is the defect; absent is legitimate.
-      // The four spine tests below mirror that rule: when a plan declares no
-      // identifiers and its tasks and tickets claim none, there is no join to
-      // enforce, so the plan legitimately passes instead of inventing a spine.
-      if (ticket.tier !== undefined && !TIERS.includes(ticket.tier)) {
-        offenders.push(`${set.label}/${ticket.id}: tier "${String(ticket.tier)}"`);
-      }
-      if (ticket.workflow !== undefined && !WORKFLOWS.includes(ticket.workflow)) {
-        offenders.push(`${set.label}/${ticket.id}: workflow "${ticket.workflow}"`);
-      }
-      if (!validTaskClass(ticket.task_class)) {
-        offenders.push(`${set.label}/${ticket.id}: task_class ${JSON.stringify(ticket.task_class)}`);
-      }
-      if (
-        ticket.serves !== undefined
-        && (!Array.isArray(ticket.serves)
-          || ticket.serves.some((identifier) => typeof identifier !== "string" || !isPlanIdentifierClaim(identifier)))
-      ) {
-        offenders.push(`${set.label}/${ticket.id}: serves ${JSON.stringify(ticket.serves)}`);
-      }
-      if (!TICKET_ID.test(ticket.id)) offenders.push(`${set.label}/${ticket.id}: id is not zero-padded Tnn or Wnn`);
-    }
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("VOCABULARIES");
 });
 
 test("identifier spine COVERAGE: every declaration is served by a plan task", () => {
-  for (const set of planSets()) {
-    const offenders = identifierSpineViolations(set)
-      .filter((violation) => violation.rule === "COVERAGE")
-      .map((violation) => violation.message);
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("COVERAGE");
 });
 
 test("identifier spine ORPHANS: task and ticket claims are declared or qualified and resolvable", () => {
-  for (const set of planSets()) {
-    const offenders = identifierSpineViolations(set)
-      .filter((violation) => violation.rule === "ORPHANS")
-      .map((violation) => violation.message);
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("ORPHANS");
 });
 
 test("identifier spine MIRROR: each ticket exactly matches its plan task's served set", () => {
-  for (const set of planSets()) {
-    const offenders = identifierSpineViolations(set)
-      .filter((violation) => violation.rule === "MIRROR")
-      .map((violation) => violation.message);
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("MIRROR");
 });
 
 test("identifier spine Q5: declarations are unique and contiguous and qualified stems resolve", () => {
-  for (const set of planSets()) {
-    const offenders = identifierSpineViolations(set)
-      .filter((violation) => violation.rule === "Q5")
-      .map((violation) => violation.message);
-    assert.deepEqual(offenders, [], set.label);
-  }
+  checkRule("Q5");
 });
 
 test("every ticket directory pairs with a plan and its build prompts", () => {
