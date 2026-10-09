@@ -24,20 +24,20 @@ and status. Spine: [`../../awsf-v3-plan.html`](../../awsf-v3-plan.html) § Works
   `core/test/**`, `dashboard/**`, `prompts/**`, `docs/cheatsheet.html`. No role writes
   `package.json` or anything under `specs/` beyond intake's flat light tickets.
 - **This ticket set was authored in a direct session**, a logged exception under the spine's gate GM.
-- **Owner decisions.** W03-Q1–Q9 were decided on 2026-10-09, each as recommended, and every
-  prompt applies them.
+- **Owner decisions.** W03-Q1–Q9 were decided on 2026-10-09, each as recommended, and Q9 was
+  revised the same day to keep design-to-plan enabled. Every prompt applies them.
 
 ## Gates
 
-- **T01**, first — `specs/*.html` in `policy.protected_paths`, with the five-stage adjustments and
-  W03-Q9 in the same owner commit. Nothing else starts until it lands.
+- **T01**, first — `specs/*.html` in `policy.protected_paths`, with the test adjustments in the
+  same owner commit. design-to-plan stays enabled and unused until T12 (W03-Q9, revised).
+  Nothing else starts until it lands.
 - **T02**, after T01, per W03-Q2 — `specs/*-build-prompts.md` and `specs/tickets/*/**`.
 - **G03-C**, after T08, before T09 — `close` wired as an owner act: the `main.ts` arm, the owner
   actor in `next-steps.ts`, `delegation-guard.sh`, `OWNER_ACTS`, the driving documents, the
   cheatsheet and README, in one owner commit (the G01-C pattern).
 - **G03-I**, before T11 (W03-Q5 took the flat store) — invariant 12 names the light tier.
-- **G03-W**, after T13, before T15 — the `plan-author` role and workflow in `awsf.config.yaml`, and
-  design-to-plan restored to `workflows.enabled` if W03-Q9 removed it.
+- **G03-W**, after T13, before T15 — the `plan-author` role and workflow in `awsf.config.yaml`.
 
 ## Closure, defined
 
@@ -99,4 +99,4 @@ dated Amendment (invariant 12). From G03-C on, the owner runs `awsf close` on ea
 moves rows, milestone markers and states only; Handoff entries and narrative Amendments, when
 wanted, are separate owner commits. A milestone stays `[wip]` until every task in it is `[x]`. Only
 T15's closure moves the spine's Milestone M3 / W03 marker and `../awsf-v3-plan/W03.md`, and it
-retires gate GM. Current plan-aligned states: **T01–T15 `todo`** (M1–M7 `[]`).
+retires gate GM. Current plan-aligned states: **T01–T02 `done`** (M1 `[x]`), **T03–T15 `todo`** (M2–M7 `[]`).

@@ -149,7 +149,7 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-09</dd>
-        <dt>modified</dt>     <dd>2026-10-09 (authored, awaiting owner review), 2026-10-09 (owner review applied: W03-Q1–Q9 decided), 2026-10-09 (deep plan approved by the owner)</dd>
+        <dt>modified</dt>     <dd>2026-10-09 (authored, awaiting owner review), 2026-10-09 (owner review applied: W03-Q1–Q9 decided), 2026-10-09 (deep plan approved by the owner), 2026-10-09 (T01 and T02 landed on the plan branch; W03-Q9 revised; M1 complete)</dd>
         <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-09 approval Amendment and its commit; authoring base e93e5de</dd>
         <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
@@ -387,7 +387,7 @@ flowchart LR
     <h3>Owner gates</h3>
     <div class="card rule">
       <h5>T01 — <code>specs/*.html</code> protected, the fixed first task</h5>
-      <strong>Change.</strong> <code>policy.protected_paths</code> gains <code>specs/*.html</code>. <strong>Blocks today.</strong> Nothing: no role writes a plan. That absence is the whole point. The write glob is the only fence, and this workstream is the first that will want to touch plans, so the fence must be standing before it builds. <strong>Replacement guarantee.</strong> Path policy refuses the path whatever the write globs say; the five-stage journey's adjustment names T12 as the task that restores design-to-plan under the shipped config. <strong>Cost, measured.</strong> <code>plan-render</code> refuses its own output (<code>no_protected_paths/specs/five-stage-plan.html: matches a protected path</code>), so design-to-plan cannot complete until T12 (W03-Q9). The five-stage journey and its W11 file-list test go red and must be adjusted in the same commit. Every K1 preflight after it re-measures the suite, because the configuration changed. <strong>Alternative.</strong> None that keeps the order: deferring the line until admission exists is what v2 W15 forbade.
+      <strong>Change.</strong> <code>policy.protected_paths</code> gains <code>specs/*.html</code>. <strong>Blocks today.</strong> Nothing: no role writes a plan. That absence is the whole point. The write glob is the only fence, and this workstream is the first that will want to touch plans, so the fence must be standing before it builds. <strong>Replacement guarantee.</strong> Path policy refuses the path whatever the write globs say; the five-stage journey's adjustment names T12 as the task that restores design-to-plan under the shipped config. <strong>Cost, measured.</strong> <code>plan-render</code> refuses its own output (<code>no_protected_paths/specs/five-stage-plan.html: matches a protected path</code>), so design-to-plan cannot complete until T12 (W03-Q9). Four tests go red, two unit and two journey, and are adjusted in the same commit. Every K1 preflight after it re-measures the suite, because the configuration changed. <strong>Alternative.</strong> None that keeps the order: deferring the line until admission exists is what v2 W15 forbade.
     </div>
     <div class="card rule">
       <h5>T02 — the rest of every plan set protected, a separate commit (W03-Q2)</h5>
@@ -403,7 +403,7 @@ flowchart LR
     </div>
     <div class="card warn">
       <h5>G03-W — the plan-author role and workflow, after T13</h5>
-      <strong>Change.</strong> <code>agents</code> gains <code>plan-author</code> with <code>writes: []</code> and a tool profile that can write only its session-runtime output, and <code>workflows.enabled</code> gains <code>plan-author</code>; design-to-plan returns to <code>workflows.enabled</code> if W03-Q9 removed it. <strong>Blocks today.</strong> The config is protected. <strong>Replacement guarantee.</strong> T13 lands the code half on test configurations first. The role writes no repository path, so no write glob widens. <strong>Cost.</strong> One role. <strong>Alternative.</strong> Reuse <code>planner</code>, whose read-only profile cannot write session output at all.
+      <strong>Change.</strong> <code>agents</code> gains <code>plan-author</code> with <code>writes: []</code> and a tool profile that can write only its session-runtime output, and <code>workflows.enabled</code> gains <code>plan-author</code>. <strong>Blocks today.</strong> The config is protected. <strong>Replacement guarantee.</strong> T13 lands the code half on test configurations first. The role writes no repository path, so no write glob widens. <strong>Cost.</strong> One role. <strong>Alternative.</strong> Reuse <code>planner</code>, whose read-only profile cannot write session output at all.
     </div>
     <p><strong>Not needed.</strong> No migration: selections, closure and admission records ride journal events through <code>projector.ts</code>. No change to <code>core/src/state/**</code>: closure follows LANDED and adds no lifecycle edge. No change to <code>land.ts</code> or its confirmation (W03-Q1).</p>
     <p><strong>Owner-side, named and not ticketed.</strong> Running <code>awsf close</code> after each landing. Narrative Amendments, when wanted, as separate owner commits. Closing pre-W03 landings is optional: they predate T09's cut.</p>
@@ -434,25 +434,25 @@ flowchart LR
 
     <!-- ================= M1 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M1: The fence stands first <span class="wtag">owner</span> <span class="wtag raise">GA</span></h3>
+      <h3><code class="status">[x]</code> Milestone M1: The fence stands first <span class="wtag">owner</span> <span class="wtag raise">GA</span></h3>
       <p>Two owner commits, one at a time, each with every suite green before it is made. Nothing else in W03 starts until T01 has landed.</p>
 
       <h4>1. Owner amendment: <code>specs/*.html</code> in <code>policy.protected_paths</code></h4>
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf.config.yaml</code>'s <code>policy.protected_paths</code> gains <code>specs/*.html</code>, and nothing else in that list changes</li>
-        <li><code class="status">[]</code> The two five-stage tests it turns red are adjusted in the same commit: the W11 file-list check exempts plan files a later amendment protected, and the five-stage design-to-plan stage runs on a test configuration without <code>specs/*.html</code>, with a comment naming T12 as the task that removes the exemption</li>
-        <li><code class="status">[]</code> W03-Q9 applied: design-to-plan is removed from <code>workflows.enabled</code> in the same commit, or kept with its trap named</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0 on the commit's content, counts recorded</li>
-        <li><code class="status">[]</code> A builder-shaped write to a plan file is refused by path policy with <code>protected-path</code>, shown by a test or a recorded check against the committed config</li>
+        <li><code class="status">[x]</code> <code>awsf.config.yaml</code>'s <code>policy.protected_paths</code> gains <code>specs/*.html</code>, and nothing else in that list changes</li>
+        <li><code class="status">[x]</code> The four tests it turns red are adjusted in the same commit: the W11 file-list check exempts plan files a later amendment protected, and the three design-to-plan fixtures (the offline route, the stage stops and the five-stage journey) run on a configuration without <code>specs/*.html</code> through <code>withoutPlanProtection</code>, whose comment names T12 as the task that removes it</li>
+        <li><code class="status">[x]</code> W03-Q9 applied: design-to-plan stays in <code>workflows.enabled</code>, and its trap is named in the commit</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0 on the commit's content, counts recorded</li>
+        <li><code class="status">[x]</code> A builder-shaped write to a plan file is refused by path policy with <code>protected-path</code>, shown by a test or a recorded check against the committed config</li>
       </ul>
 
       <h4>2. Owner amendment: build prompts and paired ticket sets protected</h4>
       <p class="sub">Serves <code class="serves">AC-1</code> · <code class="serves">INV-4</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Per W03-Q2: <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code> join <code>policy.protected_paths</code> in a commit of their own</li>
-        <li><code class="status">[]</code> Intake's flat <code>specs/tickets/Tnn.md</code> path is still writable and every paired set is not, shown by a recorded <code>matchesPathGlob</code> check</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0 on the commit's content</li>
+        <li><code class="status">[x]</code> Per W03-Q2: <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code> join <code>policy.protected_paths</code> in a commit of their own</li>
+        <li><code class="status">[x]</code> Intake's flat <code>specs/tickets/Tnn.md</code> path is still writable and every paired set is not, shown by a recorded <code>matchesPathGlob</code> check</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0 on the commit's content</li>
       </ul>
       <div class="loop">🔁 <strong>Do not start any other W03 task until T01 has landed.</strong> A fence written by the session doing the widening is weaker than one already standing.</div>
     </section>
@@ -608,7 +608,7 @@ sequenceDiagram
         <li><code class="status">[]</code> <code>core/src/registry/plan-admission.ts</code>: for one new stem, writes exactly the plan, its build prompts, its ticket README and its tickets; refuses any path that exists at the base and any other path; every marker <code>[]</code>, every state <code>todo</code></li>
         <li><code class="status">[]</code> Tickets are derived by the host from Section B and a frontmatter table, so prompt equality holds by construction; the parser and T03's agreement pass on the admitted set before commit</li>
         <li><code class="status">[]</code> The candidate's <code>no_protected_paths</code> gate accepts exactly the admitted, newly created paths through an admission capability; a modified existing protected path is still refused</li>
-        <li><code class="status">[]</code> design-to-plan's <code>plan-render</code> uses admission; T01's five-stage exemption is removed and the journey passes under the shipped protected paths</li>
+        <li><code class="status">[]</code> design-to-plan's <code>plan-render</code> uses admission; T01's <code>withoutPlanProtection</code> exemption is removed and the design-to-plan tests pass under the shipped protected paths</li>
         <li><code class="status">[]</code> An admission record in the journal; unit tests for each refusal; <code>npm run test:unit</code>, <code>test:journeys</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
       </ul>
 
@@ -741,8 +741,8 @@ flowchart LR
 
     <details data-review-options="Remove design-to-plan from workflows.enabled in T01, restore at G03-W (recommended)|Keep it enabled and name the trap">
       <summary><span class="qdecided">DECIDED</span> W03-Q9 — What happens to design-to-plan between T01 and T12?</summary>
-      <p class="decided"><b>Decided 2026-10-09:</b> T01 removes design-to-plan from <code>workflows.enabled</code>; G03-W restores it once T12 has moved <code>plan-render</code> onto admission. Owner verdict via an exported <code>plan-sota-review v1</code> block, taking the recommendation.</p>
-      <p class="qa-answer rec"><strong>Recommendation (taken):</strong> T01 removes <code>design-to-plan</code> from <code>workflows.enabled</code>, so <code>awsf new</code> refuses it before any spend, and G03-W restores it once T12 has moved <code>plan-render</code> onto admission. Measured at <code>e93e5de</code> with T01 applied: <code>plan-render</code> fails its <code>no_protected_paths</code> gate after the designer, architecture-reviewer and planner phases have run.</p>
+      <p class="decided"><b>Decided 2026-10-09, revised the same day:</b> design-to-plan stays in <code>workflows.enabled</code>, and nobody runs it until T12 lands. The first verdict (remove it) rested on a cost this plan understated. Measured while preparing T01, removal turned 9 more unit tests red: the cheatsheet reconciliation, the designer and architecture-reviewer fixtures, the design-context placement refusals, a metrics row and the committed-amendment check. All of it would be reverted at G03-W. The owner switched to keeping it enabled in the T01 session.</p>
+      <p class="qa-answer rec"><strong>Recommendation at authoring (superseded):</strong> T01 removes <code>design-to-plan</code> from <code>workflows.enabled</code>, so <code>awsf new</code> refuses it before any spend, and G03-W restores it once T12 has moved <code>plan-render</code> onto admission. Measured at <code>e93e5de</code> with T01 applied: <code>plan-render</code> fails its <code>no_protected_paths</code> gate after the designer, architecture-reviewer and planner phases have run.</p>
       <p class="qa-answer">Keeping it enabled leaves a run that spends its designer, review and planner calls and then blocks, which is exactly the after-spend stop W02's trap suite exists to prevent. The five-stage journey uses its own configuration, so either way T01's commit adjusts it.</p>
     </details>
   </section>
@@ -785,7 +785,7 @@ flowchart LR
         <tr><td><strong>R3: the closing commit carries the wrong identity</strong></td><td>The host commits for the first time on the owner's checkout.</td><td>The checkout's identity, refused when unset; no trailer; <code>no-agent-coauthor</code> scans history.</td></tr>
         <tr><td><strong>R4: admission becomes a back door</strong></td><td>A create-only exemption in a protected-path gate is still an exemption.</td><td>Scoped to one new stem's exact paths, absent at base, all markers idle; any modification refused; INV-4.</td></tr>
         <tr><td><strong>R5: plan-author output is too large</strong></td><td>A W02-sized plan and prompts are about 2,500 lines.</td><td>Session-runtime files instead of an envelope string; tickets derived by the host; W03-Q8 names the live measurement.</td></tr>
-        <tr><td><strong>R6: design-to-plan is unavailable for a while</strong></td><td>T01 breaks it until T12.</td><td>W03-Q9 refuses it before spend.</td></tr>
+        <tr><td><strong>R6: design-to-plan is unavailable for a while</strong></td><td>T01 breaks it until T12.</td><td>W03-Q9 keeps it enabled and unused until T12; a run would spend three calls and block at <code>plan-render</code>.</td></tr>
       </tbody>
     </table>
 
@@ -820,6 +820,10 @@ flowchart LR
     <details open>
       <summary>2026-10-09 — Owner approval of the deep plan and factory-managed implementation</summary>
       <p>The owner approved this deep plan, its build prompts and its ticket set. W03-Q1–Q9 remain decided as recommended. The spine's W03 marker and ticket state move together to <code>[wip]</code> and <code>wip</code> in the approval commit, which also commits this plan for the first time. No implementation checklist row is marked complete by approval. Work starts with T01, the owner's protected-path commit, before any other task; M2–M7 then follow the Execution section. Built on: anthropic:claude-opus-5-5.</p>
+    <details open>
+      <summary>2026-10-09 — T01 and T02 landed on the plan branch; W03-Q9 revised; M1 complete</summary>
+      <p>On the owner's authorization, both M1 amendments were made as owner commits on <code>v3-w03-ticket-closure-plan</code>, after the approval commit and one at a time under GA. They reach <code>main</code> with it by fast-forward once the owner's W02 run has landed. <strong>T01</strong> (<code>3c8c855</code>) adds <code>specs/*.html</code> to <code>policy.protected_paths</code>. Under the committed config, a builder whose writes were widened to <code>specs/**</code> is refused <code>specs/awsf-v3-plan.html</code> with <code>protected-path</code>. It turned four tests red, not two: the five-stage W11 file-list check and the five-stage journey, plus <code>design-to-plan-route.test.ts</code> and <code>stops.test.ts</code>, which also run <code>plan-render</code> to completion. The repair is one helper, <code>withoutPlanProtection</code> in <code>core/test/unit/cli/_offline-route.ts</code>, used by the three design-to-plan fixtures and named for removal by T12, plus a glob filter in the W11 check. On its content, unit 3171/3171 (290 s), journeys 373/373 (1,144 s) and traps 76/76 (150 s) passed, and typecheck and lint exited 0. <strong>T02</strong> (<code>8653eaa</code>) adds <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code>. <code>specs/tickets/T01.md</code> and <code>specs/tickets/README.md</code> stay unprotected, so intake keeps its flat store. The helper and the W11 filter now cover all three plan-set globs. On its content, unit 3171/3171, traps 76/76, typecheck and lint passed. Journeys ran 372/373 until the W11 filter was widened, and <code>five-stage.test.ts</code> then passed 3/3.</p>
+      <p><strong>W03-Q9 revised.</strong> Removing design-to-plan from <code>workflows.enabled</code> turned 9 more unit tests red, so the owner kept it enabled. The trap is named in T01's commit: until T12 lands, a live design-to-plan run spends its three calls and then blocks at <code>plan-render</code>. The T01, T02 and T12 prompts, two M1 rows, the T12 row, G03-W and R6 are reworded to what was built, and their markers are earned by these commits. Section B changed for T01, T02 and T12, and their tickets carry the new bytes. T01 and T02 move to <code>done</code> and M1 to <code>[x]</code>. The spine's "<code>specs/*.html</code> is a protected path" row moves to <code>[x]</code>; W03 stays <code>[wip]</code>. Built on: anthropic:claude-opus-5-5.</p>
     </details>
   </section>
 

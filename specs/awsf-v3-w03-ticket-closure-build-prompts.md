@@ -37,15 +37,14 @@ From T06's landing on, every W03 attempt is created with
 `docs/driving/**`, or a root `.claude/` directory.
 
 **Owner gates.**
-- **T01**, first: `specs/*.html` in `policy.protected_paths`, with the five-stage test
-  adjustments and W03-Q9 in the same commit.
+- **T01**, first: `specs/*.html` in `policy.protected_paths`, with the test adjustments in the
+  same commit. design-to-plan stays enabled and unused until T12 (W03-Q9, revised 2026-10-09).
 - **T02**, after T01, per W03-Q2: `specs/*-build-prompts.md` and `specs/tickets/*/**`.
 - **G03-C**, after T08 and before T09: `close` wired as an owner act in `core/src/cli/main.ts`,
   `core/src/lifecycle/next-steps.ts`, the delegation guard, `OWNER_ACTS` and the driving
   documents, in one owner commit, as G01-C did for `confirm`.
 - **G03-I**, before T11 (W03-Q5 took the flat store): invariant 12 names the light tier.
-- **G03-W**, after T13: the `plan-author` role and workflow in `awsf.config.yaml`, and
-  design-to-plan restored if W03-Q9 removed it.
+- **G03-W**, after T13: the `plan-author` role and workflow in `awsf.config.yaml`.
 
 **Closure, defined.** A closing commit differs from its parent only in status-token values
 (`<code class="status">[v]</code>`, after-value `""`, `wip` or `x`) in registered plan files and the
@@ -59,8 +58,9 @@ declarations. A light ticket: every frontmatter field except `state`, and its bo
 are excluded. Closure compares them at the attempt's base and at canonical HEAD, resolving files
 through the registered plan source, never through a sealed path.
 
-**Owner decisions.** W03-Q1–Q9 were decided on 2026-10-09, each as recommended. Every prompt
-applies them; the plan's Questionables record each one.
+**Owner decisions.** W03-Q1–Q9 were decided on 2026-10-09, each as recommended, and Q9 was
+revised the same day to keep design-to-plan enabled. Every prompt applies them; the plan's
+Questionables record each one.
 
 **The never-do list**, with why each is tempting:
 - **Do not widen any role's `writes` into `specs/`**, at any width. The sync fence checks that plan
@@ -107,17 +107,20 @@ READ FIRST
   specs/awsf-v3-w03-ticket-closure.html - Execution (the T01 card), Notes ("Measured while
     authoring"), W03-Q9
   specs/awsf-v2-plan-build-prompts.md - T15, "YOUR DEEP PLAN'S FIRST TASK IS FIXED IN ADVANCE"
-  awsf.config.yaml - policy.protected_paths, workflows.enabled
+  awsf.config.yaml - policy.protected_paths
   core/src/policy/path-policy.ts - globSource, evaluatePathPolicy
-  core/test/journeys/five-stage.test.ts - the W11 file-list test and the design-to-plan stage
+  core/test/unit/cli/_offline-route.ts - the design-to-plan fixture config
+  core/test/unit/stages/stops.test.ts, core/test/unit/cli/design-to-plan-route.test.ts,
+    core/test/journeys/five-stage.test.ts - the tests that run plan-render
 
 DO
   Add specs/*.html to policy.protected_paths in awsf.config.yaml. Change nothing else in that list.
-  Apply W03-Q9 in the same commit: as recommended, remove design-to-plan from workflows.enabled.
-  Adjust core/test/journeys/five-stage.test.ts in the same commit so it stays green: the W11
-    changed-file test exempts plan files protected by a later amendment, naming this one, and the
-    design-to-plan stage runs on a test configuration that drops specs/*.html, with a comment
-    naming task 12 as the task that removes the exemption.
+  W03-Q9 as revised: design-to-plan stays in workflows.enabled; name its trap in the commit body.
+  Adjust the tests in the same commit so they stay green: the W11 changed-file test in
+    core/test/journeys/five-stage.test.ts exempts plan files protected by a later amendment,
+    naming this one; and withoutPlanProtection in core/test/unit/cli/_offline-route.ts drops
+    specs/*.html for the three design-to-plan fixtures, with a comment naming task 12 as the
+    task that removes it.
   Run npm run test:unit, npm run test:journeys, npm run test:traps, npm run typecheck and
     npm run lint on the commit's content, each alone, and record the counts.
   Record a path-policy check: a builder-shaped write to specs/awsf-v3-plan.html is refused with
@@ -127,9 +130,10 @@ DO NOT
   Add any other protected path here; T02 is its own commit (GA: one change at a time).
   Design or build any closure or admission mechanism in this commit.
   Widen any role's writes.
+  Remove design-to-plan from workflows.enabled: measured, that turns 9 more unit tests red.
 
 BUILDER READY
-  The diff is the config lines, the five-stage adjustments and nothing else.
+  The diff is the config line, the test adjustments and nothing else.
   Every listed command exits 0 on the commit's content.
 
 OWNER ACCEPTANCE
@@ -138,8 +142,8 @@ OWNER ACCEPTANCE
 COMMIT
   Owner-authored, as Santiago Marin <santiagomarinsuarez@me.com>, with no trailer.
   Proposed: chore(config): protect plan files (W03 task 1)
-  Body: the change, the measured breakage it repairs in the five-stage journey, the
-  design-to-plan decision, the test counts.
+  Body: the change, the measured breakage the test adjustments repair, the design-to-plan
+  trap, the test counts.
   Never name an agent, model or tool in an identity, a message or a trailer.
 
 MARKERS
@@ -183,7 +187,7 @@ DO
   Record a matchesPathGlob check: specs/tickets/awsf-v3-plan/W03.md and
     specs/awsf-v3-plan-build-prompts.md match; specs/tickets/T01.md does not.
   Adjust any test the change turns red in the same commit, naming task 12 where the cause is
-    plan-render.
+    plan-render: withoutPlanProtection drops the two new globs as well.
   Run npm run test:unit, npm run test:journeys, npm run test:traps, npm run typecheck and
     npm run lint on the commit's content, each alone, and record the counts.
 
@@ -899,7 +903,7 @@ READ FIRST
   core/src/registry/plan-render.ts, core/src/workflow/recipes/design-to-plan.ts
   core/src/cli/commands/production-run.ts - plan-render's host write and noProtectedPaths
   core/src/gates/git-diff.ts, core/src/contracts/protected-capability.ts - the exemption shape
-  core/test/journeys/five-stage.test.ts - task 1's exemption
+  core/test/unit/cli/_offline-route.ts - task 1's withoutPlanProtection exemption
 
 DO
   Create core/src/registry/plan-admission.ts: given one new stem, write exactly its plan, its
@@ -911,8 +915,8 @@ DO
     exactly the admitted, newly created paths. A modification of an existing protected path is
     still refused.
   Move design-to-plan's plan-render host write onto admission.
-  Remove task 1's design-to-plan exemption from core/test/journeys/five-stage.test.ts, so the
-    journey passes under the shipped protected paths.
+  Remove withoutPlanProtection from core/test/unit/cli/_offline-route.ts and its callers, so the
+    design-to-plan tests pass under the shipped protected paths.
   Journal an admission record and project it as an event row.
   Unit tests for each refusal.
 
@@ -922,7 +926,7 @@ DO NOT
   Write a marker or state other than idle and todo.
 
 BUILDER READY
-  Every refusal has a test; the five-stage journey passes with no exemption.
+  Every refusal has a test; the design-to-plan tests pass with no exemption.
   npm run test:unit and npm run test:journeys pass; npm run typecheck and npm run lint exit 0.
 
 OWNER ACCEPTANCE

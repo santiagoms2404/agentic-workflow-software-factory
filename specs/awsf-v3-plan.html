@@ -398,7 +398,7 @@ flowchart TB
       </div>
       <ul class="checklist">
         <li><code class="status">[x]</code> Deep plan <code>awsf-v3-w03-ticket-closure.html</code> authored with its build prompts and ticket set, and approved by the owner</li>
-        <li><code class="status">[]</code> <code>specs/*.html</code> is a protected path, by owner commit, before any closure mechanism is built</li>
+        <li><code class="status">[x]</code> <code>specs/*.html</code> is a protected path, by owner commit, before any closure mechanism is built</li>
         <li><code class="status">[]</code> Closure is an owner-confirmed act that changes markers and states only, and a fence proves it</li>
         <li><code class="status">[]</code> The light tier closes through the same path</li>
         <li><code class="status">[]</code> The deep plan's own milestones all reach <code>[x]</code>, which retires gate GM</li>
@@ -984,6 +984,10 @@ stateDiagram-v2
   <!-- ===== AMENDMENTS ===== -->
   <section id="amendments">
     <h2>Amendments</h2>
+    <details open>
+      <summary>2026-10-09 — W03 M1 landed: plan sets are protected paths</summary>
+      <p>W03's T01 (<code>3c8c855</code>) and T02 (<code>8653eaa</code>) are owner commits under GA. They add <code>specs/*.html</code>, then <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code>, to <code>policy.protected_paths</code>, before any closure mechanism is built. Intake keeps its flat <code>specs/tickets/Tnn.md</code> store. The W03 checklist row for the protected path moves to <code>[x]</code>; W03 stays <code>[wip]</code>. design-to-plan stays enabled and must not be run until W03's task 12: <code>plan-render</code> now refuses its own output. The deep plan's 2026-10-09 Amendment holds the measurements.</p>
+    </details>
     <details open>
       <summary>2026-10-09 — W03 deep plan approved</summary>
       <p>The owner approved <code>awsf-v3-w03-ticket-closure.html</code>, its build prompts and its fifteen-ticket set. Its nine Questionables (W03-Q1–Q9) were decided as recommended on 2026-10-09: closure is a separate owner act, <code>awsf close</code>, after <code>land</code>; T02 also protects build prompts and paired ticket sets; a K1 field refuses a start while a landing is unclosed; and W03 builds create-only plan admission and a plan-author recipe (its M6), because closure alone cannot retire GM. W03 moves to <code>[wip]</code>, with its spine ticket moving to <code>wip</code> in this same commit. Only the authored-and-approved checklist row is complete; no implementation acceptance is claimed, and gate GM stays in force until W03's final milestone lands. M1 (T01, T02) is owner work under GA; the rest is factory-managed by default under K1, subject to the deep plan's owner gates G03-C, G03-I and G03-W. The deep plan's Notes list corrections for this spine (GM conflates closure with creation; "designed" versus "built" for the fixed first task; the deep-plan state labels), not applied here.</p>
