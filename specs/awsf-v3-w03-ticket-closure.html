@@ -149,9 +149,9 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-09</dd>
-        <dt>modified</dt>     <dd>2026-10-09 (authored, awaiting owner review), 2026-10-09 (owner review applied: W03-Q1–Q9 decided), 2026-10-09 (deep plan approved by the owner), 2026-10-09 (T01 and T02 landed on the plan branch; W03-Q9 revised; M1 complete), 2026-10-09 (T07 and T08 moved from M4 to M3, so G03-C falls between milestones)</dd>
+        <dt>modified</dt>     <dd>2026-10-09 (authored, awaiting owner review), 2026-10-09 (owner review applied: W03-Q1–Q9 decided), 2026-10-09 (deep plan approved by the owner), 2026-10-09 (T01 and T02 landed on the plan branch; W03-Q9 revised; M1 complete), 2026-10-09 (T07 and T08 moved from M4 to M3, so G03-C falls between milestones), 2026-10-09 (M2 and M3 landed as 5fc9e39 through one shift; T03–T08 done)</dd>
         <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-09 approval Amendment and its commit; authoring base e93e5de</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5-5; marimba (M3/M4 boundary amendment preparation only)</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5; marimba (M3/M4 boundary amendment and M2/M3 bookkeeping preparation only)</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M3 → W03, gates GA and GM, decisions 7 and 8, Q11, Notes), ./tickets/awsf-v3-plan/W03.md (the meta-prompt this plan answers), ./awsf-v2-plan-build-prompts.md (§ T15, v2 W15's fixed first task and why a widened write scope is not the answer), ./awsf-v3-w02-trap-suite.html (the trap contract, TR-16, the doctor markers row, the 2026-10-08 handoff to W03), ./awsf-v3-intent.md (X3, decision 8), ./awsf-v3-assessment-and-direction.md (Q14), ../AGENTS.md (invariants 2, 8, 11 and 12)</dd>
         <dt>forward refs</dt> <dd>./awsf-v3-w03-ticket-closure-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v3-w03-ticket-closure/ (README, T01–T15)</dd>
@@ -458,7 +458,7 @@ flowchart LR
 
     <!-- ================= M2 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M2: Closure is boring <span class="wtag">managed</span></h3>
+      <h3><code class="status">[x]</code> Milestone M2: Closure is boring <span class="wtag">managed</span></h3>
       <p>The property, built and proven before the act that relies on it. Everything here is pure and offline.</p>
       <figure>
         <pre class="mermaid">
@@ -476,43 +476,43 @@ flowchart LR
       <h4>3. The agreement rules as one module</h4>
       <p class="sub">Serves <code class="serves">INV-6</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/registry/plan-agreement.ts</code>: every rule <code>ticket-plan-sync.test.ts</code> asserts, as pure functions over parsed plans, tickets and Section B blocks, returning violations with the plan label</li>
-        <li><code class="status">[]</code> The meta-test calls the module, keeps its test names and failure messages, and reads files only to feed it</li>
-        <li><code class="status">[]</code> On the real corpus the meta-test passes with the same test count, and planted drifts (a prompt byte, a duplicate task number, a done ticket under an idle milestone) still fail it</li>
+        <li><code class="status">[x]</code> <code>core/src/registry/plan-agreement.ts</code>: every rule <code>ticket-plan-sync.test.ts</code> asserts, as pure functions over parsed plans, tickets and Section B blocks, returning violations with the plan label</li>
+        <li><code class="status">[x]</code> The meta-test calls the module, keeps its test names and failure messages, and reads files only to feed it</li>
+        <li><code class="status">[x]</code> On the real corpus the meta-test passes with the same test count, and planted drifts (a prompt byte, a duplicate task number, a done ticket under an idle milestone) still fail it</li>
       </ul>
 
       <h4>4. The closure delta and the asked-for comparison</h4>
       <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/closure/delta.ts</code>: given before and after file maps, accepts only what "Closure, defined" accepts and returns each token change with its path, task and row; any other difference refuses with the path and the first differing offset and context</li>
-        <li><code class="status">[]</code> <code>core/src/closure/asked-for.ts</code>: the ask of a plan ticket and of a light ticket, as "What a ticket asked for" defines it, compared between two trees; Handoff sections are excluded</li>
-        <li><code class="status">[]</code> Neither module reads a file, a clock or the environment</li>
+        <li><code class="status">[x]</code> <code>core/src/closure/delta.ts</code>: given before and after file maps, accepts only what "Closure, defined" accepts and returns each token change with its path, task and row; any other difference refuses with the path and the first differing offset and context</li>
+        <li><code class="status">[x]</code> <code>core/src/closure/asked-for.ts</code>: the ask of a plan ticket and of a light ticket, as "What a ticket asked for" defines it, compared between two trees; Handoff sections are excluded</li>
+        <li><code class="status">[x]</code> Neither module reads a file, a clock or the environment</li>
       </ul>
 
       <h4>5. Testing Strategy for M2</h4>
       <p class="sub">Serves <code class="serves">AC-2</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-6</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Over every registered plan and its tickets: each single status-token flip and each ticket state flip is accepted by the delta; the agreement result of the flipped tree matches what the fence's rules say</li>
-        <li><code class="status">[]</code> Over the same corpus: a one-byte change in an acceptance row, a declaration statement, a Section B prompt, a ticket prompt, <code>title</code>, <code>depends_on</code>, <code>serves</code>, <code>milestone</code>, a Handoff, a metadata row, or an added or removed file is refused</li>
-        <li><code class="status">[]</code> A token value outside the vocabulary, <code>[f]</code>, <code>failed</code>, and a flip that breaks agreement are refused</li>
-        <li><code class="status">[]</code> The asked-for comparison refuses each ask change and ignores Handoff edits and status flips</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
+        <li><code class="status">[x]</code> Over every registered plan and its tickets: each single status-token flip and each ticket state flip is accepted by the delta; the agreement result of the flipped tree matches what the fence's rules say</li>
+        <li><code class="status">[x]</code> Over the same corpus: a one-byte change in an acceptance row, a declaration statement, a Section B prompt, a ticket prompt, <code>title</code>, <code>depends_on</code>, <code>serves</code>, <code>milestone</code>, a Handoff, a metadata row, or an added or removed file is refused</li>
+        <li><code class="status">[x]</code> A token value outside the vocabulary, <code>[f]</code>, <code>failed</code>, and a flip that breaks agreement are refused</li>
+        <li><code class="status">[x]</code> The asked-for comparison refuses each ask change and ignores Handoff edits and status flips</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>npm run typecheck</code> and <code>npm run lint</code> exit 0</li>
       </ul>
       <div class="loop">🔁 <strong>Closure must be boring.</strong> If a test finds a closing change that says anything new, the delta is wrong, not the test.</div>
     </section>
 
     <!-- ================= M3 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M3: A landing knows its tickets, and the closure act is built <span class="wtag">managed</span></h3>
+      <h3><code class="status">[x]</code> Milestone M3: A landing knows its tickets, and the closure act is built <span class="wtag">managed</span></h3>
       <p>Closure maps a landing to tickets only through a sealed selection, never through a task name, a request's words or a directory. Testing shares the task.</p>
 
       <h4>6. A sealed ticket selection on any plan attempt</h4>
       <p class="sub">Serves <code class="serves">AC-3</code> · <code class="serves">INV-7</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf new --plan &lt;stem&gt; --ticket &lt;id&gt;[,&lt;id&gt;...]</code> seals id, registered path and file digest for a non-shift attempt, the way <code>sealShiftSelection</code> does; a shift keeps its milestone selection unchanged</li>
-        <li><code class="status">[]</code> Refused before the attempt exists: <code>--ticket</code> naming a ticket outside the stem's registered set, a duplicate id, or <code>--ticket</code> on a shift</li>
-        <li><code class="status">[]</code> <code>awsf status</code> and <code>--json</code> show the selection; doctor's markers row maps such an attempt instead of reporting it unmapped</li>
-        <li><code class="status">[]</code> Unit tests for each refusal and a journey through <code>main</code> on the stub route; <code>npm run test:unit</code>, <code>typecheck</code> and <code>lint</code> exit 0; the cheatsheet lists the flag</li>
+        <li><code class="status">[x]</code> <code>awsf new --plan &lt;stem&gt; --ticket &lt;id&gt;[,&lt;id&gt;...]</code> seals id, registered path and file digest for a non-shift attempt, the way <code>sealShiftSelection</code> does; a shift keeps its milestone selection unchanged</li>
+        <li><code class="status">[x]</code> Refused before the attempt exists: <code>--ticket</code> naming a ticket outside the stem's registered set, a duplicate id, or <code>--ticket</code> on a shift</li>
+        <li><code class="status">[x]</code> <code>awsf status</code> and <code>--json</code> show the selection; doctor's markers row maps such an attempt instead of reporting it unmapped</li>
+        <li><code class="status">[x]</code> Unit tests for each refusal and a journey through <code>main</code> on the stub route; <code>npm run test:unit</code>, <code>typecheck</code> and <code>lint</code> exit 0; the cheatsheet lists the flag</li>
       </ul>
 
       <p><code>awsf close</code> is an owner act like <code>land</code>, and it follows a landing. It never runs inside <code>land</code> (W03-Q1).</p>
@@ -538,21 +538,21 @@ sequenceDiagram
       <h4>7. <code>closeCommand</code>: propose, confirm, check, commit, record</h4>
       <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-3</code> · <code class="serves">INV-5</code> · <code class="serves">INV-7</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/cli/commands/close.ts</code>, unwired until G03-C: refuses a non-human actor and a non-interactive terminal first, then an attempt that is not LANDED, has no selection, whose candidate is not an ancestor of canonical HEAD, whose checkout is dirty, or whose selected tickets' ask changed since its base (T04)</li>
-        <li><code class="status">[]</code> <code>core/src/closure/propose.ts</code>: for each selected ticket, its task's rows with current markers; for a shift, only tickets the host recorded as built in the landed candidate, the rest listed as not closable</li>
-        <li><code class="status">[]</code> The owner confirms all rows or chooses row by row; ticket state derives from the rows (all complete is done, otherwise wip) and the milestone marker from its tasks; the owner may leave every row open, which is still a closure record</li>
-        <li><code class="status">[]</code> The after bytes are built by token substitution only; T04's delta and T03's agreement pass on the after tree before any write; the owner sees every path and row, old and new value, before the final confirmation</li>
-        <li><code class="status">[]</code> One commit with the checkout's configured identity, refused when unset, and a fixed message <code>chore(specs): close &lt;stem&gt; &lt;ids&gt; after &lt;short candidate&gt;</code> with no trailer; HEAD is compared and swapped, never reset or forced, nothing is pushed; the committed diff is re-checked by the delta</li>
-        <li><code class="status">[]</code> A closure record in the attempt's journal (<code>core/src/contracts/closure-record.ts</code>): rows closed, rows left open, the commit, and before and after blob ids; projected through <code>projector.ts</code>; an interrupted closure is detected from its intent and either finished or reported, never repeated</li>
+        <li><code class="status">[x]</code> <code>core/src/cli/commands/close.ts</code>, unwired until G03-C: refuses a non-human actor and a non-interactive terminal first, then an attempt that is not LANDED, has no selection, whose candidate is not an ancestor of canonical HEAD, whose checkout is dirty, or whose selected tickets' ask changed since its base (T04)</li>
+        <li><code class="status">[x]</code> <code>core/src/closure/propose.ts</code>: for each selected ticket, its task's rows with current markers; for a shift, only tickets the host recorded as built in the landed candidate, the rest listed as not closable</li>
+        <li><code class="status">[x]</code> The owner confirms all rows or chooses row by row; ticket state derives from the rows (all complete is done, otherwise wip) and the milestone marker from its tasks; the owner may leave every row open, which is still a closure record</li>
+        <li><code class="status">[x]</code> The after bytes are built by token substitution only; T04's delta and T03's agreement pass on the after tree before any write; the owner sees every path and row, old and new value, before the final confirmation</li>
+        <li><code class="status">[x]</code> One commit with the checkout's configured identity, refused when unset, and a fixed message <code>chore(specs): close &lt;stem&gt; &lt;ids&gt; after &lt;short candidate&gt;</code> with no trailer; HEAD is compared and swapped, never reset or forced, nothing is pushed; the committed diff is re-checked by the delta</li>
+        <li><code class="status">[x]</code> A closure record in the attempt's journal (<code>core/src/contracts/closure-record.ts</code>): rows closed, rows left open, the commit, and before and after blob ids; projected through <code>projector.ts</code>; an interrupted closure is detected from its intent and either finished or reported, never repeated</li>
       </ul>
 
       <h4>8. Spine roll-up, approvals and owner rows</h4>
       <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-3</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> When a closure leaves every milestone of a deep plan complete, it finds the spine section that links to that plan, offers that workstream's rows for the owner to choose, derives the spine ticket's state and marker, and writes them in the same commit</li>
-        <li><code class="status">[]</code> A spine ticket selected by a plan-admission attempt closes its "authored and approved" row when that attempt lands (used by M6)</li>
-        <li><code class="status">[]</code> Per W03-Q6: <code>close --commit &lt;sha&gt;</code> closes owner-gate rows on the evidence of a commit reachable from HEAD, with the owner choosing the rows; recorded as a project-level closure record</li>
-        <li><code class="status">[]</code> Unit tests over fixture spines and deep plans for each roll-up case and each refusal</li>
+        <li><code class="status">[x]</code> When a closure leaves every milestone of a deep plan complete, it finds the spine section that links to that plan, offers that workstream's rows for the owner to choose, derives the spine ticket's state and marker, and writes them in the same commit</li>
+        <li><code class="status">[x]</code> A spine ticket selected by a plan-admission attempt closes its "authored and approved" row when that attempt lands (used by M6)</li>
+        <li><code class="status">[x]</code> Per W03-Q6: <code>close --commit &lt;sha&gt;</code> closes owner-gate rows on the evidence of a commit reachable from HEAD, with the owner choosing the rows; recorded as a project-level closure record</li>
+        <li><code class="status">[x]</code> Unit tests over fixture spines and deep plans for each roll-up case and each refusal</li>
       </ul>
     </section>
 
@@ -830,6 +830,13 @@ flowchart LR
       <summary>2026-10-09 — T07 and T08 moved from M4 to M3, so G03-C falls between milestones</summary>
       <p>M4 held gate G03-C between T08 and T09. A shift seals whole milestones (<code>awsf new --workflow shift --plan &lt;stem&gt; --milestone &lt;Mx&gt;</code>, <code>core/src/cli/main.ts</code>) and cannot pause inside its selection for an owner commit. So no shift could carry T07–T08 without also carrying T09–T10, which need G03-C first. W01 met the same shape and split its M4 at G01-C (2026-10-05). Here M5–M7 follow M4, so a split would renumber three milestones; the owner moved the boundary instead.</p>
       <p>M3 is now tasks 6–8: the sealed selection, <code>closeCommand</code> unwired, and the spine roll-up. M4 is tasks 9–10, and begins after G03-C. No task, row, gate, dependency, decision or acceptance bar changed. Only the milestone boundary and its marker moved. T07 and T08 move to <code>milestone: M3</code>, and their prompt lines read "milestone M3". Task 8's landing now earns M3's marker instead of task 6's, in the canonical prompts and their ticket copies, which change together and stay byte-identical. Task 10 keeps its title, "Testing Strategy for M4"; its journeys still cover the act built in M3. M2 and M3 can now run as one shift, T03–T08.</p>
+    </details>
+    <details open>
+      <summary>2026-10-09 — M2 and M3 landed: T03–T08 done, <code>closeCommand</code> built and unwired</summary>
+      <p>One shift over M2 and M3 built T03–T08 on <code>0b33c6e</code> with <code>codex/openai-codex/gpt-6.1-sol@high</code>, each ticket committed by the host with its five gates passing: T03 <code>fb34193</code>, T04 <code>a714fdd</code>, T05 <code>f79fdcd</code>, T06 <code>7ef17d9</code>, T07 <code>75596d3</code>, T08 <code>5fc9e39</code>. The shift's own review blocked before it started: the Claude login had expired, and the quota probe recorded <code>credentials_invalid</code>. A replacement review is admitted only from AWAITING_OWNER, and a retry rebuilds every ticket. So the exact candidate was adopted into a build-review task, which reran the five gates and one <code>claude-opus-5-5</code> review. The review accepted on all four checks the request named, with one low finding (below). The owner attested a journey and landed <code>5fc9e39</code> by fast-forward.</p>
+      <p>At <code>5fc9e39</code>: 3380 unit, 374 journeys, 76 traps, 151 contract, typecheck and lint. The driving session checked the candidate independently. Every diagnostic of the old <code>ticket-plan-sync</code> fence is in <code>core/src/registry/plan-agreement.ts</code> or still in the fence, which runs 15 of 15 on base and candidate. Nothing outside <code>close.ts</code> and its tests references <code>closeCommand</code>, and no owner-act list, guard, driving document or cheatsheet names <code>close</code>. <code>core/test/unit/closure/close.test.ts</code> holds a test asserting exactly that, which G03-C replaces. No protected path changed. T06 also added <code>awsf status --json</code>, which its third row asks for.</p>
+      <p><strong>Finding carried to G03-C.</strong> <code>core/src/closure/delta.ts:126-128</code> checks the closure vocabulary over every value in a changed file, not only changed values. An unrelated <code>[f]</code> row inside a plan's tasks would refuse every closure of that plan. No registered plan has a parser-consumed <code>[f]</code> today, so nothing is blocked. T05's third row ("<code>[f]</code>, <code>failed</code> … are refused") is met; the over-refusal is a decision for G03-C or a follow-up, recorded in T09's Handoff.</p>
+      <p>Tasks 3–8 move to <code>[x]</code> and T03–T08 to <code>done</code> in this commit; M2 and M3 are complete. The spine's W03 rows are unchanged, since closure is not yet an owner act. Handoffs: T09 C1 (G03-C and the closure records), T10 C1 (refusal messages for its journeys), T13 C1 (spine-ticket selection). Built on: openai-codex:gpt-6.1-sol (builder), anthropic:claude-opus-5-5 (review).</p>
     </details>
   </section>
 
