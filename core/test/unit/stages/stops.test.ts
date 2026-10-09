@@ -22,7 +22,7 @@ import { initCommand } from "../../../src/cli/commands/init.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { registerProject } from "../../../src/cli/commands/project.ts";
 import { runProductionCommand } from "../../../src/cli/commands/production-run.ts";
-import { fundCorrections } from "../cli/_offline-route.ts";
+import { fundCorrections, withoutPlanProtection } from "../cli/_offline-route.ts";
 import { k1Request, startUnderK1 } from "../../fixtures/k1-preflight.ts";
 import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
@@ -253,7 +253,8 @@ function fakeBroker(options: BrokerOptions): TransportBroker {
 }
 
 function fixtureConfig(): AwsfConfig {
-  const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+  // design-to-plan's plan-render writes a plan file; see withoutPlanProtection.
+  const loaded = withoutPlanProtection(loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8")));
   return {
     ...loaded,
     runtime: { ...loaded.runtime, seed_paths: [] },

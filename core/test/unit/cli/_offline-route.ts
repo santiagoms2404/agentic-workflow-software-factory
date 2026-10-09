@@ -64,8 +64,20 @@ export interface FixtureConfigOptions {
   readonly slug?: string;
 }
 
+/**
+ * The shipped config protects `specs/*.html` (W03 task 1), and design-to-plan's
+ * host `plan-render` phase writes a new plan file, so under the shipped policy
+ * it refuses its own output at `no_protected_paths`. These fixtures exercise
+ * that phase, so they drop the one glob. W03 task 12 moves `plan-render` onto
+ * create-only admission and removes this exemption.
+ */
+export const PLAN_FILES_GLOB = "specs/*.html";
+export function withoutPlanProtection(config: AwsfConfig): AwsfConfig {
+  return { ...config, policy: { ...config.policy, protected_paths: config.policy.protected_paths.filter((glob) => glob !== PLAN_FILES_GLOB) } };
+}
+
 export function fixtureConfig(options: FixtureConfigOptions = {}): AwsfConfig {
-  const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+  const loaded = withoutPlanProtection(loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8")));
   const fixtureRoles = new Set<string>(options.roles ?? DESIGN_TO_PLAN_ROLES);
   return {
     ...loaded,
