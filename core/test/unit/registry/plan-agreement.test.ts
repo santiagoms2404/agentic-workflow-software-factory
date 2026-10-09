@@ -249,5 +249,10 @@ test("registered W03 scratch bytes still reject Section B drift, duplicate task 
   assert.notEqual(duplicate, html);
   const duplicateViolations = planAgreement({ ...input, plan: parseAwsfPlanHtmlV1(duplicate, input.label) }, "TICKET_COVERAGE");
   assert.ok(duplicateViolations.some(({ message }) => message === "a ticket names a task the plan does not have"));
-  expectMessages(changeTicket(input, 3, { state: "done" }), "MILESTONE_STATE", ["awsf-v3-w03-ticket-closure/T03: milestone M2 is [] but ticket is done"]);
+  // The live M2 marker moves when M2 closes, so the idle milestone is planted in
+  // the scratch bytes rather than assumed of the registered plan.
+  const idle = html.replace(/<code class="status">\[[^\]]*\]<\/code> Milestone M2:/, '<code class="status">[]</code> Milestone M2:');
+  assert.match(idle, /<code class="status">\[\]<\/code> Milestone M2:/);
+  expectMessages(changeTicket({ ...input, plan: parseAwsfPlanHtmlV1(idle, input.label) }, 3, { state: "done" }), "MILESTONE_STATE",
+    ["awsf-v3-w03-ticket-closure/T03: milestone M2 is [] but ticket is done"]);
 });

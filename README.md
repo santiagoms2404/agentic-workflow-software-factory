@@ -211,7 +211,7 @@ fences, defined once in
 | Fence | What it denies | Why |
 |---|---|---|
 | **1 — delegation-shaped tool names** | Any tool whose normalised name contains one of 14 delegation stems (`agent`, `task`, `spawn`, `worktree`, `cron`, …) | A driving session must not start work the factory has no attempt directory, journal record, reserved call or gate for. Classification is by *shape*, not a fixed list, so a delegation tool that did not exist when the fence was written is denied on arrival. Ten observe-or-stop names are excluded by whole name; an MCP server's nouns are never classified. |
-| **2 — owner-act command text** | A shell command invoking any of the 13 acts the lifecycle reserves for the owner: `land`, `cancel`, `rework`, `review`, `degrade-review`, `attribute`, `prove`, `journey`, `raise`, `publish`, `resume`, `grant`, `confirm` | `processOwnerTerminal()` checks `stdin.isTTY`, which is a terminal-*shape* test. A same-user agent with shell access can allocate a PTY and answer the confirmation, so the TTY check is not the boundary — this fence is. |
+| **2 — owner-act command text** | A shell command invoking any of the 14 acts the lifecycle reserves for the owner: `land`, `cancel`, `rework`, `review`, `degrade-review`, `attribute`, `prove`, `journey`, `raise`, `publish`, `resume`, `grant`, `confirm`, `close` | `processOwnerTerminal()` checks `stdin.isTTY`, which is a terminal-*shape* test. A same-user agent with shell access can allocate a PTY and answer the confirmation, so the TTY check is not the boundary — this fence is. |
 | **3 — lifecycle timeout metadata** | A finite timeout, as declared metadata or as a written `timeout` wrapper, around `run`, `rework`, `review` or `resume` | An external deadline on a lifecycle command kills a run mid-transition. |
 
 If the payload parser cannot run at all, the guard **fails closed** and says so.
@@ -602,6 +602,7 @@ journalled, and none can be reached by a model.
 | `awsf grant TASK --phase PHASE --file PATH --reason "..."` | A one-use grant for one phase to write the exact protected files named, recorded at a quiescent boundary with their current blobs. Landing still needs its own approval. |
 | `awsf journey TASK --journey ID --sha REVISION` | Records the end-user journey. The gate checks separately that it ran, that it passed, and that the revision is the exact candidate. |
 | `awsf land TASK` | Local fast-forward only, from a TTY, through a persisted `LANDING` state. |
+| `awsf close TASK [--attempt N]` · `awsf close --commit SHA --plan STEM [--ticket ID,...]` | Records a landing in its plan after `land`, never inside it: the owner chooses the rows the landed tickets earned, and one commit moves those markers and ticket states and nothing else, re-checked against the closure delta. `--commit` closes owner-gate rows on the evidence of a commit reachable from HEAD. Nothing is pushed. |
 | `awsf publish TASK` | Publishes a landed revision to its configured remote branch and seals the attempt. |
 | `awsf cancel TASK` | Explicit human cancel, reachable from every active state. |
 | `awsf resume TASK` | Resumes a quota pause or an accepted phase result without repeating a model call. |

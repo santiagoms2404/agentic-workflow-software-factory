@@ -58,6 +58,13 @@ test("can repair a failed before-marker and state, but cannot write failed after
   assert.equal(closureDelta(before, tree(), registry).ok, true);
 });
 
+test("an unchanged failed marker and state do not block a closure of other values", () => {
+  const before = change(change(tree(), PLAN, '<li><code class="status">[]', '<li><code class="status">[f]'), TICKET, "state: todo", "state: failed");
+  const result = closureDelta(before, change(before, PLAN, '[]</code> Milestone', '[wip]</code> Milestone'), registry);
+  assert.deepEqual(result, { ok: true, changes: [{ path: PLAN, kind: "milestone", milestone: "M1",
+    taskNumber: null, rowIndex: null, oldValue: "", newValue: "wip" }] });
+});
+
 for (const marker of ["f", "unknown", "X", " x "]) {
   test(`refuses marker after-value ${JSON.stringify(marker)}`, () => {
     refused(change(tree(), PLAN, '<li><code class="status">[]', `<li><code class="status">[${marker}]`), "vocabulary");

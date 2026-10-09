@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { Value } from "@sinclair/typebox/value";
 import { closeCommand, type CloseCommandOptions } from "../../../src/cli/commands/close.ts";
@@ -20,6 +20,7 @@ import { readAttemptEvidence } from "../../../src/cli/commands/review-record.ts"
 import { recoveryDigest } from "../../../src/contracts/phase-recovery.ts";
 import { compileShift } from "../../../src/workflow/shift/compile.ts";
 import { closureJournalRecords } from "../../../src/persistence/closure-journal.ts";
+import { projectClosureJournalRecords } from "../../../src/persistence/project-closure-journal.ts";
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { projectAttemptStatus } from "../../../src/observability/projector.ts";
 import { toAttemptStatusProjection } from "../../../src/cli/commands/attempt-projection.ts";
@@ -305,18 +306,62 @@ test("a closure with no changed bytes still journals one empty-diff commit", asy
   assert.equal(runGit(w.git, ["diff", "--name-only", result.record!.parentSha, result.record!.commitSha]), "");
 });
 
-test("close remains unreachable from the CLI and absent from owner-act registration until G03-C", async () => {
-  const w = await world();
-  assert.equal((OWNER_ACT_COMMANDS as readonly string[]).includes("close"), false);
-  const source = readFileSync(new URL("../../../src/cli/main.ts", import.meta.url), "utf8");
-  assert.equal(source.includes("closeCommand"), false);
-  const before = bytesSnapshot(w.repository), journal = readFileSync(join(w.dir, "journal.jsonl"));
+const OWNER_CONFIG = resolve("awsf.config.yaml");
+
+async function viaMain(w: Awaited<ReturnType<typeof world>>, argv: readonly string[], terminal: CloseCommandOptions["terminal"] = w.terminal) {
   const out: string[] = [], err: string[] = [];
-  const code = await main({ argv: ["close", "unrelated-task", "--state-root", join(w.root, "state")], cwd: w.repository,
-    writeOut: line => out.push(line), writeError: line => err.push(line) });
-  assert.notEqual(code, 0);
+  const code = await main({ argv: [...argv, "--project", "sample", "--state-root", join(w.root, "state"), "--config", OWNER_CONFIG],
+    cwd: w.repository, terminal, writeOut: line => out.push(line), writeError: line => err.push(line) });
+  return { code, out, err };
+}
+
+test("close is an owner act: an arm in main that constructs the owner terminal, and in OWNER_ACT_COMMANDS (G03-C)", () => {
+  assert.equal((OWNER_ACT_COMMANDS as readonly string[]).includes("close"), true);
+  const source = readFileSync(new URL("../../../src/cli/main.ts", import.meta.url), "utf8");
+  const start = source.indexOf('case "close": {');
+  assert.notEqual(start, -1);
+  const arm = source.slice(start, source.indexOf("\n    }\n", start));
+  assert.ok(arm.includes("processOwnerTerminal()") && arm.includes("closeCommand("));
+  assert.equal(arm.includes("lease"), false);
+});
+
+for (const [name, argv, piped] of [
+  ["a piped terminal", ["close", "unrelated-task"], true],
+  ["a path flag", ["close", "unrelated-task", "--where", "plans/**"], false],
+  ["--ticket on the task form", ["close", "unrelated-task", "--ticket", "T01"], false],
+  ["--commit without --plan", ["close", "--commit", "HEAD"], false],
+  ["--commit with a task", ["close", "unrelated-task", "--commit", "HEAD", "--plan", "sample"], false],
+] as const) test(`close through main refuses ${name} and writes nothing`, async () => {
+  const w = await world();
+  const before = bytesSnapshot(w.repository), journal = readFileSync(join(w.dir, "journal.jsonl"));
+  const result = await viaMain(w, argv, piped ? { ...w.terminal, interactive: false } : w.terminal);
+  assert.notEqual(result.code, 0);
   assert.deepEqual(bytesSnapshot(w.repository), before);
   assert.deepEqual(readFileSync(join(w.dir, "journal.jsonl")), journal);
+  assert.equal(existsSync(join(w.root, "state/projects/sample/closure")), false);
+});
+
+test("close through main records a landed attempt's rows in one commit and pushes nothing", async () => {
+  const w = await world();
+  const head = runGit(w.git, ["rev-parse", "HEAD"]).trim();
+  const result = await viaMain(w, ["close", "unrelated-task"]);
+  assert.equal(result.code, 0, result.err.join("\n"));
+  assert.ok(result.out.some(line => line.startsWith("Closed sample T01 in ")), result.out.join("\n"));
+  const after = runGit(w.git, ["rev-parse", "HEAD"]).trim();
+  assert.equal(runGit(w.git, ["rev-parse", `${after}^`]).trim(), head);
+  assert.equal(runGit(w.git, ["log", "-1", "--format=%s", after]).trim(), `chore(specs): close sample T01 after ${w.candidate.slice(0, 7)}`);
+  assert.equal((await readAttemptEvidence(w.dir)).filter(item => item.type === "closure-record").length, 1);
+});
+
+test("close --commit through main closes owner rows at the project and leaves the attempt untouched", async () => {
+  const w = await world();
+  const journal = readFileSync(join(w.dir, "journal.jsonl"));
+  const result = await viaMain(w, ["close", "--commit", w.candidate, "--plan", "sample", "--ticket", "T02"]);
+  assert.equal(result.code, 0, result.err.join("\n"));
+  assert.ok(result.out.some(line => line.startsWith("Closed sample T02 in ")), result.out.join("\n"));
+  assert.deepEqual(readFileSync(join(w.dir, "journal.jsonl")), journal);
+  const records = await projectClosureJournalRecords(join(w.root, "state/projects/sample"));
+  assert.deepEqual(records.map(row => row.event.evidence.type), ["closure-intent", "closure-prepared", "closure-record"]);
 });
 
 test("the closure record is closed host data, not a provider envelope", () => {

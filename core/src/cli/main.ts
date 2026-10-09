@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toConfigSnapshotJson } from "../config/effective-config.ts";
 import { loadConfig } from "../config/load.ts";
@@ -34,7 +34,8 @@ import { renderAttemptNextAction, renderDegradationAdvice } from "../lifecycle/r
 import { nextCommand } from "./commands/next.ts";
 import { preflightCommand, renderPreflightLines } from "./commands/preflight.ts";
 import { newCommand } from "./commands/new.ts";
-import { sealPlanTicketSelection } from "./commands/ticket-selection.ts";
+import { parseTicketSelection, sealPlanTicketSelection } from "./commands/ticket-selection.ts";
+import { closeCommand } from "./commands/close.ts";
 import { PlanRefUnknown, resolvePlanRef } from "./commands/plan-ref.ts";
 import { relateCommand } from "./commands/relate.ts";
 import { publishCommand } from "./commands/publish.ts";
@@ -69,7 +70,7 @@ import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, se
 
 /** The complete owner-facing command table; documentation reconciles against it. */
 export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "preflight", "confirm", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "publish", "cancel", "retry",
+  "init", "project", "new", "seed", "preflight", "confirm", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "close", "publish", "cancel", "retry",
   "relate", "doctor", "traps", "gc", "dash", "routes", "metrics", "metrics export", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
 ]);
 
@@ -278,7 +279,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const command = argv[0];
     if (command === undefined) throw new Error(USAGE);
     const parsed = parseArgs(argv.slice(1));
-    if (parsed.tickets.length > 0 && command !== "new") throw new Error("--ticket is supported only by awsf new");
+    if (parsed.tickets.length > 0 && command !== "new" && command !== "close") throw new Error("--ticket is supported only by awsf new and awsf close");
     const stateRoot = parsed.flags["state-root"] === undefined
       ? resolveStateRoot(env)
       : resolve(parsed.flags["state-root"]);
@@ -576,7 +577,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       throw new Error("usage: awsf project <register|list|show|verify> [options]");
     }
 
-    const taskId = parsed.positionals[0];
+    // `awsf close --commit` closes owner-gate rows on a commit's evidence and names
+    // no task; every other command below takes one.
+    const taskId = command === "close" && parsed.flags.commit !== undefined ? "" : parsed.positionals[0];
     if (taskId === undefined) throw new Error(USAGE);
     const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
     const config = loadConfig(await readFile(configPath, "utf8"));
@@ -744,6 +747,42 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           out(`Replay declined; ${project}/${taskId} was not created and nothing was recorded.`);
           return 1;
         }
+        return 0;
+      }
+      // Follows a landing and never runs inside one (W03-Q1). The task form closes
+      // the rows of a LANDED attempt's sealed tickets; --commit closes owner-gate
+      // rows on the evidence of a commit reachable from HEAD, journalled at the
+      // project (W03-Q6). Neither form accepts a lease, and every refusal comes
+      // before a byte is written.
+      case "close": {
+        const byCommit = parsed.flags.commit !== undefined;
+        const allowed = new Set(byCommit ? ["commit", "plan", "project", "state-root", "config"] : ["attempt", "project", "state-root", "config"]);
+        if (parsed.positionals.length !== (byCommit ? 0 : 1) || parsed.repositories.length !== 0 || parsed.files.length !== 0 ||
+            parsed.routes.length !== 0 || parsed.milestones.length !== 0 || parsed.where.length !== 0 || parsed.read.length !== 0 ||
+            parsed.consulted.length !== 0 || parsed.noTrap !== undefined || (byCommit ? parsed.flags.plan === undefined : parsed.tickets.length !== 0) ||
+            Object.keys(parsed.flags).some(flag => !allowed.has(flag))) {
+          throw new Error("usage: awsf close <task> [--attempt <n>] | awsf close --commit <sha> --plan <stem> [--ticket <id>[,<id>...]]");
+        }
+        const terminal = options.terminal ?? processOwnerTerminal();
+        const result = byCommit
+          ? await closeCommand({
+            commit: parsed.flags.commit!, repository: cwd, projectDir: join(stateRoot, "projects", project), project,
+            plan: parsed.flags.plan!,
+            ...(parsed.tickets.length === 0 ? {} : { tickets: parseTicketSelection(parsed.tickets) }),
+            terminal,
+          })
+          : await closeCommand({
+            attemptDir: (await locateAttempt(stateRoot, project, taskId, selectedAttempt)).attemptDir,
+            terminal, projectRecord: projection.project,
+          });
+        if (!result.confirmed || result.record === null) {
+          out("Closure declined; no byte was written and nothing was recorded.");
+          return 1;
+        }
+        const record = result.record;
+        out(`Closed ${record.plan} ${record.tickets.join(",")} in ${record.commitSha.slice(0, 7)}: ${record.rowsClosed.length} row(s) closed, ${record.rowsLeftOpen.length} left open.`);
+        if (record.notClosable.length > 0) out(`Not closable (no host-recorded build in the landed candidate): ${record.notClosable.join(", ")}.`);
+        out("Nothing was pushed.");
         return 0;
       }
     }

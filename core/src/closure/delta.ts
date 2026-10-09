@@ -124,10 +124,14 @@ export function closureDelta(before: ClosureTree, after: ClosureTree, registry: 
         return refusal(before, after, path, "content", "difference outside status-token or state values");
       }
       for (const [index, span] of newSpans.entries()) {
+        const old = oldSpans[index]!;
+        if (old.value === span.value) continue;
+        // Only a value closure writes is held to its vocabulary. An untouched [f]
+        // row or failed state elsewhere in the file is not this closure's doing,
+        // and refusing it would block every closure of that plan (G03-C, F1).
         const allowed = span.kind === "state" ? ["todo", "wip", "done"] : ["", "wip", "x"];
         if (!allowed.includes(span.value)) return refusal(before, after, path, "vocabulary", `closure refuses ${span.kind} value ${JSON.stringify(span.value)}`);
-        const old = oldSpans[index]!;
-        if (old.value !== span.value) changes.push(Object.freeze({ path, kind: span.kind,
+        changes.push(Object.freeze({ path, kind: span.kind,
           milestone: span.milestone, taskNumber: span.taskNumber, rowIndex: span.rowIndex,
           oldValue: old.value, newValue: span.value }));
       }
