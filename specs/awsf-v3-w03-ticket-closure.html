@@ -149,9 +149,9 @@ section.phase .sub { font-size:13px; }
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-10-09</dd>
-        <dt>modified</dt>     <dd>2026-10-09 (authored, awaiting owner review), 2026-10-09 (owner review applied: W03-Q1–Q9 decided), 2026-10-09 (deep plan approved by the owner), 2026-10-09 (T01 and T02 landed on the plan branch; W03-Q9 revised; M1 complete)</dd>
+        <dt>modified</dt>     <dd>2026-10-09 (authored, awaiting owner review), 2026-10-09 (owner review applied: W03-Q1–Q9 decided), 2026-10-09 (deep plan approved by the owner), 2026-10-09 (T01 and T02 landed on the plan branch; W03-Q9 revised; M1 complete), 2026-10-09 (T07 and T08 moved from M4 to M3, so G03-C falls between milestones)</dd>
         <dt>commits</dt>      <dd>authoring and owner approval: recorded by the 2026-10-09 approval Amendment and its commit; authoring base e93e5de</dd>
-        <dt>agent name</dt>   <dd>claude-opus-5-5</dd>
+        <dt>agent name</dt>   <dd>claude-opus-5-5; marimba (M3/M4 boundary amendment preparation only)</dd>
         <dt>session id</dt>   <dd>not recorded: AGENTS.md invariant 1 keeps live session state out of every committed file</dd>
         <dt>back refs</dt>    <dd>./awsf-v3-plan.html (§ Workstreams → Milestone M3 → W03, gates GA and GM, decisions 7 and 8, Q11, Notes), ./tickets/awsf-v3-plan/W03.md (the meta-prompt this plan answers), ./awsf-v2-plan-build-prompts.md (§ T15, v2 W15's fixed first task and why a widened write scope is not the answer), ./awsf-v3-w02-trap-suite.html (the trap contract, TR-16, the doctor markers row, the 2026-10-08 handoff to W03), ./awsf-v3-intent.md (X3, decision 8), ./awsf-v3-assessment-and-direction.md (Q14), ../AGENTS.md (invariants 2, 8, 11 and 12)</dd>
         <dt>forward refs</dt> <dd>./awsf-v3-w03-ticket-closure-build-prompts.md (§ Section B, the prompt source the invariant-12 fence pairs against), ./tickets/awsf-v3-w03-ticket-closure/ (README, T01–T15)</dd>
@@ -233,8 +233,8 @@ flowchart LR
     <ul>
       <li><strong>M1, the fence first.</strong> T01, fixed in advance: the owner adds <code>specs/*.html</code> to <code>policy.protected_paths</code> under GA. T02 (W03-Q2): the owner protects the rest of every plan set, <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code>, in a separate commit. Intake keeps its flat store.</li>
       <li><strong>M2, closure is boring.</strong> The agreement rules move into <code>core/src</code> so the fence and closure share one implementation. A pure closure delta accepts a change only when it alters status-token values and ticket <code>state</code> values, and an asked-for comparison refuses when a ticket's ask changed after the work began. Both are proven over every registered plan before anything uses them.</li>
-      <li><strong>M3, a landing knows its tickets.</strong> <code>awsf new --plan &lt;stem&gt; --ticket &lt;id&gt;</code> seals a selection on any plan attempt, as a shift already does.</li>
-      <li><strong>M4, the closure act.</strong> <code>awsf close</code>, an owner act at the owner's terminal. It proposes the rows of the landed attempt's tickets, and the owner confirms each one. It derives ticket states and milestone markers, rolls up to the spine when a deep plan completes, checks the delta and agreement, and commits once. It writes a closure record in the journal. The owner wires the verb into the CLI and the guard at G03-C.</li>
+      <li><strong>M3, a landing knows its tickets.</strong> <code>awsf new --plan &lt;stem&gt; --ticket &lt;id&gt;</code> seals a selection on any plan attempt, as a shift already does. T07 and T08 then build <code>awsf close</code> and its spine roll-up, unwired until G03-C.</li>
+      <li><strong>M4, the closure act.</strong> Built in M3 and wired by G03-C at M4's start: <code>awsf close</code>, an owner act at the owner's terminal. It proposes the rows of the landed attempt's tickets, and the owner confirms each one. It derives ticket states and milestone markers, rolls up to the spine when a deep plan completes, checks the delta and agreement, and commits once. It writes a closure record in the journal. The owner wires the verb into the CLI and the guard at G03-C.</li>
       <li><strong>M5, the light tier.</strong> A flat intake ticket is a task with no deep plan (W03-Q5). It starts with <code>awsf new --ticket</code> and closes through the same act, which changes its <code>state</code> line only. Intake can create and refine a ticket and can never move its state.</li>
       <li><strong>M6, create-only admission.</strong> A host step writes a new plan set as new files only, with every marker <code>[]</code> and every state <code>todo</code>. design-to-plan's <code>plan-render</code> moves onto it, and a <code>plan-author</code> recipe uses it, so deep plans can be authored through the factory (W03-Q7).</li>
       <li><strong>M7, GM retired.</strong> The closing record, with W03's own tasks closed by <code>awsf close</code>.</li>
@@ -243,18 +243,17 @@ flowchart LR
       <pre class="mermaid">
 flowchart LR
   M1["M1 fence<br/>owner commits"] --> M2["M2 delta,<br/>agreement"]
-  M1 --> M3["M3 selection"]
-  M2 --> M4["M4 awsf close"]
-  M3 --> M4
-  M4 --> GC{"G03-C<br/>owner wires verb"}
+  M1 --> M3["M3 selection,<br/>awsf close built"]
+  M2 --> M3
+  M3 --> GC{"G03-C<br/>owner wires verb"}
   GC --> M4b["M4 status, doctor,<br/>K1"]
-  M4 --> M5["M5 light tier"]
+  M3 --> M5["M5 light tier"]
   M2 --> M6["M6 admission,<br/>plan-author"]
   M4b --> M7["M7 GM retired"]
   M5 --> M7
   M6 --> M7
       </pre>
-      <figcaption>M3 and M6 can start once M1 lands. Nothing writes a plan until M4, and nothing creates one until M6.</figcaption>
+      <figcaption>M3 and M6 can start once M1 lands. M3's T07 also waits for M2's T04. Nothing writes a plan until G03-C wires <code>awsf close</code>, and nothing creates one until M6.</figcaption>
     </figure>
 
     <h3>Decisions already taken</h3>
@@ -364,8 +363,8 @@ flowchart LR
       <tbody>
         <tr><td>M1 the fence</td><td>T01, T02</td><td>owner commits under GA</td><td>owner approval of this plan</td></tr>
         <tr><td>M2 closure is boring</td><td>T03–T05</td><td>managed, build-review per ticket or one shift</td><td>T01 landed</td></tr>
-        <tr><td>M3 selection</td><td>T06</td><td>managed, build-review</td><td>T01 landed</td></tr>
-        <tr><td>M4 the act</td><td>T07–T10</td><td>managed, build-review per ticket</td><td>T04 and T06 landed; G03-C between T08 and T09</td></tr>
+        <tr><td>M3 selection, the act built</td><td>T06–T08</td><td>managed, build-review per ticket, or one shift with M2</td><td>T01 landed; T07 also after T04 and T06</td></tr>
+        <tr><td>M4 the act wired and read</td><td>T09, T10</td><td>managed, build-review per ticket</td><td>G03-C landed</td></tr>
         <tr><td>M5 light tier</td><td>T11</td><td>managed, build-review</td><td>T07 landed; G03-I landed</td></tr>
         <tr><td>M6 admission</td><td>T12–T14</td><td>managed, build-review per ticket</td><td>T02 and T03 landed; G03-W after T13</td></tr>
         <tr><td>M7 GM retired</td><td>T15</td><td>managed, build-review</td><td>everything above, and G03-W</td></tr>
@@ -504,7 +503,7 @@ flowchart LR
 
     <!-- ================= M3 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M3: A landing knows its tickets <span class="wtag">managed</span></h3>
+      <h3><code class="status">[]</code> Milestone M3: A landing knows its tickets, and the closure act is built <span class="wtag">managed</span></h3>
       <p>Closure maps a landing to tickets only through a sealed selection, never through a task name, a request's words or a directory. Testing shares the task.</p>
 
       <h4>6. A sealed ticket selection on any plan attempt</h4>
@@ -515,11 +514,7 @@ flowchart LR
         <li><code class="status">[]</code> <code>awsf status</code> and <code>--json</code> show the selection; doctor's markers row maps such an attempt instead of reporting it unmapped</li>
         <li><code class="status">[]</code> Unit tests for each refusal and a journey through <code>main</code> on the stub route; <code>npm run test:unit</code>, <code>typecheck</code> and <code>lint</code> exit 0; the cheatsheet lists the flag</li>
       </ul>
-    </section>
 
-    <!-- ================= M4 ================= -->
-    <section class="phase">
-      <h3><code class="status">[]</code> Milestone M4: The closure act <span class="wtag">managed</span> <span class="wtag raise">gate G03-C</span></h3>
       <p><code>awsf close</code> is an owner act like <code>land</code>, and it follows a landing. It never runs inside <code>land</code> (W03-Q1).</p>
       <figure>
         <pre class="mermaid">
@@ -559,6 +554,12 @@ sequenceDiagram
         <li><code class="status">[]</code> Per W03-Q6: <code>close --commit &lt;sha&gt;</code> closes owner-gate rows on the evidence of a commit reachable from HEAD, with the owner choosing the rows; recorded as a project-level closure record</li>
         <li><code class="status">[]</code> Unit tests over fixture spines and deep plans for each roll-up case and each refusal</li>
       </ul>
+    </section>
+
+    <!-- ================= M4 ================= -->
+    <section class="phase">
+      <h3><code class="status">[]</code> Milestone M4: The closure act, wired and read <span class="wtag">managed</span> <span class="wtag raise">gate G03-C</span></h3>
+      <p>It begins only after G03-C has landed: the owner commit that wires <code>awsf close</code>, built in M3, as an owner act. Task 10's journeys exercise the act end to end.</p>
 
       <h4>9. Status, doctor, K2 and K1 read closure</h4>
       <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-7</code></p>
@@ -824,6 +825,11 @@ flowchart LR
       <summary>2026-10-09 — T01 and T02 landed on the plan branch; W03-Q9 revised; M1 complete</summary>
       <p>On the owner's authorization, both M1 amendments were made as owner commits on <code>v3-w03-ticket-closure-plan</code>, after the approval commit and one at a time under GA. They reach <code>main</code> with it by fast-forward once the owner's W02 run has landed. <strong>T01</strong> (<code>3c8c855</code>) adds <code>specs/*.html</code> to <code>policy.protected_paths</code>. Under the committed config, a builder whose writes were widened to <code>specs/**</code> is refused <code>specs/awsf-v3-plan.html</code> with <code>protected-path</code>. It turned four tests red, not two: the five-stage W11 file-list check and the five-stage journey, plus <code>design-to-plan-route.test.ts</code> and <code>stops.test.ts</code>, which also run <code>plan-render</code> to completion. The repair is one helper, <code>withoutPlanProtection</code> in <code>core/test/unit/cli/_offline-route.ts</code>, used by the three design-to-plan fixtures and named for removal by T12, plus a glob filter in the W11 check. On its content, unit 3171/3171 (290 s), journeys 373/373 (1,144 s) and traps 76/76 (150 s) passed, and typecheck and lint exited 0. <strong>T02</strong> (<code>8653eaa</code>) adds <code>specs/*-build-prompts.md</code> and <code>specs/tickets/*/**</code>. <code>specs/tickets/T01.md</code> and <code>specs/tickets/README.md</code> stay unprotected, so intake keeps its flat store. The helper and the W11 filter now cover all three plan-set globs. On its content, unit 3171/3171, traps 76/76, typecheck and lint passed. Journeys ran 372/373 until the W11 filter was widened, and <code>five-stage.test.ts</code> then passed 3/3.</p>
       <p><strong>W03-Q9 revised.</strong> Removing design-to-plan from <code>workflows.enabled</code> turned 9 more unit tests red, so the owner kept it enabled. The trap is named in T01's commit: until T12 lands, a live design-to-plan run spends its three calls and then blocks at <code>plan-render</code>. The T01, T02 and T12 prompts, two M1 rows, the T12 row, G03-W and R6 are reworded to what was built, and their markers are earned by these commits. Section B changed for T01, T02 and T12, and their tickets carry the new bytes. T01 and T02 move to <code>done</code> and M1 to <code>[x]</code>. The spine's "<code>specs/*.html</code> is a protected path" row moves to <code>[x]</code>; W03 stays <code>[wip]</code>. Built on: anthropic:claude-opus-5-5.</p>
+    </details>
+    <details open>
+      <summary>2026-10-09 — T07 and T08 moved from M4 to M3, so G03-C falls between milestones</summary>
+      <p>M4 held gate G03-C between T08 and T09. A shift seals whole milestones (<code>awsf new --workflow shift --plan &lt;stem&gt; --milestone &lt;Mx&gt;</code>, <code>core/src/cli/main.ts</code>) and cannot pause inside its selection for an owner commit. So no shift could carry T07–T08 without also carrying T09–T10, which need G03-C first. W01 met the same shape and split its M4 at G01-C (2026-10-05). Here M5–M7 follow M4, so a split would renumber three milestones; the owner moved the boundary instead.</p>
+      <p>M3 is now tasks 6–8: the sealed selection, <code>closeCommand</code> unwired, and the spine roll-up. M4 is tasks 9–10, and begins after G03-C. No task, row, gate, dependency, decision or acceptance bar changed. Only the milestone boundary and its marker moved. T07 and T08 move to <code>milestone: M3</code>, and their prompt lines read "milestone M3". Task 8's landing now earns M3's marker instead of task 6's, in the canonical prompts and their ticket copies, which change together and stay byte-identical. Task 10 keeps its title, "Testing Strategy for M4"; its journeys still cover the act built in M3. M2 and M3 can now run as one shift, T03–T08.</p>
     </details>
   </section>
 

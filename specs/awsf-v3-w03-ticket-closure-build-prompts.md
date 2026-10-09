@@ -494,8 +494,8 @@ COMMIT
   Never name an agent, model or tool in an identity, a message or a trailer.
 
 MARKERS
-  Owner-side, after this ticket's candidate lands: task 6's rows, M3's marker and this ticket's
-  state move together in one commit. Return the evidence. Edit neither file.
+  Owner-side, after this ticket's candidate lands: task 6's rows and this ticket's state move
+  together in one commit. Return the evidence. Edit neither file.
 
 HANDOFF
   In your envelope's notes, give dated findings for T07 and T11: where the selection is
@@ -509,7 +509,7 @@ ROUTING
   Managed (default): host configuration owns the route, the review inversion and the effort.
   Manual (a logged exception): Opus 5.5 at high, or codex:gpt-6-sol at xhigh, by live quota.
 
-TASK 7 of 15. Plan: specs/awsf-v3-w03-ticket-closure.html, milestone M4, task 7.
+TASK 7 of 15. Plan: specs/awsf-v3-w03-ticket-closure.html, milestone M3, task 7.
 REPOSITORY: this checkout (AWSF). One repository.
 
 EXECUTION
@@ -594,7 +594,7 @@ ROUTING
   Managed (default): host configuration owns the route, the review inversion and the effort.
   Manual (a logged exception): Opus 5.5 at high, or codex:gpt-6-sol at high, by live quota.
 
-TASK 8 of 15. Plan: specs/awsf-v3-w03-ticket-closure.html, milestone M4, task 8.
+TASK 8 of 15. Plan: specs/awsf-v3-w03-ticket-closure.html, milestone M3, task 8.
 REPOSITORY: this checkout (AWSF). One repository.
 
 EXECUTION
@@ -648,8 +648,8 @@ COMMIT
   Never name an agent, model or tool in an identity, a message or a trailer.
 
 MARKERS
-  Owner-side, after this ticket's candidate lands: task 8's rows and this ticket's state move
-  together in one commit. Return the evidence. Edit neither file.
+  Owner-side, after this ticket's candidate lands: task 8's rows, M3's marker and this ticket's
+  state move together in one commit. Return the evidence. Edit neither file.
 
 HANDOFF
   In your envelope's notes, give dated findings for G03-C, T09 and T13: the CLI options the arm

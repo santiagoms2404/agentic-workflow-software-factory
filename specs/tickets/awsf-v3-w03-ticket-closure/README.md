@@ -71,8 +71,8 @@ disagreed would be refused.
 | `T04` | M2 | `T03` | — | The closure delta and the asked-for comparison |
 | `T05` | M2 | `T03`, `T04` | — | Testing Strategy for M2 |
 | `T06` | M3 | `T01` | — | A sealed ticket selection on any plan attempt |
-| `T07` | M4 | `T04`, `T06` | — | closeCommand: propose, confirm, check, commit, record |
-| `T08` | M4 | `T07` | G03-C after it | Spine roll-up, approvals and owner rows |
+| `T07` | M3 | `T04`, `T06` | — | closeCommand: propose, confirm, check, commit, record |
+| `T08` | M3 | `T07` | G03-C after it | Spine roll-up, approvals and owner rows |
 | `T09` | M4 | `T08` | G03-C landed | Status, doctor, K2 and K1 read closure |
 | `T10` | M4 | `T05`, `T07`, `T08`, `T09` | — | Testing Strategy for M4 |
 | `T11` | M5 | `T07` | G03-I landed | Light tickets start, close and keep their state out of intake's reach |
@@ -81,7 +81,7 @@ disagreed would be refused.
 | `T14` | M6 | `T10`, `T12`, `T13` | — | Testing Strategy for M6 |
 | `T15` | M7 | `T10`, `T11`, `T14` | G03-W landed | The closing record, and the workstream's closing duties |
 
-M3 and M2 may run in parallel once T01 lands; M6's T12 needs only T02 and T03. M4 is the critical
+M2 and M3's T06 may run in parallel once T01 lands, and T07 waits for T04 and T06; M6's T12 needs only T02 and T03. M3 and M4, with G03-C between them, are the critical
 path. M7 waits for everything.
 
 ## Design references
