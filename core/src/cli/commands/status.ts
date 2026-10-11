@@ -1,3 +1,4 @@
+import { readClosure, type ClosureReadout } from "../../closure/readout.ts";
 import { renderStatusAdvice, renderWatchAdvice } from "../../lifecycle/renderer.ts";
 import { join } from "node:path";
 import { ceilingFor } from "../../state/tiers.ts";
@@ -214,6 +215,12 @@ export function formatAttemptSelection(status: AttemptStatus): readonly string[]
   return Object.freeze(lines);
 }
 
+/** JSON adds a read-only journal projection; no status-store or lifecycle change. */
+export async function statusJson(attemptDir: string): Promise<AttemptStatus & { readonly closure: ClosureReadout }> {
+  const status = await readAttempt(attemptDir);
+  return { ...status, closure: await readClosure(attemptDir, status) };
+}
+
 export async function statusCommand(
   attemptDir: string,
   options: { readonly evidence?: boolean } = {},
@@ -227,6 +234,7 @@ export async function statusCommand(
   ]);
   const lines = [
     ...formatStatus(status), ...formatRelation(status, relation), ...formatGroup(status),
+    `Closure: ${(await readClosure(attemptDir, status)).state} — closure is read from the journal, not inferred from ticket markers`,
     ...formatAttemptSelection(status), ...formatRouteProvenance(records),
   ];
   if (status.recovery != null && status.process === null && status.budget.callsReserved === 0) {

@@ -86,6 +86,8 @@ export const TRAPS: readonly TrapEntry[] = [
     refusalPoint: "start", refusal: "StartPreflightRefused" },
   { id: "TR-20", family: "grant-boundary", title: "A protected grant names the next writing phase", seeds: ["C8-later-grant"],
     refusalPoint: "owner-act", refusal: "ProtectedGrantBoundaryRefused" },
+  { id: "TR-21", family: "closure", title: "A selected landing after the closure cut needs an owner closure record", seeds: [],
+    refusalPoint: "k1-field", refusal: "awsf.preflight-refused/v1" },
 ];
 
 function isNoTrapKind(outcome: Seed["outcome"]): outcome is NoTrapKind {

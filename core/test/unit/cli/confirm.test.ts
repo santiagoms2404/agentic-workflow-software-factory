@@ -137,6 +137,7 @@ async function freshness(attemptDir: string): Promise<FreshnessFacts> {
   const status = await readAttempt(attemptDir);
   return {
     record: await latestPreflight(attemptDir),
+    closure: [],
     current: {
       project: status.project, taskId: status.taskId, attempt: status.attempt, baseSha: BASE, configDigest: CONFIG,
       requestDigest: requestTextDigest(status.request),

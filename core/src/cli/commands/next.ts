@@ -1,8 +1,9 @@
+import { hasTicketSelection, readClosure } from "../../closure/readout.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
 import { assertNextSteps, type NextSteps } from "../../contracts/next-steps.ts";
 import { nextSteps } from "../../lifecycle/next-steps.ts";
 import { renderNextSteps } from "../../lifecycle/renderer.ts";
-import { freshnessRefusals, k1Requirements, PREFLIGHT_RECORD_REQUIREMENT, type K1Requirement } from "../../preflight/fields.ts";
+import { evaluateClosure, freshnessRefusals, k1Requirements, PREFLIGHT_RECORD_REQUIREMENT, type K1Requirement } from "../../preflight/fields.ts";
 import { grantOwedAt, writingPhases } from "../../preflight/grant-plan.ts";
 import { workflowRecipe } from "../../workflow/catalog.ts";
 import { readProtectedState } from "../../workflow/protected-grants.ts";
@@ -25,7 +26,8 @@ export interface NextK1Context {
 async function k1At(attemptDir: string, status: AttemptStatus, context: NextK1Context): Promise<readonly K1Requirement[]> {
   try {
     const facts = await gatherFreshness({ attemptDir, status, ...context });
-    return k1Requirements(freshnessRefusals(facts), facts.confirmations);
+    if (!evaluateClosure(facts.closure).passed) return [{ check: "K1", field: "closure", status: "failed" }];
+    return K1_EXEMPT_WORKFLOWS.includes(status.workflow) ? [] : k1Requirements(freshnessRefusals(facts), facts.confirmations);
   } catch {
     return [{ check: "K1", field: PREFLIGHT_RECORD_REQUIREMENT, status: "unmeasured" }];
   }
@@ -58,10 +60,11 @@ async function grantOwedNow(attemptDir: string, status: AttemptStatus, config: A
 /** Read the status projection and, at DRAFT, K1's facts; at a grant boundary, the grant owed. No lock, write, SQLite or owner terminal. */
 export async function nextCommand(attemptDir: string, k1?: NextK1Context): Promise<{ readonly model: NextSteps; readonly lines: readonly string[] }> {
   const status = await readAttempt(attemptDir);
-  const measured = k1 !== undefined && status.lifecycleState === "DRAFT" && !K1_EXEMPT_WORKFLOWS.includes(status.workflow);
+  const measured = k1 !== undefined && status.lifecycleState === "DRAFT";
   const grantOwed = k1 !== undefined && (status.lifecycleState === "PREPARED" || status.recovery != null)
     ? await grantOwedNow(attemptDir, status, k1.config) : undefined;
-  const model = nextSteps({ ...status, state: status.lifecycleState, ...(measured ? { k1: await k1At(attemptDir, status, k1) } : {}),
+  const closure = { hasSelection: hasTicketSelection(status), recorded: (await readClosure(attemptDir, status)).record !== null };
+  const model = nextSteps({ ...status, closure, state: status.lifecycleState, ...(measured ? { k1: await k1At(attemptDir, status, k1) } : {}),
     ...(grantOwed === undefined ? {} : { grantOwed }) });
   assertNextSteps(model);
   const grantUnwidenable = grantOwed?.grantId == null ? undefined : { phase: grantOwed.phase, grantId: grantOwed.grantId, paths: grantOwed.paths };

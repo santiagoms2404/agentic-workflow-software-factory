@@ -22,6 +22,7 @@
 // Every other field is measured from Git, the configuration and the journal.
 
 import assert from "node:assert/strict";
+import { selectedLanding } from "../fixtures/closure-readers.ts";
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -155,6 +156,12 @@ async function assertClearsAndStarts(b: Box, taskId: string, attemptDir: string)
 // --- One refusal per K1 field, each test named with its field id ---
 
 const FIELD_CASES: Record<K1FieldId, (b: Box, taskId: string) => Promise<{ attemptDir: string; reason: RegExp }>> = {
+  closure: async (b, taskId) => {
+    const created = await draft(b, taskId);
+    await prepareK1({ attemptDir: created.attemptDir, configPath: b.configPath, worktreeRoot: b.worktreeRoot });
+    await selectedLanding(b);
+    return { attemptDir: created.attemptDir, reason: /owner closes it with awsf close selected-landing/u };
+  },
   suite: async (b, taskId) => {
     const created = await draft(b, taskId);
     await prepareK1({ attemptDir: created.attemptDir, configPath: b.configPath, worktreeRoot: b.worktreeRoot,

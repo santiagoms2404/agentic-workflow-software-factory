@@ -79,6 +79,8 @@ export interface NextStepsInput {
    * widened on this attempt, so no grant step is offered.
    */
   readonly grantOwed?: { readonly phase: string; readonly paths: readonly string[]; readonly grantId?: string | null } | null;
+  /** Journal-measured: absent facts never infer a selection from the task name. */
+  readonly closure?: { readonly hasSelection: boolean; readonly recorded: boolean };
 }
 
 interface NonTransitionAct {
@@ -154,6 +156,10 @@ export function nextSteps(input: NextStepsInput): NextSteps {
       who: isOwner(act.verb) ? "owner" : "driver", interactive: isOwner(act.verb), spendsCalls: false,
       requires: owed === null ? [] : owed.paths.map(path => ({ check: "protected-paths", field: path, status: `ungranted for ${owed.phase}` })) };
     output.steps.push(step);
+  }
+  if (input.state === "LANDED" && input.closure?.hasSelection === true && !input.closure.recorded) {
+    output.steps.push({ kind: "act", verb: "close", argv: argvFor(input, "close", []), who: "owner",
+      interactive: true, spendsCalls: false, requires: [] });
   }
   return output;
 }

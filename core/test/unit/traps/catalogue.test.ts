@@ -61,8 +61,8 @@ test("TRAP_CUT parses as the same instant used by the one population rule", () =
   assert.equal(isPopulationStop({ ...attempt, terminalAt: "2026-10-08T00:00:00Z" }, new Set([attempt.project])), false);
 });
 
-test("the catalogue assigns all eight K1 fields and the four complementary existing refusals", () => {
-  assert.deepEqual(TRAPS.slice(0, 8).map(trap => trap.family), K1_FIELD_IDS);
+test("the catalogue assigns all K1 fields and the complementary existing refusals", () => {
+  assert.deepEqual([...TRAPS.slice(0, 8), TRAPS.find(trap => trap.id === "TR-21")!].map(trap => trap.family), K1_FIELD_IDS);
   assert.deepEqual(TRAPS.filter(trap => trap.refusalPoint !== "k1-field").map(trap => [trap.id, trap.refusal]), [
     ["TR-09", "ProtectedGrantRefused"], ["TR-10", "ProductionConfigSnapshotMismatch"],
     ["TR-11", "E_BACKEND_FAILURE"], ["TR-12", "AttemptWorktreeExists"],

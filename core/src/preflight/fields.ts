@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { CLOSURE_CUT, closeArgv, unclosedLandings, type LandingClosureFact } from "../closure/model.ts";
 import {
   FRESHNESS_REFUSALS,
   K1_FIELD_IDS,
@@ -25,7 +26,7 @@ import type { TaskState } from "../state/task-machine.ts";
 // none of them can mark a field passed by being said.
 //
 // Refusal reasons name the fault and the input that would clear it. They never
-// spell a next command: lifecycle advice is rendered only by
+// spell a next command, except W03-Q3's required closure command: lifecycle advice is rendered only by
 // core/src/lifecycle/renderer.ts.
 
 export type FieldVerdict = { readonly passed: true } | { readonly passed: false; readonly reason: string };
@@ -573,6 +574,19 @@ export function evaluateConfirmation(facts: ConfirmationFacts): FieldVerdict {
   return PASS;
 }
 
+// ---------------------------------------------------------------- closure
+
+/** W03-Q3: only post-cut selected landings without a final record block L1. */
+export function evaluateClosure(facts: readonly LandingClosureFact[]): FieldVerdict {
+  const problems: string[] = [];
+  // trap-refusal-begin TR-21
+  for (const fact of unclosedLandings(facts)) {
+    problems.push(`attempt ${fact.project}/${fact.taskId}#${fact.attempt} landed after ${CLOSURE_CUT} with a ticket selection and no closure record; owner closes it with ${closeArgv(fact).join(" ")}`);
+  }
+  // trap-refusal-end TR-21
+  return verdict(problems);
+}
+
 // ---------------------------------------------------------------- the record's fields
 
 export interface PreflightFacts {
@@ -587,6 +601,7 @@ export interface PreflightFacts {
   readonly duplicate: DuplicateFacts;
   readonly priorAttempts: PriorAttemptsFacts;
   readonly confirmation: ConfirmationFacts;
+  readonly closure: readonly LandingClosureFact[];
 }
 
 export interface PreflightEvaluation {
@@ -612,6 +627,7 @@ export function evaluatePreflightFields(facts: PreflightFacts): PreflightEvaluat
     "request-shape": evaluateRequestShape(facts.request),
     "prior-attempts": evaluatePriorAttempts(facts.priorAttempts),
     confirmation: evaluateConfirmation(facts.confirmation),
+    closure: evaluateClosure(facts.closure),
   };
   return Object.freeze({
     fields: Object.freeze(K1_FIELD_IDS.map((id) => result(id, verdicts[id]))),
@@ -647,6 +663,7 @@ export interface FreshnessFacts {
   readonly gitStorage: GitStorageFacts;
   readonly duplicate: DuplicateFacts;
   readonly confirmations: readonly RequestConfirmationRecord[];
+  readonly closure: readonly LandingClosureFact[];
 }
 
 function stale(refusal: FreshnessRefusal, reason: string): FreshnessFailure {
@@ -679,6 +696,7 @@ export function freshnessRefusals(facts: FreshnessFacts): readonly FreshnessFail
     let outcome: FieldVerdict;
     if (id === "git-storage") outcome = evaluateGitStorage(facts.gitStorage);
     else if (id === "duplicate") outcome = evaluateDuplicate(facts.duplicate);
+    else if (id === "closure") outcome = evaluateClosure(facts.closure);
     else if (id === "confirmation") {
       outcome = evaluateConfirmation({
         project: record.project,

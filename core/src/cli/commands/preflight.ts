@@ -16,6 +16,7 @@
 // never in the owner's checkout and never in a tree created for this run alone.
 
 import { readdir, readFile, stat } from "node:fs/promises";
+import { gatherLandingClosures } from "../../closure/readout.ts";
 import { dirname, join, resolve } from "node:path";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { loadConfig } from "../../config/load.ts";
@@ -339,12 +340,14 @@ export async function gatherFreshness(options: FreshnessGathering): Promise<Fres
   };
   if (record === null) {
     return {
-      record, confirmations, current: { ...current, baseSha: "" }, gitStorage: { entries: [] },
+      record, confirmations, closure: await gatherLandingClosures(options.stateRoot, status.project),
+      current: { ...current, baseSha: "" }, gitStorage: { entries: [] },
       duplicate: { taskId: status.taskId, chain: [], requestDigest: normalizedRequestDigest(status.request), planRef: status.planRef, others: [] },
     };
   }
   return {
     record, confirmations,
+    closure: await gatherLandingClosures(options.stateRoot, status.project),
     current: { ...current, baseSha: await pinnedBase(options.attemptDir, status) },
     gitStorage: { entries: await measureGitStorage(status.repository, options.worktreeRoot) },
     duplicate: await duplicateFacts(options.stateRoot, status),
@@ -404,6 +407,7 @@ export async function preflightCommand(options: PreflightCommandOptions): Promis
     writers, shift, protectedPaths: config.policy.protected_paths,
     gitStorage: { entries: await measureGitStorage(current.repository, options.worktreeRoot) },
     duplicate: journal.duplicate,
+    closure: await gatherLandingClosures(options.stateRoot, current.project),
     priorAttempts: { consulted: options.consulted, journal: journal.priorSessions },
     // The owner's confirmation is a separate act, so this field reports what the
     // attempt's journal holds now; the freshness rule reads confirmations again

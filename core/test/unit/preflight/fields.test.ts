@@ -416,6 +416,7 @@ test("confirmation refuses no record, a record bound to other text, and one boun
 
 function facts(overrides: Partial<PreflightFacts> = {}): PreflightFacts {
   return {
+    closure: [],
     request: REQUEST,
     where: ["core/src/preflight/**", "core/test/**"],
     read: [],
@@ -468,6 +469,7 @@ function freshness(overrides: Partial<FreshnessFacts> = {}): FreshnessFacts {
   const record = preflightRecord(input);
   return {
     record,
+    closure: [],
     current: { project: "demo", taskId: "T", attempt: 1, baseSha: BASE, configDigest: CONFIG_DIGEST, requestDigest: requestTextDigest(REQUEST) },
     gitStorage: { entries: NATIVE },
     duplicate: duplicate(),
@@ -539,7 +541,7 @@ test("freshness names the first failing field in K1's order", () => {
 test("fields.ts reads no file, runs no Git and asks no clock: it imports only pure modules", () => {
   const source = readFileSync(resolve("core/src/preflight/fields.ts"), "utf8");
   const imports = [...source.matchAll(/from\s+"([^"]+)"/gu)].map((match) => match[1]);
-  assert.deepEqual(imports.sort(), ["../contracts/driver-preflight.ts", "../policy/path-policy.ts", "../state/task-machine.ts", "node:crypto"]);
+  assert.deepEqual(imports.sort(), ["../closure/model.ts", "../contracts/driver-preflight.ts", "../policy/path-policy.ts", "../state/task-machine.ts", "node:crypto"]);
   const code = source.split("\n").filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*") && !line.trim().startsWith("/**")).join("\n");
   for (const forbidden of [/\bDate\b/u, /\bprocess\./u, /\brequire\(/u, /\bimport\(/u, /\bsetTimeout\b/u, /\bperformance\b/u]) {
     assert.doesNotMatch(code, forbidden);

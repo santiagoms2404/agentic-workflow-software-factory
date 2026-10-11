@@ -69,12 +69,12 @@ test("both records are registered as host records and never as agent-output enve
   }
 });
 
-test("K1's field list is exactly the one the G01-F Amendment froze: seven measured, one attested", () => {
+test("K1's G01-F fields plus W03-Q3 closure are eight measured, one attested", () => {
   assert.deepEqual([...K1_FIELD_IDS], [
-    "suite", "write-boundary", "protected-paths", "git-storage", "duplicate", "request-shape", "prior-attempts", "confirmation",
+    "suite", "write-boundary", "protected-paths", "git-storage", "duplicate", "request-shape", "prior-attempts", "confirmation", "closure",
   ]);
   assert.deepEqual(K1_FIELD_IDS.filter((id) => k1FieldKind(id) === "attested"), ["confirmation"]);
-  assert.equal(K1_FIELD_IDS.filter((id) => k1FieldKind(id) === "measured").length, 7);
+  assert.equal(K1_FIELD_IDS.filter((id) => k1FieldKind(id) === "measured").length, 8);
 });
 
 test("a well-formed preflight record and confirmation are accepted", () => {

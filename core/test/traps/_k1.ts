@@ -61,6 +61,7 @@ export async function k1Trap(id: string, field: K1FieldId): Promise<void> {
       "request-shape": /no Out of scope: line/u,
       "prior-attempts": /--consulted names invented-session/u,
       confirmation: /no owner confirmation/u,
+      closure: /with a ticket selection and no closure record/u,
     };
     assert.match(record!.reason, reasons[field], `${label}: reason`);
     assert.equal(code, 1, `${label}: CLI exit`);

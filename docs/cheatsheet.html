@@ -723,6 +723,9 @@ npm run awsf -- land TASK</pre>
   <p>A reused baseline whose ignored seed bytes differ from the repository refuses before measuring gates; inspect and restore it by hand. Nothing is refreshed or cleared. <code>retry SOURCE --adopt-as TARGET --request "..."</code> first records TARGET as DRAFT and requires its own four-line request, preflight and owner confirmation. Run those on TARGET, then repeat the adoption command unchanged; no target tree, integration or provider call precedes K1.</p>
   <pre>npm run awsf -- preflight TASK --where core/src/example.ts</pre>
 
+  <p><code>closure</code> (TR-21) refuses preparation while any attempt in the project landed after <code>2026-10-09T22:02:56Z</code> with a sealed ticket selection and no closure record. The refusal names each attempt and its <code>awsf close</code> command. No flag or environment variable bypasses it, including on intake or proving runs. A closure leaving rows open by your choice counts; a pre-cut landing does not.</p>
+  <p><code>status</code>, including <code>--json</code>, and doctor&rsquo;s markers row distinguish <em>closed</em>, <em>open by the owner&rsquo;s choice</em> and <em>not closed</em> from journal records. <code>next --json</code> prepares <code>close</code> for a LANDED attempt with a selection and no record as an interactive owner act, never a driver act.</p>
+
   <h3>One command, three spellings</h3>
   <p><code>awsf status TASK</code>, <code>npm run awsf -- status TASK</code> and <code>just awsf status TASK</code> are the same command reached three ways. The <code>just</code> targets are thin wrappers over the repository&rsquo;s npm scripts, so they are a convenience and never a second source of truth. On the drive this guide was written from, <code>just</code> was not installed on the machine at all; marimba used the npm form and got the same healthy result. <strong>A missing wrapper is a missing convenience, not a missing command.</strong></p>
 

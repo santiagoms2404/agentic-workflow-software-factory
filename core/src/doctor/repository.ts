@@ -1,5 +1,6 @@
 // Read-only repository facts. Git reads go through the transport broker; there
 // is no gc join, provider launch, trap run, state writer or repair operation.
+import { readClosure, type ClosureState } from "../closure/readout.ts";
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { readAttempt, type AttemptStatus } from "../cli/commands/attempt.ts";
@@ -147,10 +148,13 @@ export async function gatherRepositoryRows(input: RepositoryInput): Promise<Repo
   for (const attempt of local.filter(attempt => landed(attempt) && attempt.planRef != null)) {
     const label = `${attempt.project}/${attempt.taskId}#${attempt.attempt}`;
     const plan = attempt.planRef!;
+    let closure: ClosureState | undefined;
+    try { closure = (await readClosure(join(input.stateRoot, "projects", attempt.project, "tasks", attempt.taskId, String(attempt.attempt)), attempt)).state; }
+    catch { attemptNotes.push(`${label}: closure records not measured`); }
     const source = sources.find(source => basename(source.planPath, ".html") === plan);
     const selection = attempt.shift ?? attempt.ticketSelection;
     if (selection == null || selection.plan !== plan || selection.tickets.length === 0) {
-      markerFacts.push({ attempt: label, plan, tickets: null });
+      markerFacts.push({ attempt: label, plan, tickets: null, ...(closure === undefined ? {} : { closure }) });
       continue;
     }
     const tickets: NonNullable<MarkerFact["tickets"]>[number][] = [];
@@ -168,7 +172,7 @@ export async function gatherRepositoryRows(input: RepositoryInput): Promise<Repo
       }
       tickets.push({ id: selected.id, state: ticketStates.get(key)! });
     }
-    markerFacts.push({ attempt: label, plan, tickets });
+    markerFacts.push({ attempt: label, plan, tickets, ...(closure === undefined ? {} : { closure }) });
   }
   return { branches: branchesRow(branches, defaultBranch, branchNotes), worktrees: worktreesRow(counts, root, attemptNotes),
     baseline: baselineRow(baselineFact), markers: markersRow(markerFacts, [...contextNotes, ...attemptNotes]) };

@@ -8,6 +8,7 @@
 // adapter does not skip any of it; prove and intake are exempt by workflow id.
 
 import assert from "node:assert/strict";
+import { selectedLanding } from "../../fixtures/closure-readers.ts";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -166,6 +167,12 @@ test("without any record start refuses before any side effect, and the refusal i
 
 // One refusal per K1 field on the stub adapter, each named by its field id.
 const FIELD_CASES: Record<K1FieldId, (b: Box) => Promise<{ attemptDir: string; reason: RegExp }>> = {
+  closure: async b => {
+    const created = await draft(b, "closure");
+    await prepareK1({ attemptDir: created.attemptDir, configPath: b.configPath, worktreeRoot: b.worktreeRoot });
+    await selectedLanding(b);
+    return { attemptDir: created.attemptDir, reason: /owner closes it with awsf close selected-landing/u };
+  },
   suite: async (b) => {
     const created = await draft(b, "suite");
     await prepareK1({ attemptDir: created.attemptDir, configPath: b.configPath, worktreeRoot: b.worktreeRoot,

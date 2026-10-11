@@ -10,7 +10,7 @@ import {
   type K1FieldId,
   type PreflightRefusedRecord,
 } from "../../contracts/driver-preflight.ts";
-import { evaluateFreshness, type FreshnessFailure } from "../../preflight/fields.ts";
+import { evaluateClosure, evaluateFreshness, type FreshnessFailure } from "../../preflight/fields.ts";
 import { gatherFreshness, K1_EXEMPT_WORKFLOWS } from "./preflight.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
@@ -190,7 +190,11 @@ export async function enforceK1(options: StartCommandOptions, current: AttemptSt
     attemptDir: options.attemptDir, stateRoot: stateRootOf(options.attemptDir, current),
     worktreeRoot: resolve(options.worktreeRoot), status: current, config,
   });
-  const refusal = evaluateFreshness(facts);
+  // The historical intake/prove exemption does not exempt W03's closure field.
+  const closure = evaluateClosure(facts.closure);
+  const refusal = !closure.passed
+    ? { passed: false as const, refusal: "field-failed" as const, field: "closure" as const, reason: closure.reason }
+    : K1_EXEMPT_WORKFLOWS.includes(current.workflow) ? { passed: true as const } : evaluateFreshness(facts);
   if (refusal.passed) return;
   const at = (options.now ?? ((): string => new Date().toISOString()))();
   const record: PreflightRefusedRecord = {
@@ -237,7 +241,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   }
   // K1, before the recipe is bound, before any L2, worktree or adapter. Every
   // caller passes here: no option of this command reaches past it.
-  if (!K1_EXEMPT_WORKFLOWS.includes(current.workflow)) await enforceK1(options, current, config);
+  await enforceK1(options, current, config);
   let recipe = workflowRecipe(current.workflow);
   if (recipe === null) {
     const compiled = compiledWorkflow(current.workflow);

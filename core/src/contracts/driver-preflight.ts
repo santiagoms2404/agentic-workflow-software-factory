@@ -35,8 +35,8 @@ export const GRANT_REFUSED_SCHEMA_ID = "awsf.grant-refused/v1";
 
 /**
  * K1's field ids, in the K1 table's order, as frozen by the G01-F Amendment
- * (2026-10-05). Seven are measured by the host; `confirmation` is the only
- * attested field. Adding or dropping one is a plan amendment, not an edit here.
+ * (2026-10-05), extended by W03-Q3 / T09 (2026-10-09) with `closure`.
+ * `confirmation` is the only attested field; the others are host-measured.
  */
 export const K1_FIELD_IDS = [
   "suite",
@@ -47,6 +47,7 @@ export const K1_FIELD_IDS = [
   "request-shape",
   "prior-attempts",
   "confirmation",
+  "closure",
 ] as const;
 export type K1FieldId = (typeof K1_FIELD_IDS)[number];
 

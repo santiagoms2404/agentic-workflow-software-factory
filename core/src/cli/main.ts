@@ -62,7 +62,7 @@ import { reworkCommand } from "./commands/rework.ts";
 import { runStubCommand } from "./commands/run.ts";
 import { runProductionCommand, resumeProductionCommand, stopFactsPhases } from "./commands/production-run.ts";
 import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
-import { statusCommand } from "./commands/status.ts";
+import { statusCommand, statusJson } from "./commands/status.ts";
 import { intakeRequest, listTickets, showTicket, ticketStoreFor, ticketStoreForPlan } from "./commands/ticket.ts";
 import { watchCommand } from "./commands/watch.ts";
 import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
@@ -872,7 +872,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         return result.confirmed && result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
       case "status":
-        if (parsed.flags.json === "true") out(JSON.stringify(await readAttempt(located.attemptDir)));
+        if (parsed.flags.json === "true") out(JSON.stringify(await statusJson(located.attemptDir)));
         else for (const line of await statusCommand(located.attemptDir, { evidence: parsed.flags.evidence === "true" })) out(line);
         return 0;
       case "watch":
