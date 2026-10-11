@@ -192,6 +192,8 @@ export interface AttemptEvent {
   readonly kind: "attempt.created" | "attempt.updated" | "attempt.transitioned" | "attempt.retried";
   readonly next: AttemptStatus;
   readonly evidence?: AttemptEvidence;
+  /** Host admission metadata, journaled independently of provider evidence. */
+  readonly admission?: import("../../contracts/plan-admission.ts").PlanAdmissionRecord;
 }
 
 /** The observability callback occupying the write protocol's project step. */

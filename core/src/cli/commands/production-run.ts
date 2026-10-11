@@ -118,6 +118,8 @@ import { buildPhaseRequest, openRetainedColdTurn, phasePersistenceMode, phasePer
 import { loadCatalog } from "../../registry/catalog.ts";
 import { readPlacement } from "../../registry/placement.ts";
 import { renderPlanDocument } from "../../registry/plan-render.ts";
+import { admitPlanSet } from "../../registry/plan-admission.ts";
+import type { PlanAdmissionRecord } from "../../contracts/plan-admission.ts";
 import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
 import { continuityFilePath } from "../../persistence/platform-paths.ts";
 import { TicketStore } from "../../persistence/ticket-store.ts";
@@ -194,7 +196,7 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 
-const { chmod, lstat, mkdir, open, readFile, realpath, writeFile } = fs;
+const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
 
 /**
  * Make one path's bytes durable. The file must be fsynced before any journal
@@ -729,41 +731,7 @@ export interface ProductionPlanRenderResult {
   readonly output: DocumentOutput;
   readonly candidateSha: string | null;
   readonly reports: readonly GateReport[];
-}
-
-async function managedPlanPath(worktree: string, path: string): Promise<string> {
-  const root = resolve(worktree);
-  const target = resolve(root, path);
-  const fromRoot = relative(root, target);
-  if (fromRoot === "" || fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
-    throw new Error(`rendered plan path escapes the managed worktree: ${JSON.stringify(path)}`);
-  }
-
-  // Host writes do not pass through the agent sandbox. Walk each parent one
-  // component at a time so a tracked symlink cannot redirect mkdir/writeFile
-  // across the managed-worktree boundary.
-  let parent = root;
-  for (const component of fromRoot.split(/[\\/]/u).slice(0, -1)) {
-    parent = join(parent, component);
-    try {
-      const observed = await lstat(parent);
-      if (observed.isSymbolicLink() || !observed.isDirectory()) {
-        throw new Error(`rendered plan parent is not a managed directory: ${JSON.stringify(parent)}`);
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      await mkdir(parent);
-    }
-  }
-  try {
-    const observed = await lstat(target);
-    if (observed.isSymbolicLink() || !observed.isFile()) {
-      throw new Error(`rendered plan target is not a managed file: ${JSON.stringify(path)}`);
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-  return target;
+  readonly admission: PlanAdmissionRecord;
 }
 
 /** Writes and commits one rendered plan set inside the managed worktree only. */
@@ -773,6 +741,10 @@ export async function renderProductionPlanIntoWorktree(input: {
   readonly plan: DesignPlanOutput;
   readonly identifierSet: PlanContext["identifierSet"];
   readonly protectedPaths: readonly string[];
+  readonly baseSha?: string;
+  readonly at?: string;
+  /** Persist the host admission before creating its candidate commit. */
+  readonly journalAdmission?: (record: PlanAdmissionRecord) => Promise<void>;
 }): Promise<ProductionPlanRenderResult> {
   const git = systemGitRunner(input.worktree);
   assertClean(input.worktree, "before", git);
@@ -781,15 +753,17 @@ export async function renderProductionPlanIntoWorktree(input: {
     repository: input.worktree,
     commitMessage: (output) => output.proposedCommitMessage,
   });
-  const documents = renderPlanDocument({
-    stem: input.stem,
-    plan: input.plan,
-    identifierSet: input.identifierSet,
+  const rendered = renderPlanDocument({ stem: input.stem, plan: input.plan, identifierSet: input.identifierSet });
+  const admitted = admitPlanSet({
+    worktree: input.worktree, baseSha: input.baseSha ?? phaseBase,
+    at: input.at ?? new Date().toISOString(), stem: input.stem,
+    planHtml: rendered.get(`specs/${input.stem}.html`)!,
+    buildPrompts: rendered.get(`specs/${input.stem}-build-prompts.md`)!,
+    tickets: input.plan.steps.map(step => ({ id: step.id, title: step.title, milestone: step.milestone,
+      depends_on: step.dependsOn, serves: step.serves })),
   });
-  for (const [path, content] of documents) {
-    const target = await managedPlanPath(input.worktree, path);
-    await writeFile(target, content, "utf8");
-  }
+  const { documents, capability, record: admission } = admitted;
+  await input.journalAdmission?.(admission);
 
   const observed = hostGit.captureDiff();
   const output: DocumentOutput = {
@@ -802,8 +776,8 @@ export async function renderProductionPlanIntoWorktree(input: {
       description: `Rendered design-to-plan document ${path}`,
     })),
     notesForNextPhase: "Inspect and land the host-rendered plan set.",
-    changedFiles: [...observed],
-    documentedAreas: observed.map((path) => ({ subject: input.plan.summary, documentPath: path })),
+    changedFiles: [...documents.keys()].sort(),
+    documentedAreas: [...documents.keys()].map((path) => ({ subject: input.plan.summary, documentPath: path })),
     proposedCommitMessage: `docs: render ${input.stem} plan`,
     runReport: {
       path: "reports/design-to-plan.md",
@@ -816,21 +790,21 @@ export async function renderProductionPlanIntoWorktree(input: {
   }
 
   const beforeCommit = [
-    noProtectedPaths(observed, input.protectedPaths),
+    noProtectedPaths(observed, input.protectedPaths, true, [capability]),
     diffMatchesClaims(observed, output.changedFiles),
   ] as const;
   if (!beforeCommit.every((report) => report.passed)) {
-    return Object.freeze({ output, candidateSha: null, reports: Object.freeze(beforeCommit) });
+    return Object.freeze({ output, candidateSha: null, reports: Object.freeze(beforeCommit), admission });
   }
 
   const candidateSha = hostGit.commit(output, observed);
   if (candidateSha === null) throw new Error("plan-render produced no candidate commit");
   const committedPaths = changesSinceBase(input.worktree, phaseBase);
   const reports = Object.freeze([
-    noProtectedPaths(committedPaths, input.protectedPaths),
+    noProtectedPaths(committedPaths, input.protectedPaths, true, [capability]),
     diffMatchesClaims(committedPaths, output.changedFiles),
   ]);
-  return Object.freeze({ output, candidateSha, reports });
+  return Object.freeze({ output, candidateSha, reports, admission });
 }
 
 /** Keeps the review's design handoff intact while carrying the host envelope beside it. */
@@ -1766,13 +1740,14 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   let transitionSeq = 0;
 
   let writeQueue: Promise<void> = Promise.resolve();
-  const persist = async (kind: AttemptEvent["kind"], update: Partial<AttemptStatus>, evidence?: AttemptEvidence): Promise<void> => {
+  const persist = async (kind: AttemptEvent["kind"], update: Partial<AttemptStatus>, evidence?: AttemptEvidence, admission?: PlanAdmissionRecord): Promise<void> => {
     const operation = writeQueue.then(async () => {
       const next = nextRevision(status, update);
       status = await persistAttempt(options.attemptDir, status.revision, {
         kind,
         next,
         ...(evidence === undefined ? {} : { evidence }),
+        ...(admission === undefined ? {} : { admission }),
       }, options.projectRecord);
     });
     writeQueue = operation.catch(() => undefined);
@@ -3581,6 +3556,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             plan: designPlanOutput,
             identifierSet: planContext.identifierSet,
             protectedPaths: options.config.policy.protected_paths,
+            baseSha: status.baseSha!,
+            at: infra.now(),
+            journalAdmission: admission => persist("attempt.updated", {}, undefined, admission),
           });
           previous = rendered.output;
           await persistHostEnvelope(phase.id, rendered.output);

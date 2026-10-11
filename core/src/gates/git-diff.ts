@@ -1,5 +1,6 @@
 import { matchesPathGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { protectedExemptionAllows, isProtectedCapability, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
+import { isPlanAdmissionCapability, planAdmissionExemptionAllows, type PlanAdmissionCapability } from "../registry/plan-admission.ts";
 import { GateReport } from "./interface.ts";
 
 function uniqueSorted(paths: readonly string[]): string[] {
@@ -50,13 +51,13 @@ export function noProtectedPaths(
   changedPaths: readonly string[],
   protectedPaths: readonly string[],
   caseSensitive = true,
-  capabilities: readonly ProtectedFilesCapability[] = [],
+  capabilities: readonly (ProtectedFilesCapability | PlanAdmissionCapability)[] = [],
 ): GateReport {
   const report = new GateReport("no_protected_paths");
   if (changedPaths.length === 0) return report.check("change-set", true, "no changed paths");
   for (const path of uniqueSorted(changedPaths)) {
-    const classification = classifyPath(path, protectedPaths, capabilities.some(isProtectedCapability) ? false : caseSensitive);
-    const ok = classification.valid && (!classification.matches || capabilities.some(capability => protectedExemptionAllows(capability, path)));
+    const classification = classifyPath(path, protectedPaths, capabilities.some(capability => isProtectedCapability(capability) || isPlanAdmissionCapability(capability)) ? false : caseSensitive);
+    const ok = classification.valid && (!classification.matches || capabilities.some(capability => protectedExemptionAllows(capability, path) || planAdmissionExemptionAllows(capability, path)));
     report.check(path, ok, !classification.valid ? "invalid path or protected-path policy" : classification.matches ? "matches a protected path" : "not protected");
   }
   return report;

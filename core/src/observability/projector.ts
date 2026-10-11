@@ -5,6 +5,7 @@
 // no-op, and a failure never throws into the caller's phase — it degrades.
 
 import type { JournalRecord } from "../persistence/journal.ts";
+import { assertPlanAdmissionRecord, type PlanAdmissionRecord } from "../contracts/plan-admission.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import { isPersistableKind } from "../contracts/normalized-events.ts";
 import type { DatabaseSync } from "./sqlite.ts";
@@ -90,6 +91,7 @@ export interface AttemptStatusProjection extends SessionInit {
   endedAt: string | null;
   stateRevision: number;
   evidence?: AttemptEvidence;
+  admission?: PlanAdmissionRecord;
   /** The proving-ground replay the attempt measures (`awsf prove`); absent or `null` on every other attempt. */
   replay?: ReplayRecord | null;
 }
@@ -146,6 +148,14 @@ export function projectAttemptStatus(
     db.exec("BEGIN IMMEDIATE");
     try {
       if (status.evidence !== undefined) applyAttemptEvidence(db, status.sessionId, sourceSeq, status.evidence);
+      if (status.admission !== undefined) {
+        assertPlanAdmissionRecord(status.admission);
+        db.prepare(`INSERT OR IGNORE INTO events
+          (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json, started_at)
+          VALUES (?, ?, NULL, ?, ?, 'notice', 'plan-admission', ?, ?)`)
+          .run(`${status.sessionId}:plan-admission:${sourceSeq}`, status.sessionId, sourceSeq, sourceSeq,
+            stringifyRedacted(status.admission), status.admission.at);
+      }
       if (status.replay != null) projectReplay(db, status.sessionId, sourceSeq, status.replay, status.updatedAt);
       // `call_ceiling` is written on every record, not only at session creation:
       // an owner raise moves it mid-attempt, and a column that only ever held

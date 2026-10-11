@@ -104,7 +104,9 @@ function renderStepDocuments(envelope: PlanDocumentEnvelope): RenderedStepDocume
     // documents. The sync fence trims the Section B block but only strips final
     // newlines from the ticket, so retaining boundary whitespace would make its
     // two readers disagree even though both copies came from the same field.
-    const buildPrompt = step.buildPrompt.trim();
+    const normalized = step.buildPrompt.trim();
+    const buildPrompt = normalized.startsWith("```\n") && normalized.endsWith("\n```")
+      ? normalized : `\`\`\`\n${normalized}\n\`\`\``;
     const title = JSON.stringify(step.title);
     const ticket = [
       "---",

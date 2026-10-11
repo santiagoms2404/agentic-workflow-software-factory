@@ -50,5 +50,6 @@ export function toAttemptStatusProjection(
     stateRevision: status.revision,
     replay: status.replay ?? null,
     ...(event?.evidence === undefined ? {} : { evidence: event.evidence }),
+    ...(event?.admission === undefined ? {} : { admission: event.admission }),
   };
 }

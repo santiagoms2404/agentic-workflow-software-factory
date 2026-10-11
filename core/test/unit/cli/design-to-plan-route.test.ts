@@ -10,6 +10,11 @@ import { gatesForSession, phasesForSession, processesForSession } from "../../..
 import { openDatabase } from "../../../src/observability/sqlite.ts";
 import { spineCoverage } from "../../../src/registry/plan-spine.ts";
 import { parseAwsfPlanHtmlV1 } from "../../../src/registry/plan-source.ts";
+import { sectionBBlocks } from "../../../src/closure/tree.ts";
+import type { AttemptEvent } from "../../../src/cli/commands/attempt.ts";
+import { toAttemptStatusProjection } from "../../../src/cli/commands/attempt-projection.ts";
+import { projectAttemptStatus } from "../../../src/observability/projector.ts";
+import type { JournalRecord } from "../../../src/persistence/journal.ts";
 import {
   CannedStubAdapter,
   STEM,
@@ -55,12 +60,10 @@ async function assertTicketPlanSync(worktree: string): Promise<void> {
   assert.equal(fields.workflow, undefined);
   const promptBody = ticketRaw.split("## Build prompt\n\n")[1]?.replace(/\n+$/u, "");
   const prompts = readFileSync(promptsPath, "utf8");
-  const promptBlock = /^### T01 — ([^\n]+)\n\n([\s\S]*?)\n*$/mu.exec(
-    prompts.split("# Section B — Task prompts (recommended)\n\n")[1] ?? "",
-  );
-  assert.notEqual(promptBlock, null);
-  assert.equal(promptBlock![1], fields.title);
-  assert.equal(promptBlock![2], promptBody);
+  const promptBlock = sectionBBlocks(prompts).get(1);
+  assert.notEqual(promptBlock, undefined);
+  assert.equal(promptBlock!.title, fields.title);
+  assert.equal(promptBlock!.prompt, promptBody);
   assert.match(html, new RegExp(`<h4>1\\. ${fields.title}</h4>`, "u"));
 
   const coverage = spineCoverage(
@@ -109,6 +112,22 @@ test("design-to-plan runs request through render on canned stub envelopes and it
     assert.equal(git(fixture.worktree, "status", "--porcelain"), "");
     assert.equal(git(fixture.worktree, "rev-parse", "HEAD"), status.candidateSha);
     await assertTicketPlanSync(fixture.worktree);
+    const records = readFileSync(join(fixture.attemptDir, "journal.jsonl"), "utf8").trim().split("\n")
+      .map(line => JSON.parse(line) as JournalRecord<AttemptEvent>);
+    const admissions = records.flatMap(record => record.event.admission === undefined ? [] : [record.event.admission]);
+    assert.equal(admissions.length, 1);
+    assert.equal(admissions[0]?.baseSha, status.baseSha);
+    assert.equal(admissions[0]?.stem, STEM);
+    const rebuilt = openDatabase(join(fixture.root, "rebuilt.db"));
+    try {
+      for (const record of records) {
+        const projection = toAttemptStatusProjection(fixture.stateRoot, record.event.next, record.event);
+        assert.equal(projectAttemptStatus(rebuilt, projection, record.source_seq).ok, true);
+        assert.equal(projectAttemptStatus(rebuilt, projection, record.source_seq).applied, false);
+      }
+      const rows = rebuilt.prepare("SELECT payload_json FROM events WHERE name = 'plan-admission'").all() as { payload_json: string }[];
+      assert.deepEqual(rows.map(row => JSON.parse(row.payload_json)), admissions);
+    } finally { rebuilt.close(); }
 
     const db = openDatabase(join(fixture.stateRoot, "awsf.db"), { readonly: true });
     try {
@@ -123,6 +142,8 @@ test("design-to-plan runs request through render on canned stub envelopes and it
       ]);
       assert.equal(processesForSession(db, fixture.sessionId).length, 3);
       assert.ok(gatesForSession(db, fixture.sessionId).every((gate) => gate.passed === 1));
+      const rows = db.prepare("SELECT payload_json FROM events WHERE session_id = ? AND name = 'plan-admission'").all(fixture.sessionId) as { payload_json: string }[];
+      assert.deepEqual(rows.map(row => JSON.parse(row.payload_json)), admissions);
     } finally {
       db.close();
     }

@@ -1,4 +1,5 @@
 import type { TObject } from "@sinclair/typebox";
+import { PlanAdmissionRecordSchema, PLAN_ADMISSION_SCHEMA_ID } from "./plan-admission.ts";
 import { ClosureRecordSchema, CLOSURE_RECORD_SCHEMA_ID } from "./closure-record.ts";
 import {
   ArchitectureReviewOutputSchema,
@@ -110,6 +111,7 @@ export const ENVELOPE_SCHEMA_IDS = Object.keys(ENVELOPE_SCHEMAS) as EnvelopeSche
  * prompt.
  */
 export const RECORD_SCHEMAS = {
+  [PLAN_ADMISSION_SCHEMA_ID]: PlanAdmissionRecordSchema,
   [CLOSURE_RECORD_SCHEMA_ID]: ClosureRecordSchema,
   [SHIFT_MANIFEST_SCHEMA_ID]: ShiftManifestSchema,
   [TICKET_SELECTION_SCHEMA_ID]: TicketSelectionSchema,

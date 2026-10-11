@@ -135,7 +135,7 @@ export const designToPlanWorkflow = {
       id: "plan-render",
       kind: "code",
       owner: "host",
-      description: "Render the validated plan envelope into the committed plan, prompts, and tickets",
+      description: "Admit the validated plan, prompts, and host-derived tickets as new idle files only",
       schemaId: "awsf.document-output/v1",
       outputSchema: DocumentOutputSchema,
       maxCorrections: 0,

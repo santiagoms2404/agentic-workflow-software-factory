@@ -64,22 +64,11 @@ export interface FixtureConfigOptions {
   readonly slug?: string;
 }
 
-/**
- * The shipped config protects every plan set: plan files (W03 task 1), build
- * prompts and paired ticket sets (W03 task 2). design-to-plan's host
- * `plan-render` phase writes a new plan set, so under the shipped policy it
- * refuses its own output at `no_protected_paths`. These fixtures exercise that
- * phase, so they drop those globs. W03 task 12 moves `plan-render` onto
- * create-only admission and removes this exemption.
- */
+/** W11's history filter retains the protection added later by W03 T01/T02. */
 export const PLAN_FILES_GLOB = "specs/*.html";
 export const PLAN_SET_GLOBS: readonly string[] = [PLAN_FILES_GLOB, "specs/*-build-prompts.md", "specs/tickets/*/**"];
-export function withoutPlanProtection(config: AwsfConfig): AwsfConfig {
-  return { ...config, policy: { ...config.policy, protected_paths: config.policy.protected_paths.filter((glob) => !PLAN_SET_GLOBS.includes(glob)) } };
-}
-
 export function fixtureConfig(options: FixtureConfigOptions = {}): AwsfConfig {
-  const loaded = withoutPlanProtection(loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8")));
+  const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
   const fixtureRoles = new Set<string>(options.roles ?? DESIGN_TO_PLAN_ROLES);
   return {
     ...loaded,

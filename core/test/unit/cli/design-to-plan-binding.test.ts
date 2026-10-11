@@ -152,7 +152,7 @@ test("plan-render refuses a symlink that redirects a rendered parent outside the
   }
 });
 
-test("plan-render refuses a protected rendered path before creating a commit", async () => {
+test("plan-render admits a new protected plan set with an exact create-only capability", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-plan-render-protected-"));
   const worktree = repository(root);
   try {
@@ -165,10 +165,12 @@ test("plan-render refuses a protected rendered path before creating a commit", a
       protectedPaths: ["specs/**"],
     });
 
-    assert.equal(result.candidateSha, null);
+    assert.notEqual(result.candidateSha, null);
     assert.equal(result.reports[0]?.gateId, "no_protected_paths");
-    assert.equal(result.reports[0]?.passed, false);
-    assert.equal(git(worktree, "rev-parse", "HEAD"), base);
+    assert.equal(result.reports[0]?.passed, true);
+    assert.notEqual(git(worktree, "rev-parse", "HEAD"), base);
+    assert.equal(result.admission.baseSha, base);
+    assert.deepEqual(result.admission.files.map(file => file.path).sort(), result.output.changedFiles);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
