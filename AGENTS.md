@@ -67,7 +67,12 @@ not a judgement call. Several are mechanically enforced by meta-tests under
     than parsed to zero tasks. Enforced by the ticket/plan-sync meta-test:
     task coverage, milestone grouping, `state` against both the milestone
     marker and the task's own checklist, prompt and title integrity,
-    `depends_on` ordering, and the frontmatter vocabularies.
+    `depends_on` ordering, and the frontmatter vocabularies. The one ticket
+    store with no plan is the light tier (owner amendment G03-I, 2026-10-09):
+    the flat intake store, `specs/tickets/Tnn.md` under the plans root,
+    belongs to no plan, its tickets change `state` only through `awsf close`,
+    and W03 task 11 makes the shared agreement module check their
+    vocabularies.
 13. **The Delegate acts only under an owner lease, and never as the owner.**
     An owner act runs from the owner's interactive terminal, or under an
     owner-granted, task-scoped, revocable lease that names it. Delegated acts
