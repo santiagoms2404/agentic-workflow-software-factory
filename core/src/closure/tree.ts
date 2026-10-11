@@ -1,6 +1,6 @@
 import { isMap, isScalar, parseDocument } from "yaml";
 import { parsePlanTicketBody } from "../persistence/plan-ticket-body.ts";
-import { planAgreement, type AgreementTicket, type PlanAgreementViolation, type SectionBBlock } from "../registry/plan-agreement.ts";
+import { planAgreement, lightTicketAgreement, type AgreementTicket, type PlanAgreementViolation, type SectionBBlock } from "../registry/plan-agreement.ts";
 import { parseAwsfPlanHtmlV1, UnsupportedPlanFormatError, type ResolvedPlanSource } from "../registry/plan-source.ts";
 
 /** Complete tree snapshots; paths and registered sources use the same namespace. */
@@ -128,5 +128,11 @@ export function treeAgreement(tree: ClosureTree, registry: ClosureRegistry): rea
       tickets: paths.map((path) => agreementTicket(treeText(tree, path), path)),
       sectionB: sectionBBlocks(treeText(tree, source.promptsPath)), knownStems }));
   }
+  const lights = [...(registry.lightTickets ?? new Map<string, string>())].map(([id, path]) => {
+    const frontmatter = ticketFrontmatter(treeText(tree, path), path, true).fields;
+    if (frontmatter.id !== id) throw new ClosureTreeError(path, "light ticket identity differs from registered filename");
+    return { path, frontmatter };
+  });
+  out.push(...lightTicketAgreement(lights));
   return Object.freeze(out);
 }

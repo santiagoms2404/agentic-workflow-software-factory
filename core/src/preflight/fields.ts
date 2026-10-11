@@ -200,7 +200,11 @@ function omittablePrefixes(glob: string): string[] {
 function protectedSpelling(candidate: string, glob: string): string | null {
   for (const prefix of omittablePrefixes(glob)) {
     const path = `${prefix}${candidate}`;
-    if (matches(path, glob, false) || matches(`${path}/${PROBE}`, glob, false)) return path;
+    // Flat light tickets are files, not paired-ticket directories. Appending
+    // a synthetic descendant would misclassify tickets/Tnn.md under */**.
+    // A glob protecting the file itself still matches normally.
+    const flatTicket = /\/tickets\/T\d\d\.md$/u.test(path);
+    if (matches(path, glob, false) || (!flatTicket && matches(`${path}/${PROBE}`, glob, false))) return path;
   }
   return null;
 }

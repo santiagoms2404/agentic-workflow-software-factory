@@ -1,4 +1,5 @@
-import { TICKET_TASK_CLASSES } from "../contracts/ticket.ts";
+import { Value } from "@sinclair/typebox/value";
+import { TicketSchema, TICKET_TASK_CLASSES, type Ticket } from "../contracts/ticket.ts";
 import type { ParsedAwsfPlan } from "./plan-source.ts";
 import { isPlanIdentifierClaim, spineCoverage, type SpineCoverageRule } from "./plan-spine.ts";
 
@@ -42,7 +43,7 @@ export interface PlanAgreementInput {
 export type PlanAgreementRule =
   | "TICKET_COVERAGE" | "MILESTONE" | "MILESTONE_STATE" | "CHECKLIST"
   | "CHECKLIST_STATE" | "PROMPT" | "DEPENDENCIES" | "COMPLETED_DEPENDENCIES"
-  | "VOCABULARIES" | SpineCoverageRule;
+  | "VOCABULARIES" | "DEPENDENCY_CYCLES" | SpineCoverageRule;
 
 export interface PlanAgreementViolation {
   readonly plan: string;
@@ -57,6 +58,46 @@ function violations(
   messages: readonly string[],
 ): readonly PlanAgreementViolation[] {
   return Object.freeze(messages.map((message) => Object.freeze({ plan: input.label, rule, message })));
+}
+
+/** Pure flat-store rules: the Ticket contract is the vocabulary authority. */
+export function lightTicketAgreement(records: readonly { readonly path: string; readonly frontmatter: unknown }[]): readonly PlanAgreementViolation[] {
+  const out: PlanAgreementViolation[] = [];
+  const tickets: Ticket[] = [];
+  for (const record of records) {
+    for (const error of Value.Errors(TicketSchema, record.frontmatter)) out.push({ plan: "light", rule: "VOCABULARIES",
+      message: `${record.path}${error.path}: ${error.message}` });
+    if (Value.Check(TicketSchema, record.frontmatter)) {
+      const ticket = record.frontmatter;
+      if (tickets.some(existing => existing.id === ticket.id)) out.push({ plan: "light", rule: "VOCABULARIES", message: `duplicate light ticket ${ticket.id}` });
+      tickets.push(ticket);
+    }
+  }
+  const cycle = lightTicketCycle(tickets);
+  if (cycle !== null) out.push({ plan: "light", rule: "DEPENDENCY_CYCLES", message: `ticket dependency cycle: ${cycle.join(" -> ")}` });
+  return Object.freeze(out);
+}
+
+export function lightTicketCycle(tickets: readonly Pick<Ticket, "id" | "depends_on">[]): readonly string[] | null {
+  const visiting = new Set<string>(), visited = new Set<string>(), trail: string[] = [];
+  const visit = (id: string): readonly string[] | null => {
+    if (visiting.has(id)) return [...trail.slice(trail.indexOf(id)), id];
+    if (visited.has(id)) return null;
+    const ticket = tickets.find(ticket => ticket.id === id);
+    if (ticket === undefined) return null;
+    visiting.add(id); trail.push(id);
+    for (const dependency of ticket.depends_on) {
+      const cycle = visit(dependency);
+      if (cycle !== null) return cycle;
+    }
+    trail.pop(); visiting.delete(id); visited.add(id);
+    return null;
+  };
+  for (const ticket of tickets) {
+    const cycle = visit(ticket.id);
+    if (cycle !== null) return cycle;
+  }
+  return null;
 }
 
 function sameNumbers(left: readonly number[], right: readonly number[]): boolean {

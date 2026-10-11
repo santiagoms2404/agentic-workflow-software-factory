@@ -9,6 +9,7 @@ import type { DoctorReadout } from "../contracts/doctor-readout.ts";
 import type { TicketState } from "../contracts/ticket.ts";
 import { resolveExecutable, runSystemCommand } from "../execution/transport-broker.ts";
 import { discoverAttempts } from "../observability/rebuild.ts";
+import { parseStoredTicket } from "../persistence/ticket-store.ts";
 import { parsePlanTicketData } from "../persistence/plan-tickets.ts";
 import { defaultWorktreeRoot } from "../persistence/platform-paths.ts";
 import { baselineWorktreeName } from "../preflight/baseline-worktree.ts";
@@ -59,11 +60,13 @@ export async function gatherRepositoryRows(input: RepositoryInput): Promise<Repo
   let defaultBranch: string | null = null;
   let root = defaultWorktreeRoot(input.stateRoot);
   let sources: readonly ResolvedPlanSource[] = [];
+  let lightRoot: string | null = null;
   const contextNotes: string[] = [];
   try {
     const catalogPath = join(input.cwd, "awsf.project.yaml");
     const catalog = loadCatalog(await readFile(catalogPath, "utf8"));
     project = catalog.project.slug;
+    lightRoot = catalog.plans.root;
     let placement;
     try { placement = await readPlacement(input.stateRoot, project); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
@@ -145,24 +148,31 @@ export async function gatherRepositoryRows(input: RepositoryInput): Promise<Repo
 
   const markerFacts: MarkerFact[] = [];
   const ticketStates = new Map<string, TicketState | "not measured">();
-  for (const attempt of local.filter(attempt => landed(attempt) && attempt.planRef != null)) {
+  for (const attempt of local.filter(attempt => landed(attempt) && (attempt.planRef != null || attempt.ticketSelection?.plan === null))) {
     const label = `${attempt.project}/${attempt.taskId}#${attempt.attempt}`;
-    const plan = attempt.planRef!;
+    const light = attempt.planRef === null && attempt.ticketSelection?.plan === null;
+    const plan = light ? "light" : attempt.planRef!;
     let closure: ClosureState | undefined;
     try { closure = (await readClosure(join(input.stateRoot, "projects", attempt.project, "tasks", attempt.taskId, String(attempt.attempt)), attempt)).state; }
     catch { attemptNotes.push(`${label}: closure records not measured`); }
     const source = sources.find(source => basename(source.planPath, ".html") === plan);
     const selection = attempt.shift ?? attempt.ticketSelection;
-    if (selection == null || selection.plan !== plan || selection.tickets.length === 0) {
+    if (selection == null || selection.plan !== (light ? null : plan) || selection.tickets.length === 0) {
       markerFacts.push({ attempt: label, plan, tickets: null, ...(closure === undefined ? {} : { closure }) });
       continue;
     }
     const tickets: NonNullable<MarkerFact["tickets"]>[number][] = [];
     for (const selected of selection.tickets) {
-      const key = `${plan}/${selected.id}`;
+      const key = JSON.stringify([light ? null : plan, selected.id]);
       if (!ticketStates.has(key)) {
         let state: NonNullable<MarkerFact["tickets"]>[number]["state"] = "not measured";
-        if (source !== undefined && /^[TW]\d\d$/u.test(selected.id)) {
+        if (light && lightRoot !== null && /^T\d\d$/u.test(selected.id)) {
+          try {
+            const path = join(repositoryPath, lightRoot, "tickets", `${selected.id}.md`);
+            const ticket = parseStoredTicket(await readFile(path, "utf8"), path).ticket;
+            if (ticket?.id === selected.id) state = ticket.state;
+          } catch { /* Missing or invalid flat tickets remain visible as not measured. */ }
+        } else if (!light && source !== undefined && /^[TW]\d\d$/u.test(selected.id)) {
           try {
             const ticket = parsePlanTicketData(await readFile(join(source.ticketsPath, `${selected.id}.md`), "utf8"));
             if (ticket?.id === selected.id) state = ticket.state;

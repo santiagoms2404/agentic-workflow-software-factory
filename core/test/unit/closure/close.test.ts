@@ -26,6 +26,7 @@ import { projectAttemptStatus } from "../../../src/observability/projector.ts";
 import { toAttemptStatusProjection } from "../../../src/cli/commands/attempt-projection.ts";
 import { OWNER_ACT_COMMANDS } from "../../../src/lifecycle/next-steps.ts";
 import { main } from "../../../src/cli/main.ts";
+import { closureReadout } from "../../../src/closure/model.ts";
 
 const planPath = "plans/sample.html";
 const ticketPath = (id: string) => `plans/tickets/sample/${id}.md`;
@@ -58,7 +59,10 @@ Build ${id}.
 \`\`\`
 `;
 
-async function world() {
+const lightPath = "plans/tickets/T00.md";
+const fixtureLight = `---\nid: T00\ntitle: Small change\nmilestone: M1\ntier: 2\nstate: todo\ndepends_on: []\nworkflow: build-review\noutcome: Small change works\ncontext: [Fixture context]\nacceptance: [Fixture passes]\nnon_goals: [Other work]\n---\n# Small change\n\n## Handoff\n\nFindings.\n\n## Work\n\nBuild the small change.\n`;
+
+async function world(light = false) {
   // Every closure runs only on this synthetic repository and synthetic journal.
   const root = mkdtempSync(join(tmpdir(), "awsf-closure-unit-"));
   const repository = join(root, "repository");
@@ -83,6 +87,7 @@ Build T02.
 \`\`\`
 `);
   for (const id of ["T01", "T02"]) writeFileSync(join(repository, ticketPath(id)), fixtureTicket(id));
+  if (light) writeFileSync(join(repository, lightPath), fixtureLight);
   writeFileSync(join(repository, "binary.dat"), Buffer.from([255, 0, 128]));
   runGit(git, ["add", "."]);
   runGit(git, ["commit", "-m", "fixture base"]);
@@ -93,7 +98,9 @@ Build T02.
   const candidate = runGit(git, ["rev-parse", "HEAD"]).trim();
   const tickets = ["T01", "T02"].map(id => ({ id, path: ticketPath(id), digest: ticketFileDigest(readFileSync(join(repository, ticketPath(id)))) }));
   const created = await newCommand({ stateRoot: join(root, "state"), repository, project: "sample", taskId: "unrelated-task",
-    request: "build", workflow: "build-review", tier: 2, planRef: "sample", ticketSelection: sealTicketSelection({ plan: "sample", tickets: [tickets[0]!] }) });
+    request: "build", workflow: "build-review", tier: 2, ...(light ? {} : { planRef: "sample" }),
+    ticketSelection: sealTicketSelection({ plan: light ? null : "sample", tickets: light
+      ? [{ id: "T00", path: lightPath, digest: ticketFileDigest(Buffer.from(fixtureLight)) }] : [tickets[0]!] }) });
   const dir = created.attemptDir;
   const status = await persistAttempt(dir, created.status.revision, { kind: "attempt.transitioned",
     next: nextRevision(created.status, { lifecycleState: "LANDED", baseSha: base, candidateSha: candidate }) });
@@ -362,6 +369,46 @@ test("close --commit through main closes owner rows at the project and leaves th
   assert.deepEqual(readFileSync(join(w.dir, "journal.jsonl")), journal);
   const records = await projectClosureJournalRecords(join(w.root, "state/projects/sample"));
   assert.deepEqual(records.map(row => row.event.evidence.type), ["closure-intent", "closure-prepared", "closure-record"]);
+});
+
+for (const done of [true, false]) test(`light closure confirms ${done ? "done" : "wip"} and changes exactly its state value`, async () => {
+  const w = await world(true);
+  w.answers([done, true]);
+  const before = readFileSync(join(w.repository, lightPath), "utf8");
+  const result = await closeCommand(w.options);
+  assert.ok(result.record);
+  const record = result.record;
+  assert.equal(record.plan, null);
+  assert.deepEqual(record.tickets, ["T00"]);
+  assert.deepEqual(record.rowsClosed, []);
+  assert.deepEqual(record.rowsLeftOpen, []);
+  assert.deepEqual(record.blobs.map(blob => blob.path), [lightPath]);
+  assert.equal(readFileSync(join(w.repository, lightPath), "utf8"), before.replace("state: todo", `state: ${done ? "done" : "wip"}`));
+  verifyClosureCommit(w.git, record);
+  assert.equal(closureReadout(await readAttempt(w.dir), [record]).state, done ? "closed" : "open by the owner's choice");
+  const journal = readFileSync(join(w.dir, "journal.jsonl"));
+  assert.deepEqual((await closeCommand(w.options)).record, record);
+  assert.deepEqual(readFileSync(join(w.dir, "journal.jsonl")), journal);
+});
+
+for (const [before, after, field] of [
+  ["title: Small change", "title: Other change", "frontmatter.title"],
+  ["milestone: M1", "milestone: M2", "frontmatter.milestone"],
+  ["tier: 2", "tier: 1", "frontmatter.tier"],
+  ["depends_on: []", "depends_on: [T01]", "frontmatter.depends_on"],
+  ["workflow: build-review", "workflow: build", "frontmatter.workflow"],
+  ["outcome: Small change works", "outcome: Changed outcome", "frontmatter.outcome"],
+  ["context: [Fixture context]", "context: [Other context]", "frontmatter.context"],
+  ["acceptance: [Fixture passes]", "acceptance: [Other acceptance]", "frontmatter.acceptance"],
+  ["non_goals: [Other work]", "non_goals: [More work]", "frontmatter.non_goals"],
+  ["Build the small change.", "Build another change.", "body"],
+] as const) test(`light closure refuses changed ${field} without writing checkout or journal bytes`, async () => {
+  const w = await world(true);
+  w.commit(lightPath, fixtureLight.replace(before, after));
+  const bytes = bytesSnapshot(w.repository), journal = readFileSync(join(w.dir, "journal.jsonl"));
+  await assert.rejects(closeCommand(w.options), error => error instanceof Error && error.message.includes(`T00.${field}`));
+  assert.deepEqual(bytesSnapshot(w.repository), bytes);
+  assert.deepEqual(readFileSync(join(w.dir, "journal.jsonl")), journal);
 });
 
 test("the closure record is closed host data, not a provider envelope", () => {

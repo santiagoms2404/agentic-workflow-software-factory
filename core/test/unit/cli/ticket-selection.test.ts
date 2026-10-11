@@ -7,10 +7,16 @@ import { Value } from "@sinclair/typebox/value";
 import { main } from "../../../src/cli/main.ts";
 import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
-import { parseTicketSelection, sealPlanTicketSelection } from "../../../src/cli/commands/ticket-selection.ts";
+import { parseTicketSelection, sealPlanTicketSelection, sealLightTicketSelection } from "../../../src/cli/commands/ticket-selection.ts";
 import { assertTicketSelection, sealTicketSelection, TicketSelectionSchema, TICKET_SELECTION_SCHEMA_ID } from "../../../src/contracts/ticket-selection-record.ts";
 import { RECORD_SCHEMAS, ENVELOPE_SCHEMAS } from "../../../src/contracts/registry.ts";
 import { ticketFileDigest } from "../../../src/persistence/plan-ticket-body.ts";
+import { stringify } from "yaml";
+import type { Ticket } from "../../../src/contracts/ticket.ts";
+
+const flatTicket: Ticket = { id: "T00", title: "Small change", milestone: "M1", tier: 1, state: "todo", depends_on: [],
+  workflow: "build-review", outcome: "Small change works", context: [], acceptance: ["Observable result"], non_goals: [] };
+const flatSource = (ticket: Ticket) => `---\n${stringify(ticket)}---\n# Small change\n`;
 
 function world(t: { after(fn: () => void): void }) {
   const root = mkdtempSync(join(tmpdir(), "awsf-ticket-selection-"));
@@ -41,7 +47,7 @@ for (const [name, flags, message] of [
   ["duplicate comma ids", ["--plan", "selected-plan", "--ticket", "T01,T01"], /duplicate ticket id/],
   ["duplicate repeated ids", ["--plan", "selected-plan", "--ticket", "T01", "--ticket", "T01"], /duplicate ticket id/],
   ["shift selection", ["--workflow", "shift", "--plan", "selected-plan", "--milestone", "M1", "--ticket", "T01"], /cannot select a shift/],
-  ["absent plan", ["--ticket", "T01"], /requires --plan/],
+  ["paired ticket without plan", ["--ticket", "T01"], /not a flat light ticket/],
   ["empty selection", ["--plan", "selected-plan", "--ticket="], /requires one or more ticket ids/],
 ] as const) test(`new refuses ${name} before any attempt exists`, async t => {
   const w = world(t);
@@ -85,4 +91,52 @@ test("host record is closed, disjoint from envelopes, and newCommand refuses inv
   await assert.rejects(newCommand({ stateRoot: w.stateRoot, project: w.options.project, taskId: "misbound", repository: w.repository,
     workflow: "build", tier: 1, request: "request", planRef: "another-plan", ticketSelection: selection }), /requires its registered --plan/);
   assert.equal(existsSync(join(w.stateRoot, "projects", w.options.project, "tasks", "misbound")), false);
+});
+
+test("light selection uses the non-default plans root, seals one exact file and journals plan=null", async t => {
+  const w = world(t);
+  const path = join(w.repository, "plans/tickets/T00.md");
+  writeFileSync(path, flatSource(flatTicket));
+  const result = await w.cli(["new", "light-build", "small work", "--workflow", "build-review", "--ticket", "T00"]);
+  assert.equal(result.code, 0, result.err.join("\n"));
+  const dir = join(w.stateRoot, "projects", w.options.project, "tasks/light-build/1");
+  const status = await readAttempt(dir);
+  assert.equal(status.planRef, null);
+  assert.equal(status.ticketSelection!.plan, null);
+  assert.deepEqual(status.ticketSelection!.tickets, [{ id: "T00", path: "plans/tickets/T00.md", digest: ticketFileDigest(readFileSync(path)), tier: 1, workflow: "build-review" }]);
+  assert.match((await w.cli(["status", "light-build"])).out.join("\n"), /Tickets: light T00/);
+  assert.deepEqual(JSON.parse((await w.cli(["status", "light-build", "--json"])).out.join("\n")).ticketSelection, status.ticketSelection);
+  writeFileSync(path, flatSource({ ...flatTicket, title: "Changed title" }));
+  assert.notEqual((await sealLightTicketSelection(w.repository, ["T00"])).selectionDigest, status.ticketSelection!.selectionDigest);
+});
+
+for (const [values, message] of [
+  [["T00,T01"], /exactly one flat/], [["W01"], /exactly one flat/], [["T00,T00"], /duplicate/], [["T99"], /not a flat/],
+] as const) test(`light selection refuses ${values.join(",")} before an attempt exists`, async t => {
+  const w = world(t);
+  writeFileSync(join(w.repository, "plans/tickets/T00.md"), flatSource(flatTicket));
+  const result = await w.cli(["new", "refused-light", "work", "--ticket", ...values]);
+  assert.equal(result.code, 1);
+  assert.match(result.err.join("\n"), message);
+  assert.equal(existsSync(join(w.stateRoot, "projects", w.options.project, "tasks/refused-light")), false);
+});
+
+test("light selection refuses vocabulary, filename identity and dependency-cycle defects", async t => {
+  const w = world(t), path = join(w.repository, "plans/tickets/T00.md");
+  writeFileSync(path, flatSource(flatTicket).replace("state: todo", "state: unknown"));
+  await assert.rejects(sealLightTicketSelection(w.repository, ["T00"]), /light ticket agreement/);
+  writeFileSync(path, flatSource({ ...flatTicket, id: "T01" }));
+  await assert.rejects(sealLightTicketSelection(w.repository, ["T00"]), /not a valid flat/);
+  writeFileSync(path, flatSource({ ...flatTicket, depends_on: ["T00"] }));
+  await assert.rejects(sealLightTicketSelection(w.repository, ["T00"]), /dependency cycle/);
+});
+
+test("light selection cannot bind to a --plan and cannot seal several tickets", async t => {
+  const w = world(t), path = join(w.repository, "plans/tickets/T00.md");
+  writeFileSync(path, flatSource(flatTicket));
+  const selection = await sealLightTicketSelection(w.repository, ["T00"]);
+  await assert.rejects(newCommand({ stateRoot: w.stateRoot, project: w.options.project, taskId: "misbound-light", repository: w.repository,
+    workflow: "build-review", tier: 2, request: "request", planRef: "selected-plan", ticketSelection: selection }), /requires its registered/);
+  assert.throws(() => sealTicketSelection({ plan: null, tickets: [selection.tickets[0]!, { ...selection.tickets[0]!, id: "T01" }] }), /not a sealed/);
+  assert.equal(existsSync(join(w.stateRoot, "projects", w.options.project, "tasks/misbound-light")), false);
 });

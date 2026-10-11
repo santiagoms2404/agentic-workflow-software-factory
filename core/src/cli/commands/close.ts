@@ -92,7 +92,7 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
   const baseSha = status?.baseSha ?? candidate;
   if (!closureAncestor(git, candidate, head)) refuse(ownerCommit ? "E_CLOSURE_COMMIT" : "E_CLOSURE_CANDIDATE",
     ownerCommit ? "closure evidence commit is not reachable from canonical HEAD" : "closure candidate is not an ancestor of canonical HEAD");
-  const plan = sealed?.plan ?? options.plan!;
+  const plan = sealed === undefined || sealed === null ? options.plan! : sealed.plan;
   const operationKey = createHash("sha256").update(JSON.stringify([candidate, plan, options.tickets ?? null])).digest("hex");
   const projectIdentity = { project: options.project!, repository, operationKey };
   const attemptRecords = status === null ? [] : await closureJournalRecords(options.attemptDir!);
@@ -144,10 +144,11 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
   if (!closureClean(git)) refuse("E_CLOSURE_DIRTY", "closure requires a clean canonical checkout");
   const base = readClosureSnapshot(git, baseSha);
   const before = readClosureSnapshot(git, head);
+  const light = plan === null;
   const source = before.registry.plans.find(source => source.label === plan);
-  if (source === undefined) refuse("E_CLOSURE_SELECTION", "closure selection has no registered plan");
-  if (ownerCommit && source.project !== options.project) refuse("E_CLOSURE_PROJECT", "closure project differs from registered plan");
-  const ids = sealed?.tickets.map(ticket => ticket.id) ?? options.tickets ?? registeredTicketPaths(before.tree, source)
+  if (!light && source === undefined) refuse("E_CLOSURE_SELECTION", "closure selection has no registered plan");
+  if (ownerCommit && source?.project !== options.project) refuse("E_CLOSURE_PROJECT", "closure project differs from registered plan");
+  const ids = sealed?.tickets.map(ticket => ticket.id) ?? options.tickets ?? registeredTicketPaths(before.tree, source!)
     .map(path => String(ticketFrontmatter(treeText(before.tree, path), path).fields.id));
   if (ids.length === 0 || new Set(ids).size !== ids.length) refuse("E_CLOSURE_SELECTION", "closure requires distinct registered tickets");
   const checkAsk = (selected: readonly AskedForSelection[]): void => {
@@ -156,9 +157,11 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
       ? `closure ask changed since base: ${ask.refusal.differences.map(item => `${item.selection.ticket}.${item.field}`).join(", ")}`
       : `closure cannot resolve ask: ${ask.refusal.message}`);
   };
-  checkAsk(ids.map(ticket => ({ kind: "plan", plan, ticket })));
-  const proposal = proposeClosure(before.tree, before.registry, plan, ids,
-    status === null ? undefined : await builtTickets(options.attemptDir!, status, base));
+  if (light && (ids.length !== 1 || status?.shift != null)) refuse("E_CLOSURE_SELECTION", "light closure requires exactly one flat ticket");
+  checkAsk(ids.map(ticket => light ? { kind: "light", ticket } : { kind: "plan", plan: plan!, ticket }));
+  const proposal = light ? { tickets: ids, rows: [] as readonly ClosureRow[], notClosable: [] as readonly string[] }
+    : proposeClosure(before.tree, before.registry, plan!, ids,
+      status === null ? undefined : await builtTickets(options.attemptDir!, status, base));
   for (const id of proposal.notClosable) options.terminal.write(`${id}: not closable (no host-recorded built candidate in the landed selection)`);
   const closed = new Set<ClosureRow>();
   const choose = async (rows: readonly ClosureRow[], rollUp = false): Promise<void> => {
@@ -170,8 +173,23 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
   await choose(proposal.rows);
   // Owner-commit mode offers any task, but derives only tasks whose rows the owner chose.
   const primary = ownerCommit ? { ...proposal, tickets: proposal.tickets.filter(id => proposal.rows.some(row => row.ticket === id && closed.has(row))) } : proposal;
-  let after = applyClosureChoices(before.tree, before.registry, primary, closed);
-  const rollUp = proposeSpineRollUp(after, before.registry, plan);
+  let lightState: ClosureRecord["lightState"];
+  let after;
+  if (light) {
+    const path = before.registry.lightTickets?.get(ids[0]!);
+    if (path === undefined) refuse("E_CLOSURE_SELECTION", "light ticket has no registered flat source");
+    const text = treeText(before.tree, path);
+    const fm = ticketFrontmatter(text, path, true);
+    options.terminal.write(`${path} ${ids[0]} state: ${fm.state} (no checklist rows)`);
+    const state = await options.terminal.confirm(`Mark ${path} ${ids[0]} state done? (No leaves it open as wip)`)
+      ? "done" : "wip";
+    lightState = { path, ticket: ids[0]!, oldValue: fm.state, newValue: state };
+    after = new Map(before.tree);
+    after.set(path, Buffer.from(text.slice(0, fm.stateStart) + state + text.slice(fm.stateEnd)));
+  } else {
+    after = applyClosureChoices(before.tree, before.registry, { ...primary, plan: plan! }, closed);
+  }
+  const rollUp = light ? null : proposeSpineRollUp(after, before.registry, plan!);
   if (rollUp !== null) {
     checkAsk(rollUp.tickets.map(ticket => ({ kind: "plan", plan: rollUp.plan, ticket })));
     await choose(rollUp.rows, true);
@@ -200,12 +218,13 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
     const at = (options.now ?? (() => new Date().toISOString()))();
     await append({ type: "closure-intent", intent: { id, parentSha: head, candidateSha: candidate, at } });
     await options.onStep?.("intent");
-    const message = `chore(specs): close ${plan} ${primary.tickets.join(",")} after ${candidate.slice(0, 7)}`;
+    const message = `chore(specs): close ${plan ?? "light"} ${primary.tickets.join(",")} after ${candidate.slice(0, 7)}`;
     const prepared = prepareClosureCommit(repository, options.attemptDir ?? options.projectDir!, head, before, after, paths, message, { name: name.stdout.trim(), email: email.stdout.trim() });
     await options.onStep?.("commit");
     const rows = rowsOffered.map(row => ({ path: row.path, ticket: row.ticket, taskNumber: row.taskNumber,
       rowIndex: row.rowIndex, oldValue: row.marker, newValue: closed.has(row) ? "x" : row.marker }));
     const record: ClosureRecord = { schema: "awsf.closure-record/v1", id, plan, tickets: [...primary.tickets],
+      ...(lightState === undefined ? {} : { lightState }),
       parentSha: head, candidateSha: candidate, commitSha: prepared.commit, at,
       rowsClosed: rows.filter(row => row.newValue === "x"), rowsLeftOpen: rows.filter(row => row.newValue !== "x"),
       notClosable: [...proposal.notClosable], blobs: prepared.blobs };

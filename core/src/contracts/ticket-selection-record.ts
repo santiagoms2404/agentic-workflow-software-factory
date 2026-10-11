@@ -4,10 +4,10 @@ import { Value } from "@sinclair/typebox/value";
 import { canonicalJson } from "./owner-amendment.ts";
 import { ShiftManifestTicketSchema } from "./shift-selection-record.ts";
 
-/** Host-owned selection for a non-shift plan attempt; never a provider envelope. */
+/** Host-owned selection; plan=null names exactly one flat light ticket, never a paired set. */
 export const TICKET_SELECTION_SCHEMA_ID = "awsf.ticket-selection/v1";
 export const TicketSelectionSchema = Type.Object({
-  plan: Type.String({ pattern: "^[a-z0-9][a-z0-9.-]*$" }),
+  plan: Type.Union([Type.String({ pattern: "^[a-z0-9][a-z0-9.-]*$" }), Type.Null()]),
   tickets: Type.Array(ShiftManifestTicketSchema, { minItems: 1 }),
   selectionDigest: Type.String({ pattern: "^[a-f0-9]{64}$" }),
 }, { additionalProperties: false, $id: TICKET_SELECTION_SCHEMA_ID, title: "TicketSelection" });
@@ -24,6 +24,7 @@ export function sealTicketSelection(body: Body): TicketSelection {
 }
 export function assertTicketSelection(record: TicketSelection): void {
   if (!Value.Check(TicketSelectionSchema, record)
+    || (record.plan === null && (record.tickets.length !== 1 || !/^T\d\d$/u.test(record.tickets[0]!.id)))
     || new Set(record.tickets.map(ticket => ticket.id)).size !== record.tickets.length
     || ticketSelectionDigest(record) !== record.selectionDigest) {
     throw new Error("ticket selection is not a sealed awsf.ticket-selection/v1");

@@ -159,7 +159,7 @@ plans:
 });
 
 test("ticket new and refine requests pin the id and refinement includes the validated prior ticket", async () => {
-  assert.match(intakeRequest("new", "T37", "add bounded work intake"), /^Create ticket T37\./);
+  assert.match(intakeRequest("new", "T37", "add bounded work intake"), /^Ask: Create ticket T37\./);
   const existing = (await new TicketStore("specs/tickets/awsf-plan").load()).find((record) => record.ticket?.id === "T32");
   assert.ok(existing);
   const request = intakeRequest("refine", "T32", "make acceptance observable", existing);

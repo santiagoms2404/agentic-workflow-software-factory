@@ -12,7 +12,7 @@ import { ledgerGovernanceFailure, planAdoptedMeasurement, planCommandRecovery, p
 import type { VerifyCandidateLedgerVerdict } from "../../workflow/host-validation.ts";
 import { occurrenceKeyForMeasurement, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
 import type { OwnerTerminal } from "../tty.ts";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type {
   AgentPhaseProcessRegistration,
   BrokerProcessRegistration,
@@ -84,6 +84,8 @@ import { hostCommitContentDigest, reconcileHostCommit } from "../../git/commit-r
 import type { HostCommitAdoption } from "../../workflow/engine.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
+import { intakeStateGate } from "../../gates/intake-state.ts";
+import { lightTicketStore } from "./ticket-selection.ts";
 import {
   REVIEW_FINDING_COMPLETENESS_ITEMS,
   reviewEnvelopeComplete,
@@ -1008,18 +1010,30 @@ function phaseGates(
       id: "diff_matches_claims",
       run: async ({ envelope }) => {
         const output = envelope as IntakeOutput;
-        const expected = `specs/tickets/${output.ticket.id}.md`;
+        let store: TicketStore;
+        try { store = await lightTicketStore(worktree); }
+        catch (error) {
+          // Legacy standalone intake projects have no catalog. Other failures are hard refusals.
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          store = new TicketStore(join(worktree, "specs", "tickets"));
+        }
+        const expected = relative(worktree, join(store.directory, `${output.ticket.id}.md`)).split(sep).join("/");
         const report = new GateReport("diff_matches_claims");
-        report.check("exact ticket path changed", observe().includes(expected), expected);
+        report.check("exact ticket path changed", observe().length === 1 && observe()[0] === expected, expected);
         report.check(
           "exact ticket artifact declared",
           output.artifacts.length === 1 && output.artifacts[0]?.path === expected,
           output.artifacts.map((artifact) => artifact.path).join(", ") || "none",
         );
-        const record = (await new TicketStore(join(worktree, "specs", "tickets")).load())
+        const record = (await store.load())
           .find((candidate) => candidate.ticket?.id === output.ticket.id);
         report.check("written ticket validates", record?.ticket !== null && record?.ticket !== undefined, record?.violations.map((violation) => violation.message).join("; ") ?? "missing");
         report.check("written ticket matches output", JSON.stringify(record?.ticket) === JSON.stringify(output.ticket), expected);
+        const git = systemGitRunner(worktree);
+        const existed = git(["cat-file", "-e", `${baseSha}:${expected}`]);
+        if (existed.status !== 0 && existed.status !== 128 && existed.status !== 1) throw new Error("cannot inspect intake base ticket");
+        const before = existed.status === 0 ? runGit(git, ["show", `${baseSha}:${expected}`]) : null;
+        for (const check of intakeStateGate(expected, before, output.ticket).checks) report.check(check.item, check.ok, check.note);
         return report;
       },
     });

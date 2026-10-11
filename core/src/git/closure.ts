@@ -42,9 +42,11 @@ export function readClosureSnapshot(git: GitRunner, sha: string): ClosureSnapsho
     return { project: catalog.project.slug, repositoryId, label, planPath,
       promptsPath: `${root}/${label}-build-prompts.md`, ticketsPath: `${root}/tickets/${label}`, format: catalog.plans.format };
   });
+  const lightTickets = new Map([...blobs.keys()].filter(path => posix.dirname(path) === `${root}/tickets` && /^T\d\d\.md$/u.test(posix.basename(path)))
+    .map(path => [posix.basename(path, ".md"), path]));
   const tree = new Map<string, Uint8Array>();
-  const paths = new Set(plans.flatMap(source => [source.planPath, source.promptsPath,
-    ...[...blobs.keys()].filter(path => path.startsWith(`${source.ticketsPath}/`))]));
+  const paths = new Set([...lightTickets.values(), ...plans.flatMap(source => [source.planPath, source.promptsPath,
+    ...[...blobs.keys()].filter(path => path.startsWith(`${source.ticketsPath}/`))])]);
   for (const path of paths) {
     const blob = blobs.get(path);
     if (blob === undefined) continue;
@@ -53,7 +55,7 @@ export function readClosureSnapshot(git: GitRunner, sha: string): ClosureSnapsho
     if (createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex") !== blob) throw new Error(`closure refuses non-UTF-8 or truncated registered blob ${path}`);
     tree.set(path, bytes);
   }
-  return { tree, registry: { plans }, modes, blobs };
+  return { tree, registry: { plans, lightTickets }, modes, blobs };
 }
 
 export function closureHead(git: GitRunner): string { return runGit(git, ["rev-parse", "HEAD"]).trim(); }

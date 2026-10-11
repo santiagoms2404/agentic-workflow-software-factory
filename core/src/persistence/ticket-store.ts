@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { parseDocument, stringify } from "yaml";
 import { TicketSchema, type Ticket } from "../contracts/ticket.ts";
+import { lightTicketCycle } from "../registry/plan-agreement.ts";
 
 export interface TicketViolation {
   path: string;
@@ -52,30 +53,8 @@ function splitFrontmatter(source: string): { frontmatter: string; body: string }
 }
 
 function rejectCycles(records: readonly StoredTicket[]): void {
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const trail: string[] = [];
-
-  const visit = (id: string): void => {
-    if (visiting.has(id)) {
-      const start = trail.indexOf(id);
-      throw new TicketDependencyCycleError([...trail.slice(start), id]);
-    }
-    if (visited.has(id)) return;
-    // This is deliberately a scan of the loaded files, not a retained index.
-    const ticket = records.find((record) => record.ticket?.id === id)?.ticket;
-    if (ticket === undefined || ticket === null) return;
-    visiting.add(id);
-    trail.push(id);
-    for (const dependency of ticket.depends_on) visit(dependency);
-    trail.pop();
-    visiting.delete(id);
-    visited.add(id);
-  };
-
-  for (const record of records) {
-    if (record.ticket !== null) visit(record.ticket.id);
-  }
+  const cycle = lightTicketCycle(records.flatMap(record => record.ticket === null ? [] : [record.ticket]));
+  if (cycle !== null) throw new TicketDependencyCycleError(cycle);
 }
 
 /**
@@ -119,7 +98,12 @@ export class TicketStore {
   }
 
   private async readPath(path: string): Promise<StoredTicket> {
-    const source = await readFile(path, "utf8");
+    return parseStoredTicket(await readFile(path, "utf8"), path);
+  }
+}
+
+/** Parse the exact bytes a selector seals, rather than re-reading the file. */
+export function parseStoredTicket(source: string, path: string): StoredTicket {
     const split = splitFrontmatter(source);
     if (split === null) {
       return {
@@ -150,5 +134,4 @@ export class TicketStore {
       ticket: violations.length === 0 ? (frontmatter as Ticket) : null,
       violations,
     };
-  }
 }

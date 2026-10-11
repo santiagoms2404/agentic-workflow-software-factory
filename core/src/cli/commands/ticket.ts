@@ -46,16 +46,13 @@ export async function showTicket(store: TicketStore, id: string): Promise<readon
  * The request passed through the engineer phase. The model receives the prior
  * ticket for refine, but the write boundary is still config + T17 path policy.
  */
-export function intakeRequest(action: "new" | "refine", id: string, intent: string, existing?: StoredTicket): string {
+export function intakeRequest(action: "new" | "refine", id: string, intent: string, existing?: StoredTicket, path = `specs/tickets/${id}.md`): string {
   if (!/^T\d\d$/.test(id)) throw new Error(`ticket id must be zero-padded Tnn; got ${JSON.stringify(id)}`);
   if (intent.trim().length === 0) throw new Error(`awsf ticket ${action} requires an intent`);
-  if (action === "new") return `Create ticket ${id}. Owner intent: ${intent.trim()}`;
-  if (existing === undefined || existing.ticket === null) throw new TicketNotFound(id);
-  return [
-    `Refine ticket ${id} without changing its id. Owner intent: ${intent.trim()}`,
-    "Existing validated ticket:",
-    JSON.stringify(existing.ticket),
-    "Existing body:",
-    existing.body,
+  if (action === "refine" && (existing === undefined || existing.ticket === null)) throw new TicketNotFound(id);
+  const ask = action === "new" ? `Create ticket ${id}. Owner intent: ${intent.trim()}` : [
+    `Refine ticket ${id} without changing its id or state. Owner intent: ${intent.trim()}`,
+    "Existing validated ticket:", JSON.stringify(existing!.ticket), "Existing body:", existing!.body,
   ].join("\n");
+  return `Ask: ${ask}\nWhere: ${path}\nDone means: the ticket validates, matches the intake envelope and ${action === "new" ? "starts todo" : "retains its state"}.\nOut of scope: other tickets, paired plan sets and moving any existing ticket state.`;
 }

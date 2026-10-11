@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toConfigSnapshotJson } from "../config/effective-config.ts";
 import { loadConfig } from "../config/load.ts";
@@ -30,11 +30,11 @@ import { previewCommand } from "./commands/preview.ts";
 import { initCommand } from "./commands/init.ts";
 import { listProjects, registerProject, showProject, verifyRegisteredProject } from "./commands/project.ts";
 import { landCommand } from "./commands/land.ts";
-import { renderAttemptNextAction, renderDegradationAdvice } from "../lifecycle/renderer.ts";
+import { renderDegradationAdvice } from "../lifecycle/renderer.ts";
 import { nextCommand } from "./commands/next.ts";
 import { preflightCommand, renderPreflightLines } from "./commands/preflight.ts";
 import { newCommand } from "./commands/new.ts";
-import { parseTicketSelection, sealPlanTicketSelection } from "./commands/ticket-selection.ts";
+import { parseTicketSelection, sealPlanTicketSelection, sealLightTicketSelection, lightTicketStore } from "./commands/ticket-selection.ts";
 import { closeCommand } from "./commands/close.ts";
 import { PlanRefUnknown, resolvePlanRef } from "./commands/plan-ref.ts";
 import { relateCommand } from "./commands/relate.ts";
@@ -368,7 +368,6 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     }
     if (command === "ticket") {
       const action = parsed.positionals[0];
-      const store = ticketStoreFor(cwd);
       if (action === "list" && parsed.positionals.length === 1) {
         try {
           for (const line of await listTickets(await ticketStoreForList(cwd, parsed.flags.plan))) out(line);
@@ -388,10 +387,13 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       }
       const id = parsed.positionals[1] ?? "";
       const intent = parsed.positionals.slice(2).join(" ");
+      if (parsed.flags.plan !== undefined) throw new Error("ticket new/refine use the flat light store, never a paired --plan ticket");
+      // Creation/refinement always use the flat store, not the catalog's default paired plan.
+      const store = await lightTicketStore(cwd);
       const loaded = await store.load();
       const existing = loaded.find((record) => record.ticket?.id === id);
       if (action === "new" && existing !== undefined) throw new Error(`ticket ${id} already exists; use awsf ticket refine`);
-      const request = intakeRequest(action, id, intent, existing);
+      const request = intakeRequest(action, id, intent, existing, relative(cwd, resolve(store.directory, `${id}.md`)).split(sep).join("/"));
       const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
       const config = loadConfig(await readFile(configPath, "utf8"));
       if (!config.workflows.enabled.includes("intake")) throw new Error("the intake workflow is not enabled");
@@ -400,44 +402,20 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       // prior T0 task would either collide or make a second refinement inherit
       // its already-spent one-call ceiling.
       const taskId = `ticket-${action}-${id}-${randomUUID()}`;
-      // The intake task's plan is the one its ticket store was resolved through,
-      // so it is stated rather than guessed here too. An intake run against a
-      // repository with no catalog stays unlinked.
-      let intakePlanRef: string | undefined;
-      try {
-        intakePlanRef = await resolvePlanRef({
-          repository: cwd, stateRoot, project,
-          stem: parsed.flags.plan ?? loadCatalog(await readFile(resolve(cwd, "awsf.project.yaml"), "utf8")).plans.default ?? "",
-        });
-      } catch {
-        intakePlanRef = undefined;
-      }
       const projection = createDashboardProjection(stateRoot, err);
       try {
         const created = await newCommand({
           stateRoot, project, taskId, repository: cwd, request, workflow: "intake", tier: 0,
-          ...(intakePlanRef === undefined ? {} : { planRef: intakePlanRef }),
           configSnapshotJson: toConfigSnapshotJson(config),
           callCeilings: callCeilingsOf(config.risk.call_ceiling),
           allowance: config.risk.correction_allowance,
           projectRecord: projection.project,
         });
-        await startCommand({
-          attemptDir: created.attemptDir,
-          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
-          configPath,
-          projectRecord: projection.project,
-        });
-        const status = await runProductionCommand({
-          attemptDir: created.attemptDir, stateRoot, config, configPath,
-          projectRecord: projection.project,
-          assertAdvancement: projection.assertAdvancement,
-          assertLaunchProjection: projection.assertLaunchPermitted,
-        });
-        await shadowStop(created.attemptDir, config, configPath, env);
-        out(`${status.lifecycleState}: ${status.nextAction}`);
-        out(`Validated intake result for ${id}; ${renderAttemptNextAction(status)}`);
-        return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
+        // Intake is not an exception to K1. Return the DRAFT for preflight,
+        // owner confirmation and start; `run` buys its one intake call.
+        out(`Created ${project}/${taskId} attempt ${created.status.attempt} in DRAFT for ticket ${action} ${id}.`);
+        out(created.status.nextAction);
+        return 0;
       } finally {
         projection.close();
       }
@@ -633,7 +611,6 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       let { tier } = selection;
       if (parsed.tickets.length > 0) {
         if (workflow === SHIFT_WORKFLOW_ID) throw new Error("--ticket cannot select a shift; use --milestone");
-        if (parsed.flags.plan === undefined) throw new Error("--ticket requires --plan (light tickets are not supported yet)");
       }
       // A shift seals its selection here, from `--plan` and `--milestone`,
       // and the attempt stores the manifest (Q5). Its tier is derived from
@@ -658,9 +635,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const planRef = parsed.flags.plan === undefined
         ? undefined
         : await resolvePlanRef({ repository: cwd, stateRoot, project, stem: parsed.flags.plan });
-      const ticketSelection = parsed.tickets.length === 0 ? undefined : await sealPlanTicketSelection(
-        { repository: cwd, stateRoot, project, stem: planRef! }, parsed.tickets,
-      );
+      const ticketSelection = parsed.tickets.length === 0 ? undefined : planRef === undefined
+        ? await sealLightTicketSelection(cwd, parsed.tickets)
+        : await sealPlanTicketSelection({ repository: cwd, stateRoot, project, stem: planRef }, parsed.tickets);
       const result = await newCommand({
         stateRoot,
         project,
@@ -686,7 +663,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       if (shift !== undefined) {
         out(`Shift: ${shift.plan} ${shift.milestones.join(",")}, ${String(shift.tickets.length)} ticket(s) sealed as ${shift.manifestDigest}.`);
       }
-      if (ticketSelection !== undefined) out(`Tickets: ${ticketSelection.plan} ${ticketSelection.tickets.map(ticket => ticket.id).join(",")} sealed as ${ticketSelection.selectionDigest}.`);
+      if (ticketSelection !== undefined) out(`Tickets: ${ticketSelection.plan ?? "light"} ${ticketSelection.tickets.map(ticket => ticket.id).join(",")} sealed as ${ticketSelection.selectionDigest}.`);
       if (result.status.groupId !== null) out(`Group: ${result.status.groupId} — this run is recorded as part of that driving session.`);
       if (result.status.planRef !== null) out(`Plan: ${result.status.planRef} — this run is recorded against that registered plan.`);
       for (const [phaseId, selected] of Object.entries(routeOverrides)) {
@@ -780,7 +757,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           return 1;
         }
         const record = result.record;
-        out(`Closed ${record.plan} ${record.tickets.join(",")} in ${record.commitSha.slice(0, 7)}: ${record.rowsClosed.length} row(s) closed, ${record.rowsLeftOpen.length} left open.`);
+        out(record.lightState === undefined
+          ? `Closed ${record.plan} ${record.tickets.join(",")} in ${record.commitSha.slice(0, 7)}: ${record.rowsClosed.length} row(s) closed, ${record.rowsLeftOpen.length} left open.`
+          : `Recorded light ${record.lightState.ticket} in ${record.commitSha.slice(0, 7)}: state ${record.lightState.oldValue} -> ${record.lightState.newValue}.`);
         if (record.notClosable.length > 0) out(`Not closable (no host-recorded build in the landed candidate): ${record.notClosable.join(", ")}.`);
         out("Nothing was pushed.");
         return 0;

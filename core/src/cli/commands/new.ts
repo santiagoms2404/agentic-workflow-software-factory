@@ -103,7 +103,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
   if (options.ticketSelection !== undefined) {
     assertTicketSelection(options.ticketSelection);
     if (options.workflow === SHIFT_WORKFLOW_ID) throw new Error("--ticket cannot select a shift; use --milestone");
-    if (options.planRef !== options.ticketSelection.plan) throw new Error("--ticket requires its registered --plan");
+    if ((options.planRef ?? null) !== options.ticketSelection.plan) throw new Error("--ticket requires its registered --plan, or no plan for a flat light ticket");
   }
   if ((options.workflow === PROVE_WORKFLOW_ID) !== (options.replay !== undefined)) {
     throw new Error(`workflow ${JSON.stringify(options.workflow)} ${options.replay === undefined ? "requires a replay record, which only `awsf prove` creates" : "cannot carry a replay record"}`);

@@ -133,9 +133,23 @@ test("registered plan root wins over adjacent or sealed ticket paths; done, miss
   attempt(world, "mismatch", "LANDED", null, { planRef: "synthetic-plan", shift: { plan: "another-plan", tickets: [{ id: "T01" }] } });
   attempt(world, "active", "RUNNING", null, { planRef: "synthetic-plan" });
   const rows = await gatherRepositoryRows({ cwd: world.repository, stateRoot: world.stateRoot, env: { ...process.env } as Record<string, string>, config: world.measuredConfig });
-  assert.match(rows.markers.detail[0]!, /landed attempts with plan ref=2; open selected tickets=1; unmapped=1/);
+  assert.match(rows.markers.detail[0]!, /landed attempts with plan ref or light selection=2; open selected tickets=1; unmapped=1/);
   assert.match(rows.markers.detail.join("\n"), /synthetic-plan\/T02=not measured/);
   assert.doesNotMatch(rows.markers.detail.join("\n"), /T01=/);
+});
+
+test("a plan named light and a flat light ticket keep distinct state caches even with the same ticket id", async t => {
+  const world = setup(t);
+  mkdirSync(join(world.repository, "plans/tickets/light"), { recursive: true });
+  writeFileSync(join(world.repository, "plans/light.html"), '<section><h3><code class="status">[]</code> Milestone M1: Light plan</h3><h4>1. Paired</h4></section>');
+  writeFileSync(join(world.repository, "plans/tickets/light/T01.md"), "---\nid: T01\ntitle: paired\nmilestone: M1\nstate: todo\ndepends_on: []\n---\nPaired request\n");
+  writeFileSync(join(world.repository, "plans/tickets/T01.md"), "---\nid: T01\ntitle: flat\nmilestone: M1\ntier: 1\nstate: done\ndepends_on: []\nworkflow: build-review\noutcome: flat works\ncontext: []\nacceptance: [flat works]\nnon_goals: []\n---\nFlat request\n");
+  attempt(world, "a-flat", "LANDED", null, { ticketSelection: { plan: null, tickets: [{ id: "T01", path: "wrong-path.md" }] } });
+  attempt(world, "b-paired", "LANDED", null, { planRef: "light", ticketSelection: { plan: "light", tickets: [{ id: "T01", path: "wrong-path.md" }] } });
+  const rows = await gatherRepositoryRows({ cwd: world.repository, stateRoot: world.stateRoot, env: { ...process.env } as Record<string, string>, config: world.measuredConfig });
+  assert.match(rows.markers.detail.join("\n"), /b-paired#1: light\/T01=todo/);
+  assert.doesNotMatch(rows.markers.detail.join("\n"), /a-flat#1: light\/T01=/);
+  assert.match(rows.markers.detail[0]!, /open selected tickets=1; unmapped=0/);
 });
 
 test("a single-attempt selection maps through the registered plan exactly like a shift, without trusting sealed paths", async t => {

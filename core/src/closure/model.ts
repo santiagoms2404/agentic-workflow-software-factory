@@ -27,7 +27,7 @@ export function closureReadout(status: AttemptStatus, records: readonly ClosureR
   const record = records.findLast(record => record.candidateSha === status.candidateSha &&
     selection != null && record.plan === selection.plan &&
     selection.tickets.every(ticket => record.tickets.includes(ticket.id))) ?? null;
-  return { state: record === null ? "not closed" : record.rowsLeftOpen.length > 0 || record.notClosable.length > 0
+  return { state: record === null ? "not closed" : record.rowsLeftOpen.length > 0 || record.notClosable.length > 0 || (record.lightState !== undefined && record.lightState.newValue !== "done")
     ? "open by the owner's choice" : "closed", record };
 }
 
