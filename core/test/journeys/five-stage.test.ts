@@ -560,6 +560,10 @@ test("a throwaway project travels all five captured stages on the stub route wit
     // replaces the configuration and supplies the role prompts; every name S3
     // needs arrives that way rather than out of S2's return value.
     const config = fixtureConfig({ slug: SLUG, roles: ROLES });
+    // W03 T14: all five stages run with the shipped protections, not a render exemption.
+    const shipped = loadConfig(readFileSync(join(REPOSITORY_ROOT, "awsf.config.yaml"), "utf8"));
+    assert.deepEqual(config.policy.protected_paths, shipped.policy.protected_paths);
+    for (const glob of PLAN_SET_GLOBS) assert.ok(config.policy.protected_paths.includes(glob));
     const configPath = join(canonical, "awsf.config.yaml");
     const configBytes = stringify(config);
     assertOwnerHeldBoundary(
