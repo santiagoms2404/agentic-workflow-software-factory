@@ -151,12 +151,13 @@ async function world(defect?: Defect) {
     }
     git(canonical, "add", "."); git(canonical, "commit", "-m", "test: seed plan author journey");
     const shipped = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
-    assert.equal(shipped.workflows.enabled.includes("plan-author"), false, "G03-W remains owner work");
+    assert.equal(shipped.workflows.enabled.includes("plan-author"), shipped.agents.some(agent => agent.name === "plan-author"),
+      "the shipped config must declare and enable plan-author together, or neither");
     const planner = shipped.agents.find(agent => agent.name === "planner")!;
     const config = { ...shipped, project: { ...shipped.project, slug: PROJECT }, runtime: { ...shipped.runtime, seed_paths: [] },
-      workflows: { enabled: [...shipped.workflows.enabled, "plan-author"] },
+      workflows: { enabled: [...shipped.workflows.enabled.filter(id => id !== "plan-author"), "plan-author"] },
       gates: { test: { argv: ["node", "-e", "process.exit(0)"], timeout_seconds: 10 } },
-      agents: [...shipped.agents.map(agent => ({ ...agent, harness: { ...agent.harness, interrupted_turn: false } })),
+      agents: [...shipped.agents.filter(agent => agent.name !== "plan-author").map(agent => ({ ...agent, harness: { ...agent.harness, interrupted_turn: false } })),
         { ...planner, name: "plan-author", model: "codex:gpt-6-sol", purpose: "Author private plan output only",
           harness: { adapter: "codex", continuity: "none" as const, interrupted_turn: false },
           prompt: { system: "prompts/plan-author/system.md", user: "prompts/plan-author/user.md" },

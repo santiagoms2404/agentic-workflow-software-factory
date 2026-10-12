@@ -122,8 +122,20 @@ agents:
     tools: { profile: readonly, allow: [read, grep, find, ls] }
     writes: []
 
+  - name: plan-author
+    # Gate G03-W. Writes no repository path: the plan set leaves through the
+    # session-runtime output, and host admission creates it as new files only.
+    model: codex:gpt-6-sol
+    thinking: high
+    color: "#A78BFA"
+    purpose: Author new plan sets in session output only.
+    prompt: { system: prompts/plan-author/system.md, user: prompts/plan-author/user.md }
+    harness: { adapter: codex, continuity: none, interrupted_turn: false }
+    tools: { profile: managed-worker, allow: [read, grep, find, ls, edit, write] }
+    writes: []
+
 workflows:
-    enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc, intake, design-to-plan, shift, prove]
+    enabled: [scout, plan, build, plan-build-test, build-review, simple-sdlc, intake, design-to-plan, shift, prove, plan-author]
 
 gates:
   test: { argv: [npm, run, test:unit], timeout_seconds: 600 }

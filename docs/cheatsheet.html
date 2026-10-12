@@ -887,6 +887,7 @@ npm run awsf -- land TASK</pre>
     <li><code>workflow|design-to-plan</code></li>
     <li><code>workflow|shift</code></li>
     <li><code>workflow|prove</code></li>
+    <li><code>workflow|plan-author</code></li>
     <li><code>gate|test</code></li>
     <li><code>gate|typecheck</code></li>
     <li><code>gate|lint</code></li>
@@ -905,6 +906,7 @@ npm run awsf -- land TASK</pre>
     <li><b><code>simple-sdlc</code></b>Capture the owner request, plan, build, run checks, write the private run report, update project documentation only when needed, run the checks again, and obtain an opposite-provider review.</li>
     <li><b><code>intake</code></b>Turns a rough request into something the other routes can take.</li>
     <li><b><code>design-to-plan</code></b>Design work, then an architecture review of the design.</li>
+    <li><b><code>plan-author</code></b>Writes a new deep plan for one spine ticket into private session output. The host admits it as new files only, then tests it and has the other provider review it. The plan is approved only when you land it.</li>
   </ul>
 
   <h3>A gate is a check this project runs against the candidate</h3>
