@@ -134,6 +134,7 @@ export async function degradeReviewCommand(
   // type into a terminal cannot take this act, whatever it is asking for.
   const status = await readAttempt(options.attemptDir);
   if (!options.terminal.interactive) throw new ReviewDegradeNotInteractive(status.taskId);
+  if (status.workflow === "plan-author") throw new Error("plan-author requires cross-provider review; degradation is not available");
   const reason = assertDegradeReason(options.reason);
   if (isTerminalStatus(status)) throw new ReviewDegradeAttemptNotLive(status.lifecycleState, status.taskId);
   if (!workflowBuysReview(status.workflow)) throw new ReviewDegradeNoReviewPhase(status.workflow, status.taskId);

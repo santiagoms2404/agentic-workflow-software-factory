@@ -26,6 +26,7 @@ import {
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
 import { readPlacement } from "../../registry/placement.ts";
 import { bindProveRecipe } from "../../workflow/prove/bind.ts";
+import { assertPlanAuthorRole, compilePlanAuthor, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
 import { PROVE_WORKFLOW_ID } from "../../workflow/prove/compile.ts";
 import { bindShiftRecipe } from "../../workflow/shift/bind.ts";
 import { correctionHeadroom } from "./workflows.ts";
@@ -249,7 +250,11 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     // Start reads only the phase list's shape (its count, owners and tier),
     // which no prompt moves; the runner compiles again with the real ones.
     const prompts = { builder: "", reviewer: "" };
-    if (compiled.id === PROVE_WORKFLOW_ID) {
+    if (compiled.id === PLAN_AUTHOR_WORKFLOW_ID) {
+      assertPlanAuthorRole(config);
+      if (current.reviewDegradation !== null) throw new Error("plan-author cannot use degraded same-provider review");
+      recipe = compilePlanAuthor(current);
+    } else if (compiled.id === PROVE_WORKFLOW_ID) {
       if (current.replay == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${current.taskId}`);
       recipe = await bindProveRecipe(current, { prompts, gates: Object.keys(config.gates) });
     } else {

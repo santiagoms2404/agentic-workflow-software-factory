@@ -36,6 +36,7 @@ const REVIEWER_PRESERVATION_OVERLAY =
 
 const ROLE_POLICIES = {
   planner: "common",
+  "plan-author": "common",
   builder: "common",
   reviewer: "reviewer-preserving",
   documenter: "common",

@@ -1,4 +1,5 @@
 import { BUILD_OUTPUT_SCHEMA_ID } from "../contracts/build-output.ts";
+import { PLAN_AUTHOR_OUTPUT_SCHEMA_ID } from "../contracts/plan-author-output.ts";
 import type { EnvelopeBase } from "../contracts/envelope-base.ts";
 import {
   PREVIOUS_ENVELOPE_PLACEHOLDER,
@@ -168,7 +169,12 @@ export class ReviewBuildProvidersDisagree extends InvalidReviewInversion {
  * inversion is by provider. The count check alone is "at least one", which is
  * why the provider half is not optional.
  *
- * One exception, for `prove` alone: a replay's candidate is committed by the
+ * Plan-author alone also recognizes its private-document author as the
+ * candidate-producing agent. Host admission writes those documents, but review
+ * must still invert against the provider that authored them. This cannot make
+ * the author schema a build producer in any other workflow.
+ *
+ * One host-producer exception, for `prove` alone: a replay's candidate is committed by the
  * host from a frozen patch, so its one build producer is a host code phase and
  * no provider built anything. The runner reads that shape as seeded mode and
  * routes the review by the replay's arm instead of by inversion. Every other
@@ -182,7 +188,8 @@ function reviewBuildPhaseIds(workflowId: string, phases: readonly PhaseDefinitio
   if (!hasReview) return Object.freeze([]);
 
   const buildPhaseIds = phases
-    .filter((phase) => phase.kind === "agent" && phase.schemaId === BUILD_OUTPUT_SCHEMA_ID)
+    .filter((phase) => phase.kind === "agent" && (phase.schemaId === BUILD_OUTPUT_SCHEMA_ID ||
+      (workflowId === "plan-author" && phase.owner === "plan-author" && phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID)))
     .map((phase) => phase.id);
   if (buildPhaseIds.length === 0) {
     const seeds = workflowId === SEEDED_REVIEW_WORKFLOW ? seedPhaseIds(phases) : [];

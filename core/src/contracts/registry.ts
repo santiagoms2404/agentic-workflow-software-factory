@@ -1,4 +1,5 @@
 import type { TObject } from "@sinclair/typebox";
+import { PlanAuthorOutputSchema, PLAN_AUTHOR_OUTPUT_SCHEMA_ID, type PlanAuthorOutput } from "./plan-author-output.ts";
 import { PlanAdmissionRecordSchema, PLAN_ADMISSION_SCHEMA_ID } from "./plan-admission.ts";
 import { ClosureRecordSchema, CLOSURE_RECORD_SCHEMA_ID } from "./closure-record.ts";
 import {
@@ -60,6 +61,7 @@ import { DoctorReadoutSchema, DOCTOR_READOUT_SCHEMA_ID } from "./doctor-readout.
  * without registering it makes it unusable rather than silently unvalidated.
  */
 export const ENVELOPE_SCHEMAS = {
+  [PLAN_AUTHOR_OUTPUT_SCHEMA_ID]: PlanAuthorOutputSchema,
   [PLAN_OUTPUT_SCHEMA_ID]: PlanOutputSchema,
   [BUILD_OUTPUT_SCHEMA_ID]: BuildOutputSchema,
   [TEST_OUTPUT_SCHEMA_ID]: TestOutputSchema,
@@ -82,6 +84,7 @@ export type EnvelopeSchemaId = keyof typeof ENVELOPE_SCHEMAS;
 
 /** Static payload type for a given schema id. */
 export interface EnvelopeTypeById {
+  [PLAN_AUTHOR_OUTPUT_SCHEMA_ID]: PlanAuthorOutput;
   [PLAN_OUTPUT_SCHEMA_ID]: PlanOutput;
   [BUILD_OUTPUT_SCHEMA_ID]: BuildOutput;
   [TEST_OUTPUT_SCHEMA_ID]: TestOutput;

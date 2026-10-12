@@ -118,7 +118,10 @@ import { buildPhaseRequest, openRetainedColdTurn, phasePersistenceMode, phasePer
 import { loadCatalog } from "../../registry/catalog.ts";
 import { readPlacement } from "../../registry/placement.ts";
 import { renderPlanDocument } from "../../registry/plan-render.ts";
-import { admitPlanSet } from "../../registry/plan-admission.ts";
+import { admitPlanSet, verifyPlanAdmission, type PlanAdmissionCapability, type PlanAdmissionInput } from "../../registry/plan-admission.ts";
+import { PLAN_AUTHOR_OUTPUT_SCHEMA_ID, type PlanAuthorOutput } from "../../contracts/plan-author-output.ts";
+import { readPlanAuthorInput } from "../../workflow/plan-author-input.ts";
+import { assertPlanAuthorRole, compilePlanAuthor, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
 import type { PlanAdmissionRecord } from "../../contracts/plan-admission.ts";
 import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
 import { continuityFilePath } from "../../persistence/platform-paths.ts";
@@ -293,7 +296,7 @@ const SUPPORTED = new Map<string, WorkflowRecipe>(
   WORKFLOW_RECIPES.map((recipe) => [recipe.id, recipe]),
 );
 
-const SUPPORTED_NAMES = [...SUPPORTED.keys(), SHIFT_WORKFLOW_ID, PROVE_WORKFLOW_ID].join(", ");
+const SUPPORTED_NAMES = [...SUPPORTED.keys(), SHIFT_WORKFLOW_ID, PROVE_WORKFLOW_ID, PLAN_AUTHOR_WORKFLOW_ID].join(", ");
 
 /**
  * The recipe this attempt runs: a shipped one by id, a shift compiled from the
@@ -305,6 +308,11 @@ const SUPPORTED_NAMES = [...SUPPORTED.keys(), SHIFT_WORKFLOW_ID, PROVE_WORKFLOW_
 async function attemptRecipe(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus): Promise<WorkflowRecipe | undefined> {
   const shipped = SUPPORTED.get(status.workflow);
   if (shipped !== undefined) return shipped;
+  if (status.workflow === PLAN_AUTHOR_WORKFLOW_ID) {
+    assertPlanAuthorRole(options.config);
+    if (status.reviewDegradation !== null) throw new Error("plan-author cannot use degraded same-provider review");
+    return compilePlanAuthor(status);
+  }
   const bindsShift = status.workflow === SHIFT_WORKFLOW_ID && status.shift != null;
   const bindsReplay = status.workflow === PROVE_WORKFLOW_ID && status.replay != null;
   if (!bindsShift && !bindsReplay) return undefined;
@@ -746,6 +754,27 @@ export async function renderProductionPlanIntoWorktree(input: {
   /** Persist the host admission before creating its candidate commit. */
   readonly journalAdmission?: (record: PlanAdmissionRecord) => Promise<void>;
 }): Promise<ProductionPlanRenderResult> {
+  const rendered = renderPlanDocument({ stem: input.stem, plan: input.plan, identifierSet: input.identifierSet });
+  return admitProductionPlanIntoWorktree({ ...input, summary: input.plan.summary, admissionInput: {
+    stem: input.stem,
+    planHtml: rendered.get(`specs/${input.stem}.html`)!,
+    buildPrompts: rendered.get(`specs/${input.stem}-build-prompts.md`)!,
+    tickets: input.plan.steps.map(step => ({ id: step.id, title: step.title, milestone: step.milestone,
+      depends_on: step.dependsOn, serves: step.serves })),
+  } });
+}
+
+/** Shared host materialization: authoring never gains a repository write permission. */
+export async function admitProductionPlanIntoWorktree(input: {
+  readonly worktree: string;
+  readonly admissionInput: PlanAdmissionInput;
+  readonly summary: string;
+  readonly protectedPaths: readonly string[];
+  readonly baseSha?: string;
+  readonly at?: string;
+  readonly journalAdmission?: (record: PlanAdmissionRecord) => Promise<void>;
+}): Promise<ProductionPlanRenderResult> {
+  const stem = input.admissionInput.stem;
   const git = systemGitRunner(input.worktree);
   assertClean(input.worktree, "before", git);
   const phaseBase = runGit(git, ["rev-parse", "HEAD"]).trim();
@@ -753,14 +782,9 @@ export async function renderProductionPlanIntoWorktree(input: {
     repository: input.worktree,
     commitMessage: (output) => output.proposedCommitMessage,
   });
-  const rendered = renderPlanDocument({ stem: input.stem, plan: input.plan, identifierSet: input.identifierSet });
   const admitted = admitPlanSet({
-    worktree: input.worktree, baseSha: input.baseSha ?? phaseBase,
-    at: input.at ?? new Date().toISOString(), stem: input.stem,
-    planHtml: rendered.get(`specs/${input.stem}.html`)!,
-    buildPrompts: rendered.get(`specs/${input.stem}-build-prompts.md`)!,
-    tickets: input.plan.steps.map(step => ({ id: step.id, title: step.title, milestone: step.milestone,
-      depends_on: step.dependsOn, serves: step.serves })),
+    ...input.admissionInput, worktree: input.worktree, baseSha: input.baseSha ?? phaseBase,
+    at: input.at ?? new Date().toISOString(),
   });
   const { documents, capability, record: admission } = admitted;
   await input.journalAdmission?.(admission);
@@ -769,7 +793,7 @@ export async function renderProductionPlanIntoWorktree(input: {
   const output: DocumentOutput = {
     schema: DOCUMENT_OUTPUT_SCHEMA_ID,
     producerStatus: "success",
-    summary: `Rendered ${input.plan.summary}`,
+    summary: `Rendered ${input.summary}`,
     artifacts: [...documents.keys()].map((path) => ({
       path,
       kind: path.endsWith(".html") ? "plan" as const : "documentation" as const,
@@ -777,11 +801,11 @@ export async function renderProductionPlanIntoWorktree(input: {
     })),
     notesForNextPhase: "Inspect and land the host-rendered plan set.",
     changedFiles: [...documents.keys()].sort(),
-    documentedAreas: [...documents.keys()].map((path) => ({ subject: input.plan.summary, documentPath: path })),
-    proposedCommitMessage: `docs: render ${input.stem} plan`,
+    documentedAreas: [...documents.keys()].map((path) => ({ subject: input.summary, documentPath: path })),
+    proposedCommitMessage: `docs: render ${stem} plan`,
     runReport: {
       path: "reports/design-to-plan.md",
-      markdown: `The host rendered the validated ${input.stem} design plan and ticket set.`,
+      markdown: `The host rendered the validated ${stem} plan and ticket set.`,
     },
   };
   const parsed = parseEnvelope(JSON.stringify(output), DOCUMENT_OUTPUT_SCHEMA_ID);
@@ -899,7 +923,7 @@ function phaseGates(
   tier: Tier,
   buildsCandidate: boolean,
   attributionBaseSha: string | null = null,
-  protectedCapabilities: () => Promise<readonly ProtectedFilesCapability[]> = async () => [],
+  protectedCapabilities: () => Promise<readonly (ProtectedFilesCapability | PlanAdmissionCapability)[]> = async () => [],
   reviewObservation: () => { events: readonly NormalizedEvent[]; runId: string } = () => ({ events: [], runId: "" }),
 ): readonly GateDefinition[] {
   const observe = attributionBaseSha !== null && review === null
@@ -2479,7 +2503,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const rolePrompt = renderProductionRolePrompt(phase, previous, designContext, status.request, route.agent);
     const grantContext = protectedPromptContext(phaseGrant);
     const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions) + grantContext +
-      (visualDelivery === null ? "" : visualReferencePrompt(visualDelivery)) + reviewDiffPrompt(reviewContext?.evidence ?? null);
+      (visualDelivery === null ? "" : visualReferencePrompt(visualDelivery)) + reviewDiffPrompt(reviewContext?.evidence ?? null) +
+      (phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID
+        ? `\nHost-sealed spine selection: ${JSON.stringify(status.ticketSelection)}\nHost-provided session-runtime output directory: ${runtimeDir}\nWrite plan.html, build-prompts.md and tickets.json here only.\n` : "");
     const amendment = phase.id === seed?.builderPhaseKey ? seed.ownerAmendment : null;
     const instruction = instructionFor(phase.id);
     if (instruction !== null) {
@@ -2505,7 +2531,17 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       renderPrompt: () => renderedPrompt,
       gates: [
         ...phase.gates,
-        ...phaseGates(
+        ...(phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID ? [{
+          id: "envelope_valid",
+          run: ({ envelope }: { envelope: EnvelopeBase }) => {
+            const report = new GateReport("envelope_valid");
+            try { readPlanAuthorInput(runtimeDir, envelope as PlanAuthorOutput); report.check("private plan documents", true, "validated for create-only admission"); }
+            catch (error) { report.check("private plan documents", false, (error as Error).message); }
+            return report;
+          },
+        },
+          { id: "writes_within_globs", run: () => writesWithinGlobs(changesSinceBase(status.worktree!, status.baseSha!), []) },
+        ] : phaseGates(
           roleOf(phase.id),
           permission.profile.writes,
           status.worktree!,
@@ -2521,13 +2557,18 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           recipe.phases.some((candidate) => candidate.kind === "agent" && candidate.owner === "builder"),
           attributionBaseSha,
           async () => {
-            if (protectedState.grants.length === 0) return [];
-            const capabilities: ProtectedFilesCapability[] = protectedCapability === undefined ? [] : [protectedCapability];
+            const capabilities: (ProtectedFilesCapability | PlanAdmissionCapability)[] = protectedCapability === undefined ? [] : [protectedCapability];
+            if (status.workflow === PLAN_AUTHOR_WORKFLOW_ID && reviewContext !== null) {
+              const author = acceptedEnvelopes.get(PLAN_AUTHOR_WORKFLOW_ID) as PlanAuthorOutput | undefined;
+              if (author === undefined) throw new Error("review requires the accepted author envelope");
+              capabilities.push(verifyPlanAdmission({ ...readPlanAuthorInput(join(options.attemptDir, "private", PLAN_AUTHOR_WORKFLOW_ID), author),
+                worktree: status.worktree!, baseSha: status.baseSha! }));
+            }
             if (readProtectedState(options.attemptDir).bindings.length > 0) capabilities.push(await verifyProtectedPreservation(options.attemptDir, runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim(), protectedCapability));
             return capabilities;
           },
           () => reviewObservation,
-        ),
+        )),
         ...(visualPhase ? [{
           id: "visual_references_inspected",
           run: () => visualReferencesInspected({ phaseId: phaseDb, frames: visualBound!.frames, observations: visualObservations }),
@@ -3547,14 +3588,23 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       }
       if (phase.schemaId === DOCUMENT_OUTPUT_SCHEMA_ID) {
         try {
-          if (designPlanOutput === null || planContext === null) {
+          const author = phase.id === "plan-admit" ? acceptedEnvelopes.get(PLAN_AUTHOR_WORKFLOW_ID) as PlanAuthorOutput | undefined : undefined;
+          if (phase.id === "plan-admit" && author === undefined) throw new Error("plan-admit requires the accepted author envelope");
+          if (phase.id !== "plan-admit" && (designPlanOutput === null || planContext === null)) {
             throw new Error("plan-render requires the stored design-plan and plan-context envelopes");
           }
-          const rendered = await renderProductionPlanIntoWorktree({
+          const rendered = author !== undefined ? await admitProductionPlanIntoWorktree({
+            worktree: status.worktree!,
+            admissionInput: readPlanAuthorInput(join(options.attemptDir, "private", PLAN_AUTHOR_WORKFLOW_ID), author),
+            summary: author.summary,
+            protectedPaths: options.config.policy.protected_paths,
+            baseSha: status.baseSha!, at: infra.now(),
+            journalAdmission: admission => persist("attempt.updated", {}, undefined, admission),
+          }) : await renderProductionPlanIntoWorktree({
             worktree: status.worktree!,
             stem: status.taskId,
-            plan: designPlanOutput,
-            identifierSet: planContext.identifierSet,
+            plan: designPlanOutput!,
+            identifierSet: planContext!.identifierSet,
             protectedPaths: options.config.policy.protected_paths,
             baseSha: status.baseSha!,
             at: infra.now(),

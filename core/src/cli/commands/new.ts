@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { assertPlanAuthorSelection, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
 import { assertTicketSelection, type TicketSelection } from "../../contracts/ticket-selection-record.ts";
 import { resolve } from "node:path";
 import { Value } from "@sinclair/typebox/value";
@@ -109,6 +110,7 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
     throw new Error(`workflow ${JSON.stringify(options.workflow)} ${options.replay === undefined ? "requires a replay record, which only `awsf prove` creates" : "cannot carry a replay record"}`);
   }
   if (options.replay !== undefined) assertReplayRecord(options.replay);
+  if (options.workflow === PLAN_AUTHOR_WORKFLOW_ID) assertPlanAuthorSelection(options.planRef, options.ticketSelection);
   const existing = await latestAttemptNumber(root);
   if (existing !== null) {
     throw new Error(`${options.project}/${options.taskId} already has attempt ${existing}; use \`awsf retry\` after it is terminal`);

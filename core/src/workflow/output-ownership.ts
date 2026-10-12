@@ -24,6 +24,8 @@ export const PHASE_OUTPUT_OWNERSHIP = Object.freeze({
   "architecture-review": { outputs: ["review"], artifactKinds: ARTIFACT_KINDS },
   "plan-context": { outputs: ["plan"], artifactKinds: [] },
   "plan-render": { outputs: ["plan", "documentation"], artifactKinds: ["plan", "documentation"] },
+  "plan-author": { outputs: ["plan"], artifactKinds: [] },
+  "plan-admit": { outputs: ["plan", "documentation"], artifactKinds: ["plan", "documentation"] },
   scout: { outputs: ["review"], artifactKinds: ARTIFACT_KINDS },
   intake: { outputs: ["plan"], artifactKinds: ["documentation"] },
 } as const satisfies Readonly<Record<string, PhaseOutputOwnership>>);

@@ -2,6 +2,7 @@ import type { WorkflowRecipe } from "./compiler.ts";
 import { WORKFLOW_IDS } from "../config/workflow-ids.ts";
 import { ceilingFor, type ResolvedCeiling, type Tier } from "../state/tiers.ts";
 import { COMPILED_WORKFLOW_IDS, type CompiledWorkflowId } from "./compiled-ids.ts";
+import { compilePlanAuthor, PLAN_AUTHOR_TIER_FLOOR, PLAN_AUTHOR_WORKFLOW_ID } from "./recipes/plan-author.ts";
 import { buildWorkflow } from "./recipes/build.ts";
 import { buildReviewWorkflow } from "./recipes/build-review.ts";
 import { designToPlanWorkflow } from "./recipes/design-to-plan.ts";
@@ -46,11 +47,18 @@ export interface CompiledWorkflow {
   readonly agentOwners: readonly string[];
   /** Whether every compilation ends in a review phase. */
   readonly buysReview: boolean;
-  readonly compile: typeof compileShift | typeof compileProve;
+  readonly compile: typeof compileShift | typeof compileProve | typeof compilePlanAuthor;
 }
 
 /** The compiler registry. A compiled id is resolved here, never through WORKFLOW_RECIPES. */
 export const COMPILED_WORKFLOWS: readonly CompiledWorkflow[] = Object.freeze([
+  Object.freeze({
+    id: PLAN_AUTHOR_WORKFLOW_ID,
+    tierFloor: PLAN_AUTHOR_TIER_FLOOR,
+    agentOwners: Object.freeze(["plan-author", "reviewer"]),
+    buysReview: true,
+    compile: compilePlanAuthor,
+  }),
   Object.freeze({
     id: SHIFT_WORKFLOW_ID,
     tierFloor: SHIFT_TIER_FLOOR,

@@ -52,6 +52,7 @@ import {
 import { compiledWorkflow, CompiledWorkflowUnbound, workflowRecipe } from "../../workflow/catalog.ts";
 import { verifiedTargetSeed } from "../../workflow/candidate-seed.ts";
 import { bindProveRecipe } from "../../workflow/prove/bind.ts";
+import { assertPlanAuthorRole, compilePlanAuthor, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
 import { PROVE_WORKFLOW_ID } from "../../workflow/prove/compile.ts";
 import { bindShiftRecipe } from "../../workflow/shift/bind.ts";
 import { SHIFT_WORKFLOW_ID } from "../../workflow/shift/compile.ts";
@@ -114,6 +115,11 @@ async function attemptRecipe(status: AttemptStatus, config: AwsfConfig): Promise
   if (shipped !== null) return shipped;
   const compiled = compiledWorkflow(status.workflow);
   if (compiled === null) throw new Error(`workflow ${JSON.stringify(status.workflow)} has no shipped recipe`);
+  if (compiled.id === PLAN_AUTHOR_WORKFLOW_ID) {
+    assertPlanAuthorRole(config);
+    if (status.reviewDegradation !== null) throw new Error("plan-author cannot use degraded same-provider review");
+    return compilePlanAuthor(status);
+  }
   const prompts = { builder: "", reviewer: "" };
   if (compiled.id === PROVE_WORKFLOW_ID) {
     if (status.replay == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${status.taskId}`);

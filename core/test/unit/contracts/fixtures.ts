@@ -429,6 +429,9 @@ export function validIntakeOutput(): IntakeOutput {
 
 /** Every envelope fixture, keyed by schema id, so suites can iterate the registry uniformly. */
 export const VALID_ENVELOPES = {
+  "awsf.plan-author-output/v1": () => ({ schema: "awsf.plan-author-output/v1" as const, producerStatus: "success" as const,
+    summary: "Author a fixture plan", artifacts: [], notesForNextPhase: "Admit as new idle files only",
+    stem: "fixture-plan", runtimeFiles: { plan: "plan.html" as const, buildPrompts: "build-prompts.md" as const, tickets: "tickets.json" as const } }),
   "awsf.plan-output/v1": validPlanOutput,
   "awsf.build-output/v1": validBuildOutput,
   "awsf.test-output/v1": validTestOutput,
