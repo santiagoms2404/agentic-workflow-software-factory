@@ -7,6 +7,7 @@ import { loadConfig } from "../../../src/config/load.ts";
 import { renderProductionRolePrompt } from "../../../src/cli/commands/production-run.ts";
 import { composePromptBundle } from "../../../src/workflow/prompt-composition.ts";
 import { continuityDigest } from "../../../src/contracts/interrupted-turn.ts";
+import { digest } from "../../live/support/continuation-probe.ts";
 import { prepareRoleProbe } from "../../live/support/phase-parity.ts";
 import { createRoleFixture, snapshotRoleFixture } from "../../live/support/role-fixture.ts";
 
@@ -26,6 +27,7 @@ for (const configured of config.agents) {
     const optedIn = structuredClone(config);
     optedIn.agents.find(agent => agent.name === configured.name)!.harness.interrupted_turn = true;
     const input = { config: optedIn, configPath, workflow: fixture.workflow, role: configured.name,
+      planRef: fixture.planRef, ticketSelection: fixture.ticketSelection,
       selection: "proof-low" as const, previous: fixture.previous, designContext: fixture.designContext,
       recordedRequest: fixture.request, canonical: fixture.canonical, worktree: fixture.worktree,
       stateRoot: fixture.stateRoot, runtime: fixture.runtime, env: { ...fixture.env, OMIT_UNDEFINED: undefined } };
@@ -68,6 +70,19 @@ for (const configured of config.agents) {
     if (configured.name === "documenter") {
       assert.ok(prepared.request.prompt.includes(`Exact repository write boundary: ${configured.writes.join(", ")}`));
       assert.ok(prepared.request.prompt.includes("the host writes it outside the repository"));
+    }
+    if (configured.name === "plan-author") {
+      assert.equal(prepared.workflow.id, "plan-author");
+      assert.equal(prepared.phase.id, "plan-author");
+      assert.equal(prepared.phase.schemaId, "awsf.plan-author-output/v1");
+      assert.equal(prepared.evidence.ordinal, 2);
+      assert.deepEqual(configured.writes, []);
+      assert.ok(fixture.ticketSelection);
+      const ticket = fixture.ticketSelection.tickets[0]!;
+      assert.equal(ticket.id, "W01");
+      assert.equal(ticket.digest, digest(await readFile(join(fixture.worktree, ticket.path))));
+      await assert.rejects(prepareRoleProbe({ ...input, ticketSelection: null }), /plan-author requires/);
+      await assert.rejects(prepareRoleProbe({ ...input, planRef: "different" }), /plan-author requires/);
     }
     if (configured.name === "architecture-reviewer") {
       assert.ok(prepared.request.prompt.includes(fixture.worktree));

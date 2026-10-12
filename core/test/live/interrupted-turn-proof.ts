@@ -61,6 +61,7 @@ async function run(): Promise<void> {
   privateFile(join(root, "quota.txt"), quota.stdout);
   const fixture = await createRoleFixture(root, configured!.name, `fixture-${randomUUID()}`);
   const prepared = await prepareRoleProbe({ config, configPath, workflow: fixture.workflow, role: configured!.name,
+    planRef: fixture.planRef, ticketSelection: fixture.ticketSelection,
     selection: values.selection as "proof-low" | "configured", previous: fixture.previous, designContext: fixture.designContext,
     recordedRequest: fixture.request, canonical: fixture.canonical, worktree: fixture.worktree,
     stateRoot: fixture.stateRoot, runtime: fixture.runtime, env: fixture.env });

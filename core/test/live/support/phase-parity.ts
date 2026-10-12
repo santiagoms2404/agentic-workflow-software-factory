@@ -7,6 +7,7 @@ import { isContinuityCapable } from "../../../src/adapters/interface.ts";
 import { writeSystemPromptFile } from "../../../src/adapters/system-prompt-file.ts";
 import type { DesignContext } from "../../../src/contracts/design-context.ts";
 import type { EnvelopeBase } from "../../../src/contracts/envelope-base.ts";
+import type { TicketSelection } from "../../../src/contracts/ticket-selection-record.ts";
 import { parseEnvelope } from "../../../src/contracts/parse-envelope.ts";
 import { continuityDigest, InterruptedTurnRefused } from "../../../src/contracts/interrupted-turn.ts";
 import { ContinuityStore, continuityHandle } from "../../../src/execution/continuity-store.ts";
@@ -15,12 +16,15 @@ import { openPermissionSession } from "../../../src/policy/sandbox-broker.ts";
 import { composePromptBundle } from "../../../src/workflow/prompt-composition.ts";
 import { compileWorkflow } from "../../../src/workflow/compiler.ts";
 import { workflowRecipe } from "../../../src/workflow/catalog.ts";
+import { assertPlanAuthorRole, compilePlanAuthor } from "../../../src/workflow/recipes/plan-author.ts";
 import { productionPhaseRegistration, renderProductionRolePrompt } from "../../../src/cli/commands/production-run.ts";
 
 export async function prepareRoleProbe(input: {
   readonly config: AwsfConfig;
   readonly configPath: string;
   readonly workflow: string;
+  readonly planRef?: string | null;
+  readonly ticketSelection?: TicketSelection | null;
   readonly role: string;
   readonly selection: "proof-low" | "configured";
   readonly previous: EnvelopeBase;
@@ -33,10 +37,12 @@ export async function prepareRoleProbe(input: {
   readonly env: Readonly<Record<string, string | undefined>>;
 }) {
   const configured = input.config.agents.find((agent) => agent.name === input.role);
-  const recipe = workflowRecipe(input.workflow);
-  if (configured === undefined || recipe === null || !input.config.workflows.enabled.includes(recipe.id)) {
+  if (configured === undefined || !input.config.workflows.enabled.includes(input.workflow)) {
     throw new Error("proof role or workflow is not configured");
   }
+  if (input.workflow === "plan-author") assertPlanAuthorRole(input.config);
+  const recipe = input.workflow === "plan-author" ? compilePlanAuthor(input) : workflowRecipe(input.workflow);
+  if (recipe === null) throw new Error("proof role or workflow is not configured");
   const index = recipe.phases.findIndex((phase) => phase.kind === "agent" && phase.owner === input.role);
   const definition = recipe.phases[index];
   if (definition === undefined || definition.kind !== "agent") throw new Error("role is not an agent phase of this workflow");

@@ -6,6 +6,7 @@ import type { EnvelopeBase } from "../../../src/contracts/envelope-base.ts";
 import type { DesignContext } from "../../../src/contracts/design-context.ts";
 import type { PlanOutput } from "../../../src/contracts/plan-output.ts";
 import type { TestOutput } from "../../../src/contracts/test-output.ts";
+import { sealTicketSelection } from "../../../src/contracts/ticket-selection-record.ts";
 import { composeReviewEvidence } from "../../../src/workflow/review-evidence.ts";
 import { runSystemCommand } from "../../../src/execution/transport-broker.ts";
 
@@ -35,9 +36,16 @@ export async function createRoleFixture(root: string, role: string, challenge: s
     git(["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", message], cwd);
     return git(["rev-parse", "HEAD"], cwd);
   };
+  const planRef = role === "plan-author" ? "fixture" : null;
+  const ticketPath = "specs/tickets/fixture/W01.md";
+  const spineTicket = "# W01 — Author the marker replacement plan\n\nAuthor a new deep plan for replacing the pending marker with the exact fixture challenge.\n";
+  const ticketSelection = planRef === null ? null : sealTicketSelection({ plan: planRef,
+    tickets: [{ id: "W01", path: ticketPath, digest: digest(spineTicket) }] });
+  if (ticketSelection !== null) await writeFile(join(canonical, ticketPath), spineTicket);
   const baseSha = commit("test: seed isolated role continuity fixture");
   git(["worktree", "add", "--detach", worktree, baseSha]);
   let request = "Inspect fixture-challenge.txt and core/src/proof.ts. Plan the single bounded change replacing pending with the exact challenge. Do not implement or commit.";
+  if (role === "plan-author") request = "Read specs/tickets/fixture/W01.md, fixture-challenge.txt and core/src/proof.ts. Author a new idle deep plan for the marker replacement in private session output only. Do not implement, edit repository files or commit.";
   if (role === "builder") request = "Read fixture-challenge.txt. Change only core/src/proof.ts so proof equals the exact challenge. Do not commit. Return the normal build envelope.";
   if (role === "documenter") request = "Read fixture-challenge.txt and core/src/proof.ts. Update only docs/proof.md to document the exact implemented marker. Return the normal document envelope and run report. Do not commit.";
   if (role === "scout") request = "Read fixture-challenge.txt and core/src/proof.ts. Report where the pending marker is implemented and the smallest safe replacement. Write nothing.";
@@ -52,7 +60,7 @@ export async function createRoleFixture(root: string, role: string, challenge: s
     artifacts: [], notesForNextPhase: "Inspect the pinned fixture repository; write nothing.",
     targets: [{ repositoryId: "fixture", path: worktree, defaultBranch: "main", headSha: baseSha }] };
   let previous: EnvelopeBase = plan;
-  let workflow = role === "scout" ? "scout" : role === "intake" ? "intake" : role === "designer" || role === "architecture-reviewer" ? "design-to-plan" : "simple-sdlc";
+  let workflow = role === "plan-author" ? "plan-author" : role === "scout" ? "scout" : role === "intake" ? "intake" : role === "designer" || role === "architecture-reviewer" ? "design-to-plan" : "simple-sdlc";
   if (role === "designer") previous = designContext;
   if (role === "architecture-reviewer") previous = {
     schema: "awsf.design-output/v1", producerStatus: "success", summary: request, artifacts: [], notesForNextPhase: "Audit this fixture design without implementing it.",
@@ -88,7 +96,7 @@ export async function createRoleFixture(root: string, role: string, challenge: s
     if (relative(canonical, path).startsWith("..") || !path.startsWith(`${resolve(canonical)}/`)) throw new Error("fixture Git control path escaped canonical repository");
     return path;
   });
-  return { canonical, worktree, stateRoot, runtime, env, previous, designContext, request, workflow, baseSha, gitControlPaths };
+  return { canonical, worktree, stateRoot, runtime, env, previous, designContext, request, workflow, planRef, ticketSelection, baseSha, gitControlPaths };
 }
 
 /** Observe the complete fixture worktree and pinned index/HEAD without following agent-written symlinks. */

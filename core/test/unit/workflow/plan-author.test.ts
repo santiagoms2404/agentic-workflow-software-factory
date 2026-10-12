@@ -54,8 +54,8 @@ function world() {
 function config(): AwsfConfig {
   const base = fixtureConfig();
   const planner = base.agents.find(agent => agent.name === "planner")!;
-  return { ...base, workflows: { enabled: [...base.workflows.enabled, "plan-author"] },
-    agents: [...base.agents, { ...planner, name: "plan-author", model: "codex:gpt-6-sol", purpose: "Author new plan sets in session output only",
+  return { ...base, workflows: { enabled: [...base.workflows.enabled.filter(id => id !== "plan-author"), "plan-author"] },
+    agents: [...base.agents.filter(agent => agent.name !== "plan-author"), { ...planner, name: "plan-author", model: "codex:gpt-6-sol", purpose: "Author new plan sets in session output only",
       harness: { adapter: "codex", continuity: "none", interrupted_turn: false },
       prompt: { system: "prompts/plan-author/system.md", user: "prompts/plan-author/user.md" },
       tools: { profile: "managed-worker", allow: ["read", "grep", "find", "ls", "edit", "write"] }, writes: [] }] };
@@ -97,7 +97,7 @@ for (const [name, value] of [
   });
 }
 
-test("the test role loads without enabling the shipped config and grants only runtime writes", () => {
+test("the test role grants only runtime writes and the shipped role and workflow are declared together", () => {
   const loaded = loadConfig(stringify(config()));
   assertPlanAuthorRole(loaded);
   const role = loaded.agents.find(agent => agent.name === "plan-author")!;
@@ -106,8 +106,13 @@ test("the test role loads without enabling the shipped config and grants only ru
   assert.equal(writeTargetAllowed({ scope: "repository", path: "specs/new.html" }, policy), false);
   assert.equal(writeTargetAllowed({ scope: "repository", path: "core/src/new.ts" }, policy), false);
   const shipped = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
-  assert.equal(shipped.workflows.enabled.includes("plan-author"), false);
-  assert.equal(shipped.agents.some(agent => agent.name === "plan-author"), false);
+  const shippedRole = shipped.agents.find(agent => agent.name === "plan-author");
+  assert.equal(shipped.workflows.enabled.includes("plan-author"), shippedRole !== undefined,
+    "the shipped config must declare and enable plan-author together, or neither");
+  if (shippedRole !== undefined) {
+    assertPlanAuthorRole(shipped);
+    assert.deepEqual(shippedRole.writes, []);
+  }
   for (const patch of [{ writes: ["specs/**"] }, { tools: { profile: "readonly", allow: ["read"] } }, { tools: { profile: "managed-worker", allow: ["write", "exec"] } }]) {
     assert.throws(() => assertPlanAuthorRole({ ...loaded, agents: loaded.agents.map(agent => agent.name === "plan-author" ? { ...agent, ...patch } : agent) }));
   }
