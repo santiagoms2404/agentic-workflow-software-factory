@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readFile, open } from "node:fs/promises";
+import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { AttemptLock } from "./attempt-lock.ts";
 import { Journal, type JournalRecord } from "./journal.ts";
@@ -31,6 +32,35 @@ export async function projectClosureJournalRecords(projectDir: string): Promise<
       !/^[a-f0-9]{40}$/u.test(event.evidence.intent.candidateSha) || !event.evidence.intent.id) throw new Error("closure refuses invalid project evidence");
   }
   return records;
+}
+
+/** Read-only streaming inventory: never materialize the project's journal text. */
+export async function* streamProjectClosureJournalRecords(projectDir: string): AsyncGenerator<JournalRecord<ProjectClosureEvent>> {
+  let handle;
+  try { handle = await open(projectClosureJournalPath(projectDir), "r"); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+  try {
+    const { size } = await handle.stat();
+    const last = Buffer.alloc(1);
+    if (size === 0 || (await handle.read(last, 0, 1, size - 1)).bytesRead !== 1 || last[0] !== 0x0a) {
+      throw new Error("closure refuses a torn project journal");
+    }
+    const lines = createInterface({ input: handle.createReadStream({ start: 0, end: size - 1, autoClose: false }), crlfDelay: Infinity });
+    try {
+      let seq = 0;
+      for await (const line of lines) {
+        if (!line) continue;
+        const row = JSON.parse(line) as JournalRecord<ProjectClosureEvent>;
+        const event = row.event;
+        if (row.source_seq !== ++seq || event.kind !== "project-closure" || typeof event.project !== "string" ||
+          typeof event.repository !== "string" || typeof event.operationKey !== "string") throw new Error("closure refuses an invalid project journal");
+        if (event.evidence.type === "closure-record" || event.evidence.type === "closure-prepared") assertClosureRecord(event.evidence.record);
+        else if (event.evidence.type !== "closure-intent" || !/^[a-f0-9]{40}$/u.test(event.evidence.intent.parentSha) ||
+          !/^[a-f0-9]{40}$/u.test(event.evidence.intent.candidateSha) || !event.evidence.intent.id) throw new Error("closure refuses invalid project evidence");
+        yield row;
+      }
+    } finally { lines.close(); }
+  } finally { await handle.close(); }
 }
 
 export async function withProjectClosureJournal<T>(projectDir: string, identity: Omit<ProjectClosureEvent, "kind" | "evidence">,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { stringify } from "yaml";
 import type { Availability, BrokerProcessRegistration, HarnessAdapter, ModelInfo, ModelRequest, ProcessSpec, ProcessTransport, TransportBroker } from "../../src/adapters/interface.ts";
@@ -23,6 +23,7 @@ import { TicketStore } from "../../src/persistence/ticket-store.ts";
 import { fakeBroker } from "../fixtures/recording-broker.ts";
 import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { assertReviewDelivery } from "../fixtures/assert-review-delivery.ts";
+import { selectedLanding } from "../fixtures/closure-readers.ts";
 
 const PROJECT = "light-journey", PATH = "specs/tickets/T00.md";
 const ticket: Ticket = { id: "T00", title: "Small change", milestone: "M1", tier: 2, state: "todo", depends_on: [],
@@ -50,7 +51,7 @@ class LightAdapter implements HarnessAdapter {
     await broker.startProcess(registration, this.buildSpec(request), signal);
     let payload: BuildOutput | IntakeOutput | ReviewOutput;
     if (request.prompt.includes("awsf.intake-output/v1")) {
-      await new TicketStore(join(this.worktree, "specs/tickets")).write(this.outputTicket, body);
+      await new TicketStore(join(request.cwd, "specs/tickets")).write(this.outputTicket, body);
       payload = { schema: "awsf.intake-output/v1", producerStatus: "success", summary: "Created one fixture ticket", artifacts: [{ path: PATH, kind: "documentation", description: "Light fixture ticket" }], notesForNextPhase: "Owner checks the fixture", ticket: this.outputTicket };
     } else if (request.prompt.includes("awsf.review-output/v1")) {
       assertReviewDelivery(request);
@@ -95,9 +96,12 @@ async function world(t: { after(fn: () => void): void }) {
   writeFileSync(join(root, "prompts/shared/headless-role.md"), readFileSync(resolve("prompts/shared/headless-role.md")));
   await writePlacement(stateRoot, PROJECT, { version: "awsf.placement/v1", project: PROJECT, repositories: { app: { path: repository } }, worktree_root: join(root, "worktrees") });
   const terminal = { interactive: true, write: (_line: string) => {}, confirm: async (_prompt: string) => true };
-  const invoke = async (argv: string[]) => {
+  const invoke = async (argv: string[], outputTicket?: Ticket) => {
     const out: string[] = [], err: string[] = [];
-    const code = await main({ argv: [...argv, "--config", configPath, "--state-root", stateRoot], cwd: repository, terminal, writeOut: line => out.push(line), writeError: line => err.push(line) });
+    const code = await main({ argv: [...argv, "--config", configPath, "--state-root", stateRoot, "--worktree-root", join(root, "worktrees")], cwd: repository, terminal,
+      ...(outputTicket === undefined ? {} : { intakeExecution: { preflight: () => ({ adapter: true, sandbox: true, observability: true }),
+        infrastructure: { adapterFor: (_entry, id) => new LightAdapter(id, "", outputTicket), createBroker: fakeBroker, sandboxProbe: () => false } } }),
+      writeOut: line => out.push(line), writeError: line => err.push(line) });
     return { code, out, err };
   };
   const run = async (task: string, outputTicket = ticket) => {
@@ -107,20 +111,24 @@ async function world(t: { after(fn: () => void): void }) {
     return runProductionCommand({ attemptDir, stateRoot, config, configPath, projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
       assertLaunchProjection: projection.assertLaunchPermitted, infrastructure: { adapterFor: (_entry, id) => new LightAdapter(id, prepared.worktree!, outputTicket), createBroker: fakeBroker, sandboxProbe: () => false } });
   };
-  const intake = async (action: "new" | "refine") => {
-    const created = await invoke(["ticket", action, "T00", "Make the fixture work observable"]);
-    assert.equal(created.code, 0, created.err.join("\n"));
-    const task = /Created light-journey\/([^ ]+) attempt/u.exec(created.out.join("\n"))?.[1];
+  const status = (task: string) => readAttempt(join(stateRoot, "projects", PROJECT, "tasks", task, "1"));
+  const intake = async (action: "new" | "refine", outputTicket = ticket, expectedCode = 0) => {
+    const created = await invoke(["ticket", action, "T00", "Make the fixture work observable"], outputTicket);
+    assert.equal(created.code, expectedCode, created.err.join("\n"));
+    const task = readdirSync(join(stateRoot, "projects", PROJECT, "tasks")).find(name => name.startsWith(`ticket-${action}-T00-`));
     assert.ok(task);
+    assert.match(created.out[0]!, new RegExp(`^${(await status(task)).lifecycleState}:`));
+    if (expectedCode === 0) assert.match(created.out.join("\n"), /Validated intake result for T00/u);
+    else assert.doesNotMatch(created.out.join("\n"), /Validated intake result/u);
     return task;
   };
-  return { root, repository, stateRoot, invoke, run, intake };
+  return { root, repository, stateRoot, invoke, run, intake, status };
 }
 
 for (const done of [true, false]) test(`ticket new, selected build-review, landing and light closure (${done ? "done" : "wip"}) use the stub route`, async t => {
   const w = await world(t);
   const intakeTask = await w.intake("new");
-  const intake = await w.run(intakeTask);
+  const intake = await w.status(intakeTask);
   assert.equal(intake.lifecycleState, "AWAITING_OWNER", intake.blocker?.detail);
   assert.equal((await w.invoke(["land", intakeTask])).code, 0);
   const before = readFileSync(join(w.repository, PATH), "utf8");
@@ -149,9 +157,27 @@ for (const done of [true, false]) test(`ticket new, selected build-review, landi
   assert.match(doctor.out.join("\n"), new RegExp(`light/T00=${done ? "done" : "wip"}|${readout.state}`));
 });
 
+test("one-step ticket intake is refused by closure before any tree or call", async t => {
+  const w = await world(t);
+  await selectedLanding(w, { project: PROJECT });
+  const refused = await w.invoke(["ticket", "new", "T00", "Make the fixture work observable"], ticket);
+  assert.equal(refused.code, 1);
+  assert.match(refused.err.join("\n"), /K1 field closure:/u);
+  assert.doesNotMatch(refused.out.join("\n"), /Validated intake result/u);
+  const task = readdirSync(join(w.stateRoot, "projects", PROJECT, "tasks")).find(name => name.startsWith("ticket-new-T00-"));
+  assert.ok(task);
+  const status = await w.status(task);
+  assert.equal(status.lifecycleState, "DRAFT");
+  assert.equal(status.worktree, null);
+  assert.equal(status.budget.callsReserved, 0);
+  assert.equal(status.budget.callsSpent, 0);
+  assert.equal(git(w.repository, "status", "--porcelain"), "");
+});
+
 for (const state of ["wip", "done", "failed"] as const) test(`intake cannot create a new light ticket in ${state}`, async t => {
-  const w = await world(t), task = await w.intake("new"), head = git(w.repository, "rev-parse", "HEAD");
-  const result = await w.run(task, { ...ticket, state });
+  const w = await world(t), head = git(w.repository, "rev-parse", "HEAD");
+  const task = await w.intake("new", { ...ticket, state }, 1);
+  const result = await w.status(task);
   assert.equal(result.lifecycleState, "BLOCKED");
   assert.match(result.blocker!.detail, /new ticket starts todo/);
   assert.equal(git(w.repository, "rev-parse", "HEAD"), head);
@@ -162,8 +188,8 @@ test("intake refines a closed light ticket without changing its state", async t 
   const w = await world(t);
   await new TicketStore(join(w.repository, "specs/tickets")).write({ ...ticket, state: "done" }, body);
   git(w.repository, "add", "."); git(w.repository, "commit", "-m", "test: seed closed light fixture");
-  const task = await w.intake("refine");
-  const result = await w.run(task, { ...ticket, title: "Refined", state: "done" });
+  const task = await w.intake("refine", { ...ticket, title: "Refined", state: "done" });
+  const result = await w.status(task);
   assert.equal(result.lifecycleState, "AWAITING_OWNER", result.blocker?.detail);
   assert.equal((await w.invoke(["land", task])).code, 0);
   const records = await new TicketStore(join(w.repository, "specs/tickets")).load();
@@ -175,8 +201,9 @@ test("intake cannot move an existing light ticket state even to todo", async t =
   const w = await world(t);
   await new TicketStore(join(w.repository, "specs/tickets")).write({ ...ticket, state: "done" }, body);
   git(w.repository, "add", "."); git(w.repository, "commit", "-m", "test: seed closed light fixture");
-  const before = readFileSync(join(w.repository, PATH)), head = git(w.repository, "rev-parse", "HEAD"), task = await w.intake("refine");
-  const result = await w.run(task, { ...ticket, title: "Refined", state: "todo" });
+  const before = readFileSync(join(w.repository, PATH)), head = git(w.repository, "rev-parse", "HEAD");
+  const task = await w.intake("refine", { ...ticket, title: "Refined", state: "todo" }, 1);
+  const result = await w.status(task);
   assert.equal(result.lifecycleState, "BLOCKED");
   assert.match(result.blocker!.detail, /refine preserves state/);
   assert.deepEqual(readFileSync(join(w.repository, PATH)), before);

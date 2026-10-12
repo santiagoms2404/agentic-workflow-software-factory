@@ -60,8 +60,8 @@ import { seedCommand } from "./commands/seed.ts";
 import { reviewCommand } from "./commands/review.ts";
 import { reworkCommand } from "./commands/rework.ts";
 import { runStubCommand } from "./commands/run.ts";
-import { runProductionCommand, resumeProductionCommand, stopFactsPhases } from "./commands/production-run.ts";
-import { defaultWorktreeRoot, startCommand } from "./commands/start.ts";
+import { runProductionCommand, resumeProductionCommand, stopFactsPhases, type ProductionRunOptions } from "./commands/production-run.ts";
+import { defaultWorktreeRoot, startCommand, type StartCommandOptions } from "./commands/start.ts";
 import { statusCommand, statusJson } from "./commands/status.ts";
 import { intakeRequest, listTickets, showTicket, ticketStoreFor, ticketStoreForPlan } from "./commands/ticket.ts";
 import { watchCommand } from "./commands/watch.ts";
@@ -239,6 +239,11 @@ export interface CliMainOptions {
   readonly terminal?: OwnerTerminal;
   readonly writeOut?: (line: string) => void;
   readonly writeError?: (line: string) => void;
+  /** In-process stub route for intake journeys; start still enforces K1. */
+  readonly intakeExecution?: {
+    readonly preflight: NonNullable<StartCommandOptions["preflight"]>;
+    readonly infrastructure: NonNullable<ProductionRunOptions["infrastructure"]>;
+  };
 }
 
 /**
@@ -411,11 +416,26 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           allowance: config.risk.correction_allowance,
           projectRecord: projection.project,
         });
-        // Intake is not an exception to K1. Return the DRAFT for preflight,
-        // owner confirmation and start; `run` buys its one intake call.
-        out(`Created ${project}/${taskId} attempt ${created.status.attempt} in DRAFT for ticket ${action} ${id}.`);
-        out(created.status.nextAction);
-        return 0;
+        // Intake remains one step: freshness is exempt, but start always
+        // enforces K1's closure field before preparing a tree or buying a call.
+        await startCommand({
+          attemptDir: created.attemptDir,
+          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+          configPath,
+          ...(options.intakeExecution === undefined ? {} : { preflight: options.intakeExecution.preflight }),
+          projectRecord: projection.project,
+        });
+        const status = await runProductionCommand({
+          attemptDir: created.attemptDir, stateRoot, config, configPath,
+          ...(options.intakeExecution === undefined ? {} : { infrastructure: options.intakeExecution.infrastructure }),
+          projectRecord: projection.project,
+          assertAdvancement: projection.assertAdvancement,
+          assertLaunchProjection: projection.assertLaunchPermitted,
+        });
+        await shadowStop(created.attemptDir, config, configPath, env);
+        out(`${status.lifecycleState}: ${status.nextAction}`);
+        if (status.lifecycleState === "AWAITING_OWNER") out(`Validated intake result for ${id}; ${status.nextAction}`);
+        return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       } finally {
         projection.close();
       }
