@@ -558,77 +558,77 @@ sequenceDiagram
 
     <!-- ================= M4 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M4: The closure act, wired and read <span class="wtag">managed</span> <span class="wtag raise">gate G03-C</span></h3>
+      <h3><code class="status">[x]</code> Milestone M4: The closure act, wired and read <span class="wtag">managed</span> <span class="wtag raise">gate G03-C</span></h3>
       <p>It begins only after G03-C has landed: the owner commit that wires <code>awsf close</code>, built in M3, as an owner act. Task 10's journeys exercise the act end to end.</p>
 
       <h4>9. Status, doctor, K2 and K1 read closure</h4>
       <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-7</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> After G03-C: <code>awsf next --json</code> lists <code>close</code> for a LANDED attempt with a selection and no closure record, as an owner act the driver prepares</li>
-        <li><code class="status">[]</code> <code>awsf status</code> shows the closure: closed, open by the owner's choice, or not closed; doctor's markers row reads closure records and separates the three</li>
-        <li><code class="status">[]</code> Per W03-Q3: a K1 field refuses DRAFT→PREPARED while any attempt in the project that landed after the field's cut has a selection and no closure record, as a trap at the next free id with its test, marker pair and mutant</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+        <li><code class="status">[x]</code> After G03-C: <code>awsf next --json</code> lists <code>close</code> for a LANDED attempt with a selection and no closure record, as an owner act the driver prepares</li>
+        <li><code class="status">[x]</code> <code>awsf status</code> shows the closure: closed, open by the owner's choice, or not closed; doctor's markers row reads closure records and separates the three</li>
+        <li><code class="status">[x]</code> Per W03-Q3: a K1 field refuses DRAFT→PREPARED while any attempt in the project that landed after the field's cut has a selection and no closure record, as a trap at the next free id with its test, marker pair and mutant</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
       </ul>
 
       <h4>10. Testing Strategy for M4</h4>
       <p class="sub">Serves <code class="serves">AC-4</code> · <code class="serves">INV-5</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/test/journeys/closure.test.ts</code>: a fixture project with a plan and tickets, a build-review attempt with a selection on the stub route, landed, then closed through <code>main</code>; the fixture's fence passes on the result and the commit's diff is markers and states only</li>
-        <li><code class="status">[]</code> Refusal journeys, each leaving the checkout byte-identical: non-interactive, wrong actor, not LANDED, no selection, candidate not in HEAD, dirty checkout, ask changed, unset identity, HEAD moved during confirmation</li>
-        <li><code class="status">[]</code> A shift journey closes several tickets in one commit and rolls a completed fixture deep plan up to its fixture spine</li>
-        <li><code class="status">[]</code> No closure path calls push, reset, a forced update or a branch delete, shown by the existing invariant-8 fences passing over the new code</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+        <li><code class="status">[x]</code> <code>core/test/journeys/closure.test.ts</code>: a fixture project with a plan and tickets, a build-review attempt with a selection on the stub route, landed, then closed through <code>main</code>; the fixture's fence passes on the result and the commit's diff is markers and states only</li>
+        <li><code class="status">[x]</code> Refusal journeys, each leaving the checkout byte-identical: non-interactive, wrong actor, not LANDED, no selection, candidate not in HEAD, dirty checkout, ask changed, unset identity, HEAD moved during confirmation</li>
+        <li><code class="status">[x]</code> A shift journey closes several tickets in one commit and rolls a completed fixture deep plan up to its fixture spine</li>
+        <li><code class="status">[x]</code> No closure path calls push, reset, a forced update or a branch delete, shown by the existing invariant-8 fences passing over the new code</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
       </ul>
       <div class="loop">🔁 <strong>Do not exit this milestone until every box above is checked, including G03-C.</strong> T09 cannot list an owner act the CLI does not have.</div>
     </section>
 
     <!-- ================= M5 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M5: The light tier <span class="wtag">managed</span> <span class="wtag raise">gate G03-I</span></h3>
+      <h3><code class="status">[x]</code> Milestone M5: The light tier <span class="wtag">managed</span> <span class="wtag raise">gate G03-I</span></h3>
       <p>Decision 8: a task with no deep plan, closed by the same path. Per W03-Q5 it is a flat intake ticket. Testing shares the task.</p>
 
       <h4>11. Light tickets start, close and keep their state out of intake's reach</h4>
       <p class="sub">Serves <code class="serves">AC-5</code> · <code class="serves">INV-1</code> · <code class="serves">INV-2</code> · <code class="serves">INV-4</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>awsf new --ticket Tnn</code> without <code>--plan</code> seals a flat light ticket from the plans root's ticket store, with its digest</li>
-        <li><code class="status">[]</code> <code>awsf close</code> on its LANDED attempt changes only that file's <code>state</code> line, under the same delta and asked-for rules; a light ticket has no rows, so the owner confirms the state</li>
-        <li><code class="status">[]</code> Intake's gate refuses a new ticket whose state is not <code>todo</code> and a refine that changes <code>state</code></li>
-        <li><code class="status">[]</code> The agreement module checks the flat store's vocabularies and dependency cycles</li>
-        <li><code class="status">[]</code> A journey: <code>awsf ticket new</code> on the stub route, a build-review attempt with <code>--ticket</code>, landed and closed; refusal tests for each rule; <code>npm run test:unit</code>, <code>test:journeys</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+        <li><code class="status">[x]</code> <code>awsf new --ticket Tnn</code> without <code>--plan</code> seals a flat light ticket from the plans root's ticket store, with its digest</li>
+        <li><code class="status">[x]</code> <code>awsf close</code> on its LANDED attempt changes only that file's <code>state</code> line, under the same delta and asked-for rules; a light ticket has no rows, so the owner confirms the state</li>
+        <li><code class="status">[x]</code> Intake's gate refuses a new ticket whose state is not <code>todo</code> and a refine that changes <code>state</code></li>
+        <li><code class="status">[x]</code> The agreement module checks the flat store's vocabularies and dependency cycles</li>
+        <li><code class="status">[x]</code> A journey: <code>awsf ticket new</code> on the stub route, a build-review attempt with <code>--ticket</code>, landed and closed; refusal tests for each rule; <code>npm run test:unit</code>, <code>test:journeys</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
       </ul>
     </section>
 
     <!-- ================= M6 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M6: Create-only admission <span class="wtag">managed</span> <span class="wtag raise">gate G03-W</span></h3>
+      <h3><code class="status">[x]</code> Milestone M6: Create-only admission <span class="wtag">managed</span> <span class="wtag raise">gate G03-W</span></h3>
       <p>The other half of GM. A plan set enters as new files only, so nothing that admits a plan can change one that exists (W03-Q7).</p>
 
       <h4>12. Plan admission, and design-to-plan on it</h4>
       <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-4</code> · <code class="serves">INV-6</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/registry/plan-admission.ts</code>: for one new stem, writes exactly the plan, its build prompts, its ticket README and its tickets; refuses any path that exists at the base and any other path; every marker <code>[]</code>, every state <code>todo</code></li>
-        <li><code class="status">[]</code> Tickets are derived by the host from Section B and a frontmatter table, so prompt equality holds by construction; the parser and T03's agreement pass on the admitted set before commit</li>
-        <li><code class="status">[]</code> The candidate's <code>no_protected_paths</code> gate accepts exactly the admitted, newly created paths through an admission capability; a modified existing protected path is still refused</li>
-        <li><code class="status">[]</code> design-to-plan's <code>plan-render</code> uses admission; T01's <code>withoutPlanProtection</code> exemption is removed and the design-to-plan tests pass under the shipped protected paths</li>
-        <li><code class="status">[]</code> An admission record in the journal; unit tests for each refusal; <code>npm run test:unit</code>, <code>test:journeys</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+        <li><code class="status">[x]</code> <code>core/src/registry/plan-admission.ts</code>: for one new stem, writes exactly the plan, its build prompts, its ticket README and its tickets; refuses any path that exists at the base and any other path; every marker <code>[]</code>, every state <code>todo</code></li>
+        <li><code class="status">[x]</code> Tickets are derived by the host from Section B and a frontmatter table, so prompt equality holds by construction; the parser and T03's agreement pass on the admitted set before commit</li>
+        <li><code class="status">[x]</code> The candidate's <code>no_protected_paths</code> gate accepts exactly the admitted, newly created paths through an admission capability; a modified existing protected path is still refused</li>
+        <li><code class="status">[x]</code> design-to-plan's <code>plan-render</code> uses admission; T01's <code>withoutPlanProtection</code> exemption is removed and the design-to-plan tests pass under the shipped protected paths</li>
+        <li><code class="status">[x]</code> An admission record in the journal; unit tests for each refusal; <code>npm run test:unit</code>, <code>test:journeys</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
       </ul>
 
       <h4>13. The plan-author recipe, code half</h4>
       <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-4</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/src/workflow/recipes/plan-author.ts</code>: an author phase that writes the plan, its build prompts and a ticket table into its session-runtime output, then host admission (T12), then a cross-provider review; the owner's landing is the plan's approval</li>
-        <li><code class="status">[]</code> <code>prompts/plan-author/</code> carries the repository's plan grammar, the identifier spine rules, Section B equality and the "authoring earns no marker" rule</li>
-        <li><code class="status">[]</code> The attempt is created with <code>--plan &lt;spine&gt; --ticket &lt;Wnn&gt;</code>, so its landing is closed by T08's approval path</li>
-        <li><code class="status">[]</code> Runs on test configurations that declare the role; the shipped config is the owner's at G03-W</li>
+        <li><code class="status">[x]</code> <code>core/src/workflow/recipes/plan-author.ts</code>: an author phase that writes the plan, its build prompts and a ticket table into its session-runtime output, then host admission (T12), then a cross-provider review; the owner's landing is the plan's approval</li>
+        <li><code class="status">[x]</code> <code>prompts/plan-author/</code> carries the repository's plan grammar, the identifier spine rules, Section B equality and the "authoring earns no marker" rule</li>
+        <li><code class="status">[x]</code> The attempt is created with <code>--plan &lt;spine&gt; --ticket &lt;Wnn&gt;</code>, so its landing is closed by T08's approval path</li>
+        <li><code class="status">[x]</code> Runs on test configurations that declare the role; the shipped config is the owner's at G03-W</li>
       </ul>
 
       <h4>14. Testing Strategy for M6</h4>
       <p class="sub">Serves <code class="serves">AC-6</code> · <code class="serves">INV-4</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> <code>core/test/journeys/plan-author.test.ts</code>: on the stub route, a fixture spine ticket's deep plan is authored, admitted, reviewed and landed; <code>awsf close</code> then closes the spine's authored-and-approved row and moves the fixture spine ticket to <code>wip</code></li>
-        <li><code class="status">[]</code> A scripted author that also emits a change to an existing plan, an existing stem, a non-idle marker or a non-todo state is refused before commit</li>
-        <li><code class="status">[]</code> The five-stage journey passes under the shipped protected paths</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
+        <li><code class="status">[x]</code> <code>core/test/journeys/plan-author.test.ts</code>: on the stub route, a fixture spine ticket's deep plan is authored, admitted, reviewed and landed; <code>awsf close</code> then closes the spine's authored-and-approved row and moves the fixture spine ticket to <code>wip</code></li>
+        <li><code class="status">[x]</code> A scripted author that also emits a change to an existing plan, an existing stem, a non-idle marker or a non-todo state is refused before commit</li>
+        <li><code class="status">[x]</code> The five-stage journey passes under the shipped protected paths</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0</li>
       </ul>
     </section>
 
