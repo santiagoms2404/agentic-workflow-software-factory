@@ -463,7 +463,7 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
   // the host could not make carries no `minutesToReset`, so the edge cannot
   // form. A later refactor that tried to stop on a broken gauge is refused here
   // rather than in its caller. The crossing is checked too, so the host cannot
-  // take this edge gratuitously.
+  // take this edge gratuitously, and at T2 the review must already have run.
   L26: (input) => {
     const stop = input.evidence?.quotaStop;
     if (stop === undefined) {
@@ -484,6 +484,15 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     }
     if (!isText(stop.route)) {
       violations.push("no route was named, so the threshold cannot be attributed to a configured adapter");
+    }
+    // The T2 clause, mirroring L12 (B7-04). L26 lands in AWAITING_OWNER just
+    // as L12 does, so without it a quota reading taken at the boundary before
+    // the deferred review would let a T2 task reach the human with the
+    // opposite-provider review never run — the skip L12 refuses out of
+    // GATING. "The review ran" is the recorded verdict, supplied evidence like
+    // every other field here; this layer never goes and looks.
+    if (input.tier >= 2 && input.evidence?.review === undefined) {
+      violations.push("a T2 task may not take the quota stop before its opposite-provider review has run");
     }
     return violations;
   },
