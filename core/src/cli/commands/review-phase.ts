@@ -35,8 +35,8 @@
 // defect statement, the owner's rejection reason, or a superseded verdict. A
 // reviewer told what to find is not a reviewer.
 
-import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, promises as fs } from "node:fs";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import type {
   BrokerProcessRegistration,
   HarnessAdapter,
@@ -72,7 +72,7 @@ import { ContinuityStore } from "../../execution/continuity-store.ts";
 import { buildPhaseRequest, openRetainedColdTurn, phasePersistenceEvidence, redactPhaseProcess } from "../../execution/phase-request.ts";
 import type { BarrierRecord } from "../../execution/launcher-barrier.ts";
 import type { BrokerOptions } from "../../execution/transport-broker.ts";
-import { artifactsExist, jsonParses, type ArtifactObservation } from "../../gates/artifacts.ts";
+import { artifactsExist, jsonParses } from "../../gates/artifacts.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
@@ -108,7 +108,7 @@ import {
   runMandatoryReview,
 } from "../../workflow/review-routing.ts";
 import type { AttemptEvent, AttemptStatus } from "./attempt.ts";
-import { ProductionRouteUnavailable, ProductionWorkflowUnsupported, isReviewTransportFailure, observedExitCode } from "./production-run.ts";
+import { ProductionRouteUnavailable, ProductionWorkflowUnsupported, artifactReader, isReviewTransportFailure, observedExitCode } from "./production-run.ts";
 import {
   assertPromptCompositionCurrent,
   type RecordedRoute,
@@ -277,23 +277,6 @@ function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" 
   if (["head_advanced", "diff_matches_claims", "candidate_hygiene"].includes(gateId)) return "git";
   if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
   return gateId === "journey_passes" ? "journey" : "pure";
-}
-
-function artifactReader(worktree: string): (path: string) => ArtifactObservation {
-  return (path) => {
-    const root = resolve(worktree);
-    const candidate = resolve(root, path);
-    const fromRoot = relative(root, candidate);
-    if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) return { exists: false, size: 0 };
-    try {
-      const observed = statSync(candidate);
-      if (!observed.isFile()) return { exists: false, size: 0 };
-      const content = path.toLowerCase().endsWith(".json") ? readFileSync(candidate, "utf8") : undefined;
-      return { exists: true, size: observed.size, ...(content === undefined ? {} : { content }) };
-    } catch {
-      return { exists: false, size: 0 };
-    }
-  };
 }
 
 /** Replacement-review seam retained for the three-path prompt-bundle characterization. */
