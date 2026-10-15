@@ -123,6 +123,29 @@ if [ -n "${cmd:-}" ]; then
         ;;
     esac
   done
+  # The owner acts that build their terminal outside a main.ts case arm
+  # (B5-05), from the same list in owner-acts.mts. `+` stands for the space in
+  # a two-word act, because a `for` list splits on spaces.
+  for phrase in seed group+apply; do
+    act=${phrase//+/ }
+    case " $cmd " in
+      *"awsf $act"*|*" awsf -- $act "*|*" awsf --silent -- $act "*|*"cli/main.ts $act "*)
+        deny "\`awsf $act\` is an owner act and is denied in a driving session." \
+"Prepare it and explain it: the handle, what the evidence supports, and what remains. The owner runs it themselves. The TTY prompt is a terminal-shape check, not an authorization boundary, so this fence is the one that holds."
+        ;;
+    esac
+  done
+  # Plain `retry` builds no owner terminal; adoption does, so the flag decides.
+  case " $cmd " in
+    *" --adopt-as "*|*" --adopt-as="*)
+      case " $cmd " in
+        *"awsf retry"*|*" awsf -- retry "*|*" awsf --silent -- retry "*|*"cli/main.ts retry "*)
+          deny "\`awsf retry --adopt-as\` is an owner act and is denied in a driving session." \
+"Prepare it and explain it: the handle, what the evidence supports, and what remains. The owner runs it themselves. The TTY prompt is a terminal-shape check, not an authorization boundary, so this fence is the one that holds."
+          ;;
+      esac
+      ;;
+  esac
 fi
 
 # --- fence 1: delegation shape ------------------------------------------------

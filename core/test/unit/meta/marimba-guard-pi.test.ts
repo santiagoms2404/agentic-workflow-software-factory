@@ -36,6 +36,7 @@ import {
   normalizeCommand,
   ownerActViolation,
 } from "../../../../docs/driving/marimba/marimba-guard-rules.mts";
+import { OWNER_ACT_LIST, ownerActName } from "../../../../docs/driving/marimba/owner-acts.mts";
 
 const MARIMBA_DIR = join(drivingDir(), "marimba");
 const SHELL_GUARD = readFileSync(join(MARIMBA_DIR, "delegation-guard.sh"), "utf8");
@@ -178,11 +179,14 @@ for (const row of OWNER_ACT_ROWS) {
 }
 
 test("owner-act matrix catches a planted removed owner-rule match through rules and pi binding", async () => {
+  // The rules import the owner-act list (B5-05); a vm script cannot, so the
+  // import is dropped and the same list is handed in, as the binding test does.
   const source = stripTypeScriptTypes(readFileSync(join(MARIMBA_DIR, "marimba-guard-rules.mts"), "utf8"))
+    .replace(/import\s*\{[^}]*\}\s*from "\.\/owner-acts\.mts";/u, "")
     .replace(/\bexport /gu, "")
     .replace("normalized.includes(`awsf ${act}`)", "false")
     .replace("normalized.includes(`${form} ${act} `)", "false");
-  const mutant = runInNewContext(`${source}\nownerActViolation`) as typeof ownerActViolation;
+  const mutant = runInNewContext(`${source}\nownerActViolation`, { OWNER_ACT_LIST, ownerActName }) as typeof ownerActViolation;
   const handler = bindingHandlers({}, mutant).get("tool_call")!;
   for (const row of OWNER_ACT_ROWS.filter((candidate) => candidate.expected !== null)) {
     assert.equal(mutant(row.command), null, "planted defect must actually remove the refusal");

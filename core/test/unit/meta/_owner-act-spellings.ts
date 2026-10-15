@@ -1,4 +1,4 @@
-import { OWNER_ACTS } from "../../../../docs/driving/marimba/marimba-guard-rules.mts";
+import { OWNER_ACT_LIST, ownerActName } from "../../../../docs/driving/marimba/owner-acts.mts";
 
 /** W01-Q7, decided 2026-10-04. Expectations are pinned, never learned from the guard. */
 export const OWNER_ACT_SPELLINGS = [
@@ -12,13 +12,26 @@ export const OWNER_ACT_SPELLINGS = [
   { id: "node", prefix: "node --experimental-strip-types core/src/cli/main.ts", knownGapF17: false },
 ] as const;
 
-export const OWNER_ACT_ROWS = OWNER_ACTS.flatMap((act) => OWNER_ACT_SPELLINGS.map((spelling) => ({
-  act,
-  spelling: spelling.id,
-  command: `${spelling.prefix.replace("<dir>", "./fixture-project")} ${act} T01`,
-  expected: spelling.knownGapF17 ? null : act,
-  label: `${act} / ${spelling.id}${spelling.knownGapF17 ? " / KNOWN GAP F17 (G01-G)" : ""}`,
-})));
+/**
+ * Every listed owner act in every decided spelling (B5-05, and X-01: the
+ * `npm run awsf [--silent] -- <act>` spellings of the acts built outside a
+ * main.ts case arm were open until those acts were listed). A flagged act puts
+ * its flag after the task, where the CLI reads it.
+ */
+export const OWNER_ACT_LIST_ROWS = OWNER_ACT_LIST.flatMap((entry) => OWNER_ACT_SPELLINGS.map((spelling) => {
+  const act = ownerActName(entry);
+  return {
+    act,
+    reach: entry.reach,
+    spelling: spelling.id,
+    command: `${spelling.prefix.replace("<dir>", "./fixture-project")} ${entry.verb} T01${entry.flag === undefined ? "" : ` ${entry.flag} T02`}`,
+    expected: spelling.knownGapF17 ? null : act,
+    label: `${act} / ${spelling.id}${spelling.knownGapF17 ? " / KNOWN GAP F17 (G01-G)" : ""}`,
+  };
+}));
+
+/** The case-arm acts' rows: the matrix the shell guard's `for verb` loop answers. */
+export const OWNER_ACT_ROWS = OWNER_ACT_LIST_ROWS.filter((row) => row.reach === "case-arm");
 
 /** Runnable Markdown fences and HTML pre blocks; explanatory prose is not a shell claim. */
 export function shellFenceLines(source: string): string[] {
