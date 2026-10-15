@@ -44,8 +44,12 @@ import { getSession } from "./queries.ts";
  * working, and a correction (`GATING → RUNNING`) is not an advance. So are
  * `BLOCKED` and `CANCELLED`: halting must always remain available, or a
  * degraded task could not even be stopped cleanly.
+ *
+ * `PUBLISHED` is held too (B4-02): `awsf publish` asks this gate before a push
+ * that has no rollback, so letting a degraded session through would make the
+ * one irreversible act exactly the invisible completion this hold forbids.
  */
-export const STATES_BEYOND_GATING = ["REVIEWING", "AWAITING_OWNER", "LANDING", "LANDED"] as const;
+export const STATES_BEYOND_GATING = ["REVIEWING", "AWAITING_OWNER", "LANDING", "LANDED", "PUBLISHED"] as const;
 
 /** Thrown when a degraded session tries to advance past `GATING`. */
 export class DegradedObservabilityHold extends Error {
