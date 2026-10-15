@@ -38,6 +38,7 @@ export async function grantCommand(options: {
   const permission = openPermissionSession({ canonicalRepository: current.repository, worktree: subject.worktree,
     sessionRuntime: join(options.attemptDir, "private", phase), stateRoot: options.stateRoot, profile: agent.tools.profile,
     tools: agent.tools.allow, writes: agent.writes, protectedPaths: options.config.policy.protected_paths, git: protectedReadOnlyGit(subject.worktree),
+    seedPaths: options.config.runtime.seed_paths, // B10-02: seeds stay read-only under the grant too
     ...(options.sandboxProbe === undefined ? {} : { sandboxProbe: options.sandboxProbe }) });
   if (permission.sandboxBadge !== "os-enforced") throw new Error("protected grants require an OS-enforced sandbox; no tool-policy fallback");
   const unsigned: ProtectedGrant = { schema: "awsf.protected-grant/v1", id: randomUUID(), generationId: randomUUID(), subject,

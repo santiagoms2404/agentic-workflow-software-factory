@@ -2396,6 +2396,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       tools: route.agent.tools.allow,
       writes: route.agent.writes,
       protectedPaths: options.config.policy.protected_paths,
+      // B10-02: seeded, Git-ignored inputs stay immutable to the phase.
+      seedPaths: options.config.runtime.seed_paths,
       readOnlyRoots,
       ...(confinement === "host"
         ? { providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [] }

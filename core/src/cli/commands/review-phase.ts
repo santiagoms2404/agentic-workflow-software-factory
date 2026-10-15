@@ -765,6 +765,8 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     tools: route.agent.tools.allow,
     writes: route.agent.writes,
     protectedPaths: config.policy.protected_paths,
+    // B10-02: seeded, Git-ignored inputs stay immutable to the reviewer.
+    seedPaths: config.runtime.seed_paths,
     readOnlyRoots: [deliveryContext.diffDelivery!.directory],
     providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [],
     ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
