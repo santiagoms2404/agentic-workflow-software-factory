@@ -1,7 +1,7 @@
 import { assertProtectedOutput } from "../workflow/protected-grants.ts";
 import { protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
-import { existsSync, lstatSync, readlinkSync, realpathSync, statSync, type Stats } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { existsSync, lstatSync, readdirSync, readlinkSync, realpathSync, statSync, type BigIntStats, type Stats } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ProcessSpec, SandboxConfinement } from "../adapters/interface.ts";
 import {
   assertClean,
@@ -16,7 +16,7 @@ import {
   resolvePermissionProfile,
   type PermissionProfile,
 } from "./permission-profiles.ts";
-import { enforcePathPolicy } from "./path-policy.ts";
+import { PermissionBreach, evaluatePathPolicy, normalizeRepositoryPath, type PathViolation } from "./path-policy.ts";
 
 export const SANDBOX_BADGE_STATES = ["os-enforced", "tool-policy", "unavailable"] as const;
 export type SandboxBadge = (typeof SANDBOX_BADGE_STATES)[number];
@@ -64,6 +64,15 @@ export interface SandboxRequest {
    * whole host is already readable and the argv must not move.
    */
   readonly providerReadableRoots?: readonly string[];
+  /**
+   * `runtime.seed_paths`, repository-relative, as seeded into `worktree`
+   * (B10-02). They are Git-ignored, so the change-set diff in `enforce()`
+   * never sees them, yet host gates run what they hold (a seeded
+   * `node_modules/.bin/tsc`). Under bwrap each one present is bound read-only
+   * over the worktree; without an OS sandbox `PermissionSession` fingerprints
+   * them instead. Omitted, the argv is the reviewed one byte for byte.
+   */
+  readonly seedPaths?: readonly string[];
   /**
    * `host` (the default) binds the whole filesystem read-only and masks the
    * state root. `worktree` binds no host root, so the canonical checkout, other
@@ -154,6 +163,54 @@ function providerRoots(request: SandboxRequest): readonly string[] {
   return (request.providerWritableRoots ?? []).filter((root) => existsSync(root));
 }
 
+/** Each configured seed as [repository path, absolute path in the worktree]; the spelling is the config loader's. */
+function seedRoots(request: Pick<SandboxRequest, "worktree" | "seedPaths">): readonly (readonly [string, string])[] {
+  return (request.seedPaths ?? []).map((seed) => {
+    const path = normalizeRepositoryPath(seed);
+    return [path, resolve(request.worktree, path)] as const;
+  });
+}
+
+/**
+ * B10-02: the seeds present, bound read-only. bwrap applies binds in argv
+ * order, so these must follow the worktree bind they narrow. A missing seed
+ * cannot be bound; `PermissionSession` fingerprints it as absent instead.
+ */
+function seedBinds(request: SandboxRequest): string[] {
+  return seedRoots(request).filter(([, path]) => existsSync(path)).flatMap(([, path]) => ["--ro-bind", path, path]);
+}
+
+/**
+ * size, mtime and inode of every entry under each seed, keyed by repository
+ * path. Not a content hash: the walk runs twice a phase over a whole
+ * `node_modules`, and an in-place rewrite moves mtime or size while a
+ * replacement moves the inode. Symlinks are stamped, never followed; a link
+ * into the seed is covered by its target's own entry.
+ */
+function fingerprintSeeds(seeds: readonly (readonly [string, string])[]): ReadonlyMap<string, string> {
+  const prints = new Map<string, string>();
+  const visit = (key: string, path: string): void => {
+    let stat: BigIntStats;
+    try {
+      stat = lstatSync(path, { bigint: true });
+    } catch {
+      prints.set(key, "absent");
+      return;
+    }
+    prints.set(key, `${String(stat.size)}:${String(stat.mtimeNs)}:${String(stat.ino)}`);
+    if (!stat.isDirectory()) return;
+    for (const name of readdirSync(path).sort()) visit(`${key}/${name}`, join(path, name));
+  };
+  for (const [key, path] of seeds) visit(key, path);
+  return prints;
+}
+
+function seedMutations(before: ReadonlyMap<string, string>, after: ReadonlyMap<string, string>): readonly PathViolation[] {
+  const changed = [...new Set([...before.keys(), ...after.keys()])].filter((key) => before.get(key) !== after.get(key));
+  // A seed is host-provisioned execution input, protected for every profile.
+  return changed.sort().map((path) => Object.freeze({ path, reasons: Object.freeze(["protected-path"] as const) }));
+}
+
 function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
   const worktreeBind = request.writes.length === 0 ? "--ro-bind" : "--bind";
   return {
@@ -180,6 +237,7 @@ function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
       "--bind", request.sessionRuntime, request.sessionRuntime,
       "--ro-bind", request.canonicalRepository, request.canonicalRepository,
       ...(request.readOnlyRoots ?? []).flatMap((root) => ["--ro-bind", root, root]),
+      ...seedBinds(request),
       ...providerRoots(request).flatMap((root) => ["--bind", root, root]),
       "--chdir", spec.cwd,
       "--",
@@ -347,6 +405,7 @@ function confinedSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
       worktreeBind, request.worktree, request.worktree,
       "--bind", request.sessionRuntime, request.sessionRuntime,
       ...(request.readOnlyRoots ?? []).flatMap((root) => ["--ro-bind", root, root]),
+      ...seedBinds(request),
       ...providerFiles(request.providerWritableRoots).flatMap((file) => ["--bind", file, file]),
       "--chdir", spec.cwd,
       "--",
@@ -421,6 +480,9 @@ export class PermissionSession {
   readonly #request: PermissionSessionRequest;
   readonly #git: GitRunner;
   readonly #osEnforced: boolean;
+  /** B10-02: the seeds no read-only bind protects, with their phase-start fingerprint. */
+  readonly #seeds: readonly (readonly [string, string])[];
+  readonly #seedsBefore: ReadonlyMap<string, string>;
 
   constructor(request: PermissionSessionRequest) {
     assertSandboxRoots(request);
@@ -435,6 +497,11 @@ export class PermissionSession {
     if (request.confinement === "worktree" && !this.#osEnforced) {
       throw new WorktreeConfinementUnavailable(request.platform ?? process.platform);
     }
+    // Under bwrap a present seed is bound read-only (`seedBinds`), so only a
+    // missing one, which cannot be bound, needs watching; without an OS
+    // sandbox every seed is fingerprinted.
+    this.#seeds = seedRoots(request).filter(([, path]) => !this.#osEnforced || !existsSync(path));
+    this.#seedsBefore = fingerprintSeeds(this.#seeds);
     if (request.protectedCapability !== undefined) {
       const proof = protectedWriteContext(request.protectedCapability);
       if (this.sandboxBadge !== "os-enforced" || proof?.grant.subject.worktree !== physical(request.worktree) ||
@@ -453,11 +520,16 @@ export class PermissionSession {
     if (this.#request.protectedCapability !== undefined) assertProtectedOutput(this.#request.protectedCapability, this.#request.worktree);
     const after = captureChangeSet(this.#request.worktree, this.#git);
     const mutations = changedPaths(this.before, after);
-    enforcePathPolicy(mutations, {
+    const violations = evaluatePathPolicy(mutations, {
       writes: this.profile.writes,
       protectedPaths: this.#request.protectedPaths,
       ...(this.#request.protectedCapability === undefined ? {} : { protectedCapability: this.#request.protectedCapability }),
     });
+    // Git-ignored seeds never reach `mutations`; their fingerprint diff joins
+    // the same single terminal breach (B10-02).
+    const policyPaths = new Set(violations.map((violation) => violation.path));
+    const seeded = seedMutations(this.#seedsBefore, fingerprintSeeds(this.#seeds)).filter((violation) => !policyPaths.has(violation.path));
+    if (violations.length > 0 || seeded.length > 0) throw new PermissionBreach([...violations, ...seeded]);
     if (this.#request.protectedCapability !== undefined) assertProtectedOutput(this.#request.protectedCapability, this.#request.worktree);
     return Object.freeze({ changedPaths: mutations, sandboxBadge: this.sandboxBadge });
   }
