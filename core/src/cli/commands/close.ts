@@ -201,11 +201,7 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
   const paths = [...after.keys()].filter(path => !Buffer.from(after.get(path)!).equals(Buffer.from(before.tree.get(path)!))).sort();
   for (const row of rowsOffered) options.terminal.write(`${row.path} ${row.ticket} row ${row.rowIndex}: [${row.marker}] -> [${closed.has(row) ? "x" : row.marker}]`);
   for (const change of delta.changes) options.terminal.write(`${change.path} ${change.kind} ${change.milestone ?? ""}: ${JSON.stringify(change.oldValue)} -> ${JSON.stringify(change.newValue)}`);
-  const name = git(["config", "--get", "user.name"]);
-  const email = git(["config", "--get", "user.email"]);
-  if (name.status !== 0 || email.status !== 0 || !name.stdout.trim() || !email.stdout.trim() || /[\n\r<>]/u.test(name.stdout.trim() + email.stdout.trim())) {
-    refuse("E_CLOSURE_IDENTITY", "closure requires the checkout's configured user.name and user.email");
-  }
+  // No identity is read here: prepareClosureCommit pins HOST_AUTHOR (H9: B1-01 B9-01).
   assertClosureFiles(repository, before, paths);
   if (!await options.terminal.confirm("Commit these exact closure substitutions?")) return { confirmed: false, record: null };
   if (closureHead(git) !== head) refuse("E_CLOSURE_HEAD_MOVED", "canonical HEAD moved during closure confirmation");
@@ -219,7 +215,7 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
     await append({ type: "closure-intent", intent: { id, parentSha: head, candidateSha: candidate, at } });
     await options.onStep?.("intent");
     const message = `chore(specs): close ${plan ?? "light"} ${primary.tickets.join(",")} after ${candidate.slice(0, 7)}`;
-    const prepared = prepareClosureCommit(repository, options.attemptDir ?? options.projectDir!, head, before, after, paths, message, { name: name.stdout.trim(), email: email.stdout.trim() });
+    const prepared = prepareClosureCommit(repository, options.attemptDir ?? options.projectDir!, head, before, after, paths, message);
     await options.onStep?.("commit");
     const rows = rowsOffered.map(row => ({ path: row.path, ticket: row.ticket, taskNumber: row.taskNumber,
       rowIndex: row.rowIndex, oldValue: row.marker, newValue: closed.has(row) ? "x" : row.marker }));

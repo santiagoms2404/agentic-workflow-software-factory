@@ -14,6 +14,7 @@ import { ClosureRecordSchema, CLOSURE_RECORD_SCHEMA_ID } from "../../../src/cont
 import { RECORD_SCHEMAS, ENVELOPE_SCHEMAS } from "../../../src/contracts/registry.ts";
 import { readClosureSnapshot, closureGitRunner, verifyClosureCommit } from "../../../src/git/closure.ts";
 import { runGit } from "../../../src/git/changes.ts";
+import { HOST_AUTHOR } from "../../../src/git/commit.ts";
 import { closureDelta } from "../../../src/closure/delta.ts";
 import { proposeClosure, applyClosureChoices } from "../../../src/closure/propose.ts";
 import { readAttemptEvidence } from "../../../src/cli/commands/review-record.ts";
@@ -153,7 +154,6 @@ for (const [name, change, message] of [
   }, /not an ancestor/],
   ["dirty checkout", async (w: Awaited<ReturnType<typeof world>>) => { writeFileSync(join(w.repository, "untracked"), "dirty"); return {}; }, /clean canonical checkout/],
   ["ask drift", async (w: Awaited<ReturnType<typeof world>>) => { w.commit(planPath, fixturePlan.replace("First row.", "Different ask.")); return {}; }, /ask changed since base: T01.checklist/],
-  ["unset identity", async (w: Awaited<ReturnType<typeof world>>) => { runGit(w.git, ["config", "user.name", ""]); return {}; }, /configured user.name/],
   ["agreement drift", async (w: Awaited<ReturnType<typeof world>>) => { w.commit(ticketPath("T02"), fixtureTicket("T02").replace("Build T02.", "Changed prompt.")); return {}; }, /delta refused.*agreement/],
 ] as const) test(`closure refusal ${name} leaves every checkout and index byte unchanged`, async () => {
   const w = await world();
@@ -201,7 +201,7 @@ for (const [name, answers, state, closedCount, milestone] of [
   assert.deepEqual(readFileSync(join(w.repository, "binary.dat")), Buffer.from([255, 0, 128]));
   assert.equal(runGit(w.git, ["status", "--porcelain"]), "");
   assert.equal(runGit(w.git, ["show", "--format=%B", "--no-patch", record.commitSha]).trim(), `chore(specs): close sample T01 after ${w.candidate.slice(0, 7)}`);
-  assert.equal(runGit(w.git, ["show", "--format=%an <%ae>|%cn <%ce>", "--no-patch", record.commitSha]).trim(), "Fixture Owner <owner@example.invalid>|Fixture Owner <owner@example.invalid>");
+  assert.equal(runGit(w.git, ["show", "--format=%an <%ae>|%cn <%ce>", "--no-patch", record.commitSha]).trim(), `${HOST_AUTHOR}|${HOST_AUTHOR}`, "never the checkout's configured identity (H9)");
   const before = readClosureSnapshot(w.git, record.parentSha), after = readClosureSnapshot(w.git, record.commitSha);
   assert.equal(closureDelta(before.tree, after.tree, after.registry, { before: before.modes, after: after.modes }).ok, true);
   verifyClosureCommit(w.git, record);

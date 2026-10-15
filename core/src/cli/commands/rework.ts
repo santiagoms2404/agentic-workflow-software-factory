@@ -1078,6 +1078,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     }
     const beforeCommitHead = runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
     if (beforeCommitHead !== firstInspection.candidate) throw new ReworkCandidateMismatch(`agent changed HEAD to ${beforeCommitHead}; agents never commit`);
+    // The default runner pins all four GIT_AUTHOR_*/GIT_COMMITTER_* to HOST_AUTHOR (H9: B8-04).
     const candidate = commitAsHost({ repository: status.worktree!, message: "fix: address owner rework request" });
     const parent = runGit(systemGitRunner(status.worktree!), ["rev-parse", `${candidate}^`]).trim();
     if (parent !== firstInspection.candidate) throw new ReworkCandidateMismatch(`new candidate parent ${parent} is not prior candidate ${firstInspection.candidate}`);

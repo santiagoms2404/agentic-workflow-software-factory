@@ -79,7 +79,7 @@ import { commitProtectedAsHost, type ProtectedCommitIntent } from "../../git/pro
 import { completeProtectedPublication, inspectProtectedPublication, retainedLockWitness, unfinishedProtectedEffect } from "../../git/protected-reconcile.ts";
 import { protectedWriteContext } from "../../contracts/protected-capability.ts";
 import { stageOrdinal, type HostValidationProgress, type HostValidationStage } from "../../contracts/host-validation.ts";
-import { commitAsHost, HOST_AUTHOR } from "../../git/commit.ts";
+import { commitAsHost, hostCommitGitRunner, HOST_AUTHOR } from "../../git/commit.ts";
 import { hostCommitContentDigest, reconcileHostCommit } from "../../git/commit-reconcile.ts";
 import type { HostCommitAdoption } from "../../workflow/engine.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
@@ -2425,7 +2425,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const attributionBaseSha = seed === null && shiftPhaseRole(recipe.phases, phase.id) === null ? null : runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
     const openHostGit = (): HostPhaseGit<EnvelopeBase> => {
       const message = (envelope: EnvelopeBase): string => roleOf(phase.id) === "builder" ? (envelope as BuildOutput).proposedCommitMessage : `chore: record ${phase.id} output`;
-      const ordinary = createHostPhaseGit<EnvelopeBase>({ repository: status.worktree!, ...(restored === null ? {} : { before: restored.before }), commitMessage: message });
+      // The phase commit's git child pins HOST_AUTHOR over any ambient identity (H9: B7-08).
+      const ordinary = createHostPhaseGit<EnvelopeBase>({ repository: status.worktree!, git: hostCommitGitRunner(status.worktree!),
+        ...(restored === null ? {} : { before: restored.before }), commitMessage: message });
       if (protectedCapability === undefined) return ordinary;
       let observed: readonly string[] | null = null;
       return { captureDiff: () => { observed = ordinary.captureDiff(); return observed; }, commit: async (envelope, paths) => {
@@ -3035,7 +3037,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
    */
   const seedCandidate = async (phase: ProveSeedPhase): Promise<{ readonly candidateSha: string; readonly output: BuildOutput }> => {
     const worktree = status.worktree!;
-    const git = systemGitRunner(worktree);
+    // This runner makes the seed commit, so it pins HOST_AUTHOR over any ambient identity (H9: B7-08).
+    const git = hostCommitGitRunner(worktree);
     assertClean(worktree, "before", git);
     const head = runGit(git, ["rev-parse", "HEAD"]).trim();
     if (head !== status.baseSha) throw new Error(`the seed applies only at the pinned base ${status.baseSha!}; the worktree is at ${head}`);

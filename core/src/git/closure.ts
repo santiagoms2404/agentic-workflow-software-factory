@@ -7,6 +7,7 @@ import { closureDelta } from "../closure/delta.ts";
 import type { ClosureRegistry, ClosureTree } from "../closure/tree.ts";
 import type { ClosureRecord } from "../contracts/closure-record.ts";
 import { runGit, type GitRunner } from "./changes.ts";
+import { hostIdentityEnv } from "./commit.ts";
 
 export function closureGitRunner(repository: string): GitRunner {
   const env = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
@@ -92,14 +93,15 @@ export function assertClosureFiles(repository: string, before: ClosureSnapshot, 
 
 /** Isolated index: the canonical index and files are not touched while the commit is built. */
 export function prepareClosureCommit(repository: string, attemptDir: string, parent: string, before: ClosureSnapshot,
-  after: ClosureTree, paths: readonly string[], message: string, identity: { name: string; email: string }): { commit: string; blobs: ClosureRecord["blobs"] } {
+  after: ClosureTree, paths: readonly string[], message: string): { commit: string; blobs: ClosureRecord["blobs"] } {
   const root = join(attemptDir, "private", "closure");
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const stage = mkdtempSync(join(root, "stage-"));
+  // Identity is HOST_AUTHOR, pinned in all four variables: never the checkout's
+  // `git config user.*` and never an ambient author/committer override (AGENTS.md
+  // invariant 11; H9: B1-01 B1-07 B9-01).
   const env = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-    GIT_INDEX_FILE: join(stage, "index"), GIT_AUTHOR_NAME: identity.name, GIT_AUTHOR_EMAIL: identity.email,
-    GIT_COMMITTER_NAME: identity.name, GIT_COMMITTER_EMAIL: identity.email, GIT_TERMINAL_PROMPT: "0" };
-  // Identity comes from Git config, never ambient author/committer overrides.
+    GIT_INDEX_FILE: join(stage, "index"), ...hostIdentityEnv(), GIT_TERMINAL_PROMPT: "0" };
   delete (env as Record<string, string>)["GIT_AUTHOR_DATE"];
   delete (env as Record<string, string>)["GIT_COMMITTER_DATE"];
   const git: GitRunner = argv => runSystemCommand("git", ["-C", repository, "-c", "core.fsync=all", "--literal-pathspecs", ...argv], { timeoutMs: 30_000, env });

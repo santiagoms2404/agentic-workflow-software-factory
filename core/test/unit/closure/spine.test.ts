@@ -214,7 +214,6 @@ for (const [name, change, message] of [
   ["non-human actor", () => ({ actor: "delegate" as const }), /human actor/],
   ["non-interactive terminal", (w: Awaited<ReturnType<typeof world>>) => ({ terminal: { ...w.terminal, interactive: false } }), /interactive owner terminal/],
   ["lease", () => ({ lease: "fixture lease" }), /cannot run under a lease/],
-  ["unset identity", (w: Awaited<ReturnType<typeof world>>) => { runGit(w.git, ["config", "user.name", ""]); return {}; }, /configured user.name/],
   ["agreement drift", (w: Awaited<ReturnType<typeof world>>) => { w.commit("plans/spine-build-prompts.md", prompts([["W01", "Different title"]])); return {}; }, /delta refused.*agreement/],
   ["unknown ticket", () => ({ tickets: ["T99"] }), /cannot resolve ask/],
   ["duplicate tickets", () => ({ tickets: ["T02", "T02"] }), /distinct registered tickets/],
