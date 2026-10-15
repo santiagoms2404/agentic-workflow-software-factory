@@ -1,11 +1,11 @@
-import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { canonicalJson, composeOwnerAmendment, createOwnerAmendment, ownerText, sha256, type ReworkOwnerAmendment, type OwnerAmendmentDelivery } from "../../contracts/owner-amendment.ts";
 import { argvDigest, gateConfigDigest, gatesConfigDigest, COMMAND_LEDGER_PROTOCOL_VERSION } from "../../contracts/command-ledger.ts";
 import { ledgerGovernanceFailure, planCommandRecovery } from "../../workflow/command-ledger.ts";
 import { occurrenceKeyForRework, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
 import { withExecutionLease, assertOwnExecutionLease } from "../../execution/operation-lease.ts";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import type {
   AdapterEntry,
   AgentDefinition,
@@ -45,7 +45,7 @@ import {
   type BrokerOptions,
   type SystemCommandOptions,
 } from "../../execution/transport-broker.ts";
-import { artifactsExist, filesNonEmpty, jsonParses, type ArtifactObservation } from "../../gates/artifacts.ts";
+import { artifactsExist, filesNonEmpty, jsonParses } from "../../gates/artifacts.ts";
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
@@ -87,6 +87,8 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 import {
+  // The one realpath-contained artifact reader (H11: B8-02); rework keeps no copy.
+  artifactReader,
   assertProductionConfigSnapshot,
   ProductionRouteUnavailable,
   ProductionWorkflowUnsupported,
@@ -545,23 +547,6 @@ function preflightDescriptor(
     throw new AdapterError(route.adapter.id, "E_REDACTION", "private prompt content appeared in argv");
   }
   return spec;
-}
-
-function artifactReader(worktree: string): (path: string) => ArtifactObservation {
-  return (path) => {
-    const root = resolve(worktree);
-    const candidate = resolve(root, path);
-    const fromRoot = relative(root, candidate);
-    if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) return { exists: false, size: 0 };
-    try {
-      const observed = statSync(candidate);
-      if (!observed.isFile()) return { exists: false, size: 0 };
-      const content = path.toLowerCase().endsWith(".json") ? readFileSync(candidate, "utf8") : undefined;
-      return { exists: true, size: observed.size, ...(content === undefined ? {} : { content }) };
-    } catch {
-      return { exists: false, size: 0 };
-    }
-  };
 }
 
 function sumUsage(events: readonly NormalizedEvent[]): TokenUsage {

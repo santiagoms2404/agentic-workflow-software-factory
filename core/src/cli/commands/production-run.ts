@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
+import { closeSync, constants as fsConstants, existsSync, fstatSync, openSync, readFileSync, realpathSync, statSync, promises as fs } from "node:fs";
 import { renderHeadroomAdvice, renderAttemptNextAction, renderGrantRefusalAdvice } from "../../lifecycle/renderer.ts";
 import { assertGrantRefusedRecord, GRANT_REFUSED_SCHEMA_ID, type GrantRefusalBoundary, type GrantRefusedRecord } from "../../contracts/driver-preflight.ts";
 import { grantOwedFor, writingPhases, type GrantOwed } from "../../preflight/grant-plan.ts";
@@ -872,19 +872,45 @@ export function productionPhaseRegistration(input: {
     phaseId: input.phaseId, phaseOrdinal: input.phaseOrdinal } satisfies AgentPhaseProcessRegistration;
 }
 
-function artifactReader(worktree: string): (path: string) => ArtifactObservation {
+/** True when `path` is strictly below `root`; `..notes.json` is a name, not a climb. */
+function strictlyWithin(root: string, path: string): boolean {
+  const fromRoot = relative(root, path);
+  return fromRoot !== "" && fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
+}
+
+/**
+ * The one host reader behind artifacts_exist, files_non_empty and json_parses,
+ * shared by production runs and owner rework (H11: B7-01 B7-02 B8-02).
+ *
+ * A lexical check alone let an in-worktree symlink make the gates stat and read
+ * a host file and report its size and JSON shape back to the provider. So the
+ * spelling is checked first, then the realpath of the whole path is checked
+ * again against the realpath of the worktree: any symlink component that leaves
+ * the worktree is refused, while an in-tree symlink still resolves. The final
+ * open refuses to follow a link swapped in after the realpath, and the stat and
+ * read come from that one descriptor.
+ */
+export function artifactReader(worktree: string): (path: string) => ArtifactObservation {
   return (path) => {
-    const root = resolve(worktree);
-    const candidate = resolve(root, path);
-    const fromRoot = relative(root, candidate);
-    if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) return { exists: false, size: 0 };
+    const absent = { exists: false, size: 0 };
+    let descriptor: number | null = null;
     try {
-      const observed = statSync(candidate);
-      if (!observed.isFile()) return { exists: false, size: 0 };
-      const content = path.toLowerCase().endsWith(".json") ? readFileSync(candidate, "utf8") : undefined;
+      const root = realpathSync(worktree);
+      const candidate = resolve(root, path);
+      if (!strictlyWithin(root, candidate)) return absent;
+      const real = realpathSync(candidate);
+      if (!strictlyWithin(root, real)) return absent;
+      // Refuse a FIFO or device before open, which could block on it.
+      if (!statSync(real).isFile()) return absent;
+      descriptor = openSync(real, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+      const observed = fstatSync(descriptor);
+      if (!observed.isFile()) return absent;
+      const content = path.toLowerCase().endsWith(".json") ? readFileSync(descriptor, "utf8") : undefined;
       return { exists: true, size: observed.size, ...(content === undefined ? {} : { content }) };
     } catch {
-      return { exists: false, size: 0 };
+      return absent;
+    } finally {
+      if (descriptor !== null) closeSync(descriptor);
     }
   };
 }
