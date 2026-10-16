@@ -753,13 +753,24 @@ export class ProcessTransportBroker implements TransportBroker {
         return recorded;
       },
       release: async () => {
+        // The write's completion callback is called WITH the write error (B1-18).
+        // A launcher that died between identify and release — killed, OOM, or
+        // `awsf cancel` signalling the registered group before GO — fails this
+        // write, and handing the callback straight to `resolve` turned that into
+        // a released launch: the barrier billed it as running and returned a
+        // transport whose exit had already fired before anyone listened. A token
+        // that did not reach the child rejects, and the barrier reports the
+        // launch failed at `spent`, still billed, because it cannot know more.
         await new Promise<void>((resolve, reject) => {
           const channel = child.stdio[RELEASE_FD] as unknown as {
-            end: (chunk: string, cb: () => void) => void;
+            end: (chunk: string, cb: (error?: Error | null) => void) => void;
             once: (event: string, cb: (error: Error) => void) => void;
           };
           channel.once("error", reject);
-          channel.end(`${RELEASE_TOKEN}\n`, resolve);
+          channel.end(`${RELEASE_TOKEN}\n`, (error) => {
+            if (error === undefined || error === null) resolve();
+            else reject(error);
+          });
         });
       },
       abandon: async (reason) => {
