@@ -1,5 +1,5 @@
-import { closeSync, constants, fsyncSync, lstatSync, mkdtempSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdtempSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { runSystemCommand } from "../execution/transport-broker.ts";
 import { ownExecutionLease } from "../execution/operation-lease.ts";
@@ -19,6 +19,28 @@ export interface ProtectedCommitIntent {
   readonly stagedIndexDigest: string;
 }
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+
+/**
+ * B1-20: release an index lock this process created and published nothing
+ * through, by renaming it to `aside` — never by deleting it (invariant 8), so
+ * its bytes stay as evidence beside the index.
+ *
+ * Only when the file at `lockPath` is still the inode `lock` holds open, and
+ * only onto a name nothing occupies: a lock somebody else now holds, or an
+ * earlier file at `aside`, is left exactly as it is. `false` means nothing
+ * moved, and the caller's original failure stands either way.
+ */
+export function setAsideUnpublishedIndexLock(lock: number, lockPath: string, aside: string): boolean {
+  try {
+    const held = fstatSync(lock); const named = lstatSync(lockPath);
+    if (!named.isFile() || named.dev !== held.dev || named.ino !== held.ino) return false;
+    try { lstatSync(aside); return false; } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return false;
+    }
+    renameSync(lockPath, aside);
+    return true;
+  } catch { return false; }
+}
 
 /** One candidate, staged without filters/hooks, verified before HEAD CAS; never resets the worktree. */
 export async function commitProtectedAsHost(options: {
@@ -114,6 +136,8 @@ export async function commitProtectedAsHost(options: {
   // would defeat the point of holding a descriptor at all.
   const lock = openSync(lockPath, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL, 0o600);
   let headPublished = false;
+  /** Set just before `persistWitness`: from then on the witness may be durable. */
+  let witnessOffered = false;
   /** The durable creation record for the lock now open above, once it exists. */
   let witness: ProtectedLockWitness | null = null;
   /** A caught interruption after the HEAD CAS. Finished below, then re-thrown. */
@@ -135,6 +159,7 @@ export async function commitProtectedAsHost(options: {
       beforeIndexDigest: digest(beforeIndex), stagedIndexDigest: digest(stagedIndex),
       controller: { leaseId: current.id, pid: current.pid, startIdentity: current.startIdentity },
       now: options.now ?? (() => new Date().toISOString()) });
+    witnessOffered = true;
     await options.persistWitness(witness);
     runGit(git, ["-c", "core.fsync=all", "update-ref", "HEAD", candidate, grant.subject.preWriteHeadSha]);
     headPublished = true;
@@ -142,7 +167,17 @@ export async function commitProtectedAsHost(options: {
     assertWitnessedLockAtMutationBoundary(lock, lockPath, witness, "the Git index lock this publication created");
     renameSync(lockPath, indexPath);
   } catch (error) {
-    if (!headPublished) throw error;
+    if (!headPublished) {
+      // B1-20: nothing was published and no witness was ever offered, so no
+      // recovery can attribute this lock — it would refuse it, and every later
+      // Git index write in the worktree would fail on it. This process created
+      // it and still holds it open, so it sets it aside (a rename, not a
+      // delete). With no lock left, `awsf resume` takes its own, witnessed one.
+      // Once the witness was offered it may be durable, and the lock it names
+      // stays for recovery to adopt, exactly as a crash there would leave it.
+      if (!witnessOffered) setAsideUnpublishedIndexLock(lock, lockPath, `${lockPath}.awsf-unpublished-${basename(stage)}`);
+      throw error;
+    }
     // The compare-and-swap has already published this exact authorized
     // candidate. Installing the index it was staged against is the remainder of
     // that one act — same process, same execution lease, same one-use
