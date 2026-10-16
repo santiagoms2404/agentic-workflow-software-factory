@@ -10,9 +10,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   CONTINUITY_FILE_MODE,
   ContinuityStore,
@@ -63,12 +63,33 @@ test("opening mints a private locator, persists it 0600, and reloads it", async 
   } finally { close(); }
 });
 
-test("a missing or unreadable file loads as an empty store rather than throwing", async () => {
+test("a missing continuity mirror loads as an empty store", async () => {
   const { store, close } = world();
   try {
     await store.load();
     assert.equal(store.get("continuity:builder"), undefined);
     assert.throws(() => store.ref("continuity:builder"), ContinuityUnavailable);
+  } finally { close(); }
+});
+
+test("an unreadable existing continuity mirror refuses without replacing it", async () => {
+  const { path, store, close } = world();
+  try {
+    mkdirSync(path, { recursive: true });
+    await assert.rejects(store.load(), /continuity store is unusable/);
+    assert.equal(statSync(path).isDirectory(), true);
+  } finally { close(); }
+});
+
+test("malformed and foreign-schema continuity mirrors refuse and remain unchanged", async () => {
+  const { path, store, close } = world();
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    for (const content of ["{", JSON.stringify({ schema: "awsf.continuity/v0", records: {} })]) {
+      writeFileSync(path, content, { mode: 0o600 });
+      await assert.rejects(store.load(), /continuity store is unusable/);
+      assert.equal(readFileSync(path, "utf8"), content, "a refused mirror must not be rewritten");
+    }
   } finally { close(); }
 });
 

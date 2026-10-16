@@ -90,6 +90,13 @@ export class ContinuityUnavailable extends Error {
   }
 }
 
+export class ContinuityStoreUnavailable extends Error {
+  constructor(detail: string) {
+    super(`continuity store is unusable: ${detail}`);
+    this.name = "ContinuityStoreUnavailable";
+  }
+}
+
 export interface ContinuityStoreOptions {
   /** `private/continuity.json` for this attempt. */
   readonly path: string;
@@ -121,26 +128,43 @@ export class ContinuityStore {
     this.#now = options.now ?? ((): string => new Date().toISOString());
   }
 
-  /** Rehydrates from disk. A missing or unreadable file is an empty store, never a throw. */
+  /** A missing file is a fresh store; an existing mirror that cannot be trusted must not be overwritten. */
   async load(): Promise<void> {
     let text: string;
     try {
       text = await readFile(this.#path, "utf8");
-    } catch {
-      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw new ContinuityStoreUnavailable("the existing private mirror could not be read");
     }
-    let parsed: Partial<ContinuityFile>;
+    let parsed: unknown;
     try {
-      parsed = JSON.parse(text) as Partial<ContinuityFile>;
+      parsed = JSON.parse(text);
     } catch {
-      return;
+      throw new ContinuityStoreUnavailable("the existing private mirror is not valid JSON");
     }
-    if (parsed.schema !== CONTINUITY_SCHEMA || typeof parsed.records !== "object" || parsed.records === null) {
-      return;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new ContinuityStoreUnavailable("the existing private mirror has an unsupported schema");
     }
-    for (const [handle, record] of Object.entries(parsed.records)) {
-      this.#records.set(handle, record);
+    const file = parsed as Partial<ContinuityFile>;
+    if (file.schema !== CONTINUITY_SCHEMA || typeof file.records !== "object" || file.records === null || Array.isArray(file.records)) {
+      throw new ContinuityStoreUnavailable("the existing private mirror has an unsupported schema");
     }
+    const loaded = new Map<string, ContinuityRecord>();
+    for (const [handle, value] of Object.entries(file.records)) {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        throw new ContinuityStoreUnavailable("the existing private mirror contains an invalid conversation");
+      }
+      const record = value as ContinuityRecord;
+      if (typeof record.phaseId !== "string" || record.handle !== handle || record.handle !== continuityHandle(record.phaseId) ||
+          typeof record.adapter !== "string" || typeof record.provider !== "string" || typeof record.model !== "string" ||
+          typeof record.providerSessionId !== "string" || (record.storeDir !== null && typeof record.storeDir !== "string") ||
+          typeof record.openedAt !== "string" || !Number.isSafeInteger(record.turns) || record.turns < 0) {
+        throw new ContinuityStoreUnavailable("the existing private mirror contains an invalid conversation");
+      }
+      loaded.set(handle, record);
+    }
+    for (const [handle, record] of loaded) this.#records.set(handle, record);
   }
 
   get(handle: string): ContinuityRecord | undefined {

@@ -789,6 +789,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
    * preserved rather than widened.
    */
   const continuity = new ContinuityStore({ path: join(runtimeDir, "continuity.json") });
+  await continuity.load();
   let nextColdTurn = 0;
   type ReviewTurnPreflight = { request: ModelRequest; grant: SandboxGrant; spec: ProcessSpec; continuityHandle: string | null; context: ReviewContext };
   const preflightFor = async (prompt: string): Promise<ReviewTurnPreflight> => {
