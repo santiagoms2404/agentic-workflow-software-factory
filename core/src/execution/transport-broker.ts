@@ -1,4 +1,8 @@
-// THE ONLY MODULE IN THIS REPOSITORY THAT IMPORTS `node:child_process`.
+// THE ONLY MODULE IN SHIPPED CODE THAT IMPORTS `node:child_process`.
+//
+// "Shipped code" is AGENTS.md invariant 3 as scoped by its O5 owner amendment:
+// the non-test code under `core/src`, `dashboard/src` and `docs/driving`, which
+// is exactly what the child-process fence walks. Tests may spawn.
 //
 // Everything else — every adapter, every workflow, every gate — asks this file
 // to start a process and cannot start one itself. That is not a style rule: an

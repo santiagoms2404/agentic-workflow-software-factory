@@ -159,8 +159,10 @@ test("`awsf land` refuses a non-interactive stdin before it asks anything, and t
 // W17 INV-2 and INV-3, over the same WORKSTREAM_MODULES scope INV-1 uses.
 // INV-2: the dashboard records intent; a human-started session compiles and
 // drains it. `node:child_process` stays out of every workstream module (AGENTS.md
-// invariant 3 bars it repository-wide; this is the workstream's own record of
-// it), and no route this workstream adds may be anything but read-only — which
+// invariant 3 bars it from all shipped code except `transport-broker.ts` —
+// scoped by its O5 owner amendment to the non-test code under `core/src`,
+// `dashboard/src` and `docs/driving`, with tests free to spawn; this is the
+// workstream's own record of it), and no route this workstream adds may be anything but read-only — which
 // this repository spells as "adds nothing to API_ROUTE_TABLE", since `preview.ts`
 // and the shift commands are CLI, never API handlers.
 // INV-3: no push path and no skill in the execution path. AGENTS.md invariant 8

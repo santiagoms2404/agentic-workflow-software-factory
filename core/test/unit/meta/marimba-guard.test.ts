@@ -14,9 +14,12 @@ import { OWNER_ACT_ROWS } from "./_owner-act-spellings.ts";
 // the guard a payload on stdin, and asserts what came back. No provider call,
 // no quota, no network.
 //
-// WHY A META-TEST MAY SPAWN A PROCESS. child-process-fence.test.ts scopes the
-// `node:child_process` ban to `core/src`; junk-drawer.test.ts already spawns
-// `git` from this directory for the same reason. The thing under test is a
+// WHY A META-TEST MAY SPAWN A PROCESS. AGENTS.md invariant 3, as scoped by its
+// O5 owner amendment, bans `node:child_process` in shipped code only — the
+// non-test code under `core/src`, `dashboard/src` and `docs/driving` that
+// child-process-fence.test.ts walks — and says tests may spawn. This file is a
+// test under `core/test`; junk-drawer.test.ts already spawns `git` from this
+// directory for the same reason. The thing under test is a
 // shell script, so running it is the only way to assert its behaviour.
 //
 // THE DENY PROTOCOL, WHICH IS THE HALF A NAIVE TEST FORGETS. The guard's own
