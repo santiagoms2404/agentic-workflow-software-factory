@@ -15,6 +15,12 @@ export interface LandingClosureFact {
   readonly landedAt: string;
   readonly hasSelection: boolean;
   readonly closure: ClosureReadout;
+  /**
+   * Why this entry was read with less than a clean journal and projection (B4-01): a status.json
+   * that is missing, unreadable or behind the journal, or a torn journal tail. The entry is still
+   * read from the journal; absent when the two agree.
+   */
+  readonly degraded?: readonly string[];
 }
 
 export function hasTicketSelection(status: AttemptStatus): boolean {

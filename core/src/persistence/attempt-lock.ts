@@ -5,7 +5,7 @@
 
 import { mkdir, open, readFile, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { Journal, JournalRecord } from "./journal.ts";
+import { readJournalTail, type Journal, type JournalRecord } from "./journal.ts";
 import { writeStatus } from "./status-store.ts";
 
 /** Thrown when a write is attempted against an attempt already sealed by a terminal status. */
@@ -177,6 +177,44 @@ export interface WriteProtocolDeps<Event, Status> {
 }
 
 /**
+ * Thrown when the journal already holds a record the status was not written from (B4-03).
+ *
+ * A crash, or a thrown status write, between the append and the status write leaves the journal one
+ * record ahead of status.json, and the lock is released either way. A writer that then validated
+ * against that status would append a record whose `source_seq` (taken from the journal tail) no
+ * longer matches the revision it carries, forking the journal from the status for good. The write
+ * is refused instead and appends nothing: the journal is the truth, and repairing the status from
+ * it is recovery's job (`recoverAttempt`), not a guess this layer makes. Nothing is removed.
+ */
+export class JournalAheadOfStatus extends Error {
+  constructor(journalPath: string, journalSeq: number, statusSeq: number) {
+    super(
+      `${journalPath} is at source_seq ${journalSeq} but the status was written from source_seq ${statusSeq}; ` +
+        "the status write after the last append was lost, so this write is refused until the status is recovered from the journal",
+    );
+    this.name = "JournalAheadOfStatus";
+  }
+}
+
+/**
+ * The `source_seq` a status was written from. The protocol is generic over the status, so this reads
+ * the attempt status's own `lastSourceSeq`; a status type without one is not checked. No status at
+ * all was written from no record.
+ */
+function statusSourceSeq(status: unknown): number | null {
+  if (status === null) return 0;
+  const seq = (status as { lastSourceSeq?: unknown }).lastSourceSeq;
+  return typeof seq === "number" && Number.isSafeInteger(seq) ? seq : null;
+}
+
+async function refuseJournalAhead(journalPath: string, status: unknown): Promise<void> {
+  const statusSeq = statusSourceSeq(status);
+  if (statusSeq === null) return;
+  const { lastSourceSeq: journalSeq } = await readJournalTail(journalPath);
+  if (journalSeq > statusSeq) throw new JournalAheadOfStatus(journalPath, journalSeq, statusSeq);
+}
+
+/**
  * The write protocol, in one function: lock -> validate -> append+fsync ->
  * atomic status replace -> project -> unlock. Every step after acquiring the
  * lock runs inside the same critical section, so a reader can never observe
@@ -194,6 +232,7 @@ export async function runWriteProtocol<Event, Status>(
     await step("locked");
     const currentStatus = await deps.readCurrentStatus();
     const { event, nextStatus: next } = deps.validate(currentStatus);
+    await refuseJournalAhead(deps.journal.path, currentStatus);
     await step("validated");
     const record = await deps.journal.append(event);
     await step("appended");
