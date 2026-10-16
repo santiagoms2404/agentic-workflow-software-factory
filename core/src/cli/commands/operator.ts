@@ -1,6 +1,6 @@
 import { access, readdir } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AwsfConfig } from "../../config/schema.ts";
 import { createApiRouter, type ApiRouter } from "../../api/routes.ts";
 import { sendResponse } from "../../api/responses.ts";
@@ -106,6 +106,30 @@ export interface DashOptions {
   readonly onListening?: (server: Server) => void;
 }
 
+type AsyncListener = (request: IncomingMessage, response: ServerResponse) => Promise<void>;
+
+/**
+ * `createServer` never awaits its listener, so a rejection from an async one is
+ * unhandled and, with no process-level handler anywhere in AWSF, ends the whole
+ * `awsf dash` process — one bad request would take the dashboard down for every
+ * other client (B9-02). Anything the handler throws is answered here as a 500
+ * instead; the error text stays server-side. A failure after the headers went
+ * out cannot be turned into a status any more, so that socket is destroyed
+ * rather than left hanging.
+ */
+export function guardedListener(handler: AsyncListener): (request: IncomingMessage, response: ServerResponse) => void {
+  return (request, response) => {
+    handler(request, response).catch(() => {
+      if (response.headersSent) {
+        response.destroy();
+        return;
+      }
+      response.writeHead(500, SECURITY_HEADERS);
+      response.end("internal error");
+    });
+  };
+}
+
 /** Serve only an already-built dashboard; building belongs to the owner, never this command. */
 export async function dashCommand(options: DashOptions): Promise<"not-built" | "serving"> {
   const root = resolve(
@@ -129,7 +153,7 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
     if (path.endsWith(".json")) return "application/json; charset=utf-8";
     return "application/octet-stream";
   };
-  const server = createServer(async (request, response) => {
+  const server = createServer(guardedListener(async (request, response) => {
     try {
       validateAuthority(request.headers);
     } catch {
@@ -141,7 +165,18 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
       sendResponse(response, await router.dispatch({ method: request.method ?? "GET", url: request.url, headers: request.headers }));
       return;
     }
-    const target = request.url === undefined ? "/" : new URL(request.url, "http://127.0.0.1").pathname;
+    // A target such as `//[` reads as a scheme-relative URL with an invalid
+    // host, so `new URL` throws on it. That is the client's malformed request,
+    // answered 400 like preview.ts answers its own unparsable paths — never a
+    // rejection out of the listener.
+    let target: string;
+    try {
+      target = request.url === undefined ? "/" : new URL(request.url, "http://127.0.0.1").pathname;
+    } catch {
+      response.writeHead(400, SECURITY_HEADERS);
+      response.end("bad request target");
+      return;
+    }
     const path = target === "/" ? index : join(root, target.replace(/^\//, ""));
     const fromRoot = relative(root, resolve(path));
     if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
@@ -157,7 +192,7 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
       response.writeHead(404, SECURITY_HEADERS);
       response.end("not found");
     }
-  });
+  }));
   server.once("close", () => router?.close());
   await new Promise<void>((done, reject) => {
     server.once("error", reject);
