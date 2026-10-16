@@ -182,8 +182,12 @@ test("dash initializes an absent disposable projection before listening", async 
     assert.equal(response.status, 200);
     // A fresh projection in a directory that registers no plans: both lists are
     // empty, and `plans` is present rather than absent, so the sessions view
-    // reads "no registered plan" instead of undefined.
-    assert.deepEqual(JSON.parse(response.body), { sessions: [], plans: [] });
+    // reads "no registered plan" instead of undefined. Since O4 (B2-02) the
+    // missing catalog is named rather than silent: the board stays up and carries
+    // a PlanUnresolved planError for its banner.
+    const body = JSON.parse(response.body) as { sessions: unknown[]; plans: unknown[]; planError?: { code: string; message: string } };
+    assert.deepEqual({ sessions: body.sessions, plans: body.plans, code: body.planError?.code }, { sessions: [], plans: [], code: "PlanUnresolved" });
+    assert.match(body.planError?.message ?? "", /no awsf\.project\.yaml in this checkout/);
   } finally {
     if (server?.listening) await new Promise<void>((done) => server?.close(() => done()));
     rmSync(root, { recursive: true, force: true });
