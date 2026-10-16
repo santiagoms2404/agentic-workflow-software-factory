@@ -29,6 +29,7 @@ import type {
 } from "../../adapters/interface.ts";
 import { AdapterError, isContinuityCapable } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
+import { gateEnv } from "../../adapters/env.ts";
 import { awaitExit } from "../../adapters/stream/transport-loop.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
@@ -2100,6 +2101,11 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // would re-dispatch the owner's argv over an unknown prior effect.
     const ungoverned = ledgerGovernanceFailure(ledger, MEASURE_DISPATCHER, occurrenceKey);
     if (ungoverned !== null) throw new CommandLedgerRefusal("candidate measurement", ungoverned);
+    // Built before the opening, so an environment refused as credential-shaped
+    // aborts with nothing dispatched and nothing to close. Gates run
+    // agent-authored code with no sandbox; they get the allowlist, never the
+    // host's whole environment (O6, B7-03).
+    const gateEnvironment = gateEnv(HOST.process.env);
     await persist("attempt.updated", {}, { type: "command-occurrence-opened", opening: {
       schema: "awsf.command-occurrence-opened/v1", dispatcherId: MEASURE_DISPATCHER,
       occurrenceKey, protocolVersion: COMMAND_LEDGER_PROTOCOL_VERSION, openedAt: infra.now(),
@@ -2192,6 +2198,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           timeoutMs: configured.timeout_seconds * 1_000,
           cwd: status.worktree!,
           maxBuffer: options.config.runtime.max_output_bytes,
+          env: gateEnvironment,
         });
         // The COMPLETE output is retained privately, mode 0600. Retaining only the
         // bounded rendering is exactly the defect pilot 2 hit: the one segment

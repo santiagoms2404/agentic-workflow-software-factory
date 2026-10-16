@@ -1,4 +1,5 @@
-// The environment a provider child is allowed to see.
+// The environment a provider child is allowed to see, and (through `gateEnv`
+// below) the environment a host gate is allowed to see.
 //
 // An ALLOWLIST, not a filter, and the distinction is the whole point: a filter
 // enumerates what must not pass and is wrong the moment a new secret-shaped
@@ -57,14 +58,63 @@ export function filterEnv(
   for (const key of ENV_ALLOWLIST) {
     const value = source[key];
     if (value === undefined) continue;
-    if (ENV_CREDENTIAL_KEY.test(key) || containsCredential(value)) {
-      throw new AdapterError(
-        adapter,
-        "E_REDACTION",
-        `the allowlisted environment entry ${JSON.stringify(key)} holds credential-shaped data`,
-      );
-    }
-    filtered[key] = value;
+    filtered[key] = admitted(adapter, key, value);
   }
   return Object.freeze({ ...filtered, ...ENV_INJECTED });
+}
+
+function admitted(adapter: string, key: string, value: string): string {
+  if (ENV_CREDENTIAL_KEY.test(key) || containsCredential(value)) {
+    throw new AdapterError(
+      adapter,
+      "E_REDACTION",
+      `the allowlisted environment entry ${JSON.stringify(key)} holds credential-shaped data`,
+    );
+  }
+  return value;
+}
+
+// ---------------------------------------------------------------------------
+// Host gates (owner call O6, finding B7-03).
+//
+// A configured gate (`npm run test:unit`, typecheck, lint, journeys, traps)
+// executes agent-authored candidate code on the host with no sandbox, so it is
+// held to the same allowlist as a provider child: inheriting the host
+// environment handed the builder's own tests the Jev credential (inv 13) and
+// every other secret in the owner's shell. ONE allowlist — this module's —
+// extended by only what a gate needs to run, never a second copy.
+// ---------------------------------------------------------------------------
+
+/**
+ * Passed from the parent when set, on top of `ENV_ALLOWLIST`. `CI` switches
+ * test runners out of watch and interactive modes. The locale passes through
+ * and replaces the injected default: the injected value exists so two machines
+ * frame a PROVIDER stream identically, while a gate runs the owner's own
+ * toolchain on the owner's host and is compared only against the same host's
+ * baseline, which this same builder also produced.
+ */
+export const GATE_ENV_PASSTHROUGH: readonly string[] = Object.freeze(["CI", "LANG", "LC_ALL"]);
+
+const GATE_ENV_LABEL = "gate";
+
+/**
+ * The environment every configured gate runs under: the provider allowlist and
+ * injected set, the gate passthrough, then what config declared for the gate.
+ * `NODE_OPTIONS` is deliberately NOT a passthrough — an ambient value can
+ * preload arbitrary code into every node gate — so it reaches a gate only as a
+ * declared entry. Every admitted entry gets `filterEnv`'s refusal: a
+ * credential-named key or credential-shaped value is `E_REDACTION`, not a
+ * pass-through.
+ */
+export function gateEnv(
+  source: Readonly<Record<string, string | undefined>>,
+  declared: Readonly<Record<string, string>> = {},
+): Readonly<Record<string, string>> {
+  const env: Record<string, string> = { ...filterEnv(GATE_ENV_LABEL, source) };
+  for (const key of GATE_ENV_PASSTHROUGH) {
+    const value = source[key];
+    if (value !== undefined) env[key] = admitted(GATE_ENV_LABEL, key, value);
+  }
+  for (const [key, value] of Object.entries(declared)) env[key] = admitted(GATE_ENV_LABEL, key, value);
+  return Object.freeze(env);
 }

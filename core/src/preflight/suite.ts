@@ -15,6 +15,7 @@
 
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { gateEnv } from "../adapters/env.ts";
 import { gatesConfigDigest } from "../contracts/command-ledger.ts";
 import type { DriverPreflightRecord, PreflightSuite, SuiteGateRow } from "../contracts/driver-preflight.ts";
 import type { AwsfConfig } from "../config/schema.ts";
@@ -131,6 +132,14 @@ function detail(error: unknown): string {
  */
 export async function runBaselineSuite(request: BaselineSuiteRequest): Promise<SuiteGathering> {
   const runCommand = request.runCommand ?? runSystemCommand;
+  // The same allowlisted env the candidate's gates get (O6, B7-03), so the
+  // baseline row and the candidate row are measured under one environment.
+  let gateEnvironment: Readonly<Record<string, string>>;
+  try {
+    gateEnvironment = gateEnv(process.env);
+  } catch (error) {
+    return Object.freeze({ suite: null, unavailable: `the gate environment was refused, and no gate ran: ${detail(error)}`, reused: null, reusedFrom: null, baseline: null, runs: [] });
+  }
   let baseline: BaselineWorktree;
   try {
     baseline = await prepareBaselineWorktree({
@@ -149,6 +158,7 @@ export async function runBaselineSuite(request: BaselineSuiteRequest): Promise<S
     const started = Date.now();
     const result = runCommand(executable!, argv, {
       timeoutMs: gate.timeout_seconds * 1_000, cwd: baseline.path, maxBuffer: request.config.runtime.max_output_bytes,
+      env: gateEnvironment,
     });
     const durationMs = Date.now() - started;
     const outputPath = join(request.outputDir, `preflight-${gateId}.txt`);

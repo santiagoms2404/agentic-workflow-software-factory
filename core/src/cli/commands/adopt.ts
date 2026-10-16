@@ -20,6 +20,7 @@ import { ledgerGovernanceFailure, planCommandRecovery } from "../../workflow/com
 import { occurrenceKeyForAdoption, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
 import { existsSync, promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
+import { gateEnv } from "../../adapters/env.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
@@ -162,6 +163,7 @@ export interface AdoptionCommandInfrastructure extends ReviewPhaseInfrastructure
     readonly timeoutMs: number;
     readonly cwd: string;
     readonly maxBuffer: number;
+    readonly env: Readonly<Record<string, string>>;
   }): GitResult;
   sessionId(): string;
   pidIsLive(pid: number): boolean;
@@ -870,6 +872,9 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     // production-run.ts. A refusal must not leave behind its own exculpation.
     const ungoverned = ledgerGovernanceFailure(ledger, ADOPT_DISPATCHER, occurrenceKey);
     if (ungoverned !== null) throw new CommandLedgerRefusal("adoption tests", ungoverned);
+    // Built before the opening, as in production-run.ts: gates get the
+    // allowlisted env, never the host's whole environment (O6, B7-03).
+    const gateEnvironment = gateEnv(process.env);
     await ledgerStep("occurrence opening", () => persist("attempt.updated", {}, { type: "command-occurrence-opened", opening: {
       schema: "awsf.command-occurrence-opened/v1", dispatcherId: ADOPT_DISPATCHER,
       occurrenceKey, protocolVersion: COMMAND_LEDGER_PROTOCOL_VERSION, openedAt: infra.now(),
@@ -921,6 +926,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
           timeoutMs: configured.timeout_seconds * 1_000,
           cwd: status.worktree!,
           maxBuffer: options.config.runtime.max_output_bytes,
+          env: gateEnvironment,
         });
         const raw = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
         exitCode = result.status ?? -1;

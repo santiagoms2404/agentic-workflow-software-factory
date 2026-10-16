@@ -22,6 +22,7 @@ import type {
 } from "../../adapters/interface.ts";
 import { AdapterError, reservationIdOf } from "../../adapters/interface.ts";
 import { renderHeadroomAdvice, renderOwnerAlternatives, type AdviceSelector } from "../../lifecycle/renderer.ts";
+import { gateEnv } from "../../adapters/env.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { assertPrivateSystemPrompt, writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { injectOutputSchema } from "../../contracts/json-schema.ts";
@@ -1107,6 +1108,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     // production-run.ts. A refusal must not leave behind its own exculpation.
     const ungoverned = ledgerGovernanceFailure(ledger, REWORK_DISPATCHER, occurrenceKey);
     if (ungoverned !== null) throw new CommandLedgerRefusal("owner rework gates", ungoverned);
+    // Built before the opening, as in production-run.ts: gates get the
+    // allowlisted env, never the host's whole environment (O6, B7-03).
+    const gateEnvironment = gateEnv(HOST.process.env);
     await persist("attempt.updated", {}, { type: "command-occurrence-opened", opening: {
       schema: "awsf.command-occurrence-opened/v1", dispatcherId: REWORK_DISPATCHER,
       occurrenceKey, protocolVersion: COMMAND_LEDGER_PROTOCOL_VERSION, openedAt: infra.now(),
@@ -1149,6 +1153,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       const [executable, ...argv] = configured.argv;
       const result = infra.runCommand(executable!, argv, {
         timeoutMs: configured.timeout_seconds * 1_000, cwd: status.worktree!, maxBuffer: options.config.runtime.max_output_bytes,
+        env: gateEnvironment,
       });
       rawCommandOutput = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
       exit = result.status ?? -1;
