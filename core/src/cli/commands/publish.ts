@@ -6,7 +6,10 @@
 // durable BEFORE Git moves, because a local fast-forward is recoverable and a
 // durable approval is what recovery replays. A push is not undoable, so nothing
 // here may claim a publication before the remote has performed one: the push
-// runs first and the `L27` transition records what the remote actually did.
+// runs before anything is persisted and the `L27` transition records what the
+// remote actually did. The record itself is built and validated in memory
+// BEFORE the push, so a record that could never be persisted never moves the
+// remote (B3-02/B3-03).
 
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -264,6 +267,43 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
   // the publication must stop the command while there is still nothing to record.
   options.assertAdvancement?.(current.sessionId, "PUBLISHED");
 
+  // B3-02/B3-03: the transition and the output record are built and validated
+  // BEFORE the push, for the same reason as the guard above. Validating after
+  // it meant a status the closed schema refused moved the remote and then
+  // threw, and every retry pushed again and threw again. Only the push's
+  // reported outcomes are unknown here, so the record is validated with none
+  // and rebuilt below with the ones the remote reported; outcomes are a closed
+  // vocabulary, so that rebuild cannot change whether the record validates.
+  // Nothing here claims a publication: it is in memory until the persist.
+  const decision = authorizePublication(current, actor, true, true, observed.repository.checkoutClean);
+  const now = (options.now ?? ((): string => new Date().toISOString()))();
+  const publishRecord = (outcomes: readonly PublishOutcome[]) => {
+    const published = nextRevision(current, {
+      lifecycleState: decision.to,
+      lastActivityAt: now,
+      lastActivity: `L27 published ${candidateSha} to ${remoteName}/${branch}: ${outcomes.join(", ") || "no ref update reported"}`,
+      blocker: null,
+    });
+    const output = {
+      schema: PUBLISH_OUTPUT_SCHEMA_ID,
+      producerStatus: "success" as const,
+      summary: published.lastActivity,
+      artifacts: [],
+      notesForNextPhase: "",
+      kind: PUBLISH_OUTPUT_KIND,
+      terminalLines,
+      result: { outcome: "published" as const, status: published, outcomes },
+      // status.json uses this exact JSON.stringify call, with no trailing newline.
+      finalStatusBytes: JSON.stringify(published),
+    };
+    const parsed = parseEnvelope(JSON.stringify(output), PUBLISH_OUTPUT_SCHEMA_ID);
+    if (!parsed.valid) {
+      throw new Error(`invalid ${PUBLISH_OUTPUT_SCHEMA_ID}: ${parsed.violations.map((violation) => `${violation.path || "/"} ${violation.message}`).join("; ")}`);
+    }
+    return { published, parsed };
+  };
+  publishRecord([]);
+
   const run = runPublish(facts, repository, observed.remote, refspec, runner);
   if (run.decision === "refused") return { outcome: "refused", code: run.code, detail: run.detail };
   await options.afterPushed?.(run.outcomes);
@@ -277,31 +317,7 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
   // observation then reports the remote already at the candidate, the same
   // fourteen rows authorize, the push reports `already-current`, and this
   // transition completes.
-  const decision = authorizePublication(current, actor, true, true, observed.repository.checkoutClean);
-  const now = (options.now ?? ((): string => new Date().toISOString()))();
-  const published = nextRevision(current, {
-    lifecycleState: decision.to,
-    lastActivityAt: now,
-    lastActivity: `L27 published ${candidateSha} to ${remoteName}/${branch}: ${run.outcomes.join(", ") || "no ref update reported"}`,
-    blocker: null,
-  });
-  const result = { outcome: "published" as const, status: published, outcomes: run.outcomes };
-  const output = {
-    schema: PUBLISH_OUTPUT_SCHEMA_ID,
-    producerStatus: "success" as const,
-    summary: published.lastActivity,
-    artifacts: [],
-    notesForNextPhase: "",
-    kind: PUBLISH_OUTPUT_KIND,
-    terminalLines,
-    result,
-    // status.json uses this exact JSON.stringify call, with no trailing newline.
-    finalStatusBytes: JSON.stringify(published),
-  };
-  const parsed = parseEnvelope(JSON.stringify(output), PUBLISH_OUTPUT_SCHEMA_ID);
-  if (!parsed.valid) {
-    throw new Error(`invalid ${PUBLISH_OUTPUT_SCHEMA_ID}: ${parsed.violations.map((violation) => `${violation.path || "/"} ${violation.message}`).join("; ")}`);
-  }
+  const { published, parsed } = publishRecord(run.outcomes);
   const phaseId = `${current.sessionId}:publish`;
   const envelope = wrapEnvelope({
     envelopeId: `${phaseId}:0`,

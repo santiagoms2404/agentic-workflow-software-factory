@@ -3,6 +3,9 @@ import { PUBLISH_OUTCOMES } from "../publish/argv.ts";
 import { phaseEnvelope } from "./envelope-base.ts";
 import { CandidateSeedSchema } from "./candidate-seed.ts";
 import { PhaseRecoverySchema } from "./phase-recovery.ts";
+import { ReplayRecordSchema } from "./proving-ground.ts";
+import { ShiftManifestSchema } from "./shift-selection-record.ts";
+import { TicketSelectionSchema } from "./ticket-selection-record.ts";
 import { SHA_PATTERN } from "./test-output.ts";
 import { stringUnion } from "./typebox.ts";
 import { PhaseRouteSelectionSchema } from "../config/schema.ts";
@@ -29,7 +32,12 @@ const BudgetSchema = Type.Object(
       },
       { additionalProperties: false },
     ),
-    ceiling: Type.Integer({ minimum: 1 }),
+    // Optional because a status written before the ceiling became a dial records
+    // none (B3-02), and `withLegacyDefaults` deliberately leaves it ABSENT:
+    // `ceilingFor` reads absence as the tier default, which IS the legacy
+    // default. Writing a number in to satisfy this schema would claim the
+    // attempt recorded a ceiling it never did.
+    ceiling: Type.Optional(Type.Integer({ minimum: 1 })),
   },
   { additionalProperties: false },
 );
@@ -120,6 +128,13 @@ export const PublishedAttemptStatusSchema = Type.Object(
     lifecycleState: Type.Literal("PUBLISHED"),
     baseSha: NullableShaSchema,
     candidateSha: NullableShaSchema,
+    // The creation-time selections `awsf new` copies onto the status and every
+    // later revision carries (B3-03). Each is absent on every other workflow,
+    // so each is optional; this object is closed, and a key the status really
+    // carries but this schema omits refuses every such attempt's publication.
+    shift: Type.Optional(Type.Union([ShiftManifestSchema, Type.Null()])),
+    ticketSelection: Type.Optional(Type.Union([TicketSelectionSchema, Type.Null()])),
+    replay: Type.Optional(Type.Union([ReplayRecordSchema, Type.Null()])),
     phase: Type.Union([PhaseMeterSchema, Type.Null()]),
     budget: BudgetSchema,
     ceilingGrants: Type.Array(CeilingGrantSchema),
