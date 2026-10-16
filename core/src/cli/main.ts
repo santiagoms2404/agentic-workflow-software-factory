@@ -212,6 +212,19 @@ export function lightTierListingLabel(requestedPlan: string | undefined): string
   return requestedPlan === undefined ? label : `${label}; --plan ${requestedPlan} was not resolved`;
 }
 
+/**
+ * The refusal for a declared default plan whose registered ticket directory
+ * does not exist (B7-06, owner call O8). The flat specs/tickets set is not
+ * substituted for it: that set is the light tier and belongs to no plan.
+ */
+export class DefaultPlanTicketsMissing extends Error {
+  constructor(planStem: string, directory: string) {
+    super(`default plan ${JSON.stringify(planStem)} has no ticket directory at ${JSON.stringify(directory)}; `
+      + "the flat specs/tickets set is the light tier and belongs to no plan, so it is not listed in its place");
+    this.name = "DefaultPlanTicketsMissing";
+  }
+}
+
 interface TicketListing {
   readonly store: ReturnType<typeof ticketStoreFor>;
   /** Printed before the listing when the store is not a resolved plan's set. */
@@ -243,11 +256,15 @@ async function ticketStoreForList(repository: string, requestedPlan: string | un
   }
 
   const store = ticketStoreForPlan(resolved, planStem);
-  // Task 20 moves the existing flat default set after this resolver exists.
-  // Until then, the declared default retains the single-repository behaviour.
-  return listing(!existsSync(store.directory) && planStem === catalog.plans.default
-    ? ticketStoreFor(repository)
-    : store);
+  // B7-06, owner call O8 (R): this used to fall back to the flat store "until
+  // Task 20 moves the existing flat default set". W04 task 20 has landed
+  // (b4fca7a), so the shim's reason is gone, and reading the flat set here
+  // would present the light tier, which belongs to no plan, as the default
+  // plan's tickets — pairing by directory existence, which inv 12 forbids.
+  if (!existsSync(store.directory) && planStem === catalog.plans.default) {
+    throw new DefaultPlanTicketsMissing(planStem, store.directory);
+  }
+  return listing(store);
 }
 
 function adoptionTerminal(provided: OwnerTerminal | undefined): OwnerTerminal {
