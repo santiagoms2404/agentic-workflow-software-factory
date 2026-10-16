@@ -22,7 +22,7 @@
 // point — a rejection that arrives after `spawn()` has already returned has
 // already failed.
 
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess, type SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { IllegalSpawnSite } from "../state/errors.ts";
@@ -248,17 +248,40 @@ export function runSystemCommand(
   const options = typeof timeoutOrOptions === "number"
     ? { timeoutMs: timeoutOrOptions }
     : timeoutOrOptions;
-  const result = spawnSync(executable, [...argv], {
+  // The timeout bounds the whole command, not only its direct child (B1-17).
+  // spawnSync's timeout signals the one process it started, so the ssh, the
+  // credential helper or the test-runner workers that process started used to
+  // outlive it, unregistered, in the worktree the next gate runs in. Off
+  // Windows the command therefore gets its own process group — the same reason
+  // the provider launch is `detached` — and a timeout ends that group. Windows
+  // has no process groups to kill; there the direct child is all it bounds.
+  const grouped = process.platform !== "win32";
+  // `detached` is read by spawnSync exactly as by spawn (both go through the
+  // same argument normalisation into libuv's DETACHED flag), but the typings
+  // only declare it for spawn — hence the widened options type.
+  const spawnOptions: SpawnSyncOptionsWithStringEncoding & { readonly detached: boolean } = {
     encoding: "utf8",
     timeout: options.timeoutMs,
     shell: false,
     windowsHide: true,
+    detached: grouped,
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     ...(options.env === undefined ? {} : { env: { ...options.env } }),
     // A process table on a busy machine is large, and configured gate output is
     // bounded at this sole command boundary rather than after unbounded capture.
     maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
-  });
+  };
+  const result = spawnSync(executable, [...argv], spawnOptions);
+  const timedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
+  if (grouped && timedOut && result.pid > 0) {
+    // The leader is already dead and reaped; the group lives while anything is
+    // in it, so its id cannot have been handed to anyone else yet.
+    try {
+      process.kill(-result.pid, "SIGKILL");
+    } catch {
+      // ESRCH: nothing of the command was left running.
+    }
+  }
   return {
     status: result.status,
     stdout: result.stdout ?? "",
