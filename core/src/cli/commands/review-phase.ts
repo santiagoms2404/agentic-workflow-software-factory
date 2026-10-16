@@ -108,7 +108,7 @@ import {
   runMandatoryReview,
 } from "../../workflow/review-routing.ts";
 import type { AttemptEvent, AttemptStatus } from "./attempt.ts";
-import { ProductionRouteUnavailable, ProductionWorkflowUnsupported, artifactReader, isReviewTransportFailure, observedExitCode } from "./production-run.ts";
+import { ProductionRouteUnavailable, ProductionWorkflowUnsupported, artifactReader, cancelOrRecord, isReviewTransportFailure, observedExitCode } from "./production-run.ts";
 import {
   assertPromptCompositionCurrent,
   type RecordedRoute,
@@ -119,7 +119,12 @@ const { chmod, mkdir, readFile, realpath, writeFile } = fs;
 const HOST = globalThis as unknown as {
   process: { env: Readonly<Record<string, string>> };
   AbortController: new () => { signal: Parameters<TransportBroker["startProcess"]>[2]; abort(reason?: unknown): void };
+  setTimeout(callback: () => void, milliseconds: number): unknown;
+  clearTimeout(timer: unknown): void;
 };
+
+/** The abort and cancel reason the builder's silence timer gives, reused for the reviewer's. */
+const SILENCE_ELAPSED = "configured silence timeout elapsed";
 
 /** Marks the appended block so a compiled prompt says which turn it was. */
 export const CONTRACT_RETRY_HEADING = "ENVELOPE CONTRACT CORRECTION";
@@ -185,6 +190,19 @@ export class ReplacementReviewInconsistent extends Error {
 }
 
 /**
+ * Host-deterministic: the reviewer emitted nothing for the configured silence
+ * window, and the host aborted it and cancelled its process tree (H17: B8-01).
+ * Not a transport fault, so it earns no retry: a second silent turn would buy
+ * another call and another full window for the same nothing.
+ */
+export class ReviewProviderSilent extends Error {
+  constructor(detail: string) {
+    super(`the reviewer went silent: ${detail}`);
+    this.name = "ReviewProviderSilent";
+  }
+}
+
+/**
  * Every review failure the host can classify without interpreting a verdict,
  * and which host-observed code L17 records after the process exits.
  *
@@ -202,6 +220,7 @@ export function reviewFailureBlocker(
   if (failure instanceof ReviewEvidenceUnfit) return { code: "review-evidence-invalid", detail, edge: "L17" };
   if (failure instanceof PermissionBreach) return { code: "permission-breach", detail, edge: "L17" };
   if (failure instanceof ReplacementReviewInconsistent) return { code: "review-inconsistent", detail, edge: "L17" };
+  if (failure instanceof ReviewProviderSilent) return { code: "silence", detail, edge: "L17" };
   if (failure instanceof AdapterError && failure.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail, edge: "L17" };
   return null;
 }
@@ -970,22 +989,56 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         reservationId: held.id, adapterId: route.adapterId, role: route.agent.name,
       };
       const controller = new HOST.AbortController();
+      // The builder's silence bound from production-run.ts, which the reviewer
+      // loop lacked (H17: B8-01). A reviewer that stays alive and writes nothing
+      // never resumes the for-await, so `awsf review`, `awsf adopt` and the T2
+      // rework review all sat in REVIEWING with the process record open. The
+      // adapter reads the signal only once stdout ends, so the abort alone does
+      // not end the stream; the cancel does. The timer cannot await that cancel,
+      // so it is held here, and a failed cancel names itself in the reason.
+      // The turn then fails as `ReviewProviderSilent`, which L17 admits as
+      // `silence` in every caller's recovery.
+      const silence: { elapsed: boolean; cancelled: Promise<void>; failure: Error | null } = {
+        elapsed: false, cancelled: Promise.resolve(), failure: null,
+      };
+      const silenceFailure = (): ReviewProviderSilent => new ReviewProviderSilent(silence.failure?.message ??
+        `${SILENCE_ELAPSED}: no provider event for ${String(config.runtime.silence_timeout_seconds)} s`);
+      let idle: unknown | null = null;
+      const arm = (): void => {
+        if (idle !== null) HOST.clearTimeout(idle);
+        idle = HOST.setTimeout(() => {
+          silence.elapsed = true;
+          controller.abort(new Error(SILENCE_ELAPSED));
+          silence.cancelled = cancelOrRecord(turnTransport ?? undefined, SILENCE_ELAPSED, (failure) => { silence.failure = failure; });
+        }, config.runtime.silence_timeout_seconds * 1_000);
+        (idle as { unref?: () => void }).unref?.();
+      };
       const events: NormalizedEvent[] = [];
       let output = "";
       let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;
       let terminal: NormalizedEvent | null = null;
       state.observed = null;
-      for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
-        routeEventExact(event, route);
-        events.push(event);
-        if (event.kind === "text.delta") output += event.text;
-        if (event.kind === "model.resolved") resolved = { model: event.resolvedModel, provenance: event.provenance };
-        const outcome = observedProcessOutcome(event, event.hostAt);
-        if (outcome !== null) {
-          terminal = event;
-          state.observed = outcome;
+      arm();
+      try {
+        for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
+          arm();
+          routeEventExact(event, route);
+          events.push(event);
+          if (event.kind === "text.delta") output += event.text;
+          if (event.kind === "model.resolved") resolved = { model: event.resolvedModel, provenance: event.provenance };
+          const outcome = observedProcessOutcome(event, event.hostAt);
+          if (outcome !== null) {
+            terminal = event;
+            state.observed = outcome;
+          }
         }
+      } catch (error) {
+        await silence.cancelled;
+        throw silence.elapsed ? silenceFailure() : error;
+      } finally {
+        if (idle !== null) HOST.clearTimeout(idle);
       }
+      await silence.cancelled;
       const endedAt = infra.now();
       if (state.observed !== null) {
         const exitCode = terminal?.kind === "run.failed" ? await observedExitCode(turnTransport) : state.observed.exitCode;
@@ -1010,6 +1063,10 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         });
         state.processSettled = true;
       }
+      // What the reviewer said before going quiet is recorded above; the turn
+      // still fails as silence, never as the missing terminal (a transport
+      // retry) that follows from it.
+      if (silence.elapsed) throw silenceFailure();
       if (terminal?.kind === "run.failed") throw new AdapterError(route.adapter.id, terminal.errorCode, terminal.message);
       if (terminal?.kind === "run.cancelled") throw new AdapterError(route.adapter.id, "E_CANCELLED", terminal.reason);
       if (terminal?.kind !== "run.completed") throw new AdapterError(route.adapter.id, "E_TERMINAL_MISSING", "adapter event stream ended without a terminal");

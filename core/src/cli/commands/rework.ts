@@ -91,6 +91,8 @@ import {
   // The one realpath-contained artifact reader (H11: B8-02); rework keeps no copy.
   artifactReader,
   assertProductionConfigSnapshot,
+  // The silence timer's cancel, which must never become an unhandled rejection (H15, H17).
+  cancelOrRecord,
   ProductionRouteUnavailable,
   ProductionWorkflowUnsupported,
   requestOutput,
@@ -176,7 +178,12 @@ export function nextReworkPhaseOrdinal(evidence: readonly AttemptEvidence[]): nu
 const HOST = globalThis as unknown as {
   process: { env: Readonly<Record<string, string>> };
   AbortController: new () => { signal: Parameters<TransportBroker["startProcess"]>[2]; abort(reason?: unknown): void };
+  setTimeout(callback: () => void, milliseconds: number): unknown;
+  clearTimeout(timer: unknown): void;
 };
+
+/** The abort and cancel reason the builder's silence timer gives; `blocker` reads it as `silence`. */
+const SILENCE_ELAPSED = "configured silence timeout elapsed";
 
 export class OwnerReworkDefectRequired extends Error {
   constructor() {
@@ -963,23 +970,57 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name,
     };
     const controller = new HOST.AbortController();
+    // The builder's silence bound from production-run.ts, which this loop
+    // lacked (H17: B8-03). A provider that stays alive and writes nothing never
+    // resumes the for-await, so without it `awsf rework` held the attempt in
+    // RUNNING with the execution lease and the process record open, forever.
+    // The adapter reads the signal only once stdout ends, so the abort alone
+    // does not end the stream; the cancel does. The timer cannot await that
+    // cancel, so it is held here, and a failed cancel becomes the turn's error.
+    // Either way the turn fails with the silence reason and the catch below
+    // settles the process and takes L8, which admits `silence`.
+    const silence: { elapsed: boolean; cancelled: Promise<void>; failure: Error | null } = {
+      elapsed: false, cancelled: Promise.resolve(), failure: null,
+    };
+    const silenceFailure = (): Error => silence.failure ??
+      new Error(`${SILENCE_ELAPSED}: no provider event for ${String(options.config.runtime.silence_timeout_seconds)} s`);
+    let idle: unknown | null = null;
+    const arm = (): void => {
+      if (idle !== null) HOST.clearTimeout(idle);
+      idle = HOST.setTimeout(() => {
+        silence.elapsed = true;
+        controller.abort(new Error(SILENCE_ELAPSED));
+        silence.cancelled = cancelOrRecord(activeTransport.current ?? undefined, SILENCE_ELAPSED, (failure) => { silence.failure = failure; });
+      }, options.config.runtime.silence_timeout_seconds * 1_000);
+      (idle as { unref?: () => void }).unref?.();
+    };
     const events: NormalizedEvent[] = [];
     let output = "";
     let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;
     let terminal: NormalizedEvent | null = null;
-    for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
-      // Accumulate original deltas before scrubbing: a shape can span any boundary.
-      if (event.kind === "text.delta") output += event.text;
-      const safeEvent = scrubCredentials(event);
-      routeEventExact(safeEvent, route);
-      events.push(safeEvent);
-      if (safeEvent.kind === "model.resolved") resolved = { model: safeEvent.resolvedModel, provenance: safeEvent.provenance };
-      const outcome = observedProcessOutcome(safeEvent, safeEvent.hostAt);
-      if (outcome !== null) {
-        terminal = safeEvent;
-        observedProcess = outcome;
+    arm();
+    try {
+      for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
+        arm();
+        // Accumulate original deltas before scrubbing: a shape can span any boundary.
+        if (event.kind === "text.delta") output += event.text;
+        const safeEvent = scrubCredentials(event);
+        routeEventExact(safeEvent, route);
+        events.push(safeEvent);
+        if (safeEvent.kind === "model.resolved") resolved = { model: safeEvent.resolvedModel, provenance: safeEvent.provenance };
+        const outcome = observedProcessOutcome(safeEvent, safeEvent.hostAt);
+        if (outcome !== null) {
+          terminal = safeEvent;
+          observedProcess = outcome;
+        }
       }
+    } catch (error) {
+      await silence.cancelled;
+      throw silence.elapsed ? silenceFailure() : error;
+    } finally {
+      if (idle !== null) HOST.clearTimeout(idle);
     }
+    await silence.cancelled;
     const endedAt = infra.now();
     if (observedProcess !== null) observedProcess = { ...observedProcess, endedAt };
     // Provider output is evidence, not owner input. Scrub rather than abort.
@@ -1008,6 +1049,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       });
       processSettled = true;
     }
+    // What the provider said before going quiet is recorded above; the turn
+    // still fails as silence, never as the missing terminal that follows from it.
+    if (silence.elapsed) throw silenceFailure();
     if (terminal?.kind === "run.failed") throw new AdapterError(route.adapter.id, terminal.errorCode, terminal.message);
     if (terminal?.kind === "run.cancelled") throw new AdapterError(route.adapter.id, "E_CANCELLED", terminal.reason);
     if (terminal?.kind !== "run.completed") throw new AdapterError(route.adapter.id, "E_TERMINAL_MISSING", "adapter event stream ended without a terminal");
