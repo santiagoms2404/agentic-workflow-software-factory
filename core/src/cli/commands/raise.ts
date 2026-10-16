@@ -111,6 +111,33 @@ export class CeilingRaiseAttemptNotLive extends Error {
   }
 }
 
+/**
+ * A provider call is in flight: the attempt records a process or a reserved
+ * call (B9-03).
+ *
+ * The runner writes its status with the revision it cached, so a grant landing
+ * mid-call would make the run's next write fail its compare-and-swap and kill
+ * it — and the run's budget resolved its ceiling once at construction, so the
+ * raise would not even widen the call it interrupted. Like `awsf grant`, the
+ * act waits for a quiescent attempt.
+ */
+export class CeilingRaiseCallInFlight extends Error {
+  constructor(status: AttemptStatus) {
+    const process = status.process === null ? "no process recorded" : `process ${String(status.process.pid)} recorded`;
+    super(
+      `awsf raise ${status.taskId} requires a quiescent attempt: it is ${status.lifecycleState} with a provider call running ` +
+        `(${process}, ${status.budget.callsReserved} call(s) reserved), and a grant now would make the run's next status write fail; ` +
+        "wait for the call to finish, then raise again",
+    );
+    this.name = "CeilingRaiseCallInFlight";
+  }
+}
+
+/** Running, by the same test `awsf grant` refuses on: a recorded process or a reserved call. */
+function callInFlight(status: AttemptStatus): boolean {
+  return status.process !== null || status.budget.callsReserved !== 0;
+}
+
 /** The ceiling moved between the display and the write — another act landed. */
 export class CeilingRaiseRaced extends Error {
   constructor(displayed: number, observed: number) {
@@ -171,6 +198,7 @@ export async function raiseCommand(options: RaiseCommandOptions): Promise<RaiseC
   const calls = assertGrantCalls(options.calls);
   const reason = assertGrantReason(options.reason);
   if (isTerminalStatus(status)) throw new CeilingRaiseAttemptNotLive(status.lifecycleState, status.taskId);
+  if (callInFlight(status)) throw new CeilingRaiseCallInFlight(status);
 
   const from = effectiveCeiling(status);
   if (from + calls > MAX_CALL_CEILING) throw new CeilingRaiseBeyondBound(from, calls, status.taskId);
@@ -192,6 +220,8 @@ export async function raiseCommand(options: RaiseCommandOptions): Promise<RaiseC
   // this one add to a number nobody was shown.
   const current = await readAttempt(options.attemptDir);
   if (isTerminalStatus(current)) throw new CeilingRaiseAttemptNotLive(current.lifecycleState, current.taskId);
+  // A call may have started while the owner was deciding.
+  if (callInFlight(current)) throw new CeilingRaiseCallInFlight(current);
   if (effectiveCeiling(current) !== from) throw new CeilingRaiseRaced(from, effectiveCeiling(current));
 
   const at = (options.now ?? ((): string => new Date().toISOString()))();
