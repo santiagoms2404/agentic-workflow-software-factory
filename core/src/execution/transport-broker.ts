@@ -355,6 +355,50 @@ export class PromptDeliveryFailed extends Error {
   }
 }
 
+/**
+ * The gated child itself could not be created: `spawn()` failed, so no process
+ * exists, the provider never ran, and the barrier's start step refuses the
+ * launch (refunding its reservation) rather than the host dying of it.
+ *
+ * `spawn()` blames its executable for every ENOENT, and the executable here is
+ * the very node binary the host is running on. The ENOENT that actually happens
+ * is a working directory that is gone — an attempt worktree removed or pruned
+ * after preflight — so the message says which of the two it was.
+ */
+export class GatedSpawnFailed extends Error {
+  readonly runId: string;
+  readonly cwd: string;
+  readonly errorCode: string | null;
+
+  constructor(runId: string, cwd: string, cause: NodeJS.ErrnoException) {
+    const code = cause.code ?? null;
+    let detail = code ?? cause.message;
+    if (code === "ENOENT") {
+      detail += cwdMissing(cwd)
+        ? ": the working directory does not exist"
+        : `: the launcher's node binary ${JSON.stringify(process.execPath)} was not found`;
+    }
+    super(
+      `refusing ${runId || "(unnamed run)"}: the gated child could not be started in ` +
+        `${JSON.stringify(cwd)} (${detail})`,
+      { cause },
+    );
+    this.name = "GatedSpawnFailed";
+    this.runId = runId;
+    this.cwd = cwd;
+    this.errorCode = code;
+  }
+}
+
+function cwdMissing(cwd: string): boolean {
+  try {
+    accessSync(cwd, constants.F_OK);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT";
+  }
+}
+
 export class ProcessTransportBroker implements TransportBroker {
   readonly #options: BrokerOptions;
   readonly #launcherPath: string;
@@ -444,7 +488,7 @@ export class ProcessTransportBroker implements TransportBroker {
     let reattachedProof: VerifiedReconnectAuthorization | null = null;
     const outcome = await runLauncherBarrier({
       start: async () => {
-        const started = this.#spawnGated(executable, spec, registration.runId);
+        const started = await this.#spawnGated(executable, spec, registration.runId);
         held.child = started.child;
         return started.launch;
       },
@@ -617,32 +661,65 @@ export class ProcessTransportBroker implements TransportBroker {
    * cancellation whole: a provider that spawns its own children puts them in
    * this group, so `kill(-pgid)` reaches all of them rather than orphaning the
    * ones the host never saw.
+   *
+   * It resolves only once the child provably exists. `spawn()` reports most of
+   * its failures — a working directory that is gone, EMFILE, EAGAIN — not by
+   * throwing but as an `error` event on the ChildProcess, a tick later. An
+   * `error` nobody listens for is thrown, and nothing in core/src catches it at
+   * the process level: the HOST died before the barrier's start step could
+   * reject, so the reservation was never refunded and no RegistrationFailed was
+   * raised. So both shapes of failure — thrown now or emitted later — become a
+   * `GatedSpawnFailed` rejection here, which the barrier turns into a refused
+   * launch at "start" with the call given back.
+   *
+   * The `error` listener is never removed. After `spawn` the only thing left
+   * that emits on the ChildProcess is a failed `kill()` from `abandon`, which is
+   * already reported through the termination path; it must not crash the host
+   * either.
    */
-  #spawnGated(
+  async #spawnGated(
     executable: string,
     spec: ProcessSpec,
     runId: string,
-  ): { child: ChildProcess; launch: GatedLaunch } {
+  ): Promise<{ child: ChildProcess; launch: GatedLaunch }> {
     const payload = encodeLaunchPayload({ executable, argv: spec.argv });
-    const child = spawn(
-      process.execPath,
-      // The run id is the last argument and the launcher never reads it. It is
-      // there so a human looking at `ps` can tell which run a child blocked at
-      // the barrier belongs to — an opaque gated process is exactly the kind of
-      // thing nobody can act on at 2 a.m.
-      ["--no-warnings", "--experimental-strip-types", this.#launcherPath, payload, runId],
-      {
-        cwd: spec.cwd,
-        env: { ...spec.env },
-        detached: true,
-        // 0-2 are the provider's after the exec; 3 and 4 are the barrier's and
-        // are closed before it.
-        stdio: ["pipe", "pipe", "pipe", "pipe", "pipe"],
-      },
-    );
+    let child: ChildProcess;
+    try {
+      child = spawn(
+        process.execPath,
+        // The run id is the last argument and the launcher never reads it. It is
+        // there so a human looking at `ps` can tell which run a child blocked at
+        // the barrier belongs to — an opaque gated process is exactly the kind of
+        // thing nobody can act on at 2 a.m.
+        ["--no-warnings", "--experimental-strip-types", this.#launcherPath, payload, runId],
+        {
+          cwd: spec.cwd,
+          env: { ...spec.env },
+          detached: true,
+          // 0-2 are the provider's after the exec; 3 and 4 are the barrier's and
+          // are closed before it.
+          stdio: ["pipe", "pipe", "pipe", "pipe", "pipe"],
+        },
+      );
+    } catch (error) {
+      throw new GatedSpawnFailed(runId, spec.cwd, error as NodeJS.ErrnoException);
+    }
+
+    // The handshake attaches in the `spawn` handler itself, so its `exit`
+    // listener is in place before any I/O callback could deliver an exit.
+    const { identify } = await new Promise<{ identify: Promise<ProcessIdentity> }>((resolve, reject) => {
+      let spawned = false;
+      child.on("error", (error: NodeJS.ErrnoException) => {
+        if (spawned) return;
+        reject(new GatedSpawnFailed(runId, spec.cwd, error));
+      });
+      child.once("spawn", () => {
+        spawned = true;
+        resolve({ identify: this.#handshake(child) });
+      });
+    });
 
     let recorded: ProcessIdentity | null = null;
-    const identify = this.#handshake(child);
     const launch: GatedLaunch = {
       identify: async () => {
         recorded = this.#withObservedIdentity(await identify);
