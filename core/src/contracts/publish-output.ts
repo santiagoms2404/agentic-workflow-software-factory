@@ -55,6 +55,15 @@ const ReviewDegradationSchema = Type.Object(
   { additionalProperties: false },
 );
 
+/** The persistent mark `awsf start --stub true` leaves on the attempt it prepares. */
+const StubMarkSchema = Type.Object(
+  {
+    startedBy: Type.Literal("awsf start --stub true"),
+    at: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
 const LandingApprovalSchema = Type.Object(
   {
     candidateSha: Type.String({ pattern: SHA_PATTERN }),
@@ -141,6 +150,10 @@ export const PublishedAttemptStatusSchema = Type.Object(
     requiredReviewPresent: Type.Boolean(),
     journeyApproved: Type.Boolean(),
     protectedApprovalsValid: Type.Boolean(),
+    // Optional for the same reason as above: only a stub attempt carries them
+    // (owner call O7), and a T1 stub demonstration may still land and publish.
+    stub: Type.Optional(Type.Union([StubMarkSchema, Type.Null()])),
+    attestationProvenance: Type.Optional(Type.Union([Type.Literal("stub"), Type.Null()])),
     process: Type.Null(),
     landingApproval: Type.Union([LandingApprovalSchema, Type.Null()]),
     blocker: Type.Union([BlockerSchema, Type.Null()]),

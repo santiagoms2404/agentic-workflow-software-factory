@@ -204,7 +204,7 @@ test("dash refuses a projection newer than this binary before listening", async 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("the fixture simple-sdlc reaches the interactive owner boundary without a provider", async () => {
+test("the fixture simple-sdlc reaches the interactive owner boundary without a provider, and its stub attestations cannot land at T2", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-stub-sdlc-"));
   try {
     const canonical = join(root, "canonical");
@@ -216,12 +216,19 @@ test("the fixture simple-sdlc reaches the interactive owner boundary without a p
     mkdirSync(join(canonical, "node_modules", "fixture"), { recursive: true });
     writeFileSync(join(canonical, "node_modules", "fixture", "index.js"), "dependency\n");
     const created = await newCommand({ stateRoot: join(root, "state"), project: "agentic-workflow-software-factory", taskId: "T22", repository: canonical, request: k1Request("stub", "core/src/example.ts"), workflow: "simple-sdlc", tier: 2 });
-    await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath: "awsf.config.yaml", preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
+    await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath: "awsf.config.yaml", preflight: () => ({ adapter: true, sandbox: true, observability: true }), stub: true });
     const status = await runStubCommand(created.attemptDir);
     assert.equal(status.lifecycleState, "AWAITING_OWNER");
     assert.ok(status.candidateSha !== null);
-    const landed = await landCommand({ attemptDir: created.attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => true } });
-    assert.equal(landed.status.lifecycleState, "LANDED");
+    // Owner call O7: the stub's review and journey are fixture attestations, so
+    // the T2 land guard refuses them and the canonical branch never moves.
+    const head = execFileSync("git", ["-C", canonical, "rev-parse", "HEAD"], { encoding: "utf8" });
+    await assert.rejects(
+      landCommand({ attemptDir: created.attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => true } }),
+      /"stub" provenance/u,
+    );
+    assert.equal((await readAttempt(created.attemptDir)).lifecycleState, "AWAITING_OWNER");
+    assert.equal(execFileSync("git", ["-C", canonical, "rev-parse", "HEAD"], { encoding: "utf8" }), head);
     assert.equal(execFileSync("git", ["-C", canonical, "status", "--porcelain"], { encoding: "utf8" }), "");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -250,6 +257,7 @@ test("the bounded fixture window is RUNNING in WAL and rebuild preserves its fin
       configPath: "awsf.config.yaml",
       preflight: () => ({ adapter: true, sandbox: true, observability: true }),
       projectRecord: projection.project,
+      stub: true,
     });
 
     const final = await runStubCommand(created.attemptDir, {

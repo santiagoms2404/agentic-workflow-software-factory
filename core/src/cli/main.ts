@@ -793,9 +793,15 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           attemptDir: located.attemptDir,
           worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
           configPath,
-          // --stub replaces only the adapter's availability probe. K1 runs before
-          // it inside startCommand, and no flag of this arm reaches past K1.
-          ...(parsed.flags.stub === "true" ? { preflight: () => ({ adapter: true, sandbox: true, observability: true }) } : {}),
+          // --stub injects the fixture preflight seam (the adapter probe, and with
+          // it the start-time prompt check; the run composes prompts again before
+          // any provider). K1 runs before it inside startCommand, and no flag of
+          // this arm reaches past K1. It also marks the attempt as a stub for good
+          // (owner call O7): only a marked attempt takes `run --stub true`, and
+          // nothing that run attests can satisfy the T2 land guard.
+          ...(parsed.flags.stub === "true"
+            ? { preflight: () => ({ adapter: true, sandbox: true, observability: true }), stub: true }
+            : {}),
           ...(parsed.flags["visual-references"] === undefined ? {} : { visualReferences: parsed.flags["visual-references"] }),
           projectRecord: projection.project,
         });

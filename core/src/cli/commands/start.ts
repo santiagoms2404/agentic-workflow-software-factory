@@ -64,6 +64,13 @@ export interface StartCommandOptions {
    * started with it can never run its bound phases without it.
    */
   readonly visualReferences?: string;
+  /**
+   * `awsf start --stub true`: the PREPARED revision carries the persistent stub
+   * mark (owner call O7), so the attempt is a fixture demonstration for good.
+   * `awsf run --stub true` runs nothing else, and whatever that run attests is
+   * refused by the T2 land guard.
+   */
+  readonly stub?: boolean;
 }
 
 async function defaultPreflight(status: AttemptStatus, configPath: string): Promise<StartPreflight> {
@@ -406,6 +413,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     lifecycleState: decision.to,
     baseSha,
     worktree: managed.path,
+    ...(options.stub === true ? { stub: { startedBy: "awsf start --stub true", at: now } } : {}),
     lastActivityAt: now,
     lastActivity: `L1 prepared detached worktree at ${managed.path}`,
   });

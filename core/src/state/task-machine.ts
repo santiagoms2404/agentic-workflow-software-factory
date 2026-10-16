@@ -207,6 +207,13 @@ export interface LandingEvidence {
   journeyApproved: boolean;
   protectedApprovalsValid: boolean;
   fastForwardPreflightPasses: boolean;
+  /**
+   * Who wrote the review and journey flags above when it was not a reviewer
+   * and the owner; absent when they did. `"stub"` is the fixture run's mark
+   * (owner call O7). Deliberately `string`, as `TransitionReason.source` is: an
+   * unexpected value is what the guard exists to refuse at RUNTIME.
+   */
+  attestationProvenance?: string;
 }
 
 /** Host-observed proof that a shipped T0 analysis intentionally produced no tree. */

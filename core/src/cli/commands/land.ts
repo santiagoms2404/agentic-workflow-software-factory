@@ -84,17 +84,28 @@ function authorizeLanding(
         journeyApproved: status.journeyApproved,
         protectedApprovalsValid: status.protectedApprovalsValid,
         fastForwardPreflightPasses: inspection.clean && inspection.fastForwardPossible,
+        // Flags a stub run wrote are fixture attestations; L20 refuses them at
+        // T2 (owner call O7). Keyed on the run's provenance, not on the start
+        // mark: a stub-started attempt driven by a real run and a real journey
+        // carries real evidence.
+        ...(isStubAttested(status) ? { attestationProvenance: "stub" } : {}),
       },
     },
   });
 }
 
+/** A stub run wrote this attempt's gate, review and journey flags. */
+function isStubAttested(status: AttemptStatus): boolean {
+  return status.attestationProvenance === "stub";
+}
+
 function summaryFor(status: AttemptStatus, inspection: LandingInspection): LandingSummary {
+  const stub = isStubAttested(status);
   const verification = [
-    `- Deterministic gates: ${status.gatesPass ? "passed" : "not passed"}`,
+    `- Deterministic gates: ${status.gatesPass ? (stub ? "stub attestation, no gate ran" : "passed") : "not passed"}`,
     `- Candidate checked: ${inspection.candidateSha}`,
-    `- Required review: ${status.tier === 2 ? (status.requiredReviewPresent ? "recorded" : "missing") : "not required"}`,
-    `- End-user journey: ${status.tier === 2 ? (status.journeyApproved ? "approved" : "not approved") : "not required"}`,
+    `- Required review: ${status.tier === 2 ? (status.requiredReviewPresent ? (stub ? "stub attestation, no reviewer ran" : "recorded") : "missing") : "not required"}`,
+    `- End-user journey: ${status.tier === 2 ? (status.journeyApproved ? (stub ? "stub attestation, not the owner's journey" : "approved") : "not approved") : "not required"}`,
   ].join("\n");
   const risks = [
     `- Risk tier: T${String(status.tier)}`,

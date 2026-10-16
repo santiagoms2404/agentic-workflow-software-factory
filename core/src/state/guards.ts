@@ -363,6 +363,15 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     if (input.tier >= 2) {
       if (!isTrue(landing.requiredReviewPresent)) violations.push("the T2 opposite-provider review is missing");
       if (!isTrue(landing.journeyApproved)) violations.push("the T2 end-user journey was not approved");
+      // Two true flags are only as good as whoever wrote them. A stub run
+      // writes both with no reviewer and no owner (B7-07, owner call O7), and
+      // marks them; any recorded provenance is a writer other than a reviewer
+      // and the owner, so it is refused whatever its spelling.
+      if (landing.attestationProvenance !== undefined) {
+        violations.push(
+          `the T2 review and journey carry ${show(landing.attestationProvenance)} provenance; only a recorded review and the owner's journey satisfy L20`,
+        );
+      }
     }
     return violations;
   },

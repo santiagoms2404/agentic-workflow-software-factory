@@ -82,6 +82,7 @@ test("vague intent becomes a ready ticket that drives a zero-spend stub run", as
       worktreeRoot,
       configPath,
       preflight: () => ({ adapter: true, sandbox: true, observability: true }),
+      stub: true,
     });
     const status = await runStubCommand(created.attemptDir);
     assert.equal(status.lifecycleState, "AWAITING_OWNER");

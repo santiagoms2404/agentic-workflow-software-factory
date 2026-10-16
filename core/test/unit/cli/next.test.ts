@@ -168,7 +168,7 @@ test("real offline stub transitions persist the same rendered action next reads"
       repository, request: k1Request("exercise next without providers", "core/src/example.ts"), workflow: "simple-sdlc", tier: 2 });
     assert.equal((await nextCommand(created.attemptDir)).lines[0], created.status.nextAction);
     const prepared = await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"),
-      configPath: resolve("awsf.config.yaml"), preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
+      configPath: resolve("awsf.config.yaml"), preflight: () => ({ adapter: true, sandbox: true, observability: true }), stub: true });
     assert.equal((await nextCommand(created.attemptDir)).lines[0], prepared.nextAction);
     const states: string[] = [];
     const done = await runStubCommand(created.attemptDir, { projectRecord: (_record, status) => {

@@ -43,11 +43,16 @@ async function advance(
   const next = nextRevision(current, {
     lifecycleState: decision.to,
     ...(typeof evidence?.candidateSha === "string" ? { candidateSha: evidence.candidateSha } : {}),
+    // No gate, reviewer or owner wrote these four flags, and the record says so
+    // (owner call O7): `attestationProvenance: "stub"` travels with them, and
+    // L20 refuses it at T2, so the fixture's review and journey can never be
+    // landed as if a reviewer and the owner had made them.
     ...(to === "AWAITING_OWNER" ? {
       gatesPass: true,
       requiredReviewPresent: current.tier === 2,
       journeyApproved: true,
       protectedApprovalsValid: true,
+      attestationProvenance: "stub" as const,
     } : {}),
     lastActivityAt: new Date().toISOString(),
     lastActivity: `stub simple-sdlc reached ${decision.to} through ${decision.edge}`,
@@ -67,6 +72,12 @@ async function advance(
  */
 export async function runStubCommand(attemptDir: string, options: StubRunOptions = {}): Promise<AttemptStatus> {
   let status = await readAttempt(attemptDir);
+  // Only an attempt `awsf start --stub true` prepared is a stub attempt (O7).
+  // Without this, any session could run the fixture on a real PREPARED attempt
+  // and write the owner's attestations with no terminal and no lease (B7-07).
+  if ((status.stub ?? null) === null) {
+    throw new Error(`stub run refused: ${status.taskId} was not prepared by awsf start --stub true, so it is not a stub attempt; run it with awsf run ${status.taskId}`);
+  }
   if (status.lifecycleState !== "PREPARED") throw new Error(`stub run requires PREPARED, got ${status.lifecycleState}`);
   if (status.workflow !== "simple-sdlc") throw new Error("stub run is only available for simple-sdlc");
   if (status.worktree === null || status.baseSha === null) throw new Error("PREPARED attempt has no managed worktree or base SHA");
