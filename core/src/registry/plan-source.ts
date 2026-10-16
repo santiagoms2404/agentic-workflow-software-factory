@@ -83,6 +83,20 @@ export class PlanIdentifierGrammarError extends Error {
   }
 }
 
+export class PlanCheckoutUnresolvedError extends Error {
+  readonly code = "E_PLAN_CHECKOUT_UNRESOLVED";
+  readonly start: string;
+
+  constructor(start: string) {
+    super(
+      `directory ${JSON.stringify(start)} is not inside a git checkout (no .git at or above it); `
+      + "plan sources resolve only from a git checkout, so run awsf from inside one",
+    );
+    this.name = "PlanCheckoutUnresolvedError";
+    this.start = start;
+  }
+}
+
 function declarationStatement(html: string): string {
   return html.replace(/<[^>]*>/gu, "").replace(/&(?:nbsp|#160);/gu, " ").trim();
 }
@@ -246,12 +260,18 @@ export function scanAwsfPlanHtmlV1(html: string): {
   return Object.freeze({ milestones: Object.freeze(milestones), tasks: Object.freeze(tasks) });
 }
 
+/**
+ * The nearest directory at or above `start` holding a `.git` entry (a directory,
+ * or a worktree's gitfile). A directory with none above it is not a checkout:
+ * falling back to `start` would let any folder holding a catalog self-place its
+ * own plan root and shadow the registered placement, so it is refused by name.
+ */
 function checkoutRoot(start: string): string {
   let candidate = resolve(start);
   while (true) {
     if (existsSync(join(candidate, ".git"))) return candidate;
     const parent = dirname(candidate);
-    if (parent === candidate) return resolve(start);
+    if (parent === candidate) throw new PlanCheckoutUnresolvedError(resolve(start));
     candidate = parent;
   }
 }
