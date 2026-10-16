@@ -137,9 +137,9 @@ test("autonomy: owner-all unlocks every judgment act and is labeled owner-all, n
   }
 });
 
-test("autonomy: code-decided acts are live from the first lease, and nothing is live without one", () => {
+test("autonomy: code-decided acts are live under a lease that names them, and nothing is live without one", () => {
   for (const act of CODE_DECIDED_ACTS) {
-    assert.deepEqual([autonomyFor(act, [], "earned").live, autonomyFor(act, [], "earned").basis], [true, "code-decided"]);
+    assert.deepEqual([autonomyFor(act, [], "earned", [act]).live, autonomyFor(act, [], "earned", [act]).basis], [true, "code-decided"]);
     assert.deepEqual([autonomyFor(act, [], null).live, autonomyFor(act, [], null).basis], [false, "no-lease"]);
   }
   assert.equal(autonomyFor("rework", history("rework", [M, M, M, M, M, M, M, M]), null).live, false);
