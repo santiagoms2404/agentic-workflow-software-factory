@@ -73,6 +73,7 @@ import { OutputBudget, type OutputBudgetOptions } from "./stream/output-budget.t
 import {
   DEFAULT_EXIT_WAIT_MS,
   awaitExit,
+  awaitStderr,
   drainStderr,
   stderrSuffix,
 } from "./stream/transport-loop.ts";
@@ -785,7 +786,8 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
     } catch (error) {
       // The stream itself failed. A run whose bytes stopped arriving still owes
       // exactly one terminal, and a settlement for every tool call it left open.
-      await stderr.done;
+      // Bounded: a descendant holding the stderr pipe must not hang it.
+      await awaitStderr(stderr, this.#exitWaitMs);
       // The run may ALREADY have settled — the provider printed its terminal
       // and the pipe broke on the way out. Holding the terminal to measure the
       // exit code made that case lose it entirely: the sequencer is terminal,
@@ -806,7 +808,10 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
       return;
     }
 
-    await stderr.done;
+    // Bounded like the exit wait. Stderr closes only when every holder closes
+    // it, and a descendant that inherited the pipe can outlive the provider; an
+    // unbounded wait here withheld a terminal the provider had already written.
+    await awaitStderr(stderr, this.#exitWaitMs);
     if (held !== null) {
       yield* this.#settleHeld(transport, held);
       return;
