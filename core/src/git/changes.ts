@@ -46,7 +46,13 @@ export function runGit(runner: GitRunner, argv: readonly string[]): string {
  * vanishes because an agent restored it after it was already dirty.
  */
 export function captureChangeSet(repository: string, runner = systemGitRunner(repository)): ChangeSetFingerprint {
-  const fingerprint: Record<string, string> = {};
+  // A path is attacker-chosen data, so it never goes through a property
+  // assignment: `obj["__proto__"] = v` hits the Object.prototype setter and a
+  // root file named `__proto__` silently left the snapshot, and with it the
+  // path policy (B1-06). Paths collect in a Map, and `Object.fromEntries`
+  // defines each one as an own data property, so the snapshot stays the plain
+  // object every consumer compares and serializes, with `__proto__` included.
+  const fingerprint = new Map<string, string>();
   // `-z` is a safety property, not an optimization: newline, tab, quotes and
   // non-ASCII bytes in a filename must reach path policy as the path Git saw,
   // never as a display-quoted approximation. Disabling rename detection makes
@@ -59,18 +65,23 @@ export function captureChangeSet(repository: string, runner = systemGitRunner(re
     const added = record.slice(0, first);
     const deleted = record.slice(first + 1, second);
     const path = record.slice(second + 1);
-    if (path) fingerprint[path] = `${added},${deleted}`;
+    if (path) fingerprint.set(path, `${added},${deleted}`);
   }
   for (const path of runGit(runner, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")) {
-    if (path) fingerprint[path] = "untracked";
+    if (path) fingerprint.set(path, "untracked");
   }
-  return Object.freeze(fingerprint);
+  return Object.freeze(Object.fromEntries(fingerprint));
+}
+
+/** An own entry only: a path absent from a snapshot never reads an inherited member. */
+function entry(fingerprint: ChangeSetFingerprint, path: string): string | undefined {
+  return Object.hasOwn(fingerprint, path) ? fingerprint[path] : undefined;
 }
 
 /** Paths whose state changed, including appearances, removals, and reversions. */
 export function changedPaths(before: ChangeSetFingerprint, after: ChangeSetFingerprint): readonly string[] {
   return Object.freeze([...new Set([...Object.keys(before), ...Object.keys(after)])]
-    .filter((path) => before[path] !== after[path])
+    .filter((path) => entry(before, path) !== entry(after, path))
     .sort());
 }
 
