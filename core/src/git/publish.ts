@@ -2,10 +2,10 @@
 // to closed facts or closed failure codes before it leaves this module.
 //
 // INV-4 gives up the guarantee that no credential is read: publication inherits
-// and may invoke the owner's configured helper chain. It keeps the narrower
-// guarantee that no credential value passes through AWSF: nothing the helper
-// returns is read, held, logged, or journalled; no URL enters the argv; and AWSF
-// writes no credential configuration and no credential file.
+// and may invoke the owner's configured helper chain. Credentials returned by
+// that chain are never read, held, logged, or journalled. Configured push URLs
+// are used transiently for destination observation, never in the push argv or a
+// diagnostic/record; AWSF writes no credential configuration or credential file.
 
 import {
   authorizePublish,
@@ -172,9 +172,22 @@ function host(runner: GitRunner, remoteName: string): string | null {
 }
 
 function remoteTip(runner: GitRunner, remoteName: string, branch: string): string | null {
+  let destination: GitResult;
+  try {
+    destination = runner(["remote", "get-url", "--push", remoteName]);
+  } catch {
+    throw new PublishBlocked("remote-unreadable");
+  }
+  if (destination.status !== 0 || destination.error !== null) throw new PublishBlocked("remote-unreadable");
+  const pushUrl = destination.stdout.trim();
+  if (pushUrl.length === 0 || /[\r\n]/u.test(pushUrl)) throw new PublishBlocked("remote-unreadable");
+
   let result: GitResult;
   try {
-    result = runner(["ls-remote", remoteName, `refs/heads/${branch}`]);
+    // B1-21: `ls-remote <remoteName>` follows the fetch URL, not the push URL
+    // used by `git push <remoteName>`. The destination URL is used only for this
+    // observation and is never included in a diagnostic or publication record.
+    result = runner(["ls-remote", pushUrl, `refs/heads/${branch}`]);
   } catch {
     throw new PublishBlocked("remote-unreadable");
   }
