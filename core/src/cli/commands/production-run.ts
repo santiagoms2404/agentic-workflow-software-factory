@@ -35,7 +35,7 @@ import { assertSystemPromptSlot, writeSystemPromptFile } from "../../adapters/sy
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { composeOwnerAmendment, composeOwnerAmendmentChain, createOwnerAmendment, ownerAmendmentDeliveryAction, ownerText, type OwnerAmendmentDelivery } from "../../contracts/owner-amendment.ts";
 import { assertResumeInstruction, type ResumeInstruction } from "../../contracts/resume-instruction.ts";
-import { savedResultPermissions, savedResultTreeDigest, ResultSnapshotUnavailable } from "../../workflow/saved-phase-result.ts";
+import { savedResultPermissions, savedResultTreeDigest, savedResultTreeDigestOrSkip } from "../../workflow/saved-phase-result.ts";
 import type { SavedPhaseResult } from "../../contracts/saved-phase-result.ts";
 import { composeResumeInstruction, resumeInstructionContext } from "../../workflow/resume-instruction.ts";
 import { seedContext, assertSeedTarget, verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
@@ -1550,7 +1550,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // for the phase it measures, whole, before any adapter is asked anything.
     if (status.workflow === PROVE_WORKFLOW_ID) assertReplayArmRoute(recipe as ProveRecipe, status.routeOverrides);
     if (recovery === undefined) await validatePreparedRepository(status);
-    else await verifyRecoveryWorktree(status, recovery.inspected.checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, recovery.inspected.checkpoint));
+    else await verifyRecoveryWorktree(status, recovery.inspected.checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, recovery.inspected.checkpoint));
     const boundRecord = (await readAttemptEvidence(options.attemptDir)).findLast((evidence) => evidence.type === "visual-references-bound");
     visualBound = boundRecord?.type === "visual-references-bound" ? boundRecord.bound : null;
     visualBinding = await readVisualBinding(options.attemptDir, visualBound);
@@ -2573,14 +2573,14 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           parentSha, message: commitMessageFor(envelope.payload!), author: HOST_AUTHOR, committer: HOST_AUTHOR,
           changedPaths: [...changed], committedPaths: [...changesSinceBase(status.worktree!, parentSha, git)],
           contentDigest: await hostCommitContentDigest(status.worktree!, parentSha, git),
-          treeDigest: await savedResultTreeDigest(status.worktree!, git) } };
+          treeDigest: await savedResultTreeDigest(status.worktree!, git, options.config.runtime.seed_paths) } };
       }
       if (stageOrdinal(stage) > stageOrdinal("commit") && base.commitResult === null && base.commitIntent !== null) {
         const git = systemGitRunner(status.worktree!);
         const head = runGit(git, ["rev-parse", "HEAD"]).trim();
         return { ...base, commitResult: { intentId: base.commitIntent.intentId,
           commitSha: head === base.commitIntent.parentSha ? null : head,
-          treeDigest: await savedResultTreeDigest(status.worktree!, git) } };
+          treeDigest: await savedResultTreeDigest(status.worktree!, git, options.config.runtime.seed_paths) } };
       }
       return base;
     };
@@ -3018,9 +3018,12 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           if (!envelope.valid || envelope.payload === null) return;
           const original = budget.reservation(reservation.id)!;
           if (original.state !== "spent" || original.kind !== "single" || original.cost !== 1 || (original.edge !== null && original.edge !== "L4" && original.edge !== "L11")) throw new Error("completed reply has no original debit");
-          let treeDigest: string;
-          try { treeDigest = await savedResultTreeDigest(status.worktree!, systemGitRunner(status.worktree!)); }
-          catch (error) { if (error instanceof ResultSnapshotUnavailable) return; throw error; }
+          // B6-01: the same seed list every recovery verifier passes, so a
+          // seeded `node_modules` no longer pushes every reply past the ceiling;
+          // a tree that still cannot be snapshotted journals why before it skips.
+          const treeDigest = await savedResultTreeDigestOrSkip(status.worktree!, systemGitRunner(status.worktree!), options.config.runtime.seed_paths,
+            async reason => { await persist("attempt.updated", {}, { type: "phase-result-unsaved", phaseId: phaseDb, reason, at: infra.now() }); });
+          if (treeDigest === null) return;
           const stored = storedEnvelopes.get(phase.id)!;
           const pending: SavedPhaseResult = { phaseKey: phase.id, runId: runIdFor(envelope.correctionRound), ordinal,
             envelopeId: stored.envelopeId, envelopeDigest: recoveryDigest(stored), round: envelope.correctionRound,
@@ -3283,7 +3286,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if (budget.remaining >= initialCalls + 1) return false;
     const checkpoint = await checkpointAt("ceiling-pause", null);
     if (checkpoint === null) throw new Error("ceiling boundary has unsettled execution; no pause permitted");
-    await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+    await verifyRecoveryWorktree(status, checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
     const detail = `ceiling stop before ticket ${ticket} (${phase.id}): ${String(budget.committed)} of ${String(budget.ceiling)} calls spent; ` +
       `${ticket}, every ticket after it and the review need ${String(initialCalls)} call(s), and ${ticket}'s declared correction round needs 1 more`;
     await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
@@ -3316,7 +3319,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const checkpoint = await checkpointAt("ticket-block", null);
     if (checkpoint === null) return false;
     try {
-      await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+      await verifyRecoveryWorktree(status, checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
     } catch {
       return false;
     }
@@ -3440,7 +3443,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if (!isReviewPhase(next) && agentOrdinal > 0 && selectedQuota !== null && prefix.length === compiled.phases.indexOf(next)) {
       const checkpoint = await checkpointAt("quota-pause", selectedQuota);
       if (checkpoint === null) throw new Error("quota boundary has unsettled execution; no pause or refund permitted");
-      await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+      await verifyRecoveryWorktree(status, checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
       await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
         lastActivity: detail, lastActivityAt: infra.now() },
         { type: "quota-pause", checkpoint });
@@ -4075,7 +4078,7 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
       throw new Error("ticket block does not name its own ticket's gate phase");
     }
   }
-  await verifyRecoveryWorktree(status, checkpoint, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+  await verifyRecoveryWorktree(status, checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
   if (checkpoint.pending !== undefined) {
     const phase = recipe.phases[checkpoint.prefix.length];
     if (phase?.id !== checkpoint.pending.phaseKey || phase.schemaId !== inspected.pendingEnvelope?.schemaId) throw new Error("saved reply does not match the compiled phase");

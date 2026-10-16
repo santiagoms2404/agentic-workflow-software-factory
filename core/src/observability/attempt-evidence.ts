@@ -93,6 +93,14 @@ export type AttemptEvidence =
   | { readonly type: "protected-landing"; readonly authorization: import("../contracts/protected-grant.ts").ProtectedCandidateAuthorization }
   | { readonly type: "phase-result-ready"; readonly phase: PhaseEvidenceRecord; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "phase-validation-started"; readonly phaseId: string; readonly checkpointId: string }
+  /**
+   * A valid reply whose result-ready checkpoint was NOT written, because its
+   * worktree could not be snapshotted; `reason` is the refusal's message. The
+   * reply still proceeds, but a crash before acceptance cannot reuse it. Before
+   * B6-01 this skip left no trace at all. A projector no-op, like
+   * `phase-validation-started`.
+   */
+  | { readonly type: "phase-result-unsaved"; readonly phaseId: string; readonly reason: string; readonly at: string }
   | { readonly type: "phase-accepted"; readonly phase: PhaseEvidenceRecord; readonly accepted: import("../contracts/phase-recovery.ts").AcceptedPhase }
   | { readonly type: "quota-pause"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "ceiling-pause"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
