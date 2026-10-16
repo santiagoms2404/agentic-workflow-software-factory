@@ -37,6 +37,13 @@ const FORBIDDEN = [
   /\bpromises\s*\.\s*(?:unlink|rm|rmdir)\b/,
   /\bauto[-_]?delete\b/i,
   /worktree\s+(?:remove|prune)\b/,
+  // Git receives these as argv tokens, so a space/string scan cannot see the destructive pair.
+  /["'`]worktree["'`]\s*,\s*["'`](?:remove|prune)["'`]/,
+  /["'`]branch["'`]\s*,\s*["'`](?:-D|-d|--delete)["'`]/,
+  /["'`]update-ref["'`]\s*,\s*["'`](?:-d|--delete)["'`]/,
+  /["'`]reset["'`]\s*,\s*["'`]--hard["'`]/,
+  // `clean -f` is destructive; this also covers combined forms such as `-fdx` and `-dfx`.
+  /["'`]clean["'`]\s*,\s*["'`]-[a-z]*f[a-z]*["'`]/i,
   ...DESTRUCTIVE_REFSPEC_PATTERNS,
 ];
 
@@ -78,7 +85,7 @@ interface Source {
  * same file is still an offender. Entries no line used come back as `unused`,
  * so a lock release that moves or goes away cannot leave a stale excuse behind.
  */
-function fenceHits(sources: readonly Source[]): { offenders: string[]; unused: string[] } {
+export function fenceHits(sources: readonly Source[]): { offenders: string[]; unused: string[] } {
   const used = new Set<AllowedDelete>();
   const offenders: string[] = [];
   for (const { path, text } of sources) {
