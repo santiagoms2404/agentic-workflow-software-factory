@@ -1128,6 +1128,70 @@ export async function observedExitCode(transport: ProcessTransport | null | unde
   return (await awaitExit(transport, 0))?.code ?? null;
 }
 
+/**
+ * Cancel a provider's process tree from a place that cannot await it, such as
+ * the silence timer, without letting a failed cancel end the host (H15: B1-02).
+ *
+ * `cancel()` is `terminateTree()`, which throws `EnumerationUnavailable` when
+ * the census cannot run and `SignalUnavailable` when the signal cannot be
+ * delivered. A bare `void` of that promise was an unhandled rejection, and
+ * Node 22 exits on one, leaving the attempt RUNNING with nothing journaled.
+ * The returned promise never rejects: the failure is handed to `record`, and
+ * the turn that awaits it raises the recorded error, so it reaches the BLOCKED
+ * path with its reason. A tree that could not be cancelled may still be
+ * running; that is what the reason has to say.
+ */
+export async function cancelOrRecord(
+  transport: Pick<ProcessTransport, "cancel"> | undefined,
+  reason: string,
+  record: (failure: Error) => void,
+): Promise<void> {
+  if (transport === undefined) return;
+  try {
+    await transport.cancel(reason);
+  } catch (error) {
+    const cause = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    record(new Error(`${reason}; the provider process tree could not be cancelled: ${cause}`));
+  }
+}
+
+/** The ordered phase-state writes of one phase. See `phaseStateQueue`. */
+export interface PhaseStateQueue {
+  /** Queue a write behind every earlier one. Called by the engine, which cannot await it. */
+  readonly push: (next: PhaseState) => void;
+  /** Wait for every queued write; rejects with the first write that failed. */
+  readonly settled: () => Promise<void>;
+}
+
+/**
+ * Phase-state writes, in order, with their failure held rather than dropped
+ * (H15: B7-09).
+ *
+ * The engine reports a state through a `void` callback and goes on to other
+ * I/O (`store()` after `validating()`), so the first `await` of the chain can
+ * come well after a write has failed. A bare `.then` chain had no handler in
+ * that window, and the rejection ended the process before the BLOCKED path
+ * could run. Each link now catches; the first failure is kept, later states are
+ * not written (as the bare chain skipped them), and `settled()` raises that
+ * failure at the runner's next wait, where it becomes the BLOCKED reason.
+ */
+export function phaseStateQueue(write: (next: PhaseState) => Promise<void>): PhaseStateQueue {
+  let tail = Promise.resolve();
+  let failure: { readonly error: unknown } | null = null;
+  return {
+    push: (next) => {
+      tail = tail.then(async () => {
+        if (failure !== null) return;
+        try { await write(next); } catch (error) { failure = { error }; }
+      });
+    },
+    settled: async () => {
+      await tail;
+      if (failure !== null) throw failure.error;
+    },
+  };
+}
+
 const COLD_ENVELOPE_GATE_IDS: ReadonlySet<GateId> = new Set([
   "envelope_valid",
   "artifacts_exist",
@@ -1167,7 +1231,7 @@ function productionReviewBlocker(error: unknown): { code: string; detail: string
   return closestBlocker(error);
 }
 
-function closestBlocker(error: unknown): { code: string; detail: string } {
+export function closestBlocker(error: unknown): { code: string; detail: string } {
   const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   if (error instanceof PermissionBreach) return { code: "permission-breach", detail };
   if (error instanceof AdapterError && error.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail };
@@ -2617,10 +2681,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         }] : []),
       ],
     };
-    let phaseQueue = Promise.resolve();
-    const onPhaseState = (next: PhaseState): void => {
-      phaseQueue = phaseQueue.then(() => persistPhase(phase.id, next));
-    };
+    // Never a bare `.then` chain: a write that fails before the next wait is held
+    // and raised there, not left to end the process (H15: B7-09).
+    const phaseQueue = phaseStateQueue((next) => persistPhase(phase.id, next));
+    const onPhaseState = (next: PhaseState): void => phaseQueue.push(next);
     const realRegistration = registrationFor(phase, ordinal, route, reservation, runId, first, reviewContext !== null);
     const handle = continuityHandle(phase.id);
     // The conversation is opened before the first turn so the locator exists,
@@ -2702,7 +2766,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         if (restored !== null) throw new Error("saved reply validation cannot call a model");
         const turn = turnIndex;
         turnIndex += 1;
-        await phaseQueue;
+        await phaseQueue.settled();
         const turnRunId = runIdFor(turn);
         // Every turn — corrections included — re-proves the delivered bytes
         // before anything is held or launched, rather than trusting that the
@@ -2753,11 +2817,14 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           store: continuity, phaseKey: phase.id, round: turn, runtimeDir });
         const controller = new HOST.AbortController();
         let idle: unknown | null = null;
+        // The timer cannot await its cancel, so the cancel is held here and the
+        // turn awaits it below; a failed cancel becomes the turn's error (H15: B1-02).
+        const silence: { cancelled: Promise<void>; failure: Error | null } = { cancelled: Promise.resolve(), failure: null };
         const arm = (): void => {
           if (idle !== null) HOST.clearTimeout(idle);
           idle = HOST.setTimeout(() => {
             controller.abort(new Error("configured silence timeout elapsed"));
-            void turnLaunch.transport?.cancel("configured silence timeout elapsed");
+            silence.cancelled = cancelOrRecord(turnLaunch.transport, "configured silence timeout elapsed", (failure) => { silence.failure = failure; });
           }, options.config.runtime.silence_timeout_seconds * 1_000);
           (idle as { unref?: () => void }).unref?.();
         };
@@ -2844,10 +2911,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           }
         } catch (error) {
           await turnLaunch.transport?.cancel("canonical provider-event persistence or transport failed").catch(() => undefined);
-          throw error;
+          await silence.cancelled;
+          throw silence.failure ?? error;
         } finally {
           if (idle !== null) HOST.clearTimeout(idle);
         }
+        await silence.cancelled;
+        if (silence.failure !== null) throw silence.failure;
         if (visualDelivery !== null) {
           const observations = matchObservations(visualBound!.frames, observed.images ?? []);
           visualObservations.push(...observations.map((observation) => ({ ...observation, phaseId: phaseDb })));
@@ -2944,7 +3014,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         ...(restored === null ? {} : { initialEnvelope: recovery!.inspected.pendingEnvelope!, initialUsage: originalUsage.snapshot() }),
         onResultStored: async envelope => {
           if (protectedCapability !== undefined) assertProtectedOutput(protectedCapability, status.worktree!);
-          await phaseQueue;
+          await phaseQueue.settled();
           if (!envelope.valid || envelope.payload === null) return;
           const original = budget.reservation(reservation.id)!;
           if (original.state !== "spent" || original.kind !== "single" || original.cost !== 1 || (original.edge !== null && original.edge !== "L4" && original.edge !== "L11")) throw new Error("completed reply has no original debit");
@@ -2983,7 +3053,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         agentSessionId: status.sessionId,
         onPhaseState,
         onAccepted: async result => {
-          await phaseQueue;
+          await phaseQueue.settled();
           const gatedSha = reviewContext === null ? result.candidateSha : reviewContext.candidateSha;
           for (const report of result.gateReports) await persistGate(phase.id, report, gatedSha, result.correctionRounds);
           if (roleOf(phase.id) === "builder") {
@@ -3046,10 +3116,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         },
         ...(verifyCandidate === null ? {} : { verifyCandidate }),
       });
-      await phaseQueue;
+      await phaseQueue.settled();
       return { envelope: result.envelope.payload!, candidateSha: result.candidateSha };
     } catch (error) {
-      await phaseQueue;
+      await phaseQueue.settled();
       let failure = error;
       if (error instanceof PhaseGateFailure) {
         // Failed reports were persisted at the round that produced them. Path
