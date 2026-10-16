@@ -276,7 +276,8 @@ export class ProcessController {
    *
    * The grace period is POLLED rather than slept, so "up to 2 s" becomes "as
    * long as it actually needs" and a cancellation returns when the tree is
-   * really gone.
+   * really gone. It is timed monotonically, and a throw inside it still ends
+   * in the KILL before it propagates.
    *
    * The residual race — the last member exiting between the enumeration and the
    * signal — is not closeable with the APIs Node exposes. `pidfd_send_signal`
@@ -349,12 +350,34 @@ export class ProcessController {
       return { termSent: false, killSent: false, survivors: [], terminated: true, skipped: null };
     }
 
-    const termSent = this.port.signalGroup(group, "SIGTERM", survivors);
-    const deadline = Date.now() + graceMs;
-    while (Date.now() < deadline) {
-      await sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())));
-      survivors = members(this.port.census());
-      if (survivors.length === 0) break;
+    // The grace is timed on the MONOTONIC clock. `Date.now()` is the wall clock,
+    // which NTP, a VM resume or a manual set can step: back an hour and a 2 s
+    // grace becomes an hour with no KILL, forward an hour and it becomes one poll.
+    //
+    // And a grace that fails still ends in the KILL. A throw from the TERM
+    // (`SignalUnavailable`) or from a census inside the loop
+    // (`EnumerationUnavailable`) used to leave before the escalation, so a tree
+    // that ignores SIGTERM was left running by the very call meant to end it.
+    // The KILL goes to the last survivors actually enumerated, and then the
+    // ORIGINAL throw goes out: escalating is not reporting, and a supervisor whose
+    // TERM or census failed still may not claim what the ladder achieved. A KILL
+    // that also throws is dropped in favour of that first cause.
+    let termSent: boolean;
+    try {
+      termSent = this.port.signalGroup(group, "SIGTERM", survivors);
+      const deadline = performance.now() + graceMs;
+      while (performance.now() < deadline) {
+        await sleep(Math.min(pollMs, Math.max(1, deadline - performance.now())));
+        survivors = members(this.port.census());
+        if (survivors.length === 0) break;
+      }
+    } catch (failure) {
+      try {
+        this.port.signalGroup(group, "SIGKILL", survivors);
+      } catch {
+        // The first cause is the one the caller needs; see above.
+      }
+      throw failure;
     }
 
     let killSent = false;
