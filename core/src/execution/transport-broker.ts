@@ -334,6 +334,27 @@ export class LauncherExited extends Error {
   }
 }
 
+/**
+ * The released provider's prompt could not be written for a reason other than
+ * the provider having stopped reading (EPIPE, which is an early exit and not a
+ * refusal). The provider never received its prompt whole, so the host ended it.
+ */
+export class PromptDeliveryFailed extends Error {
+  readonly runId: string;
+  readonly errorCode: string | null;
+
+  constructor(runId: string, cause: NodeJS.ErrnoException) {
+    super(
+      `refusing ${runId || "(unnamed run)"}: the prompt could not be written to the provider's stdin ` +
+        `(${cause.code ?? cause.message}); the provider was ended rather than left running on part of it`,
+      { cause },
+    );
+    this.name = "PromptDeliveryFailed";
+    this.runId = runId;
+    this.errorCode = cause.code ?? null;
+  }
+}
+
 export class ProcessTransportBroker implements TransportBroker {
   readonly #options: BrokerOptions;
   readonly #launcherPath: string;
@@ -746,6 +767,22 @@ export class ProcessTransportBroker implements TransportBroker {
    * The prompt is written HERE, after release — never before. A prompt written
    * into a blocked launcher's stdin would sit in a pipe nobody is draining, and
    * one larger than the buffer would deadlock the host against its own barrier.
+   *
+   * The prompt's stdin carries its own `error` listener, and it has to. A
+   * provider that exits before draining its prompt — a bad flag, missing
+   * credentials, a startup crash — leaves every byte past the pipe buffer
+   * pending, and that write fails with EPIPE. Node raises it as an `error` on
+   * the stdin socket, an `error` nobody listens for is thrown, and nothing in
+   * core/src catches it at the process level: the HOST died, after
+   * `startProcess` had resolved and before the run's outcome was journaled.
+   *
+   * EPIPE is not a fault of the host's. It says the provider stopped reading,
+   * which is an early exit, and the exit itself — with the provider's own code —
+   * still arrives through `exit` below, the one path every caller already reads
+   * an outcome from. Any other stdin error is a prompt the provider did not
+   * receive whole, which is a launch the host refuses to let run: the tree is
+   * ended, and `exit` rejects with `PromptDeliveryFailed` naming the cause
+   * rather than resolving as if the provider had run on what it was given.
    */
   #transportFor(
     child: ChildProcess,
@@ -753,8 +790,21 @@ export class ProcessTransportBroker implements TransportBroker {
     identity: ProcessIdentity,
     spec: ProcessSpec,
   ): ProcessTransport {
-    const exit = new Promise<ProcessExit>((resolve) => {
-      child.once("exit", (code: number | null, signal: string | null) => resolve({ code, signal }));
+    let deliveryFailure: PromptDeliveryFailed | null = null;
+    const exit = new Promise<ProcessExit>((resolve, reject) => {
+      child.once("exit", (code: number | null, signal: string | null) => {
+        if (deliveryFailure === null) resolve({ code, signal });
+        else reject(deliveryFailure);
+      });
+    });
+    // A caller that never reads `exit` must not turn a refusal into an
+    // unhandled rejection — the very crash this listener exists to prevent.
+    exit.catch(() => undefined);
+    child.stdin?.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "EPIPE") return;
+      if (deliveryFailure !== null) return;
+      deliveryFailure = new PromptDeliveryFailed(runId, error);
+      this.#controller.terminateTree(identity).catch(() => undefined);
     });
     child.stdin?.end(spec.stdin);
     return {
