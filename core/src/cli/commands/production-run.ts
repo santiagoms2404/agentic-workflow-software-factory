@@ -59,7 +59,8 @@ import { PLAN_CONTEXT_SCHEMA_ID, type PlanContext } from "../../contracts/plan-c
 import { wrapEnvelope, type StoredEnvelope } from "../../contracts/stored-envelope.ts";
 import type { TestOutput } from "../../contracts/test-output.ts";
 import { CallBudget, type Reservation } from "../../execution/call-budget.ts";
-import type { BarrierRecord } from "../../execution/launcher-barrier.ts";
+import type { BarrierRecord, ProcessIdentity } from "../../execution/launcher-barrier.ts";
+import { LivenessMonitor, countingStream, livenessPollMs, type LivenessSupervisor } from "../../execution/liveness-monitor.ts";
 import {
   ProcessTransportBroker,
   resolveExecutable,
@@ -1161,9 +1162,28 @@ export async function cancelOrRecord(
   try {
     await transport.cancel(reason);
   } catch (error) {
-    const cause = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    record(new Error(`${reason}; the provider process tree could not be cancelled: ${cause}`));
+    record(cancelFailure(reason, error));
   }
+}
+
+/** The error a turn raises when the tree it tried to cancel may still be running. */
+function cancelFailure(reason: string, error: unknown): Error {
+  const cause = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return new Error(`${reason}; the provider process tree could not be cancelled: ${cause}`);
+}
+
+const SILENCE_ELAPSED = "configured silence timeout elapsed";
+
+/**
+ * The group-CPU reading of the supervisor a broker cancels through, when it
+ * exposes one. `ProcessTransportBroker` does, as `controller`. A broker that
+ * does not leaves the silence window blind to CPU, and a blind poll is not
+ * activity: such a provider stays alive only by writing output.
+ */
+function groupCpuReader(broker: TransportBroker | null): LivenessSupervisor["groupCpu"] | null {
+  const controller = (broker as { readonly controller?: Partial<Pick<LivenessSupervisor, "groupCpu">> } | null)?.controller;
+  const groupCpu = controller?.groupCpu;
+  return typeof groupCpu === "function" ? (identity: ProcessIdentity) => groupCpu.call(controller, identity) : null;
 }
 
 /** The ordered phase-state writes of one phase. See `phaseStateQueue`. */
@@ -2825,17 +2845,69 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         const retainedColdTurn = await openRetainedColdTurn({ agent: route.agent, adapter: route.adapter,
           store: continuity, phaseKey: phase.id, round: turn, runtimeDir });
         const controller = new HOST.AbortController();
-        let idle: unknown | null = null;
-        // The timer cannot await its cancel, so the cancel is held here and the
-        // turn awaits it below; a failed cancel becomes the turn's error (H15: B1-02).
+        // The silence window is process and output activity, never a decoded
+        // event (B1-13, B1-14). It used to be a timer re-armed on every event the
+        // adapter yielded: a provider deep in one long silent tool call, its group
+        // burning CPU, was cancelled while working, and one streaming thinking
+        // tokens with no progress reset it forever. Once the provider exists, a
+        // LivenessMonitor watches its group's CPU and the byte COUNT of its
+        // output; before that nothing can be active, so the launch is bounded by
+        // the clock alone.
+        //
+        // Neither trip can await its cancel where it fires, so the cancel is held
+        // here and the turn awaits it below; a failed cancel becomes the turn's
+        // error (H15: B1-02).
+        const silenceMs = options.config.runtime.silence_timeout_seconds * 1_000;
         const silence: { cancelled: Promise<void>; failure: Error | null } = { cancelled: Promise.resolve(), failure: null };
-        const arm = (): void => {
-          if (idle !== null) HOST.clearTimeout(idle);
-          idle = HOST.setTimeout(() => {
-            controller.abort(new Error("configured silence timeout elapsed"));
-            silence.cancelled = cancelOrRecord(turnLaunch.transport, "configured silence timeout elapsed", (failure) => { silence.failure = failure; });
-          }, options.config.runtime.silence_timeout_seconds * 1_000);
-          (idle as { unref?: () => void }).unref?.();
+        let launchWindow: unknown | null = null;
+        let liveness: LivenessMonitor | null = null;
+        const armLaunchWindow = (): void => {
+          launchWindow = HOST.setTimeout(() => {
+            launchWindow = null;
+            controller.abort(new Error(SILENCE_ELAPSED));
+            silence.cancelled = cancelOrRecord(turnLaunch.transport, SILENCE_ELAPSED, (failure) => { silence.failure = failure; });
+          }, silenceMs);
+          (launchWindow as { unref?: () => void }).unref?.();
+        };
+        const watchSilence = (transport: ProcessTransport): ProcessTransport => {
+          if (launchWindow !== null) HOST.clearTimeout(launchWindow);
+          launchWindow = null;
+          if (controller.signal.aborted) return transport;
+          const groupCpu = groupCpuReader(broker);
+          const monitor = new LivenessMonitor({
+            supervisor: {
+              groupCpu: (identity) => {
+                if (groupCpu === null) throw new Error("this broker exposes no process census");
+                return groupCpu(identity);
+              },
+              terminateTree: async () => {
+                controller.abort(new Error(SILENCE_ELAPSED));
+                return transport.cancel(SILENCE_ELAPSED);
+              },
+            },
+            identity: transport.identity,
+            silenceMs,
+            pollMs: livenessPollMs(silenceMs),
+          });
+          liveness = monitor;
+          silence.cancelled = monitor.finished.then((outcome) => {
+            if (outcome.error !== null) silence.failure = cancelFailure(SILENCE_ELAPSED, outcome.error);
+          });
+          // The first CPU reading is only a baseline; take it now so the first
+          // poll can already see the group working.
+          void monitor.tick();
+          monitor.start();
+          return {
+            ...transport,
+            stdout: countingStream(transport.stdout, (byteCount) => { monitor.noteOutput(byteCount); }),
+            stderr: countingStream(transport.stderr, (byteCount) => { monitor.noteOutput(byteCount); }),
+          };
+        };
+        const stopSilence = async (): Promise<void> => {
+          if (launchWindow !== null) HOST.clearTimeout(launchWindow);
+          launchWindow = null;
+          // After a trip this waits for the trip's cancel to settle.
+          await liveness?.stop();
         };
         const sandboxingBroker: TransportBroker = {
           startProcess: async (registered, spec, signal) => {
@@ -2883,12 +2955,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             brokerDelegatedReservations.add(reservation.id);
             const transport = await (broker ??= infra.createBroker(brokerOptions)).startProcess(registered, grant.spec, signal);
             turnLaunch.transport = transport;
+            const watched = watchSilence(transport);
             if (delivery !== null) {
               await persist("attempt.updated", {}, { type: "resume-instruction-delivery", phaseId: phaseDb,
                 delivery: { ...delivery, state: "submitted" }, at: infra.now() });
               submittedInstructions.add(delivery.amendmentDigest);
             }
-            return transport;
+            return watched;
           },
         };
         const request = { ...buildPhaseRequest({ agent: route.agent, prompt, systemPromptPath, cwd: status.worktree!,
@@ -2903,10 +2976,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         let terminal: NormalizedEvent | null = null;
         const observed: ObservedProviderSession = { sessionId: null, resolvedModel: null, costUsd: null,
           ...(visualDelivery === null ? {} : { images: [] }) };
-        arm();
+        armLaunchWindow();
         try {
           for await (const event of route.adapter.execute(request, sandboxingBroker, registration, controller.signal, observed)) {
-            arm();
+            // No re-arm here: a decoded event is content, not activity (B1-14).
             assertObservedRoute(event, route);
             events.push(event);
             if (event.kind === "text.delta") output += event.text;
@@ -2920,10 +2993,11 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           }
         } catch (error) {
           await turnLaunch.transport?.cancel("canonical provider-event persistence or transport failed").catch(() => undefined);
+          await stopSilence();
           await silence.cancelled;
           throw silence.failure ?? error;
         } finally {
-          if (idle !== null) HOST.clearTimeout(idle);
+          await stopSilence();
         }
         await silence.cancelled;
         if (silence.failure !== null) throw silence.failure;
