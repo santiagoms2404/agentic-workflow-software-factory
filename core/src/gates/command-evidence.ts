@@ -134,20 +134,24 @@ function failureWindow(
  * — the pilot's exact shape — keeps its identity, its diagnostic, and the
  * summary that proves how much else passed.
  *
- * Credential scrubbing runs on each window rather than on the whole output,
- * which is deliberate: the windows are what leaves the host, and scrubbing what
- * leaves is cheaper and harder to get wrong than scrubbing what is stored.
+ * Credential scrubbing runs once, on the whole output, BEFORE any window is
+ * cut (B10-01). Scrubbing each window after clipping it let a credential that
+ * straddled a clip edge through as a fragment no pattern recognises — the
+ * prefix plus too few characters at the head edge, or the bare body at the tail
+ * edge. Every count below therefore describes the scrubbed text the reader is
+ * shown; the stored, unwindowed output stays host-private and unscrubbed.
  */
 export function boundCommandOutput(
-  output: string,
+  rawOutput: string,
   options: CommandEvidenceOptions = {},
 ): BoundedCommandEvidence {
   const budget = options.budget ?? DEFAULT_EVIDENCE_BUDGET;
   const contextLines = options.contextLines ?? FAILURE_CONTEXT_LINES;
+  const output = scrubCredentialString(rawOutput);
   const totalChars = output.length;
   if (totalChars <= budget) {
     return Object.freeze({
-      head: scrubCredentialString(output),
+      head: output,
       failure: "",
       tail: "",
       failureLine: firstFailureLine(output.split("\n")) === null ? null : firstFailureLine(output.split("\n"))! + 1,
@@ -169,9 +173,9 @@ export function boundCommandOutput(
     const tail = clip(output, budget - half, "end");
     const kept = head.length + tail.length;
     return Object.freeze({
-      head: scrubCredentialString(head),
+      head,
       failure: "",
-      tail: scrubCredentialString(tail),
+      tail,
       failureLine: null,
       totalChars,
       omittedChars: Math.max(0, totalChars - kept),
@@ -189,9 +193,9 @@ export function boundCommandOutput(
   const tail = clip(output, remaining - head.length, "end");
   const kept = head.length + failure.length + tail.length;
   return Object.freeze({
-    head: scrubCredentialString(head),
-    failure: scrubCredentialString(failure),
-    tail: scrubCredentialString(tail),
+    head,
+    failure,
+    tail,
     failureLine: markerIndex + 1,
     totalChars,
     omittedChars: Math.max(0, totalChars - kept),
