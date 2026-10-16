@@ -59,7 +59,7 @@ import { PLAN_CONTEXT_SCHEMA_ID, type PlanContext } from "../../contracts/plan-c
 import { wrapEnvelope, type StoredEnvelope } from "../../contracts/stored-envelope.ts";
 import type { TestOutput } from "../../contracts/test-output.ts";
 import { CallBudget, type Reservation } from "../../execution/call-budget.ts";
-import type { BarrierRecord, ProcessIdentity } from "../../execution/launcher-barrier.ts";
+import type { BarrierRecord, ProcessIdentity, TerminationReport } from "../../execution/launcher-barrier.ts";
 import { LivenessMonitor, countingStream, livenessPollMs, type LivenessSupervisor } from "../../execution/liveness-monitor.ts";
 import {
   ProcessTransportBroker,
@@ -1160,10 +1160,25 @@ export async function cancelOrRecord(
 ): Promise<void> {
   if (transport === undefined) return;
   try {
-    await transport.cancel(reason);
+    const report = await transport.cancel(reason);
+    const failure = terminationReportFailure(reason, report);
+    if (failure !== null) record(failure);
   } catch (error) {
     record(cancelFailure(reason, error));
   }
+}
+
+/** A returned report is not proof of termination when any member remains or the result is incomplete. */
+function terminationReportFailure(reason: string, report: TerminationReport): Error | null {
+  const issues: string[] = [];
+  if (!report.terminated) issues.push("the termination report says the process tree is still active");
+  if (report.survivors.length > 0) {
+    issues.push(`surviving process id(s): ${report.survivors.map((pid) => String(pid)).join(", ")}`);
+  }
+  if (report.skipped !== null) issues.push(`termination was skipped: ${report.skipped}`);
+  return issues.length === 0
+    ? null
+    : new Error(`${reason}; provider process tree could not be confirmed terminated: ${issues.join("; ")}`);
 }
 
 /** The error a turn raises when the tree it tried to cancel may still be running. */
@@ -2891,7 +2906,11 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           });
           liveness = monitor;
           silence.cancelled = monitor.finished.then((outcome) => {
-            if (outcome.error !== null) silence.failure = cancelFailure(SILENCE_ELAPSED, outcome.error);
+            if (outcome.error !== null) {
+              silence.failure = cancelFailure(SILENCE_ELAPSED, outcome.error);
+            } else if (outcome.cancellation !== null) {
+              silence.failure = terminationReportFailure(SILENCE_ELAPSED, outcome.cancellation);
+            }
           });
           // The first CPU reading is only a baseline; take it now so the first
           // poll can already see the group working.
