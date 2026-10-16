@@ -21,12 +21,20 @@ export function hasTicketSelection(status: AttemptStatus): boolean {
   return ((status.shift ?? status.ticketSelection)?.tickets.length ?? 0) > 0;
 }
 
-/** A prepared commit or intent is not a closure record. Open rows still count. */
+/**
+ * A prepared commit or intent is not a closure record. Open rows still count.
+ * A record covers the sealed selection when each sealed ticket is in `tickets` or `notClosable`:
+ * for a shift, closeCommand offers only tickets the host recorded as built in the landed candidate
+ * and lists the others as not closable (W03 task 9, specs/awsf-v3-w03-ticket-closure.html), so a
+ * partial shift's record never names its unbuilt tickets in `tickets`. Such a record is a closure,
+ * not a missing one (W03 task 11: a closure that left rows open is not unclosed); its not-closable
+ * tickets keep it "open by the owner's choice" and stay listed on the record.
+ */
 export function closureReadout(status: AttemptStatus, records: readonly ClosureRecord[]): ClosureReadout {
   const selection = status.shift ?? status.ticketSelection;
   const record = records.findLast(record => record.candidateSha === status.candidateSha &&
     selection != null && record.plan === selection.plan &&
-    selection.tickets.every(ticket => record.tickets.includes(ticket.id))) ?? null;
+    selection.tickets.every(ticket => record.tickets.includes(ticket.id) || record.notClosable.includes(ticket.id))) ?? null;
   return { state: record === null ? "not closed" : record.rowsLeftOpen.length > 0 || record.notClosable.length > 0 || (record.lightState !== undefined && record.lightState.newValue !== "done")
     ? "open by the owner's choice" : "closed", record };
 }
