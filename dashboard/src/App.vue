@@ -13,6 +13,7 @@ import { usePolling, type PollMode } from "./composables/usePolling.ts";
 import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
 import { loadAllSessions } from "./session-pages.ts";
+import { memoizeUntilRejected } from "./memo-loader.ts";
 import { DEFAULT_METRICS_ROUTE, isMetricsRoute, parseMetricsRoute, readRoleColors, type MetricsRouteState } from "./metrics-lens.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
@@ -102,33 +103,33 @@ function readEnabledWorkflows(value: unknown): readonly string[] {
   return workflowIds;
 }
 
-// The group list is titles and counts, not trees: one read at startup, and the
+// The group list is titles and counts, not trees: one successful read, and the
 // tree itself is fetched only when a reader opens one. Polling a 70-stage
-// journal every few seconds to render a heading would be an odd trade.
-let groupsRequest: Promise<void> | null = null;
+// journal every few seconds to render a heading would be an odd trade. A failed
+// read is not memoized: it rejects inside the memo, so the next poll reads
+// again, instead of one startup blip leaving the list empty for the page's life.
+const readGroups = memoizeUntilRejected(async () => {
+  const response = await fetch("/api/v1/groups");
+  if (!response.ok) throw new Error("Groups unavailable");
+  groups.value = await response.json() as GroupsResponse;
+});
 function loadGroupsOnce(): Promise<void> {
-  groupsRequest ??= (async () => {
-    const response = await fetch("/api/v1/groups");
-    if (!response.ok) return;
-    groups.value = await response.json() as GroupsResponse;
-  })().catch(() => {
-    // A project with no planning state is the ordinary case, not an error the
-    // sessions view should refuse to render over.
+  return readGroups().catch(() => {
+    // An empty group list is not an error the sessions view should refuse to
+    // render over; the failure is swallowed here, outside the memo, so it is
+    // retried on the next poll rather than kept.
   });
-  return groupsRequest;
 }
 
-let settingsRequest: Promise<void> | null = null;
-function loadSettingsOnce(): Promise<void> {
-  settingsRequest ??= (async () => {
-    const response = await fetch("/api/v1/settings");
-    if (!response.ok) throw new Error("Settings unavailable");
-    const payload: SettingsResponse = await response.json();
-    settings.value = payload.settings;
-    configuredWorkflows.value = readEnabledWorkflows(payload.settings);
-  })();
-  return settingsRequest;
-}
+// Settings are read once too, and a failed read likewise retries on the next
+// poll. Memoizing the rejection made every later poll reject until a reload.
+const loadSettingsOnce = memoizeUntilRejected(async () => {
+  const response = await fetch("/api/v1/settings");
+  if (!response.ok) throw new Error("Settings unavailable");
+  const payload: SettingsResponse = await response.json();
+  settings.value = payload.settings;
+  configuredWorkflows.value = readEnabledWorkflows(payload.settings);
+});
 
 function readRoute(): void {
   settingsRoute.value = location.hash === "#/settings";
