@@ -24,6 +24,10 @@ import {
 import { createPosixPort } from "./platform/posix.ts";
 import { createDarwinPort } from "./platform/darwin.ts";
 import { createWin32Port } from "./platform/win32.ts";
+// For the conveniences at the bottom only. transport-broker.ts imports this
+// module too; the cycle is safe because neither side touches the other's
+// bindings until call time.
+import { runSystemCommand } from "./transport-broker.ts";
 
 // ---------------------------------------------------------------------------
 // The supervision port — one contract, three implementations.
@@ -430,19 +434,29 @@ export function createHostController(options: HostPortOptions & { terminate?: Te
 
 // ---------------------------------------------------------------------------
 // Conveniences for callers that hold an identity and nothing else.
+//
+// They carry the same census runner the broker and `awsf cancel` hand their
+// ports (B1-16). Built with none, the darwin and win32 ports threw
+// EnumerationUnavailable on every call, and candidate-seed.ts read that as
+// "unknown" and refused every candidate seed off Linux with the processes
+// long gone.
 // ---------------------------------------------------------------------------
+
+function hostController(): ProcessController {
+  return createHostController({ command: runSystemCommand });
+}
 
 export function terminateGroup(
   recorded: ProcessIdentity,
   options: TerminateOptions = {},
 ): Promise<TerminationReport> {
-  return createHostController().terminateTree(recorded, options);
+  return hostController().terminateTree(recorded, options);
 }
 
 export function groupMembers(recorded: ProcessIdentity): readonly number[] {
-  return createHostController().groupMembers(recorded);
+  return hostController().groupMembers(recorded);
 }
 
 export function observeIdentity(pid: number): ProcessIdentity | null {
-  return createHostController().observeIdentity(pid);
+  return hostController().observeIdentity(pid);
 }
