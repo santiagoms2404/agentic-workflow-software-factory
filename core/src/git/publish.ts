@@ -26,6 +26,7 @@ import { systemGitRunner, type GitRunner, type GitResult } from "./changes.ts";
 export const PUBLISH_BLOCK_CODES = [
   "remote-unknown",
   "remote-unreadable",
+  "remote-ambiguous",
   "credentials-required",
   "mirror-configured",
   "git-failure",
@@ -36,6 +37,7 @@ export type PublishBlockCode = (typeof PUBLISH_BLOCK_CODES)[number];
 const PUBLISH_BLOCK_DETAILS: Readonly<Record<PublishBlockCode, string>> = {
   "remote-unknown": "The publication remote is not configured.",
   "remote-unreadable": "The publication remote could not be read.",
+  "remote-ambiguous": "A push URL of the publication remote names its host ambiguously; spell it without backslashes or encoded host characters.",
   "credentials-required": "The owner's configured credential helper provided nothing; fix the helper configuration and retry.",
   "mirror-configured": "The publication remote is configured as a mirror.",
   "git-failure": "Git could not complete publication.",
@@ -68,19 +70,62 @@ export type PublishRunResult =
       readonly outcomes: readonly PublishOutcome[];
     };
 
-function resolvedHost(remoteUrl: string): string | null {
-  try {
-    const parsed = new URL(remoteUrl);
-    if (parsed.protocol === "file:") return null;
-    return parsed.hostname.length === 0 ? null : parsed.hostname;
-  } catch {
-    // Git's scp-like syntax is not a URL: [user@]host:path.
-    if (/^[A-Za-z]:[\\/]/u.test(remoteUrl)) return null;
-    const match = /^(?:[^@/\s]+@)?(\[[^\]]+\]|[^:/\\\s]+):/u.exec(remoteUrl);
-    if (match === null) return null;
-    const hostname = match[1]!;
-    return hostname.startsWith("[") ? hostname.slice(1, -1) : hostname;
+// Git treats a remote as a URL only when it spells `scheme://`; anything else
+// with a colon before its first slash is the scp-like [user@]host:path form.
+const URL_FORM = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//u;
+
+/**
+ * The host Git's transport would read: the authority runs to the first `/`,
+ * `?` or `#`, and the host follows its last `@`. `undefined` means this reading
+ * cannot be made at all.
+ */
+function strictUrlHost(remoteUrl: string): string | null | undefined {
+  const rest = remoteUrl.replace(URL_FORM, "");
+  const end = rest.search(/[/?#]/u);
+  const authority = end === -1 ? rest : rest.slice(0, end);
+  const hostPort = authority.slice(authority.lastIndexOf("@") + 1);
+  let hostname: string;
+  if (hostPort.startsWith("[")) {
+    const close = hostPort.indexOf("]");
+    if (close === -1 || !/^(?::\d*)?$/u.test(hostPort.slice(close + 1))) return undefined;
+    hostname = hostPort.slice(0, close + 1);
+  } else {
+    hostname = hostPort.replace(/:\d*$/u, "");
+    if (hostname.includes(":")) return undefined;
   }
+  return hostname.length === 0 ? null : hostname.toLowerCase();
+}
+
+/**
+ * B1-08: WHATWG `URL` and Git's transport do not always read the same host,
+ * e.g. `https://allowed\@other/` is `allowed` to WHATWG while Git contacts
+ * `other`. A host check that one reader passes and the other contradicts does
+ * not constrain the destination, so such a URL is refused rather than guessed.
+ */
+function resolvedHost(remoteUrl: string): string | null {
+  if (remoteUrl.includes("\\")) throw new PublishBlocked("remote-ambiguous");
+
+  if (URL_FORM.test(remoteUrl)) {
+    let whatwg: URL;
+    try {
+      whatwg = new URL(remoteUrl);
+    } catch {
+      throw new PublishBlocked("remote-ambiguous");
+    }
+    const whatwgHost = whatwg.hostname.length === 0 ? null : whatwg.hostname;
+    if (strictUrlHost(remoteUrl) !== (whatwgHost === null ? null : whatwgHost.toLowerCase())) {
+      throw new PublishBlocked("remote-ambiguous");
+    }
+    return whatwg.protocol === "file:" ? null : whatwgHost;
+  }
+
+  // Git's scp-like syntax is not a URL: [user@]host:path. WHATWG would read
+  // `host:` as a scheme with no host, so it is not consulted here.
+  if (/^[A-Za-z]:\//u.test(remoteUrl)) return null;
+  const match = /^(?:[^@/\s]+@)?(\[[^\]]+\]|[^:/\s]+):/u.exec(remoteUrl);
+  if (match === null) return null;
+  const hostname = match[1]!;
+  return hostname.startsWith("[") ? hostname.slice(1, -1) : hostname;
 }
 
 function head(runner: GitRunner): string {
@@ -108,15 +153,22 @@ function clean(runner: GitRunner): boolean {
 function host(runner: GitRunner, remoteName: string): string | null {
   let result: GitResult;
   try {
-    result = runner(["remote", "get-url", "--push", remoteName]);
+    // B1-09: `--all`, because `git push` writes to every push URL and without
+    // it Git prints only the first. Git applies insteadOf/pushInsteadOf before
+    // printing, so these are the URLs the push will contact.
+    result = runner(["remote", "get-url", "--push", "--all", remoteName]);
   } catch {
     throw new PublishBlocked("remote-unknown");
   }
   if (result.status !== 0 || result.error !== null) throw new PublishBlocked("remote-unknown");
 
-  // This is the remote URL's only lifetime. Only its parsed hostname survives.
-  const remoteUrl = result.stdout.trim();
-  return resolvedHost(remoteUrl);
+  // This is the remote URLs' only lifetime. Only their parsed hostnames survive.
+  const remoteUrls = result.stdout.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
+  if (remoteUrls.length === 0) throw new PublishBlocked("remote-unknown");
+  const hosts = remoteUrls.map(resolvedHost);
+  // Push URLs on more than one host have no single resolved host. `null` is
+  // refused by the remote-host-mismatch row whenever a host is allowlisted.
+  return hosts.every((candidate) => candidate === hosts[0]) ? (hosts[0] ?? null) : null;
 }
 
 function remoteTip(runner: GitRunner, remoteName: string, branch: string): string | null {
