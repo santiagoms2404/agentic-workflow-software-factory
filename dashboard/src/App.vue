@@ -14,7 +14,7 @@ import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
 import { loadAllSessions } from "./session-pages.ts";
 import { memoizeUntilRejected } from "./memo-loader.ts";
-import { planBanner, type PlanBanner } from "./plan-banner.ts";
+import { planBanner, sessionsPlanBanner, type PlanBanner } from "./plan-banner.ts";
 import { DEFAULT_METRICS_ROUTE, isMetricsRoute, parseMetricsRoute, readRoleColors, type MetricsRouteState } from "./metrics-lens.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
@@ -51,6 +51,8 @@ const emptyBacklog = (): TicketsResponse => ({ plans: [], tickets: [], ready: []
 const backlog = ref<TicketsResponse>(emptyBacklog());
 /** Said over the board when its catalog does not resolve: refused, or stale (O4). */
 const backlogBanner = ref<PlanBanner | null>(null);
+/** The same, over the views that draw runs against the sessions route's plan list. */
+const sessionsBanner = computed(() => sessionsPlanBanner(sessions.value));
 
 let hasSeededWorkflowSelection = false;
 let hasSeededLifecycleSelection = false;
@@ -261,13 +263,17 @@ const { enabled: soundEnabled, setEnabled: setSoundEnabled } = useNotifySound(co
     <SettingsRoute v-if="settingsRoute" :settings="settings" :adapters="adapters.adapters" :health="health"
       :sound-enabled="soundEnabled" @update:sound-enabled="setSoundEnabled" />
     <MetricsScreen v-else-if="metricsRoute" :route="metricsState" :role-colors="roleColors" />
-    <CanvasScreen
-      v-else-if="canvasRoute"
-      :sessions="sessions.sessions"
-      :plans="sessions.plans"
-      :groups="groups.groups"
-      :route="canvasState"
-    />
+    <template v-else-if="canvasRoute">
+      <p v-if="sessionsBanner" class="error-bar" role="alert">
+        <strong>{{ sessionsBanner.heading }}</strong> {{ sessionsBanner.detail }}
+      </p>
+      <CanvasScreen
+        :sessions="sessions.sessions"
+        :plans="sessions.plans"
+        :groups="groups.groups"
+        :route="canvasState"
+      />
+    </template>
     <GroupsRoute v-else-if="groupsRoute" :groups="groups" :selected="selectedGroup" />
     <template v-else-if="backlogRoute">
       <p v-if="backlogBanner" class="error-bar" role="alert">
@@ -276,16 +282,20 @@ const { enabled: soundEnabled, setEnabled: setSoundEnabled } = useNotifySound(co
       <BacklogRoute :backlog="backlog" :plan="backlogPlan" />
     </template>
     <SessionRoute v-else-if="detail" :session="detail" :selected-phase-id="selectedPhaseId" />
-    <SessionsGrid
-      v-else
-      v-model:selected-workflows="selectedWorkflows"
-      v-model:selected-states="selectedLifecycleStates"
-      v-model:selected-plan-kinds="selectedPlanKinds"
-      v-model:selected-groups="selectedGroups"
-      :sessions="sessions.sessions"
-      :plans="sessions.plans"
-      :groups="groups.groups"
-      :workflows="configuredWorkflows"
-    />
+    <template v-else>
+      <p v-if="sessionsBanner" class="error-bar" role="alert">
+        <strong>{{ sessionsBanner.heading }}</strong> {{ sessionsBanner.detail }}
+      </p>
+      <SessionsGrid
+        v-model:selected-workflows="selectedWorkflows"
+        v-model:selected-states="selectedLifecycleStates"
+        v-model:selected-plan-kinds="selectedPlanKinds"
+        v-model:selected-groups="selectedGroups"
+        :sessions="sessions.sessions"
+        :plans="sessions.plans"
+        :groups="groups.groups"
+        :workflows="configuredWorkflows"
+      />
+    </template>
   </AppShell>
 </template>

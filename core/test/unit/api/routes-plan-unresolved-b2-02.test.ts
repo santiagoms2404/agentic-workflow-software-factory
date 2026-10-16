@@ -40,7 +40,14 @@ interface Checkout {
  * sources self-place against the working directory's checkout.
  */
 async function withCheckout(
-  layout: { readonly catalog: boolean; readonly plansRoot: boolean },
+  layout: {
+    readonly catalog: boolean;
+    readonly plansRoot: boolean;
+    /** Whether the default plan has its ticket directory; true unless said otherwise. */
+    readonly defaultTickets?: boolean;
+    /** A second, non-default plan with no ticket directory of its own. */
+    readonly ticketlessPlan?: string;
+  },
   run: (checkout: Checkout) => Promise<void>,
 ): Promise<void> {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "awsf-plan-unresolved-")));
@@ -48,9 +55,15 @@ async function withCheckout(
   mkdirSync(join(root, ".git"));
   if (layout.catalog) writeFileSync(catalogPath, CATALOG);
   if (layout.plansRoot) {
-    mkdirSync(join(root, "specs", "tickets", "fixture"), { recursive: true });
+    mkdirSync(join(root, "specs"), { recursive: true });
     writeFileSync(join(root, "specs", "fixture.html"), "<h3>Milestone M1</h3>");
-    writeFileSync(join(root, "specs", "tickets", "fixture", "T01.md"), TICKET);
+    if (layout.defaultTickets !== false) {
+      mkdirSync(join(root, "specs", "tickets", "fixture"), { recursive: true });
+      writeFileSync(join(root, "specs", "tickets", "fixture", "T01.md"), TICKET);
+    }
+    if (layout.ticketlessPlan !== undefined) {
+      writeFileSync(join(root, "specs", `${layout.ticketlessPlan}.html`), "<h3>Milestone M1</h3>");
+    }
   } else {
     // The flat light-tier store `awsf backlog` falls back to; the board never reads it.
     mkdirSync(join(root, "specs-flat", "tickets"), { recursive: true });
@@ -177,6 +190,53 @@ test("B2-02: a checkout with no catalog is refused by name, pointing at the ligh
       assert.match(refusal.error, /no awsf\.project\.yaml/u);
       assert.match(refusal.error, /awsf backlog/u);
       assert.equal(refusal.error.includes(root), false);
+    } finally { close(); }
+  });
+});
+
+test("B2-02: a default plan with no ticket directory is refused by name, not shown as an empty board", async () => {
+  await withCheckout({ catalog: true, plansRoot: true, defaultTickets: false }, async ({ root }) => {
+    const { router, close } = routerFor(root);
+    try {
+      const tickets = await router.dispatch(request("/api/v1/tickets"));
+      assert.deepEqual(
+        { status: tickets.status, code: (tickets.body as ApiError).code },
+        { status: 503, code: "PlanUnresolved" },
+      );
+      const refusal = tickets.body as ApiError;
+      assert.match(refusal.error, /default plan "fixture" has no ticket directory at "\.\/specs\/tickets\/fixture"/u);
+      assert.equal(refusal.error.includes(root), false, "the checkout path is not sent");
+
+      const sessions = (await router.dispatch(request("/api/v1/sessions"))).body as SessionsResponse;
+      assert.deepEqual(
+        { plans: sessions.plans, planError: sessions.planError },
+        { plans: [], planError: { code: "PlanUnresolved", message: refusal.error } },
+      );
+
+      // Once the directory exists the same router serves the board, unflagged.
+      mkdirSync(join(root, "specs", "tickets", "fixture"), { recursive: true });
+      writeFileSync(join(root, "specs", "tickets", "fixture", "T01.md"), TICKET);
+      const fixed = await router.dispatch(request("/api/v1/tickets"));
+      const board = fixed.body as TicketsResponse;
+      assert.deepEqual(
+        { status: fixed.status, uids: board.tickets.map((ticket) => ticket.uid), planError: board.planError },
+        { status: 200, uids: ["fixture/T01"], planError: undefined },
+      );
+    } finally { close(); }
+  });
+});
+
+test("B2-02: a non-default plan with no ticket directory yet still lists beside the default plan's tickets", async () => {
+  await withCheckout({ catalog: true, plansRoot: true, ticketlessPlan: "later" }, async ({ root }) => {
+    const { router, close } = routerFor(root);
+    try {
+      const tickets = await router.dispatch(request("/api/v1/tickets"));
+      assert.equal(tickets.status, 200);
+      const board = tickets.body as TicketsResponse;
+      assert.deepEqual(
+        { plans: board.plans.map((plan) => plan.id), uids: board.tickets.map((ticket) => ticket.uid), stale: board.stale, planError: board.planError },
+        { plans: ["fixture", "later"], uids: ["fixture/T01"], stale: undefined, planError: undefined },
+      );
     } finally { close(); }
   });
 });

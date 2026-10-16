@@ -1,4 +1,4 @@
-import type { PlanResolutionError, TicketsResponse } from "../shared/types.ts";
+import type { PlanResolutionError, SessionsResponse, TicketsResponse } from "../shared/types.ts";
 
 /**
  * What the plan board says when its catalog did not resolve (inv 12, owner
@@ -27,6 +27,28 @@ export function planRefusal(body: unknown): PlanResolutionError | null {
   const { code, error } = body as { code?: unknown; error?: unknown };
   if (code !== PLAN_UNRESOLVED || typeof error !== "string") return null;
   return { code: PLAN_UNRESOLVED, message: error };
+}
+
+/**
+ * The banner over the views that draw runs against the sessions route's plan
+ * list (the sessions board, the groups view, the canvas). That route never
+ * refuses, because its runs are database rows, so its two failed answers are a
+ * last good plan list beside `stale: true`, and an empty one beside the error.
+ */
+export function sessionsPlanBanner(body: Pick<SessionsResponse, "stale" | "planError">): PlanBanner | null {
+  if (body.planError === undefined) return null;
+  if (body.stale === true) {
+    return {
+      kind: "stale",
+      heading: "The plan catalog no longer resolves. Runs are shown against the last plan list that did.",
+      detail: body.planError.message,
+    };
+  }
+  return {
+    kind: "refused",
+    heading: "The plan catalog does not resolve, so runs are shown without their plans.",
+    detail: body.planError.message,
+  };
 }
 
 /** The banner for one read of the board, or null when the board is current. */

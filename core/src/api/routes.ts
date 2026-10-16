@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, resolve } from "node:path";
 import { queryPlanBacklog } from "../backlog.ts";
 import { PlanTicketReader } from "../persistence/plan-tickets.ts";
 import { loadCatalog } from "../registry/catalog.ts";
@@ -367,7 +367,19 @@ function resolveBoardPlanSources(repository: string): readonly ResolvedPlanSourc
     throw new Error(`no ${CATALOG_FILE} in this checkout: the board shows catalog plans only, `
       + "so light-tier tickets under specs/tickets are listed by `awsf backlog`, not here");
   }
-  return resolvePlanSources(catalogPath, loadCatalog(text));
+  const catalog = loadCatalog(text);
+  const sources = resolvePlanSources(catalogPath, catalog);
+  // A declared default plan whose ticket directory is missing used to read as
+  // an empty group, so the board was empty with HTTP 200 (B2-02's second case).
+  // The CLI refuses the same layout since W04 task 20 landed (B7-06, owner call
+  // O8), so the board does too rather than show the default plan as ticketless.
+  // A non-default plan with no directory yet is only a plan not ticketed yet.
+  const defaultSource = sources.find((source) => basename(source.planPath, ".html") === catalog.plans.default);
+  if (defaultSource !== undefined && !existsSync(defaultSource.ticketsPath)) {
+    throw new Error(`default plan ${JSON.stringify(catalog.plans.default)} has no ticket directory at `
+      + `${JSON.stringify(defaultSource.ticketsPath)}; the board does not show it as a plan with no tickets`);
+  }
+  return sources;
 }
 
 const PLAN_UNRESOLVED = "PlanUnresolved" satisfies PlanResolutionError["code"];
