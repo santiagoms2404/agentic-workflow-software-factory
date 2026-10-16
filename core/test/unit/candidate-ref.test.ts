@@ -190,10 +190,16 @@ test("every ticket's own candidate SHA is projected against its ticket id from t
 test("invariant 8's scans sweep candidate-ref.ts with no exemption added", () => {
   const module = "core/src/git/candidate-ref.ts";
   assert.ok(walkFiles(join(repoRoot(), "core", "src")).map(relRepo).includes(module), "no-destructive-paths walks every core/src file, this one included");
+  const fenceText = (fence: string) => readFileSync(join(repoRoot(), "core", "test", "unit", "meta", fence), "utf8");
   for (const fence of ["no-destructive-paths.test.ts", "no-land-route.test.ts"]) {
-    const text = readFileSync(join(repoRoot(), "core", "test", "unit", "meta", fence), "utf8");
-    assert.doesNotMatch(text, /candidate[-_]ref|refs\/awsf|exempt|allow(?:ed|list)/iu, `${fence} names no exemption`);
+    assert.doesNotMatch(fenceText(fence), /candidate[-_]ref|refs\/awsf/iu, `${fence} names no exemption for this module`);
   }
+  assert.doesNotMatch(fenceText("no-land-route.test.ts"), /exempt|allow(?:ed|list)/iu, "no-land-route.test.ts names no exemption");
+  // Owner call O2 gave the destructive-paths fence one argued allowlist: the four
+  // lock-release lines of operation-lease.ts and attempt-lock.ts. It may name those
+  // two modules and nothing else, so it can never excuse a ref write here.
+  const excused = [...fenceText("no-destructive-paths.test.ts").matchAll(/\{ file: "([^"]+)", line: /gu)].map((m) => m[1]);
+  assert.deepEqual([...new Set(excused)].sort(), ["core/src/execution/operation-lease.ts", "core/src/persistence/attempt-lock.ts"]);
   // The write's own shape: no delete flag, no batch that could carry one, and
   // every update-ref names the value it expects to replace.
   const source = readFileSync(join(repoRoot(), module), "utf8");
