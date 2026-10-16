@@ -27,8 +27,10 @@
 // made deliberately; replacing it silently would make the edge unauditable, and
 // correcting one is a separate explicit act that does not exist yet.
 
+import { join } from "node:path";
 import { renderNewAdvice } from "../../lifecycle/renderer.ts";
 import { latestAttemptNumber, locateAttempt, readAttempt, taskRoot } from "./attempt.ts";
+import { AttemptLock } from "../../persistence/attempt-lock.ts";
 import {
   appendTaskRelation,
   declaredContinuation as declaredRelation,
@@ -166,6 +168,11 @@ export async function declaredContinuation(
   return (await readAttempt(located.attemptDir)).continuesTask;
 }
 
+/** The task's relation lock, beside the `relations.jsonl` it guards. */
+export function relationLockPath(taskRoot: string): string {
+  return join(taskRoot, "relations.lock");
+}
+
 /** Continuation declarations already on record, walked from `start` outward. */
 async function declaredChain(stateRoot: string, project: string, start: string): Promise<string[]> {
   const chain: string[] = [];
@@ -197,16 +204,30 @@ export async function relateCommand(options: RelateCommandOptions): Promise<Rela
   const chain = await declaredChain(options.stateRoot, project, prior);
   if (chain.includes(taskId)) throw new RelateCycle(project, taskId, chain);
 
-  const existing = await declaredContinuation(options.stateRoot, project, taskId);
-  if (existing !== null) throw new RelateAlreadyDeclared(project, taskId, existing);
+  // The check and the append are one critical section under the task's
+  // relation lock. Unlocked, two declarations made at once (two driver panes)
+  // both passed the check before either appended, and each append opened its
+  // own Journal — which reads the file tail once per instance — so both were
+  // stamped source_seq 1 and every later read of the task's relations (and
+  // `awsf status` with it) threw "journal corrupt". Even when the seqs came out
+  // 1 and 2, the later declaration silently won, which is exactly the
+  // overwrite this command promises to refuse. The lock is the existing
+  // `AttemptLock`: a second holder, in this process or another, fails loudly
+  // on the `wx` lock file naming `relations.lock` rather than waiting on a
+  // holder that may never come back.
+  const relation = await new AttemptLock(relationLockPath(root)).withLock(async (): Promise<TaskRelation> => {
+    const existing = await declaredContinuation(options.stateRoot, project, taskId);
+    if (existing !== null) throw new RelateAlreadyDeclared(project, taskId, existing);
 
-  const at = (options.now ?? ((): string => new Date().toISOString()))();
-  const relation: TaskRelation = {
-    schema: "awsf/task-relation/v1", project, taskId, continuesTask: prior, reason, at,
-  };
+    const at = (options.now ?? ((): string => new Date().toISOString()))();
+    const declared: TaskRelation = {
+      schema: "awsf/task-relation/v1", project, taskId, continuesTask: prior, reason, at,
+    };
+    await appendTaskRelation(root, declared);
+    return declared;
+  });
   // Durable first, projected second: the declaration is the journal's, and a
   // projection that cannot be written degrades the screen, never the record.
-  await appendTaskRelation(root, relation);
   options.projectRelation?.(relation);
   return { relation, continuesTask: prior, attempts };
 }
