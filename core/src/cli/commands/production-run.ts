@@ -1,6 +1,6 @@
 import { closeSync, constants as fsConstants, existsSync, fstatSync, openSync, readFileSync, realpathSync, statSync, promises as fs } from "node:fs";
 import { renderHeadroomAdvice, renderAttemptNextAction, renderGrantRefusalAdvice } from "../../lifecycle/renderer.ts";
-import { assertGrantRefusedRecord, GRANT_REFUSED_SCHEMA_ID, type GrantRefusalBoundary, type GrantRefusedRecord } from "../../contracts/driver-preflight.ts";
+import { assertGrantRefusedRecord, boundedJoin, GRANT_REFUSED_SCHEMA_ID, K1_REASON_MAX_LENGTH, type GrantRefusalBoundary, type GrantRefusedRecord } from "../../contracts/driver-preflight.ts";
 import { grantOwedFor, writingPhases, type GrantOwed } from "../../preflight/grant-plan.ts";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -473,6 +473,17 @@ export class ProductionQuotaRefused extends Error {
  * L4 the attempt is still PREPARED; at a later phase it is RUNNING at the
  * resumable boundary before that phase. No lifecycle edge is requested.
  */
+/**
+ * The grant-refused record's reason. The record carries every uncovered path in
+ * `paths`; the reason lists as many as fit under the record's reason cap and
+ * counts the rest, so a long plan cannot make the refusal unjournalable (B3-01).
+ */
+export function grantRefusedReason(owed: GrantOwed): string {
+  const head = `phase ${owed.phase} writes planned protected path(s) `;
+  const tail = ` and ${owed.grantId === null ? "no grant for it is recorded" : `its recorded grant ${owed.grantId} covers none of them`}`;
+  return `${head}${boundedJoin(owed.paths, ", ", K1_REASON_MAX_LENGTH - head.length - tail.length)}${tail}`;
+}
+
 export class ProtectedGrantRefused extends Error {
   readonly phase: string;
   readonly paths: readonly string[];
@@ -1527,9 +1538,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   const grantRefusal = (owed: GrantOwed, boundary: GrantRefusalBoundary, callsSpent: number): GrantRefusedRecord => {
     const record: GrantRefusedRecord = { schema: GRANT_REFUSED_SCHEMA_ID, project: status.project, taskId: status.taskId, attempt: status.attempt,
       sessionId: status.sessionId, phase: owed.phase, paths: [...owed.paths], grantId: owed.grantId, boundary, callsSpent, preflightAt: preflight!.at,
-      reason: `phase ${owed.phase} writes planned protected path(s) ${owed.paths.join(", ")} and ` +
-        `${owed.grantId === null ? "no grant for it is recorded" : `its recorded grant ${owed.grantId} covers none of them`}`,
-      at: infra.now() };
+      reason: grantRefusedReason(owed), at: infra.now() };
     assertGrantRefusedRecord(record);
     return record;
   };

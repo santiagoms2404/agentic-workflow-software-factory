@@ -64,7 +64,32 @@ export type SuiteSource = (typeof SUITE_SOURCES)[number];
 const id = Type.String({ minLength: 1 });
 const sha = Type.String({ pattern: SHA_PATTERN });
 const digest = Type.String({ pattern: "^[0-9a-f]{64}$" });
-const reason = Type.String({ minLength: 1, maxLength: 4_000 });
+/** The longest reason any K1 record carries, in UTF-16 code units as the schema counts them. */
+export const K1_REASON_MAX_LENGTH = 4_000;
+const reason = Type.String({ minLength: 1, maxLength: K1_REASON_MAX_LENGTH });
+
+/**
+ * Joins as many leading items as fit in `maxLength` and ends with `… and N
+ * more` naming exactly how many were left out; a list that fits is joined
+ * unchanged. A refusal reason built from a list (K1's field problems, a
+ * grant's planned paths) must stay under the cap, or the record that carries
+ * the refusal fails its own schema and the refusal is never journaled (B3-01).
+ * When not even the bare count fits, the count alone is returned.
+ */
+export function boundedJoin(items: readonly string[], separator: string, maxLength: number = K1_REASON_MAX_LENGTH): string {
+  const full = items.join(separator);
+  if (full.length <= maxLength) return full;
+  let kept = 0;
+  let length = 0;
+  for (const [index, item] of items.entries()) {
+    length += (index === 0 ? 0 : separator.length) + item.length;
+    const suffix = `${separator}… and ${String(items.length - index - 1)} more`;
+    if (length + suffix.length > maxLength) break;
+    kept = index + 1;
+  }
+  const omitted = `… and ${String(items.length - kept)} more`;
+  return kept === 0 ? omitted : `${items.slice(0, kept).join(separator)}${separator}${omitted}`;
+}
 
 /** A pass carries no reason; a refusal always carries one a person can act on. */
 export const K1FieldResultSchema = Type.Union([

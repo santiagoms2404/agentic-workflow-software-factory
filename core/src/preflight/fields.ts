@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { CLOSURE_CUT, closeArgv, unclosedLandings, type LandingClosureFact } from "../closure/model.ts";
 import {
+  boundedJoin,
   FRESHNESS_REFUSALS,
   K1_FIELD_IDS,
+  K1_REASON_MAX_LENGTH,
   k1FieldKind,
   type FreshnessRefusal,
   requestPathsDigest,
@@ -33,8 +35,11 @@ export type FieldVerdict = { readonly passed: true } | { readonly passed: false;
 
 const PASS: FieldVerdict = Object.freeze({ passed: true });
 
+// The record caps every reason at K1_REASON_MAX_LENGTH, so a long problem list
+// keeps its leading problems and counts the rest; an unbounded join would make
+// the refusal fail its own record and never be journaled (B3-01).
 function verdict(problems: readonly string[]): FieldVerdict {
-  return problems.length === 0 ? PASS : Object.freeze({ passed: false, reason: problems.join("; ") });
+  return problems.length === 0 ? PASS : Object.freeze({ passed: false, reason: boundedJoin(problems, "; ", K1_REASON_MAX_LENGTH) });
 }
 
 /** A segment no configured glob names, standing in for "any segment" when a glob is tested as a path. */
