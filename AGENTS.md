@@ -13,7 +13,13 @@ not a judgement call. Several are mechanically enforced by meta-tests under
    pre-declared.
 3. **`node:child_process` is imported nowhere except
    `core/src/execution/transport-broker.ts`.** Enforced by the child-process
-   fence meta-test.
+   fence meta-test. Scoped to shipped code by owner amendment on 2026-10-16
+   (O5 of the whole-project review): "nowhere" means the code that fence
+   walks, which is exactly `core/src/**`, `dashboard/src/**` and
+   `docs/driving/**`, every file ending `.ts .tsx .vue .mts .cts .js .mjs .cjs`
+   except test files (`*.test.*` / `*.spec.*`). It does not cover
+   `core/test/**`, `dashboard/shared/**`, the rest of `docs/**`, or non-code
+   files (`.sh .md .json`). Tests may spawn.
 4. **No `shell: true`, anywhere.** Executable + argv array only. Enforced by the
    no-`shell:true` meta-test.
 5. **`core/src/state/**` imports nothing impure** — no I/O, no clock, no
