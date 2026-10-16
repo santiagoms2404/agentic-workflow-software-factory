@@ -34,6 +34,18 @@ export interface ApiError {
   code: string;
 }
 
+/**
+ * A plan catalog that did not resolve (inv 12, owner decision O4). The plan
+ * reads name it rather than fold it into an empty board: the tickets route
+ * refuses with this code when no catalog has ever resolved, and a last good
+ * set is served only beside `stale: true` and this error.
+ */
+export interface PlanResolutionError {
+  readonly code: "PlanUnresolved";
+  /** The resolver's or parser's own message, with the checkout path shown as `.`. */
+  readonly message: string;
+}
+
 export interface UsageTotals {
   inputTokens: number | null;
   outputTokens: number | null;
@@ -276,6 +288,10 @@ export interface SessionsResponse {
   sessions: SessionCard[];
   /** The catalog's registered plans, so a run can be shown as spine or deep. */
   plans: SessionPlan[];
+  /** Set only when `plans` is the last good set because the catalog no longer resolves. */
+  stale?: true;
+  /** Why the catalog did not resolve; `plans` is empty when it never did. */
+  planError?: PlanResolutionError;
 }
 
 export interface TransitionSummary {
@@ -479,6 +495,10 @@ export interface TicketsResponse {
     readonly tier: Readonly<Record<"T0" | "T1" | "T2", number>>;
   };
   readonly projectedCost: { readonly usd: number | null; readonly authority: CostAuthority; readonly partial: boolean };
+  /** Set only when this board is the last good catalog because the catalog no longer resolves. */
+  readonly stale?: true;
+  /** Why the catalog did not resolve, always beside `stale: true`. */
+  readonly planError?: PlanResolutionError;
 }
 
 export interface TicketSourceResponse {

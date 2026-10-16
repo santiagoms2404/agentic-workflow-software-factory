@@ -54,6 +54,7 @@ import type {
   PhaseDetailResponse,
   PhaseStatus,
   PhaseSummary,
+  PlanResolutionError,
   ProcessSummary,
   GroupsResponse,
   GroupTree,
@@ -330,15 +331,51 @@ export interface ApiRouter {
   close(): void;
 }
 
-/** Resolves dashboard ticket stores through the repository's declared catalog. */
-export function resolveTicketPlanSources(repository = process.cwd()): readonly ResolvedPlanSource[] {
-  const catalogPath = resolve(repository, "awsf.project.yaml");
+const CATALOG_FILE = "awsf.project.yaml";
+
+/**
+ * The catalog text, or null when the checkout has none. Only the catalog file's
+ * own absence is null: an ENOENT from resolving the plans root it declares is a
+ * plan that cannot be resolved, which inv 12 makes a failure (B2-03, B2-04).
+ */
+function readCatalogText(catalogPath: string): string | null {
   try {
-    return resolvePlanSources(catalogPath, loadCatalog(readFileSync(catalogPath, "utf8")));
+    return readFileSync(catalogPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return Object.freeze([]);
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
+}
+
+/** Resolves dashboard ticket stores through the repository's declared catalog. */
+export function resolveTicketPlanSources(repository = process.cwd()): readonly ResolvedPlanSource[] {
+  const catalogPath = resolve(repository, CATALOG_FILE);
+  const text = readCatalogText(catalogPath);
+  if (text === null) return Object.freeze([]);
+  return resolvePlanSources(catalogPath, loadCatalog(text));
+}
+
+/**
+ * The board's resolution. Unlike the CLI's, a checkout with no catalog is not
+ * an empty plan set: the board reads catalog plans only, so a light-tier
+ * checkout would otherwise show an empty board with nothing said (B2-02).
+ */
+function resolveBoardPlanSources(repository: string): readonly ResolvedPlanSource[] {
+  const catalogPath = resolve(repository, CATALOG_FILE);
+  const text = readCatalogText(catalogPath);
+  if (text === null) {
+    throw new Error(`no ${CATALOG_FILE} in this checkout: the board shows catalog plans only, `
+      + "so light-tier tickets under specs/tickets are listed by `awsf backlog`, not here");
+  }
+  return resolvePlanSources(catalogPath, loadCatalog(text));
+}
+
+const PLAN_UNRESOLVED = "PlanUnresolved" satisfies PlanResolutionError["code"];
+
+/** The resolver's own message, with the checkout path shown as `.`: plan reads never send paths. */
+function planResolutionError(error: unknown, repository: string): PlanResolutionError {
+  const message = error instanceof Error ? error.message : String(error);
+  return Object.freeze({ code: PLAN_UNRESOLVED, message: message.split(repository).join(".") });
 }
 
 interface PlanCatalog {
@@ -364,6 +401,24 @@ function planCatalog(sources: readonly ResolvedPlanSource[]): PlanCatalog {
   });
 }
 
+/** One read of the plan catalog: the set to serve, if any, and why it is not fresh. */
+interface PlanRead {
+  readonly catalog: PlanCatalog | null;
+  readonly error: PlanResolutionError | null;
+}
+
+/** The fields that say a plan list is stale, or never resolved; none when it is fresh. */
+function planReadFlags(read: PlanRead): { stale?: true; planError?: PlanResolutionError } {
+  if (read.error === null) return {};
+  return read.catalog === null ? { planError: read.error } : { stale: true, planError: read.error };
+}
+
+/** The catalog a plan route serves, or the named refusal when none has resolved. */
+function requireCatalog(read: PlanRead): PlanCatalog {
+  if (read.catalog !== null) return read.catalog;
+  throw new ApiRequestError(503, PLAN_UNRESOLVED, read.error?.message ?? "the plan catalog did not resolve");
+}
+
 function routeParams(routePath: string, segments: readonly string[]): Record<string, string> | null {
   const expected = routePath.split("/").slice(1);
   if (expected.length !== segments.length) return null;
@@ -384,20 +439,30 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
   // The catalog is re-resolved on every read rather than once at startup, so a
   // plan authored while `awsf dash` is up reaches the backlog without a
   // restart. The reader is rebuilt only when the resolved plan set changes,
-  // keeping its per-file cache across ordinary polls, and a catalog that fails
-  // to resolve mid-edit keeps serving the last good set.
-  let plans = planCatalog(options.planSources ?? resolveTicketPlanSources(options.repository));
-  const currentPlans = (): PlanCatalog => {
-    if (options.planSources !== undefined) return plans;
-    let sources: readonly ResolvedPlanSource[];
+  // keeping its per-file cache across ordinary polls.
+  //
+  // A catalog that fails to resolve is never a silent skip (inv 12, owner
+  // decision O4; B2-02, B2-03, B2-04, B2-17). It used to be one twice over: an
+  // ENOENT anywhere became an empty board with HTTP 200, and any other failure
+  // kept the last good set with nothing said. Now the dashboard stays up but
+  // says what it shows: with no good set yet the plan reads refuse with
+  // `PlanUnresolved` and the resolver's message, and a last good set is served
+  // only beside `stale: true` and that message. The router starts either way.
+  let plans: PlanCatalog | null = options.planSources === undefined ? null : planCatalog(options.planSources);
+  let planError: PlanResolutionError | null = null;
+  const currentPlans = (): PlanRead => {
+    if (options.planSources !== undefined) return { catalog: plans, error: null };
+    const repository = resolve(options.repository ?? process.cwd());
     try {
-      sources = resolveTicketPlanSources(options.repository);
-    } catch {
-      return plans;
+      const sources = resolveBoardPlanSources(repository);
+      if (plans === null || planCatalogKey(sources) !== plans.key) plans = planCatalog(sources);
+      planError = null;
+    } catch (error) {
+      planError = planResolutionError(error, repository);
     }
-    if (planCatalogKey(sources) !== plans.key) plans = planCatalog(sources);
-    return plans;
+    return { catalog: plans, error: planError };
   };
+  currentPlans();
   let archiveDb: DatabaseSync | null = null;
 
   const handlers: Readonly<Record<ApiRouteName, ApiHandler>> = {
@@ -431,9 +496,13 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         ...(state === undefined ? {} : { state }),
         archived: archivedRaw === "true",
       });
+      // Runs are database rows, so a catalog that does not resolve never refuses
+      // this list; the plan list beside them carries the error instead.
+      const planRead = currentPlans();
       return jsonResponse({
         sessions: rows.map((row) => card(readDb, row)),
-        plans: [...currentPlans().sessionPlans],
+        plans: [...(planRead.catalog?.sessionPlans ?? [])],
+        ...planReadFlags(planRead),
       } satisfies SessionsResponse);
     }),
     session: safely(async (_request, params) => {
@@ -548,7 +617,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         if (!/^[TW]\d\d$/u.test(ticket)) {
           throw new ApiRequestError(400, "invalid-query", "ticket must be a zero-padded Tnn or Wnn id");
         }
-        const source = await currentPlans().reader.source(plan, ticket);
+        const source = await requireCatalog(currentPlans()).reader.source(plan, ticket);
         if (source === null) throw new ApiRequestError(404, "ticket-not-found", "ticket not found");
         const body = { uid: `${plan}/${ticket}`, plan, ticket, source } satisfies TicketSourceResponse;
         // Repository ticket text is intentionally verbatim. Running it through
@@ -557,11 +626,12 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         return { ...response, body };
       }
 
+      const planRead = currentPlans();
       const backlog = await queryPlanBacklog(
-        currentPlans().reader,
+        requireCatalog(planRead).reader,
         backlogSessionCosts(readDb).map((row) => ({ taskId: row.task_id, estimatedCostUsd: row.estimated_cost_usd, costAuthority: row.cost_authority })),
       );
-      return jsonResponse(backlog satisfies TicketsResponse);
+      return jsonResponse({ ...backlog, ...planReadFlags(planRead) } satisfies TicketsResponse);
     }),
     groups: safely(async (request) => {
       // One route, two shapes, exactly as `tickets` above: the list without a

@@ -14,6 +14,7 @@ import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
 import { loadAllSessions } from "./session-pages.ts";
 import { memoizeUntilRejected } from "./memo-loader.ts";
+import { planBanner, type PlanBanner } from "./plan-banner.ts";
 import { DEFAULT_METRICS_ROUTE, isMetricsRoute, parseMetricsRoute, readRoleColors, type MetricsRouteState } from "./metrics-lens.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
@@ -46,7 +47,10 @@ const roleColors = computed(() => readRoleColors(settings.value));
 const backlogPlan = ref<string | null>(null);
 /** The driving session whose tree the groups screen is showing. */
 const selectedGroup = ref<string | null>(null);
-const backlog = ref<TicketsResponse>({ plans: [], tickets: [], ready: [], counts: { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } }, projectedCost: { usd: null, authority: "unavailable", partial: true } });
+const emptyBacklog = (): TicketsResponse => ({ plans: [], tickets: [], ready: [], counts: { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } }, projectedCost: { usd: null, authority: "unavailable", partial: true } });
+const backlog = ref<TicketsResponse>(emptyBacklog());
+/** Said over the board when its catalog does not resolve: refused, or stale (O4). */
+const backlogBanner = ref<PlanBanner | null>(null);
 
 let hasSeededWorkflowSelection = false;
 let hasSeededLifecycleSelection = false;
@@ -207,8 +211,18 @@ async function load(): Promise<void> {
     detail.value = null;
   } else if (kind === "backlog") {
     const response = nextData as Response;
-    if (!response.ok) throw new Error("Backlog unavailable");
-    backlog.value = await response.json() as TicketsResponse;
+    if (!response.ok) {
+      // A plan catalog that does not resolve is a named refusal, shown as a
+      // banner over an empty board rather than an empty board alone. Any other
+      // failure still fails the poll as before.
+      const refused = planBanner({ ok: false, body: await response.json().catch(() => null) });
+      if (refused === null) throw new Error("Backlog unavailable");
+      backlogBanner.value = refused;
+      backlog.value = emptyBacklog();
+    } else {
+      backlog.value = await response.json() as TicketsResponse;
+      backlogBanner.value = planBanner({ ok: true, body: backlog.value });
+    }
     detail.value = null;
   } else if (kind === "sessions") {
     sessions.value = nextData as SessionsResponse;
@@ -255,7 +269,12 @@ const { enabled: soundEnabled, setEnabled: setSoundEnabled } = useNotifySound(co
       :route="canvasState"
     />
     <GroupsRoute v-else-if="groupsRoute" :groups="groups" :selected="selectedGroup" />
-    <BacklogRoute v-else-if="backlogRoute" :backlog="backlog" :plan="backlogPlan" />
+    <template v-else-if="backlogRoute">
+      <p v-if="backlogBanner" class="error-bar" role="alert">
+        <strong>{{ backlogBanner.heading }}</strong> {{ backlogBanner.detail }}
+      </p>
+      <BacklogRoute :backlog="backlog" :plan="backlogPlan" />
+    </template>
     <SessionRoute v-else-if="detail" :session="detail" :selected-phase-id="selectedPhaseId" />
     <SessionsGrid
       v-else
