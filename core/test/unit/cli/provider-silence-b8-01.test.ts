@@ -282,7 +282,8 @@ function scripted(fixture: World, silent: Role | null, builderPauseMs = 0): Scri
   const open = new Set<() => void>();
   // Once released, a later launch (a transport retry) starts already closed.
   let released = false;
-  const release = (): void => { released = true; for (const close of [...open]) close(); };
+  // Deleting the entry being visited does not disturb a Set iteration, so no copy is needed.
+  const release = (): void => { released = true; for (const close of open) close(); };
 
   const fakeBroker = (options: BrokerOptions): TransportBroker => ({
     async startProcess(registration, spec) {
@@ -305,7 +306,7 @@ function scripted(fixture: World, silent: Role | null, builderPauseMs = 0): Scri
       if (released) close();
       return {
         runId: registration.runId, identity: record.identity,
-        stdout: (async function* () { await closed; })(), stderr: (async function* () {})(),
+        stdout: (async function* () { await closed; yield* []; })(), stderr: (async function* () {})(),
         exit: closed.then(() => ({ code: null, signal: "SIGTERM" })),
         cancel: async (reason: string) => {
           cancels.push(reason);
