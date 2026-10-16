@@ -45,7 +45,23 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
   }
 
   const root = taskRoot(options.stateRoot, prior.project, prior.taskId);
-  const attempt = (await latestAttemptNumber(root) ?? prior.attempt) + 1;
+  const latest = await latestAttemptNumber(root) ?? prior.attempt;
+  // Only the latest attempt may be retried (B9-05). Attempt n+1 carries the
+  // prior attempt's spend, so minting it from an older attempt would carry a
+  // smaller spend than the task has really used and let the task-lifetime
+  // ceiling stop binding — repeatably, since the older attempt never changes —
+  // and could leave two live attempts side by side. A live later attempt is
+  // named first because it is the one the owner has to settle.
+  if (latest > prior.attempt) {
+    for (let later = prior.attempt + 1; later <= latest; later += 1) {
+      const status = await readAttempt(join(root, String(later))).catch(() => null);
+      if (status !== null && !isTerminalStatus(status)) {
+        throw new Error(`cannot retry attempt ${prior.attempt}: attempt ${later} is live (${status.lifecycleState})`);
+      }
+    }
+    throw new Error(`attempt ${prior.attempt} is not the latest attempt (${latest}); retry attempt ${latest} instead`);
+  }
+  const attempt = latest + 1;
   if (attempt <= prior.attempt) throw new Error("retry attempt number did not advance");
   const dir = attemptDirectory(options.stateRoot, prior.project, prior.taskId, String(attempt));
   const now = (options.now ?? ((): string => new Date().toISOString()))();
