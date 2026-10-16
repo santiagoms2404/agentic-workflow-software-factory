@@ -99,6 +99,9 @@ test("a relaunch rewrite also tightens a prompt file left with a loose mode", { 
 });
 
 test("the production relaunch writer refuses the planted link and still rewrites a regular file", async () => {
+  // The production relaunch writes the prompt through `infra.writeSystemPrompt`;
+  // its default IS the exported safe writer, not a look-alike that could drift.
+  assert.equal(DEFAULT_INFRASTRUCTURE.writeSystemPrompt, writeSystemPromptFile);
   const { runtime, target } = await plantedRuntime();
   await assert.rejects(DEFAULT_INFRASTRUCTURE.writeSystemPrompt("SYSTEM PROMPT TEXT", runtime), /not a plain file|ELOOP/);
   assert.equal(await readFile(target, "utf8"), HOST_CONTENT);
