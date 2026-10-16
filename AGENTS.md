@@ -60,7 +60,13 @@ not a judgement call. Several are mechanically enforced by meta-tests under
     `built on: <provider>:<model>`) belongs only in the plan's
     `<dl>`/Amendments, never in the commit itself. Enforced by the
     no-agent-coauthor meta-test, which scans this repository's own commit
-    history (author, committer, and message trailers alike).
+    history (author, committer, and message trailers alike). One known
+    pre-fence breach stays in history by owner amendment on 2026-10-16 (O1 of
+    the whole-project review): commit
+    `e04664e3c85c3fc5d6f43353102d2215b501a803` carries an agent session
+    trailer in its message. It landed before the fence read message lines
+    beyond co-author trailers, and history is kept rather than rewritten. The
+    no-agent-coauthor fence exempts exactly that full SHA and no other commit.
 12. **A plan and its ticket set never disagree, and the pairing is resolved
     through the registered plan source rather than through directory
     adjacency.** Every ticket set belongs to exactly one plan. The plan's
