@@ -200,13 +200,35 @@ class PlanSelectionRequiredError extends Error {
   }
 }
 
+/**
+ * The line that heads a listing read from the flat store because the
+ * repository has no awsf.project.yaml (B7-05, owner call O8). That store is
+ * the light tier and belongs to no plan (inv 12), so the listing says so
+ * rather than passing for a plan's ticket set; a `--plan` it could not
+ * resolve is named, not silently dropped.
+ */
+export function lightTierListingLabel(requestedPlan: string | undefined): string {
+  const label = "light tier: no awsf.project.yaml, so this is the flat specs/tickets set, which belongs to no plan";
+  return requestedPlan === undefined ? label : `${label}; --plan ${requestedPlan} was not resolved`;
+}
+
+interface TicketListing {
+  readonly store: ReturnType<typeof ticketStoreFor>;
+  /** Printed before the listing when the store is not a resolved plan's set. */
+  readonly label?: string;
+}
+
 /** Uses a catalog when present, while retaining the original self-placed store otherwise. */
-async function ticketStoreForList(repository: string, requestedPlan: string | undefined) {
+async function ticketStoreForList(repository: string, requestedPlan: string | undefined): Promise<TicketListing> {
+  const listing = (store: ReturnType<typeof ticketStoreFor>): TicketListing => ({ store });
   let source: string;
   try {
     source = await readFile(resolve(repository, "awsf.project.yaml"), "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return ticketStoreFor(repository);
+    // Owner call O8 (R): with no catalog the flat store stays readable, labelled light tier.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { store: ticketStoreFor(repository), label: lightTierListingLabel(requestedPlan) };
+    }
     throw error;
   }
 
@@ -217,15 +239,15 @@ async function ticketStoreForList(repository: string, requestedPlan: string | un
   if (planStem === undefined) {
     if (candidates.length > 1) throw new PlanSelectionRequiredError(candidates);
     if (candidates.length === 0) throw new Error(`catalog ${JSON.stringify(resolve(repository, "awsf.project.yaml"))} resolved no plan sources`);
-    return ticketStoreForPlan(resolved, candidates[0]!);
+    return listing(ticketStoreForPlan(resolved, candidates[0]!));
   }
 
   const store = ticketStoreForPlan(resolved, planStem);
   // Task 20 moves the existing flat default set after this resolver exists.
   // Until then, the declared default retains the single-repository behaviour.
-  return !existsSync(store.directory) && planStem === catalog.plans.default
+  return listing(!existsSync(store.directory) && planStem === catalog.plans.default
     ? ticketStoreFor(repository)
-    : store;
+    : store);
 }
 
 function adoptionTerminal(provided: OwnerTerminal | undefined): OwnerTerminal {
@@ -363,7 +385,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     if (command === "backlog") {
       if (parsed.positionals.length !== 0) throw new Error("usage: awsf backlog [--state-root PATH] [--plan <stem>]");
       try {
-        for (const line of await backlogCommand(await ticketStoreForList(cwd, parsed.flags.plan), resolve(stateRoot, "awsf.db"))) out(line);
+        const listing = await ticketStoreForList(cwd, parsed.flags.plan);
+        if (listing.label !== undefined) out(listing.label);
+        for (const line of await backlogCommand(listing.store, resolve(stateRoot, "awsf.db"))) out(line);
         return 0;
       } catch (error) {
         if (!(error instanceof PlanSelectionRequiredError)) throw error;
@@ -375,7 +399,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const action = parsed.positionals[0];
       if (action === "list" && parsed.positionals.length === 1) {
         try {
-          for (const line of await listTickets(await ticketStoreForList(cwd, parsed.flags.plan))) out(line);
+          const listing = await ticketStoreForList(cwd, parsed.flags.plan);
+          if (listing.label !== undefined) out(listing.label);
+          for (const line of await listTickets(listing.store)) out(line);
           return 0;
         } catch (error) {
           if (!(error instanceof PlanSelectionRequiredError)) throw error;
@@ -384,7 +410,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
       }
       if (action === "show" && parsed.positionals.length === 2) {
-        for (const line of await showTicket(await ticketStoreForList(cwd, parsed.flags.plan), parsed.positionals[1]!)) out(line);
+        const listing = await ticketStoreForList(cwd, parsed.flags.plan);
+        if (listing.label !== undefined) out(listing.label);
+        for (const line of await showTicket(listing.store, parsed.positionals[1]!)) out(line);
         return 0;
       }
       if (action !== "new" && action !== "refine") {
