@@ -31,7 +31,7 @@ import { AdapterError, isContinuityCapable } from "../../adapters/interface.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { gateEnv } from "../../adapters/env.ts";
 import { awaitExit } from "../../adapters/stream/transport-loop.ts";
-import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
+import { assertSystemPromptSlot, writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { composeOwnerAmendment, composeOwnerAmendmentChain, createOwnerAmendment, ownerAmendmentDeliveryAction, ownerText, type OwnerAmendmentDelivery } from "../../contracts/owner-amendment.ts";
 import { assertResumeInstruction, type ResumeInstruction } from "../../contracts/resume-instruction.ts";
@@ -526,7 +526,8 @@ export interface ProductionInfrastructure {
   sandboxProbe?: SandboxProbe;
 }
 
-const DEFAULT_INFRASTRUCTURE: ProductionInfrastructure = {
+/** Exported so the B11-02 test can drive the production relaunch's own prompt writer. */
+export const DEFAULT_INFRASTRUCTURE: ProductionInfrastructure = {
   adapterFor: (_entry, adapterId, config) => registeredAdapter(config.adapters, adapterId, config.runtime),
   createBroker: (options) => new ProcessTransportBroker(options),
   runCommand: (executable, argv, options) => runSystemCommand(executable, argv, options),
@@ -2401,6 +2402,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const runIdFor = (turn: number): string => turn === 0 ? runId : `${runId}:c${String(turn)}`;
     const runtimeDir = join(options.attemptDir, "private", phase.id);
     await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
+    // B11-02: a relaunch rewrites the prompt into the runtime the sandbox could
+    // write, so the slot is checked before the write (the default writer also
+    // refuses to follow a link on its own).
+    if (restored === null) await assertSystemPromptSlot(route.adapterId, runtimeDir);
     const systemPromptPath = restored === null ? await infra.writeSystemPrompt(route.systemPrompt, runtimeDir) : "";
     // Visual references: re-verified from source against the start-time record
     // and copied fresh for THIS launch. A saved reply re-validates from the

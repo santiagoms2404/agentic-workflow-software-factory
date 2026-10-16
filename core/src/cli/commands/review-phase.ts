@@ -47,7 +47,7 @@ import type {
   TransportBroker,
 } from "../../adapters/interface.ts";
 import { AdapterError } from "../../adapters/interface.ts";
-import { assertPrivateSystemPrompt } from "../../adapters/system-prompt-file.ts";
+import { assertPrivateSystemPrompt, assertSystemPromptSlot } from "../../adapters/system-prompt-file.ts";
 import type { AdapterEntry, AgentDefinition, AwsfConfig } from "../../config/schema.ts";
 import { BUILD_OUTPUT_SCHEMA_ID } from "../../contracts/build-output.ts";
 import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
@@ -737,6 +737,10 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
 
   const runtimeDir = join(subject.attemptDir, "private", phaseKey);
   await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
+  // B11-02: containment is checked BEFORE the write. The runtime is writable
+  // from inside the sandbox, and the realpath check below runs only after the
+  // bytes have landed wherever a planted link pointed.
+  await assertSystemPromptSlot(route.adapter.id, runtimeDir);
   const systemPromptPath = await infra.writeSystemPrompt(route.systemPrompt, runtimeDir);
   await validateMaterializedSystemPrompt(route.adapter.id, runtimeDir, systemPromptPath, route.systemPrompt);
   const openPermission = (): PermissionSession => openPermissionSession({
