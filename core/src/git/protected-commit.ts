@@ -20,6 +20,19 @@ export interface ProtectedCommitIntent {
 }
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
+/** Resolve only the index belonging to the granted worktree, never an ambient Git redirect. */
+export function protectedCommitIndexPath(git: GitRunner, worktreeGitDir: string): string {
+  const observedGitDir = runGit(git, ["rev-parse", "--absolute-git-dir"]).trim();
+  if (observedGitDir !== worktreeGitDir) {
+    throw new Error("the worktree Git directory differs from the one granted to the protected commit");
+  }
+  const indexPath = join(worktreeGitDir, "index");
+  if (runGit(git, ["rev-parse", "--path-format=absolute", "--git-path", "index"]).trim() !== indexPath) {
+    throw new Error("the Git index path is redirected away from the granted worktree Git directory");
+  }
+  return indexPath;
+}
+
 /**
  * B1-20: release an index lock this process created and published nothing
  * through, by renaming it to `aside` — never by deleting it (invariant 8), so
@@ -85,7 +98,7 @@ export async function commitProtectedAsHost(options: {
   assertProtectedOutput(options.capability, root);
   enforcePathPolicy(options.paths, { writes: options.writes, protectedPaths: options.protectedPaths, protectedCapability: options.capability });
   if (options.paths.length === 0) throw new Error("protected generation produced no candidate changes; no automatic replay is authorized");
-  const indexPath = runGit(git, ["rev-parse", "--path-format=absolute", "--git-path", "index"]).trim();
+  const indexPath = protectedCommitIndexPath(git, grant.subject.worktreeGitDir);
   const beforeIndex = readFileSync(indexPath);
   const stagingRoot = join(options.attemptDir, "private", "protected-host");
   mkdirSync(stagingRoot, { recursive: true, mode: 0o700 });
