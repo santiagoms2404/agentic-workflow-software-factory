@@ -340,6 +340,9 @@ export interface BrokerOptions {
   controller?: ProcessController;
 }
 
+/** One immediate retry for a transient platform census fault before launch refuses closed. */
+const IDENTITY_OBSERVATION_ATTEMPTS = 2;
+
 export interface StartHooks {
   /** Called after each barrier step. The kill-host simulation kills from here. */
   onStep?: (step: BarrierStep) => Promise<void> | void;
@@ -749,7 +752,7 @@ export class ProcessTransportBroker implements TransportBroker {
     let recorded: ProcessIdentity | null = null;
     const launch: GatedLaunch = {
       identify: async () => {
-        recorded = this.#withObservedIdentity(await identify);
+        recorded = await this.#withObservedIdentity(await identify);
         return recorded;
       },
       release: async () => {
@@ -794,29 +797,40 @@ export class ProcessTransportBroker implements TransportBroker {
    * The launcher reads `/proc` and has nothing to read anywhere else, so off
    * Linux it honestly reports `startIdentity: null` — and a null is exactly what
    * `sameProcess` refuses to match, which would turn every later cancellation on
-   * that platform into a no-op that reported success. The host can ask the same
-   * question through its platform port.
+   * that platform into a no-op. The host can ask the same question through its
+   * platform port.
    *
    * It is safe to ask HERE and nowhere later: the child is still blocked on the
    * control channel whose write end this process holds, so it cannot have exited
    * and its PID cannot have been recycled between its report and this
-   * observation. A port that cannot enumerate leaves the honest null in place,
-   * and the ladder refuses to signal on it rather than guessing.
+   * observation. A transient census failure is retried once; if the port still
+   * cannot prove the identity, the launch is refused before registration rather
+   * than creating a process that the supervisor cannot safely signal.
    */
-  #withObservedIdentity(identity: ProcessIdentity): ProcessIdentity {
+  async #withObservedIdentity(identity: ProcessIdentity): Promise<ProcessIdentity> {
     if (identity.startIdentity !== null) return identity;
-    try {
-      const observed = this.#controller.observeIdentity(identity.pid);
-      if (observed === null || observed.startIdentity === null) return identity;
-      return {
-        pid: identity.pid,
-        pgid: observed.pgid,
-        startIdentity: observed.startIdentity,
-        startIdentitySource: observed.startIdentitySource,
-      };
-    } catch {
-      return identity;
+    let failure: unknown = new Error("the census did not find a PID-reuse-proof start identity");
+    for (let attempt = 0; attempt < IDENTITY_OBSERVATION_ATTEMPTS; attempt += 1) {
+      try {
+        const observed = this.#controller.observeIdentity(identity.pid);
+        if (observed !== null && observed.startIdentity !== null) {
+          return {
+            pid: identity.pid,
+            pgid: observed.pgid,
+            startIdentity: observed.startIdentity,
+            startIdentitySource: observed.startIdentitySource,
+          };
+        }
+        failure = new Error("the census did not find a PID-reuse-proof start identity");
+      } catch (error) {
+        failure = error;
+      }
     }
+    throw new Error(
+      `cannot establish a PID-reuse-proof identity for gated child ${String(identity.pid)} after ` +
+        `${String(IDENTITY_OBSERVATION_ATTEMPTS)} census attempts`,
+      { cause: failure },
+    );
   }
 
   /**
