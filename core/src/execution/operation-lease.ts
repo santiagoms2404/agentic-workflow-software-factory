@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, open, readFile, unlink } from "node:fs/promises";
+import { lstat, open, readFile, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { AttemptLock } from "../persistence/attempt-lock.ts";
 import { createHostPort } from "./process-controller.ts";
@@ -7,6 +7,23 @@ import { runSystemCommand } from "./transport-broker.ts";
 
 export interface Holder { id: string; pid: number; startIdentity: string }
 const pathFor = (directory: string) => join(directory, "execution-lease.json");
+
+/** Publish a complete, fsynced lease atomically; an interrupted stage is never authoritative. */
+async function writeLease(directory: string, lease: Holder): Promise<void> {
+  const target = pathFor(directory);
+  const temporary = join(directory, `.execution-lease-${lease.id}.tmp`);
+  const file = await open(temporary, "wx", 0o600);
+  try {
+    await file.writeFile(JSON.stringify(lease));
+    await file.sync();
+  } finally { await file.close(); }
+  // A crash before this rename leaves only a unique staging file. Readers use
+  // the canonical path exclusively, so the next claim can safely publish anew.
+  await rename(temporary, target);
+  const parent = await open(directory, "r");
+  try { await parent.sync(); } finally { await parent.close(); }
+}
+
 async function holder(directory: string): Promise<Holder | null> {
   try {
     const path = pathFor(directory);
@@ -70,11 +87,7 @@ export async function withExecutionLease<T>(directory: string, validate: () => P
     if (!self?.startIdentity) throw new Error("cannot establish controller identity");
     const old = await holder(directory);
     if (old !== null) await unlink(pathFor(directory));
-    const file = await open(pathFor(directory), "wx", 0o600);
-    try { await file.writeFile(JSON.stringify({ id, pid: process.pid, startIdentity: self.startIdentity })); await file.sync(); }
-    finally { await file.close(); }
-    const parent = await open(directory, "r");
-    try { await parent.sync(); } finally { await parent.close(); }
+    await writeLease(directory, { id, pid: process.pid, startIdentity: self.startIdentity });
   });
   try { return await execute(id); }
   finally {

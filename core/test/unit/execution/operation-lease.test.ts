@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, readdir, readFile, rm, writeFile, chmod } from "node:fs/promises";
+import { mkdtemp, open, readdir, readFile, rm, writeFile, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { assertControllerSettled, ownExecutionLease, withExecutionLease } from "../../../src/execution/operation-lease.ts";
@@ -34,6 +34,35 @@ test("failed takeover validation preserves the old lease; insecure or malformed 
     await writeFile(path, JSON.stringify({ id: "bad", pid: process.pid, startIdentity: {} }));
     await assert.rejects(withExecutionLease(directory, async () => {}, async () => assert.fail("must not execute")), /ambiguous execution lease/);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("a failed lease write leaves no authoritative partial file, so the next claim can recover", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "awsf-controller-write-failure-"));
+  const path = join(directory, "execution-lease.json");
+  const probe = await open(join(directory, "file-handle-probe"), "wx", 0o600);
+  const prototype = Object.getPrototypeOf(probe) as { writeFile: (...args: unknown[]) => Promise<void> };
+  await probe.close();
+  const original = prototype.writeFile;
+  let failLeaseWrite = true;
+  prototype.writeFile = async function (this: object, ...args: unknown[]): Promise<void> {
+    let value: unknown;
+    try { value = JSON.parse(String(args[0])); } catch { value = null; }
+    if (failLeaseWrite && typeof value === "object" && value !== null && Object.hasOwn(value, "startIdentity")) {
+      throw Object.assign(new Error("simulated full disk during lease write"), { code: "ENOSPC" });
+    }
+    await (Reflect.apply(original, this, args) as Promise<void>);
+  };
+  try {
+    await assert.rejects(withExecutionLease(directory, async () => {}, async () => assert.fail("must not execute after a failed lease write")), { code: "ENOSPC" });
+    await assert.rejects(readFile(path), { code: "ENOENT" }, "an incomplete lease must not become authoritative");
+    failLeaseWrite = false;
+    await withExecutionLease(directory, async () => {}, async id => {
+      assert.equal(JSON.parse(await readFile(path, "utf8")).id, id);
+    });
+  } finally {
+    prototype.writeFile = original;
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("the protected commit transport refuses outright when this process does not hold the lease", async () => {
