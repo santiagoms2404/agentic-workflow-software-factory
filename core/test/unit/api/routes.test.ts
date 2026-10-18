@@ -92,6 +92,19 @@ test("tickets endpoint returns every resolved repository ticket including the W-
   } finally { router.close(); fixture.close(); }
 });
 
+test("tickets refuses a dependency cycle instead of showing every cyclic ticket as not ready", async () => {
+  const fixture = apiFixture();
+  const tickets = fixture.planSources[0]!.ticketsPath;
+  await writeFile(join(tickets, "T01.md"), `---\nid: T01\ntitle: First\nmilestone: M1\nstate: todo\ndepends_on: [T02]\n---\nfirst\n`);
+  await writeFile(join(tickets, "T02.md"), `---\nid: T02\ntitle: Second\nmilestone: M1\nstate: todo\ndepends_on: [T01]\n---\nsecond\n`);
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, planSources: fixture.planSources });
+  try {
+    const response = await router.dispatch(request("/api/v1/tickets"));
+    assert.equal(response.status, 500, "cyclic plan data is a read failure, not a valid empty-ready backlog");
+    assert.deepEqual(response.body, { error: "request failed", code: "internal-error" });
+  } finally { router.close(); fixture.close(); }
+});
+
 test("sessions embeds ordered phases and agents in one response", async () => {
   const fixture = apiFixture();
   const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });

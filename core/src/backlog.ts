@@ -2,8 +2,9 @@ import { basename } from "node:path";
 import type { CostAuthority } from "../../dashboard/shared/types.ts";
 import { TICKET_STATES, type Ticket, type TicketState, type TicketWorkflow } from "./contracts/ticket.ts";
 import type { PlanTicketReader } from "./persistence/plan-tickets.ts";
-import type { TicketStore } from "./persistence/ticket-store.ts";
+import { TicketDependencyCycleError, type TicketStore } from "./persistence/ticket-store.ts";
 import type { PlanIdentity } from "./registry/plan-kind.ts";
+import { lightTicketCycle } from "./registry/plan-agreement.ts";
 
 export interface BacklogSessionCost {
   readonly taskId: string;
@@ -95,6 +96,12 @@ export async function queryPlanBacklog(
   const tier: Record<"T0" | "T1" | "T2", number> = { T0: 0, T1: 0, T2: 0 };
 
   for (const group of groups) {
+    // Plan admission normally refuses cycles, but a read path must still fail
+    // visibly if registered ticket files change after admission. Matching the
+    // legacy TicketStore error keeps the dashboard response from looking like a
+    // valid backlog with no ready tickets.
+    const cycle = lightTicketCycle(group.records.map((record) => record.ticket));
+    if (cycle !== null) throw new TicketDependencyCycleError(cycle);
     const byId = new Map(group.records.map((record) => [record.ticket.id, record.ticket]));
     const counts = emptyStateCounts();
     for (const record of group.records) {
