@@ -100,7 +100,9 @@ export async function queryPlanBacklog(
     // visibly if registered ticket files change after admission. Matching the
     // legacy TicketStore error keeps the dashboard response from looking like a
     // valid backlog with no ready tickets.
-    const cycle = lightTicketCycle(group.records.map((record) => record.ticket));
+    const cycle = lightTicketCycle(
+      group.records.map((record) => ({ id: record.ticket.id, depends_on: [...record.ticket.depends_on] })),
+    );
     if (cycle !== null) throw new TicketDependencyCycleError(cycle);
     const byId = new Map(group.records.map((record) => [record.ticket.id, record.ticket]));
     const counts = emptyStateCounts();
