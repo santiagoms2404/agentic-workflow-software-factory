@@ -57,13 +57,16 @@ export type QuotaProbeFailure =
       readonly reasonCode: "nonzero-exit";
       readonly command: QuotaCommandKind;
       readonly exitCode: number | null;
-      readonly retainedPath: string;
+      readonly retainedPath: string | null;
+      readonly retentionFailed?: true;
+      readonly errorMessage?: string;
     }
   | {
       readonly reasonCode: "unparseable";
       readonly command: QuotaCommandKind;
       readonly faultCount: number;
-      readonly retainedPath: string;
+      readonly retainedPath: string | null;
+      readonly retentionFailed?: true;
     }
   | {
       readonly reasonCode: "version-below-floor";
@@ -230,7 +233,7 @@ function timedOut(result: CommandResult): boolean {
 }
 
 function rawResultBytes(result: CommandResult): string {
-  return `${result.stdout}${result.stderr}`;
+  return `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
 }
 
 function emptyParsed(): ParsedQuotaReadout {
@@ -287,16 +290,21 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
     };
   };
   const retainedFailure = async (
-    failure: Omit<Extract<QuotaProbeFailure, { reasonCode: "nonzero-exit" }>, "retainedPath"> |
-      Omit<Extract<QuotaProbeFailure, { reasonCode: "unparseable" }>, "retainedPath">,
+    failure: Omit<Extract<QuotaProbeFailure, { reasonCode: "nonzero-exit" }>, "retainedPath" | "retentionFailed"> |
+      Omit<Extract<QuotaProbeFailure, { reasonCode: "unparseable" }>, "retainedPath" | "retentionFailed">,
     bytes: string,
     parsed: ParsedQuotaReadout = parsedEmpty,
     resolvedVersion: string | null = null,
   ): Promise<QuotaProbeResult> => {
-    const retainedPath = await input.retainFailureBytes(bytes);
-    const complete: QuotaProbeFailure = failure.reasonCode === "nonzero-exit"
-      ? { ...failure, retainedPath }
-      : { ...failure, retainedPath };
+    let retainedPath: string | null = null;
+    let retentionFailed = false;
+    try { retainedPath = await input.retainFailureBytes(bytes); }
+    catch { retentionFailed = true; }
+    const complete: QuotaProbeFailure = {
+      ...failure,
+      retainedPath,
+      ...(retentionFailed ? { retentionFailed: true as const } : {}),
+    };
     return unavailable(complete, parsed, resolvedVersion);
   };
 
@@ -320,8 +328,8 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
       return unavailable({ reasonCode: "timeout", command: "version", timeoutMs });
     }
     return retainedFailure(
-      { reasonCode: "nonzero-exit", command: "version", exitCode: null },
-      "",
+      { reasonCode: "nonzero-exit", command: "version", exitCode: null, errorMessage: message },
+      message,
     );
   }
   if (timedOut(versionResult)) {
@@ -329,7 +337,8 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
   }
   if (versionResult.error !== null || versionResult.status !== 0) {
     return retainedFailure(
-      { reasonCode: "nonzero-exit", command: "version", exitCode: versionResult.status },
+      { reasonCode: "nonzero-exit", command: "version", exitCode: versionResult.status,
+        ...(versionResult.error === null ? {} : { errorMessage: versionResult.error }) },
       rawResultBytes(versionResult),
     );
   }
@@ -362,8 +371,8 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
       return unavailable({ reasonCode: "timeout", command: "probe", timeoutMs }, parsedEmpty, found.text);
     }
     return retainedFailure(
-      { reasonCode: "nonzero-exit", command: "probe", exitCode: null },
-      "",
+      { reasonCode: "nonzero-exit", command: "probe", exitCode: null, errorMessage: message },
+      message,
       parsedEmpty,
       found.text,
     );
@@ -375,7 +384,8 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
   const parsed = parseQuotaReadout(result.stdout, input.now);
   if (result.error !== null || result.status !== 0) {
     return retainedFailure(
-      { reasonCode: "nonzero-exit", command: "probe", exitCode: result.status },
+      { reasonCode: "nonzero-exit", command: "probe", exitCode: result.status,
+        ...(result.error === null ? {} : { errorMessage: result.error }) },
       rawResultBytes(result),
       parsed,
       found.text,

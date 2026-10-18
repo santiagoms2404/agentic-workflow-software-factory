@@ -134,6 +134,7 @@ import {
   knownMinuteFigure,
   probeQuota,
   retainQuotaFailureInAttempt,
+  type QuotaProbeFailure,
   type ResolveQuotaExecutable,
 } from "../../quota/probe.ts";
 import { buildQuotaReadout } from "../../quota/readout.ts";
@@ -1822,6 +1823,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       const configuredStop = options.config.routing.quota_stop;
       const observedAt = infra.now();
       let reportedFailure: string | null = null;
+      let probeFailure: QuotaProbeFailure | null = null;
       const probe = await probeQuota({
         runCommand: infra.runCommand, resolveExecutable: infra.resolveExecutable,
         routes: configuredQuotaProbeRoutes(measurable), purpose: "phase-boundary",
@@ -1832,7 +1834,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
               ?? DEFAULT_QUOTA_PROBE_TIMEOUTS.phaseBoundaryMs)),
         },
         options: { cwd: status.worktree, env: HOST.process.env, maxBuffer: options.config.runtime.max_output_bytes },
-        now: observedAt, journalFailure: failure => { reportedFailure = failure.reasonCode; },
+        now: observedAt, journalFailure: failure => { reportedFailure = failure.reasonCode; probeFailure = failure; },
         retainFailureBytes: retainQuotaFailureInAttempt(options.attemptDir, "before-l4"),
       });
       const readout = buildQuotaReadout({ routes: measurable, probeResult: probe,
@@ -1843,7 +1845,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           next: nextRevision(status, {}), evidence: { type: "quota-snapshot", attribution: "none", scope: "account-window",
             completedPhaseKey: "before-l4", nextPhaseKey: compiled.phases.find(phase => routes.get(phase.id)?.adapterId === row.adapterId)!.id,
             effectivePercentRemaining: row.effectivePercentRemaining, minutesToReset: row.minutesToReset,
-            reasonCode: reportedFailure ?? row.reasonCode, resolvedVersion: probe.resolvedVersion } }, options.projectRecord);
+            reasonCode: reportedFailure ?? row.reasonCode, resolvedVersion: probe.resolvedVersion,
+            ...(probeFailure === null ? {} : { failure: probeFailure }) } }, options.projectRecord);
       }
       // An unavailable gauge has no comparable figure, even if it retained
       // partial data. Known scopes include multi-scope/composite routes.
@@ -3474,6 +3477,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     let reasonCode: string | null = quotaRoute?.reason ?? "boundary-has-no-quota-route";
     let resolvedVersion: string | null = null;
     let selectedQuota: BoundaryQuota | null = null;
+    let probeFailure: QuotaProbeFailure | null = null;
 
     if (quotaRoute !== null && quotaRoute.providers.length > 0) {
       const threshold = quotaStopFor(quotaRoute.adapterId);
@@ -3494,7 +3498,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           maxBuffer: options.config.runtime.max_output_bytes,
         },
         now: boundaryAt,
-        journalFailure: (failure) => { reportedFailure = failure.reasonCode; },
+        journalFailure: (failure) => { reportedFailure = failure.reasonCode; probeFailure = failure; },
         retainFailureBytes: retainQuotaFailureInAttempt(
           options.attemptDir,
           `${completed.id}-to-${next.id}`,
@@ -3528,6 +3532,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       minutesToReset,
       reasonCode,
       resolvedVersion,
+      ...(probeFailure === null ? {} : { failure: probeFailure }),
     });
 
     // A host-only next phase consumes no provider quota. Its snapshot remains

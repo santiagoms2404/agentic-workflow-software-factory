@@ -11,6 +11,39 @@ import type { GateCheck, GateId } from "../gates/interface.ts";
 import type { SandboxBadge, SandboxGrant } from "../policy/sandbox-broker.ts";
 import type { TaskState } from "../state/task-machine.ts";
 
+/**
+ * Structurally the same closed vocabulary as `QuotaProbeFailure`
+ * (`core/src/quota/probe.ts`), duplicated rather than imported: the
+ * quota-fence meta-test (INV-1) forbids `core/src/workflow/**` from
+ * transitively reaching `core/src/quota/**`, and several workflow modules
+ * reach this union through `AttemptEvidence`. Any literal string in the
+ * source type is widened to `string` here so the real type remains assignable
+ * without re-exporting its literal members. Keep the shapes in sync by hand;
+ * a drift only costs an assignability error in production-run.ts, which
+ * constructs the only values of this field.
+ */
+export type QuotaProbeFailureEvidence =
+  | { readonly reasonCode: "executable-not-found"; readonly executable: string }
+  | { readonly reasonCode: "timeout"; readonly command: "version" | "probe"; readonly timeoutMs: number }
+  | {
+      readonly reasonCode: "nonzero-exit";
+      readonly command: "version" | "probe";
+      readonly exitCode: number | null;
+      readonly retainedPath: string | null;
+      readonly retentionFailed?: true;
+      readonly errorMessage?: string;
+    }
+  | {
+      readonly reasonCode: "unparseable";
+      readonly command: "version" | "probe";
+      readonly faultCount: number;
+      readonly retainedPath: string | null;
+      readonly retentionFailed?: true;
+    }
+  | { readonly reasonCode: "version-below-floor"; readonly foundVersion: string; readonly floorVersion: string }
+  | { readonly reasonCode: "semantics-unresolved"; readonly providers: readonly (string | null)[] }
+  | { readonly reasonCode: "stale"; readonly providers: readonly (string | null)[] };
+
 export type SandboxMechanism = SandboxGrant["mechanism"];
 
 /**
@@ -186,7 +219,15 @@ export type AttemptEvidence =
    * less independence than the default, and nothing else can produce it.
    */
   | { readonly type: "review-degradation"; readonly reason: string; readonly attempt: number; readonly at: string }
-  | { readonly type: "quota-snapshot"; readonly attribution: "none"; readonly scope: "account-window"; readonly completedPhaseKey: string; readonly nextPhaseKey: string; readonly effectivePercentRemaining: number | null; readonly minutesToReset: number | null; readonly reasonCode: string | null; readonly resolvedVersion: string | null }
+  /**
+   * `failure` is the full QuotaProbeFailure the probe journalled, present
+   * whenever the gauge was unavailable. `reasonCode` alone (kept for the
+   * schema's history) cannot carry a retained path, an exit code, a fault
+   * count or the message a thrown process error produced; this is the one
+   * place that detail survives into the journal, AGENTS.md invariant 10's
+   * only evidence store.
+   */
+  | { readonly type: "quota-snapshot"; readonly attribution: "none"; readonly scope: "account-window"; readonly completedPhaseKey: string; readonly nextPhaseKey: string; readonly effectivePercentRemaining: number | null; readonly minutesToReset: number | null; readonly reasonCode: string | null; readonly resolvedVersion: string | null; readonly failure?: QuotaProbeFailureEvidence }
   | {
       readonly type: "publish";
       readonly remote: string;
