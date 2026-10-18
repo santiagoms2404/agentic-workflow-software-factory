@@ -489,6 +489,10 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       if (before !== undefined && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(before) || Number.isNaN(Date.parse(before)))) {
         throw new ApiRequestError(400, "invalid-query", "before must be an ISO timestamp");
       }
+      // The database compares canonical ISO timestamps as text. Equivalent
+      // inputs such as a whole-second cursor must use the same millisecond form
+      // as the stored started_at values or the lexical boundary shifts.
+      const canonicalBefore = before === undefined ? undefined : new Date(before).toISOString();
       const beforeId = params.get("beforeId") ?? undefined;
       if (beforeId !== undefined && (before === undefined || beforeId.length === 0 || beforeId.length > 256)) {
         throw new ApiRequestError(400, "invalid-query", "beforeId requires before and a nonempty session id of at most 256 characters");
@@ -503,7 +507,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       }
       const rows = listSessions(readDb, {
         limit,
-        ...(before === undefined ? {} : { before }),
+        ...(canonicalBefore === undefined ? {} : { before: canonicalBefore }),
         ...(beforeId === undefined ? {} : { beforeId }),
         ...(state === undefined ? {} : { state }),
         archived: archivedRaw === "true",

@@ -266,6 +266,28 @@ test("events use a bounded row cursor, insertion order, and private payload supp
   }
 });
 
+test("session before cursors normalize to the stored millisecond timestamp form", async () => {
+  const fixture = apiFixture();
+  createSession(fixture.writer, {
+    sessionId: "session-newer", projectSlug: "test-project", taskId: "T-newer", continuesTask: null,
+    groupId: null, planRef: null, attempt: 1, workflowId: "build", riskTier: 1, isProtected: false,
+    requestText: "Newer than the cursor", callCeiling: 3, configSnapshotJson: "{}",
+    journalPath: "state://newer.jsonl", startedAt: "2026-08-08T12:00:00.500Z",
+  });
+  createSession(fixture.writer, {
+    sessionId: "session-older", projectSlug: "test-project", taskId: "T-older", continuesTask: null,
+    groupId: null, planRef: null, attempt: 1, workflowId: "build", riskTier: 1, isProtected: false,
+    requestText: "Older than the cursor", callCeiling: 3, configSnapshotJson: "{}",
+    journalPath: "state://older.jsonl", startedAt: "2026-08-08T11:59:59.000Z",
+  });
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  try {
+    const response = await router.dispatch(request("/api/v1/sessions?before=2026-08-08T12:00:00Z"));
+    assert.equal(response.status, 200);
+    assert.deepEqual((response.body as SessionsResponse).sessions.map((session) => session.sessionId), ["session-older"]);
+  } finally { router.close(); fixture.close(); }
+});
+
 test("malformed and out-of-range query values are wrapped and do not poison later requests", async () => {
   const fixture = apiFixture();
   const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
