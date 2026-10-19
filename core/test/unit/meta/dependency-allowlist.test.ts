@@ -18,11 +18,35 @@ function readJson(path: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+// Optional and peer dependencies can be installed too; bundling has two npm
+// spellings. Check their names without banning legitimate D2 declarations.
+// Boolean bundling selects all/none of the dependencies checked by this fence.
+function checkSupplementalDependencies(pkg: Record<string, unknown>, allowed: string[]): void {
+  for (const field of ["optionalDependencies", "peerDependencies", "bundleDependencies", "bundledDependencies"]) {
+    const value = pkg[field];
+    if (value === undefined) continue;
+    const bundled = field === "bundleDependencies" || field === "bundledDependencies";
+    if (bundled && typeof value === "boolean") continue;
+    let names: unknown[];
+    if (bundled) {
+      assert.ok(Array.isArray(value), `${field} must be an array or boolean`);
+      names = value;
+    } else {
+      assert.ok(value !== null && typeof value === "object" && !Array.isArray(value), `${field} must be an object`);
+      names = Object.keys(value);
+    }
+    for (const name of names) {
+      assert.ok(typeof name === "string" && allowed.includes(name), `${field}: ${String(name)} is outside the D2 allowlist`);
+    }
+  }
+}
+
 test("core/package.json dependencies match the D2 allowlist exactly", () => {
   const pkg = readJson(join(repoRoot(), "core", "package.json"));
   const deps = Object.keys((pkg.dependencies as Record<string, string>) ?? {});
   assert.deepEqual(deps.sort(), [...CORE_DEPS].sort());
   assert.equal(pkg.devDependencies, undefined);
+  checkSupplementalDependencies(pkg, CORE_DEPS);
 });
 
 test("dashboard/package.json dependencies match the D2 allowlist exactly", () => {
@@ -31,6 +55,7 @@ test("dashboard/package.json dependencies match the D2 allowlist exactly", () =>
   const devDeps = Object.keys((pkg.devDependencies as Record<string, string>) ?? {});
   assert.deepEqual(deps.sort(), [...DASHBOARD_DEPS].sort());
   assert.deepEqual(devDeps.sort(), [...DASHBOARD_DEV_DEPS].sort());
+  checkSupplementalDependencies(pkg, [...DASHBOARD_DEPS, ...DASHBOARD_DEV_DEPS]);
 });
 
 test("root package.json devDependencies match the D2 allowlist exactly", () => {
@@ -38,4 +63,6 @@ test("root package.json devDependencies match the D2 allowlist exactly", () => {
   const devDeps = Object.keys((pkg.devDependencies as Record<string, string>) ?? {});
   assert.deepEqual(devDeps.sort(), [...ROOT_DEV_DEPS].sort());
   assert.equal(pkg.dependencies, undefined);
+  // Root's allowance is dev-only, not permission to install runtime dependencies.
+  checkSupplementalDependencies(pkg, []);
 });
