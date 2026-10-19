@@ -12,6 +12,8 @@ import { utf8ByteLength } from "./typebox.ts";
 //     salvages a complete JSON object *before* rejecting. It first tries the
 //     outermost `{…}`, then the last complete object when a provider abandoned
 //     a partial object and emitted a corrected one in the same final message.
+//     If neither parses, it tries the complete first-brace object without any
+//     brace-containing prose after it. Existing suffix precedence is preserved.
 //     The trace distinguishes clean JSON from host extraction without burning
 //     a correction round on transport-shaped duplication.
 //   - Maximum envelope size 256 KiB.
@@ -68,6 +70,27 @@ function tryParseObject(text: string): { ok: true; value: unknown } | { ok: fals
   }
 }
 
+/** Find only the first object's boundary; JSON.parse still decides whether it is valid JSON. */
+function firstObjectEnd(text: string, first: number): number | null {
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = first; index < text.length; index += 1) {
+    const char = text[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+    } else if (char === '"') quoted = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return null;
+}
+
 /** Recovers the single JSON object from a model's final message, recording how much digging it took. */
 function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown } | { why: string | null } {
   const trimmed = raw.trim();
@@ -92,9 +115,9 @@ function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown 
   if (first !== -1 && last > first) {
     const parsed = tryParseObject(trimmed.slice(first, last + 1));
     if (parsed.ok) return { extraction: "outermost-object", value: parsed.value };
-    // Held for the violation. Prose either side of a WELL-FORMED object is
-    // recovered here, so reaching this line means the object itself is broken,
-    // and where it broke is the only fact that distinguishes the two.
+    // Keep the parse position if all salvage fails. A brace in trailing prose
+    // can widen this slice beyond a well-formed object, so failure here alone
+    // does not establish that the object itself is broken.
     sliceFailure = parsed.why;
 
     // Some provider streams retain an abandoned partial object immediately
@@ -106,6 +129,17 @@ function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown 
       const suffix = tryParseObject(trimmed.slice(opening, last + 1));
       if (suffix.ok) return { extraction: "trailing-object", value: suffix.value };
       opening = trimmed.lastIndexOf("{", opening - 1);
+    }
+
+    // The suffix scan cannot recover the first object when prose after it
+    // contains braces. Locate its own closing brace in one string-aware pass
+    // (bounded by the raw byte cap), then let JSON.parse validate the slice.
+    // Do this AFTER suffix salvage: a genuine trailing JSON object keeps its
+    // existing precedence, even if it subsequently fails envelope validation.
+    const end = firstObjectEnd(trimmed, first);
+    if (end !== null && end < last) {
+      const prefix = tryParseObject(trimmed.slice(first, end + 1));
+      if (prefix.ok) return { extraction: "outermost-object", value: prefix.value };
     }
   }
 
