@@ -241,7 +241,9 @@ export async function statusCommand(
     const kind = status.recovery.kind === "quota-pause" ? "quota-paused"
       : status.recovery.kind === "ceiling-pause" ? "ceiling-paused; the owner raises the ceiling, the shift never does"
       : status.recovery.kind === "ticket-block" ? "ticket-blocked; the owner fixes the cause, the shift never retries itself"
-      : status.recovery.kind === "result-ready" ? "saved reply awaiting host validation" : "saved accepted phase result";
+      // A validating checkpoint records the stage about to run, not acceptance.
+      : status.recovery.kind === "result-ready" || status.recovery.kind === "validating"
+        ? "saved reply awaiting host validation" : "saved accepted phase result";
     const ticket = status.recovery.ticket === undefined ? "" : `; next ticket ${status.recovery.ticket}`;
     lines.push(`Recovery: ${kind}; ${status.recovery.prefix.length} completed phase(s)${ticket}. Native interrupted-turn reconnect is not implied.`);
   }
