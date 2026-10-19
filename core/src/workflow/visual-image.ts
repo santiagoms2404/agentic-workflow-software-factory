@@ -7,6 +7,7 @@
 // SOI through a frame header to EOI. This is a structural check, not a render.
 
 import { crc32, inflateSync } from "node:zlib";
+import { VISUAL_REFERENCE_LIMITS } from "../contracts/visual-references.ts";
 
 export interface ImageFacts {
   readonly mediaType: "image/png" | "image/jpeg";
@@ -26,6 +27,25 @@ export class ImageDecodeFailure extends Error {
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const PNG_CHANNELS: Readonly<Record<number, number>> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
+const PNG_DEPTHS: Readonly<Record<number, readonly number[]>> = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
+// Adam7's x/y origins and strides. Empty passes have neither pixels nor filter bytes.
+const PNG_PASSES = [[0, 0, 8, 8], [4, 0, 8, 8], [0, 4, 4, 8], [2, 0, 4, 4], [0, 2, 2, 4], [1, 0, 2, 2], [0, 1, 1, 2]] as const;
+
+function pngDecodedSize(width: number, height: number, bits: number, interlaced: boolean): number {
+  if (!interlaced) return height * (1 + Math.ceil(width * bits / 8));
+  let size = 0;
+  for (const [x, y, dx, dy] of PNG_PASSES) {
+    const columns = Math.max(0, Math.ceil((width - x) / dx));
+    const rows = Math.max(0, Math.ceil((height - y) / dy));
+    if (columns > 0 && rows > 0) size += rows * (1 + Math.ceil(columns * bits / 8));
+  }
+  return size;
+}
+
+// Largest permitted reference at PNG's maximum 16-bit RGBA depth, including
+// Adam7 row overhead. A forged IHDR must not turn the per-image bound into GiB.
+const MAX_PNG_DECODED_BYTES = pngDecodedSize(VISUAL_REFERENCE_LIMITS.maxImageEdge,
+  VISUAL_REFERENCE_LIMITS.maxImageEdge, 64, true);
 
 function pngFacts(bytes: Buffer): ImageFacts {
   let offset = PNG_SIGNATURE.length;
@@ -44,7 +64,10 @@ function pngFacts(bytes: Buffer): ImageFacts {
     if (header === null && type !== "IHDR") throw new ImageDecodeFailure("PNG does not begin with IHDR");
     if (type === "IHDR") {
       const channels = PNG_CHANNELS[body[9]!];
-      if (length !== 13 || channels === undefined) throw new ImageDecodeFailure("PNG header is malformed");
+      if (length !== 13 || channels === undefined || !PNG_DEPTHS[body[9]!]!.includes(body[8]!) ||
+        body[10] !== 0 || body[11] !== 0 || (body[12] !== 0 && body[12] !== 1)) {
+        throw new ImageDecodeFailure("PNG header is malformed");
+      }
       header = { width: body.readUInt32BE(0), height: body.readUInt32BE(4), bits: channels * body[8]!, interlaced: body[12] === 1 };
     } else if (type === "IDAT") {
       data.push(body);
@@ -57,16 +80,20 @@ function pngFacts(bytes: Buffer): ImageFacts {
   }
   if (header === null || !ended || offset !== bytes.length) throw new ImageDecodeFailure("PNG is truncated or carries bytes after IEND");
   if (header.width === 0 || header.height === 0 || data.length === 0) throw new ImageDecodeFailure("PNG has no image data");
+  if (header.width > 0x7fffffff || header.height > 0x7fffffff) throw new ImageDecodeFailure("PNG dimensions exceed the format limit");
+  const expected = pngDecodedSize(header.width, header.height, header.bits, header.interlaced);
+  // Keep edge-policy refusal in the caller (including its image-too-large code),
+  // but bound allocation here before zlib sees even a small compressed stream.
+  if (!Number.isSafeInteger(expected) || expected < 1 || expected > MAX_PNG_DECODED_BYTES) {
+    throw new ImageDecodeFailure("PNG decoded size exceeds the visual reference limit");
+  }
   let pixels: Buffer;
   try {
-    pixels = inflateSync(Buffer.concat(data));
+    pixels = inflateSync(Buffer.concat(data), { maxOutputLength: expected });
   } catch (error) {
     throw new ImageDecodeFailure(`PNG image data does not inflate: ${error instanceof Error ? error.message : String(error)}`);
   }
-  if (!header.interlaced) {
-    const expected = header.height * (1 + Math.ceil((header.width * header.bits) / 8));
-    if (pixels.length !== expected) throw new ImageDecodeFailure(`PNG image data holds ${String(pixels.length)} bytes; its header needs ${String(expected)}`);
-  }
+  if (pixels.length !== expected) throw new ImageDecodeFailure(`PNG image data holds ${String(pixels.length)} bytes; its header needs ${String(expected)}`);
   return { mediaType: "image/png", extension: "png", width: header.width, height: header.height };
 }
 
