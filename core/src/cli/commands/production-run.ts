@@ -3087,7 +3087,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           type: "agent", phaseId: phaseDb, agent: route.agent.name, adapterId: route.adapterId,
           provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
           resolvedModel: resolved.model, modelProvenance: resolved.provenance, contextWindow: route.model.contextWindow,
-          usageAuthority: route.model.usageAuthority, usage, contextTokens: contextTokens(usage), costUsd: null, costAuthority: route.model.costAuthority, purpose, at: endedAt,
+          usageAuthority: route.model.usageAuthority, usage, contextTokens: contextTokens(usage), costUsd: observed.costUsd ?? null, costAuthority: route.model.costAuthority, purpose, at: endedAt,
         });
         return {
           identity: {
@@ -3096,7 +3096,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           },
           rawOutput: output,
           usage,
-          costUsd: null,
+          // execute fills this observation on stream completion; keep its amount
+          // in both the evidence above and the correction accumulator's turn.
+          costUsd: observed.costUsd ?? null,
         };
       },
     };
