@@ -7,7 +7,10 @@ export function repoRoot(): string {
   return REPO_ROOT;
 }
 
-export function walkFiles(dir: string, exts: string[] = [".ts", ".tsx", ".vue"]): string[] {
+// Default code coverage includes both module systems and JavaScript as well as
+// TypeScript. Roots and explicit extension overrides remain the caller's policy;
+// widening defaults cannot repair a fence that supplies its own narrower list.
+export function walkFiles(dir: string, exts: string[] = [".ts", ".tsx", ".vue", ".mts", ".cts", ".js", ".mjs", ".cjs"]): string[] {
   const out: string[] = [];
   let entries: string[];
   try {
