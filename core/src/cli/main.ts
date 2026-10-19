@@ -1,10 +1,9 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
 import { toConfigSnapshotJson } from "../config/effective-config.ts";
 import { loadConfig } from "../config/load.ts";
 import { loadCatalog } from "../registry/catalog.ts";
@@ -1210,7 +1209,19 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
   }
 }
 
-const invokedPath = process.argv[1];
-if (invokedPath !== undefined && import.meta.url === pathToFileURL(invokedPath).href) {
+function isDirectRun(): boolean {
+  const invokedPath = process.argv[1];
+  if (invokedPath === undefined) return false;
+  try {
+    // npm bin links leave argv[1] symlinked while the module URL is resolved.
+    // Compare file identities, not their spellings, without executing on import.
+    return realpathSync(invokedPath) === realpathSync(new URL(import.meta.url));
+  } catch {
+    // Eval/import hosts may supply an argv[1] that is not a resolvable file.
+    return false;
+  }
+}
+
+if (isDirectRun()) {
   process.exitCode = await main();
 }
