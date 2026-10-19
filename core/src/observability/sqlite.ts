@@ -235,6 +235,10 @@ export function openDatabase(path: string, opts: OpenDatabaseOptions = {}): Data
   const readOnly = opts.readonly === true;
   const db = new DatabaseSync(path, { readOnly, enableForeignKeyConstraints: true });
   try {
+    // busy_timeout belongs to the connection, not the database file. Migration
+    // 0001 alone only configures the creating writer; later writers and readers
+    // need the same bounded wait, including while acquiring migration locks.
+    db.exec("PRAGMA busy_timeout = 5000");
     if (!readOnly) {
       probeFeatures();
       runMigrations(db, opts.migrationsDir);
