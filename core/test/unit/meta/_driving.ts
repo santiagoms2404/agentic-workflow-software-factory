@@ -66,11 +66,16 @@ export function drivingDir(): string {
 export const DRIVING_DOC_EXTS = [".md"];
 
 /**
- * Anything text-shaped that could land in the tree beside the documents.
+ * Document, configuration and code formats that can sit beside the markdown.
  * Invariants 4 and 9 say "nowhere" and "anywhere else", so their sweeps read
- * wider than the markdown the document-level fences parse.
+ * wider than the markdown the document-level fences parse. Include HTML and
+ * every supported code suffix, but keep document parsing markdown-only. This
+ * list extends coverage inside docs/driving, not the roots of either fence.
  */
-export const DRIVING_TEXT_EXTS = [".md", ".txt", ".json", ".yaml", ".yml", ".sh", ".ts", ".mts"];
+export const DRIVING_TEXT_EXTS = [
+  ".md", ".txt", ".json", ".yaml", ".yml", ".sh", ".html",
+  ".ts", ".tsx", ".vue", ".mts", ".cts", ".js", ".mjs", ".cjs",
+];
 
 export function drivingDocs(): string[] {
   return walkFiles(drivingDir(), DRIVING_DOC_EXTS);
