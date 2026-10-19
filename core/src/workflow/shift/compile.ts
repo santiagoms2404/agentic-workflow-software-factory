@@ -104,7 +104,7 @@ export class ShiftTicketDigestMismatch extends ShiftCompileRefusal {
   }
 }
 
-/** The bytes under a manifest id are not that ticket: unreadable frontmatter, or another id. */
+/** The bytes under a manifest id are not readable as that ticket: invalid UTF-8, frontmatter, or another id. */
 export class ShiftTicketUnreadable extends ShiftCompileRefusal {
   readonly ticket: string;
 
@@ -115,7 +115,10 @@ export class ShiftTicketUnreadable extends ShiftCompileRefusal {
   }
 }
 
-const UTF8 = new TextDecoder("utf-8", { ignoreBOM: true });
+// A matching raw-byte digest must not admit words that decoding would replace:
+// the brief must be verbatim, and a recorded-base rebuild cannot recover lossy text.
+// Keep the BOM visible to the ticket parser rather than silently stripping bytes.
+const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 function briefIntent(id: string, title: string, prompt: string, handoff: string): PlanOutput {
   // Key order is the order a builder reads the rendered envelope in: the
@@ -155,7 +158,12 @@ function briefIntent(id: string, title: string, prompt: string, handoff: string)
 }
 
 function ticketPhases(id: string, bytes: Uint8Array, config: ShiftCompileConfig): PhaseDefinition[] {
-  const source = UTF8.decode(bytes);
+  let source: string;
+  try {
+    source = UTF8.decode(bytes);
+  } catch {
+    throw new ShiftTicketUnreadable(id, "its bytes are not valid UTF-8");
+  }
   const data = parsePlanTicketIdentity(source);
   if (data === null) throw new ShiftTicketUnreadable(id, "its frontmatter is missing or invalid");
   if (data.id !== id) throw new ShiftTicketUnreadable(id, `its frontmatter names ${data.id}`);
