@@ -15,12 +15,14 @@ import { repoRoot, walkFiles } from "./_walk.ts";
 // shell hook spawns natively and has no child_process import to fence. At this commit the walk over
 // dashboard/src and docs/driving finds no importer, so extending it produced no false hit.
 const ALLOWED = "core/src/execution/transport-broker.ts";
-const PATTERN = /(['"])(node:)?child_process\1/;
+// Keep the quoted-specifier guard; also catch no-substitution templates in loaders.
+// A bare backtick mention appears in boundary documentation, not just executable code.
+const PATTERN = /(['"])(node:)?child_process\1|\b(?:import|require|getBuiltinModule)\s*\(\s*`(?:node:)?child_process`/;
 const ROOTS = ["core/src", "dashboard/src", "docs/driving"];
 const CODE_EXTS = [".ts", ".tsx", ".vue", ".mts", ".cts", ".js", ".mjs", ".cjs"];
 const TEST_FILE = /\.(test|spec)\.[^/]+$/;
 
-function offenders(base: string): string[] {
+export function offenders(base: string): string[] {
   return ROOTS.flatMap((root) => walkFiles(join(base, root), CODE_EXTS))
     .map((f) => relative(base, f).split("\\").join("/"))
     .filter((f) => f !== ALLOWED)
