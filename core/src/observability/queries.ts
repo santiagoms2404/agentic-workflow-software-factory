@@ -3,6 +3,7 @@
 // explicitly so private references cannot enter an API object by accident.
 
 import type { DatabaseSync } from "./sqlite.ts";
+import { TERMINAL_STATES } from "../state/task-machine.ts";
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
 
 export interface SessionRow {
@@ -434,11 +435,13 @@ export interface HealthProjection {
 export function projectionHealth(db: DatabaseSync): HealthProjection {
   const version = db.prepare("PRAGMA user_version").get() as { user_version: number };
   const mode = db.prepare("PRAGMA journal_mode").get() as { journal_mode: string };
+  // Health drives live polling: terminal work (including publication) must not
+  // keep it alive. Use the lifecycle vocabulary rather than a second state list.
   const counts = db.prepare(`SELECT
-      SUM(CASE WHEN lifecycle_state NOT IN ('LANDED','BLOCKED','CANCELLED') THEN 1 ELSE 0 END) active,
+      SUM(CASE WHEN lifecycle_state NOT IN (${TERMINAL_STATES.map(() => "?").join(",")}) THEN 1 ELSE 0 END) active,
       SUM(CASE WHEN observability_degraded = 1 THEN 1 ELSE 0 END) degraded,
       MAX(CASE WHEN state_revision > last_projected_seq THEN state_revision - last_projected_seq ELSE 0 END) lag
-    FROM sessions`).get() as { active: number | null; degraded: number | null; lag: number | null };
+    FROM sessions`).get(...TERMINAL_STATES) as { active: number | null; degraded: number | null; lag: number | null };
   return {
     schemaVersion: version.user_version,
     journalMode: mode.journal_mode,
