@@ -636,8 +636,10 @@ function sumUsage(events: readonly NormalizedEvent[]): TokenUsage {
 }
 
 function contextTokens(usage: TokenUsage): number | null {
-  if (usage.inputTokens === null && usage.outputTokens === null) return null;
-  return (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
+  // Both shipped usage mappings report cached input separately from uncached
+  // input. Keep a cache-only observation (including zero), but never invent one.
+  const counts = [usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.cacheWriteTokens];
+  return counts.every(count => count === null) ? null : counts.reduce<number>((total, count) => total + (count ?? 0), 0);
 }
 
 /** Production seam retained for the three-path prompt-bundle characterization. */
