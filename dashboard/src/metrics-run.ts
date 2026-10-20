@@ -352,9 +352,9 @@ export interface AttributionPanel {
   readonly source: "owner" | "heuristic" | null;
 }
 
-/** `null` unless the run is BLOCKED: only a blocked attempt can be attributed (`AttributeAttemptNotBlocked`). */
+/** `null` unless the run is BLOCKED or CANCELLED: only a blocked or cancelled attempt can be attributed. */
 export function attributionPanel(run: LinkedMetricsRun): AttributionPanel | null {
-  if (run.stateGroup !== "BLOCKED") return null;
+  if (run.stateGroup !== "BLOCKED" && run.stateGroup !== "CANCELLED") return null;
   return {
     blocked: blockedAt(run),
     heuristic: run.heuristicAttribution,
