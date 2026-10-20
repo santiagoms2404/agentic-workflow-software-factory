@@ -137,6 +137,19 @@ const loadSettingsOnce = memoizeUntilRejected(async () => {
   configuredWorkflows.value = readEnabledWorkflows(payload.settings);
 });
 
+// A malformed percent sequence (e.g. `#/sessions/%` or `#/groups/%E0`) must not
+// throw URIError: throwing inside onMounted aborts before the hashchange
+// listener is registered, permanently breaking navigation. Fall back to the raw
+// string on malformed input, and keep literal `+` untouched (B13-09, B13-10,
+// B13-28, B14-03).
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function readRoute(): void {
   settingsRoute.value = location.hash === "#/settings";
   // `#/backlog/<plan>` is how a sessions-view plan card hands the backlog its
@@ -144,7 +157,7 @@ function readRoute(): void {
   // the context survives a reload and a back button rather than only a click.
   const backlogWithPlan = /^#\/backlog\/([^/]+)$/.exec(location.hash);
   backlogRoute.value = location.hash === "#/backlog" || backlogWithPlan !== null;
-  backlogPlan.value = backlogWithPlan?.[1] ? decodeURIComponent(backlogWithPlan[1]) : null;
+  backlogPlan.value = backlogWithPlan?.[1] ? safeDecode(backlogWithPlan[1]) : null;
   // The decision tree has its own screen: a 72-stage group needs the width, and
   // sharing the sessions view with the runs it produced gave it neither.
   // `#/canvas?kinds=…&sel=…&cam=…`: the canvas keeps its whole state here,
@@ -157,11 +170,11 @@ function readRoute(): void {
   if (metricsRoute.value) metricsState.value = parseMetricsRoute(location.hash);
   const groupWithId = /^#\/groups\/([^/]+)$/.exec(location.hash);
   groupsRoute.value = location.hash === "#/groups" || groupWithId !== null;
-  selectedGroup.value = groupWithId?.[1] ? decodeURIComponent(groupWithId[1]) : null;
+  selectedGroup.value = groupWithId?.[1] ? safeDecode(groupWithId[1]) : null;
   const phase = location.hash.match(/^#\/sessions\/([^/]+)\/phases\/([^/]+)$/);
   const session = location.hash.match(/^#\/sessions\/([^/]+)$/);
-  selectedId.value = decodeURIComponent(phase?.[1] ?? session?.[1] ?? "") || null;
-  selectedPhaseId.value = phase?.[2] ? decodeURIComponent(phase[2]) : null;
+  selectedId.value = safeDecode(phase?.[1] ?? session?.[1] ?? "") || null;
+  selectedPhaseId.value = phase?.[2] ? safeDecode(phase[2]) : null;
 }
 function onHashChange(): void { readRoute(); void load(); }
 onMounted(() => { readRoute(); addEventListener("hashchange", onHashChange); });
