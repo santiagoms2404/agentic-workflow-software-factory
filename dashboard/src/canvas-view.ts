@@ -124,7 +124,7 @@ export function filterGraph(graph: CanvasGraph, kinds: readonly CanvasNodeKind[]
   const shown = new Set(kinds);
   const nodes = graph.nodes.filter((node) => shown.has(node.kind));
   const live = new Set(nodes.map((node) => node.id));
-  return {
+  const filtered: CanvasGraph = {
     nodes,
     edges: graph.edges.filter((edge) => live.has(edge.from) && live.has(edge.to)),
     clusters: graph.clusters
@@ -133,6 +133,13 @@ export function filterGraph(graph: CanvasGraph, kinds: readonly CanvasNodeKind[]
       .filter((cluster) => cluster.nodeIds.length > 1),
     unplaced: graph.unplaced.filter((node) => shown.has(node.kind)),
   };
+  Object.defineProperty(filtered, "allNodes", {
+    value: graph.allNodes ?? [...graph.nodes, ...graph.unplaced],
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+  return filtered;
 }
 
 export interface Viewport {

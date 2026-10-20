@@ -359,11 +359,15 @@ export function settle(
  * A layout outlives the runs it was drawn around: a task is archived, a group
  * is renamed, and a position for a node nobody can see would otherwise sit in
  * the store forever, pinning empty space.
+ *
+ * Positions survive kind filtering: hiding runs or plans from the visible map
+ * does not erase their saved arrangement when another dot is dropped.
  */
 export function retainedPins(
   graph: CanvasGraph,
   stored: ReadonlyMap<string, Point>,
 ): ReadonlyMap<string, Point> {
-  const live = new Set(graph.nodes.map((node) => node.id));
+  const source = graph.allNodes ?? [...graph.nodes, ...graph.unplaced];
+  const live = new Set(source.map((node) => node.id));
   return new Map([...stored].filter(([id]) => live.has(id)));
 }

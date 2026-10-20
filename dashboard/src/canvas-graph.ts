@@ -80,6 +80,12 @@ export interface CanvasGraph {
    * nothing but run dots — which is the honest picture of that projection.
    */
   readonly unplaced: readonly CanvasNode[];
+  /**
+   * All known nodes across kinds (including filtered or unplaced), so retained
+   * positions survive kind filtering without pinning nodes dropped from the
+   * underlying projection.
+   */
+  readonly allNodes?: readonly CanvasNode[];
 }
 
 export type CanvasSession = GroupableSession & Pick<SessionCard, "planRef" | "taskId" | "replay">;
@@ -274,10 +280,17 @@ export function buildCanvasGraph(
   // every load and the picture is reproducible.
   const ordered = nodes.sort((left, right) => left.id.localeCompare(right.id));
   const placed = (node: CanvasNode): boolean => node.kind === "run" || node.weight > 0;
-  return {
+  const graph: CanvasGraph = {
     nodes: ordered.filter(placed),
     edges: edges.sort((left, right) => `${left.from}|${left.to}`.localeCompare(`${right.from}|${right.to}`)),
     clusters,
     unplaced: ordered.filter((node) => !placed(node)),
   };
+  Object.defineProperty(graph, "allNodes", {
+    value: ordered,
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+  return graph;
 }
