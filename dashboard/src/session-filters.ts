@@ -79,12 +79,12 @@ export function matchesSelections(
 /**
  * A menu value nobody has seen before defaults to selected.
  *
- * The other three menus draw on a fixed vocabulary — configured workflows, the
- * eleven lifecycle states, the three plan buckets — so seeding the selection
- * once is enough. Driving sessions are not fixed: a run created while the
- * board is open carries a group id that was not in the first response, and a
- * selection seeded once would exclude it, hiding that run with no control on
- * screen that admits to hiding it.
+ * The other two menus draw on a fixed vocabulary — the eleven lifecycle
+ * states, the three plan buckets — so seeding the selection once is enough.
+ * Workflows and driving sessions are not fixed: a run created or recorded
+ * earlier carries a workflow id or group id that was not in the configured or
+ * initial response, and a selection seeded once would exclude it, hiding that
+ * run with no control on screen that admits to hiding it.
  *
  * Admitting only values that are NEW keeps an explicit deselection: a value
  * the reader has already seen and switched off stays off across every poll.
@@ -99,6 +99,29 @@ export function admitNewFilterValues(
   return fresh.length === 0 ? selected : [...new Set([...selected, ...fresh])];
 }
 
+/**
+ * Every value the workflow menu can offer, in menu order.
+ *
+ * Configured workflows come first, retaining configured order and workflows with
+ * zero runs. Workflows that are no longer configured but appear in recorded
+ * sessions follow in appearance order, so a run from a disabled workflow does
+ * not vanish from the board with no control to bring it back.
+ */
+export function workflowFilterValues(
+  configuredWorkflows: readonly string[],
+  sessions: readonly Pick<FilterableSession, "workflowId">[],
+): readonly string[] {
+  const seen = new Set(configuredWorkflows);
+  const unconfigured: string[] = [];
+  for (const session of sessions) {
+    if (!seen.has(session.workflowId)) {
+      seen.add(session.workflowId);
+      unconfigured.push(session.workflowId);
+    }
+  }
+  return [...configuredWorkflows, ...unconfigured];
+}
+
 /** Workflow counts are constrained only by the OTHER filters, never by their own. */
 export function workflowFilterEntries(
   configuredWorkflows: readonly string[],
@@ -107,8 +130,9 @@ export function workflowFilterEntries(
   selectedPlanKinds: readonly string[],
   selectedGroups: readonly string[],
 ): readonly SessionFilterEntry[] {
-  const others = matchesSelections(configuredWorkflows, selectedStates, selectedPlanKinds, selectedGroups);
-  return configuredWorkflows.map((workflow) => ({
+  const workflows = workflowFilterValues(configuredWorkflows, sessions);
+  const others = matchesSelections(workflows, selectedStates, selectedPlanKinds, selectedGroups);
+  return workflows.map((workflow) => ({
     value: workflow,
     count: sessions.filter((session) => session.workflowId === workflow && others(session)).length,
   }));
