@@ -312,12 +312,27 @@ export function sortRows(rows: readonly LedgerRow[], sort: LedgerSort, columns: 
  * The flat-line rule: with two groups or more, a column whose value is the
  * same in every group carries no signal in this lens. One group compares
  * nothing, so nothing is flat.
+ *
+ * Both the sort value AND the rendered cell content (cell text and note,
+ * and for the terminal strip column, the state counts) must match across all rows.
  */
 export function flatColumns(rows: readonly LedgerRow[], columns: readonly LedgerColumn[]): Set<string> {
   if (rows.length < 2) return new Set();
+  const firstRow = rows[0]!;
   return new Set(columns.filter((column) => {
-    const first = column.value(rows[0]!.stats);
-    return rows.every((row) => column.value(row.stats) === first);
+    const firstValue = column.value(firstRow.stats);
+    const firstCell = column.cell(firstRow.stats);
+    return rows.every((row) => {
+      if (column.value(row.stats) !== firstValue) return false;
+      const cell = column.cell(row.stats);
+      if (cell.text !== firstCell.text || cell.note !== firstCell.note) return false;
+      if (column.strip) {
+        for (const group of STATE_GROUPS) {
+          if (row.stats.states[group] !== firstRow.stats.states[group]) return false;
+        }
+      }
+      return true;
+    });
   }).map((column) => column.id));
 }
 
