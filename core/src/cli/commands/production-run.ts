@@ -4051,9 +4051,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       ...(inversion!.mode === "seeded" ? { reviewProvider: inversion!.reviewProvider } : {}),
       isTransportFailure: (error) => {
         // An uncertain amended submission cannot be sent again as a transport retry.
-        const transport = instructionFor(reviewPhase!.phase.id) === null && isReviewTransportFailure(error);
-        if (transport) reviewTransportRetries += 1;
-        return transport;
+        return instructionFor(reviewPhase!.phase.id) === null && isReviewTransportFailure(error);
       },
       execute: async (reviewProvider, attempt) => {
         if (reviewProvider !== reviewRoute.model.provider) {
@@ -4064,6 +4062,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           : budget.reserve({ cost: 1, subject: `${compiled.id}:${reviewPhase!.phase.id}:retry` });
         if (attempt !== 1) {
           await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `held one call for the single permitted review retry` });
+          // Classification also runs on the final failure. Count entering the
+          // funded retry instead, so two transport failures still mean one retry.
+          reviewTransportRetries += 1;
         }
         return runAgent(reviewPhase!.phase, reviewPhase!.ordinal, previous, held, false, reviewSubject, attempt);
       },
