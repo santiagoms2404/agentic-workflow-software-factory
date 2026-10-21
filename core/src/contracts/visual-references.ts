@@ -61,6 +61,7 @@ export type VisualReferenceBinding = Static<typeof VisualReferenceBindingSchema>
 /** The subset of the frame index AWSF reads. Other fields are ignored, never trusted. */
 export const VisualReferenceIndexSchema = Type.Object({
   version: Type.Literal(1),
+  plan: Type.Optional(IdentifierSchema),
   frames: Type.Array(Type.Object({ id: FrameIdSchema, image: RelativePathSchema }), { minItems: 1 }),
   ticketFrames: Type.Optional(Type.Record(Type.String(), Type.Array(FrameIdSchema))),
 });
@@ -117,7 +118,12 @@ export function selectedFrameIds(selection: VisualReferenceBinding["selection"],
     throw new Error(`ticket selection ${selection.plan}#${selection.ticket} does not belong to this attempt's plan ` +
       `${planRef === null ? "(none; create the attempt with --plan)" : JSON.stringify(planRef)}`);
   }
-  const frames = index.ticketFrames?.[selection.ticket];
+  const scopedKey = `${selection.plan}#${selection.ticket}`;
+  const frames = index.ticketFrames?.[scopedKey] ?? (
+    (index.plan === undefined || index.plan === selection.plan)
+      ? index.ticketFrames?.[selection.ticket]
+      : undefined
+  );
   if (frames === undefined || frames.length === 0) {
     throw new Error(`the index maps no frames for ${selection.plan}#${selection.ticket}`);
   }
