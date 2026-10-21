@@ -436,10 +436,10 @@ export class ClaudeStreamDecoder {
     // never meant to let the word `allowed` outrank the rest of the sentence,
     // and reading it that way is fail-open on an invented vocabulary in the one
     // direction that matters.
-    // The status is a snake_case identifier and `QUOTA_SHAPED` reads prose, so
+    // The status is a snake_case identifier and `RATE_LIMIT_EXHAUSTED_STATUS` reads prose, so
     // the separators are normalized before the two meet — without it,
     // `allowed_usage_limit_reached` is one long word that matches nothing.
-    if (status.startsWith("allowed") && !QUOTA_SHAPED.test(status.replace(/[_-]+/g, " "))) {
+    if (status.startsWith("allowed") && !RATE_LIMIT_EXHAUSTED_STATUS.test(status.replace(/[_-]+/g, " "))) {
       return out;
     }
     return [
@@ -559,6 +559,17 @@ function mapUsage(usage: unknown, reasoningFromDeltas: number | null): unknown {
     reasoningRelation: "unknown",
   };
 }
+
+/**
+ * Rate-limit statuses that read as exhausted.
+ *
+ * Unlike `#result` error messages, `rate_limit_info.status` never carries
+ * "context token limit reached" — it is subscription rate telemetry only. So
+ * any `*_limit_reached` or quota-exhausted shape here is quota exhaustion, not
+ * context overflow.
+ */
+const RATE_LIMIT_EXHAUSTED_STATUS =
+  /\b(?:usage limit|rate limit|quota)\b|\blimit reached\b/i;
 
 /**
  * Quota-shaped error text.
