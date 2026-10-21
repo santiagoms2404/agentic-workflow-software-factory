@@ -43,6 +43,23 @@ export interface NormalizedUsage {
  * bad fields is a fact about the provider, and a caller told only about the
  * first would fix it three times.
  */
+function formatFaultValue(value: unknown, maxLen = 200): string {
+  let str: string;
+  try {
+    str = JSON.stringify(value) ?? String(value);
+  } catch {
+    return "[unserializable]";
+  }
+  if (str.length > maxLen) {
+    return `${str.slice(0, maxLen)}…`;
+  }
+  return str;
+}
+
+function formatFaultKey(key: string, maxLen = 200): string {
+  return key.length > maxLen ? `${key.slice(0, maxLen)}…` : key;
+}
+
 export function normalizeUsage(raw: unknown): NormalizedUsage {
   if (raw === null || typeof raw !== "object") {
     return { usage: { ...UNREPORTED_TOKEN_USAGE }, faults: ["usage was not an object"] };
@@ -59,21 +76,21 @@ export function normalizeUsage(raw: unknown): NormalizedUsage {
       usage[field] = value;
       continue;
     }
-    faults.push(`${field} was ${JSON.stringify(value)}, which is not a token count — recorded as null`);
+    faults.push(`${field} was ${formatFaultValue(value)}, which is not a token count — recorded as null`);
   }
 
   const relation = source["reasoningRelation"];
   if (typeof relation === "string" && (REASONING_RELATIONS as readonly string[]).includes(relation)) {
     usage.reasoningRelation = relation as TokenUsage["reasoningRelation"];
   } else if (relation !== undefined && relation !== null) {
-    faults.push(`reasoningRelation was ${JSON.stringify(relation)} — recorded as unknown`);
+    faults.push(`reasoningRelation was ${formatFaultValue(relation)} — recorded as unknown`);
   }
 
   for (const key of Object.keys(source)) {
     if (key !== "reasoningRelation" && !(USAGE_COUNTS as readonly string[]).includes(key)) {
       // Reported rather than ignored: a provider carrying a metric this contract
       // has no field for is a fact about the adapter, not about the run.
-      faults.push(`${key} is not a metric this contract carries — dropped`);
+      faults.push(`${formatFaultKey(key)} is not a metric this contract carries — dropped`);
     }
   }
 
