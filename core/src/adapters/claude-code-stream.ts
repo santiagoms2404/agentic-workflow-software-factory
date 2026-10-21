@@ -336,6 +336,7 @@ export class ClaudeStreamDecoder {
     const out: NormalizedEvent[] = [];
     const model = line.message?.model;
     if (typeof model === "string" && model.length > 0) {
+      this.#session.resolvedModel = model;
       out.push(
         ...sequencer.resolveModel({
           adapter: this.#adapter,
