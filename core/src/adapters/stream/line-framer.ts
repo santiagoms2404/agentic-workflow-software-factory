@@ -75,8 +75,11 @@ export class LineFramer {
       text = this.#decoder.decode(chunk, { stream: true });
     }
     if (text.length === 0) return NO_LINES;
+    if (!text.includes("\n")) {
+      this.#pending += text;
+      return NO_LINES;
+    }
     this.#pending += text;
-    if (!this.#pending.includes("\n")) return NO_LINES;
     const parts = this.#pending.split("\n");
     this.#pending = parts.pop() ?? "";
     return parts;
