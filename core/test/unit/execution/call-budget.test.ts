@@ -95,9 +95,6 @@ test("a fresh ledger has committed nothing and offers the whole ceiling", () => 
       correctionsOwner: 0,
       ownerReentries: 0,
       allowance: { auto: 1, owner: 1, ownerReentries: 1 },
-      // The snapshot carries the ceiling the ledger resolved, so the pure
-      // machine measures a spawn against the same number the ledger will.
-      ceiling: CEILING[tier],
     });
   }
 });

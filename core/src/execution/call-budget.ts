@@ -49,6 +49,7 @@ import {
   assertWorkflowFitsTier,
   ceilingFor,
   compositeCost,
+  DEFAULT_CALL_CEILINGS,
   fitsCeiling,
   type ResolvedCeiling,
   type Tier,
@@ -222,6 +223,8 @@ export interface CallBudgetOptions {
    * which is what every caller predating the dial was already getting.
    */
   ceiling?: number;
+  /** Configured tier call ceilings table or resolved ceiling fallback when `ceiling` is omitted. */
+  ceilings?: ResolvedCeiling;
   /**
    * Rehydration from the journal. Spend is task-lifetime, so a ledger rebuilt
    * mid-task starts where the last one left off. Reservations are deliberately
@@ -243,6 +246,7 @@ export class CallBudget {
   readonly taskId: string;
   readonly tier: Tier;
   readonly allowance: CorrectionAllowance;
+  readonly #explicitCeiling: number | undefined;
   /** Resolved once at construction; a ledger's ceiling never moves under it. */
   readonly #resolvedCeiling: number;
 
@@ -266,9 +270,13 @@ export class CallBudget {
     this.taskId = options.taskId;
     this.tier = options.tier;
     this.allowance = correctionAllowance(options.allowance ?? DEFAULT_ALLOWANCE);
-    this.#resolvedCeiling = options.ceiling === undefined
-      ? ceilingFor(options.tier)
-      : assertCeiling(options.ceiling, `task ${options.taskId}`);
+    if (options.ceiling === undefined) {
+      this.#explicitCeiling = undefined;
+      this.#resolvedCeiling = ceilingFor(options.tier, options.ceilings ?? DEFAULT_CALL_CEILINGS);
+    } else {
+      this.#explicitCeiling = assertCeiling(options.ceiling, `task ${options.taskId}`);
+      this.#resolvedCeiling = this.#explicitCeiling;
+    }
     const carried = options.carried ?? {};
     this.#attempt = carried.attempt ?? 1;
     this.#callsSpent = carried.callsSpent ?? 0;
@@ -314,7 +322,7 @@ export class CallBudget {
 
   /** Exactly the `sessions` columns the pure machines reason over. */
   snapshot(): BudgetState {
-    return {
+    const state: BudgetState = {
       attempt: this.#attempt,
       callsSpent: this.#callsSpent,
       callsReserved: this.callsReserved,
@@ -322,8 +330,11 @@ export class CallBudget {
       correctionsOwner: this.#correctionsOwner,
       ownerReentries: this.#ownerReentries,
       allowance: { ...this.allowance },
-      ceiling: this.#resolvedCeiling,
     };
+    if (this.#explicitCeiling !== undefined) {
+      state.ceiling = this.#explicitCeiling;
+    }
+    return state;
   }
 
   outstanding(): readonly Reservation[] {

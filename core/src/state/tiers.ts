@@ -33,7 +33,7 @@ export const TIERS: readonly Tier[] = [0, 1, 2];
 export const DEFAULT_CALL_CEILINGS: Readonly<Record<Tier, number>> = { 0: 1, 1: 3, 2: 5 };
 
 /** One ceiling per tier — the shape `risk.call_ceiling` resolves to. */
-export type CallCeilings = Readonly<Record<Tier, number>>;
+export type CallCeilings = Readonly<Record<Tier, number> & { [key: number]: number }>;
 
 /**
  * Either a whole tier table (the effective configuration) or one already
