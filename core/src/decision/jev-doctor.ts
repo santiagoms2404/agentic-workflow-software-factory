@@ -68,7 +68,12 @@ export async function jevFenceStatus(sourceRoot: string = DEFAULT_SOURCE_ROOT): 
   for (const [index, file] of files.entries()) {
     const name = names[index]!;
     if (name === JEV_TRANSPORT_FILE) continue;
-    const text = await readFile(file, "utf8");
+    let text: string;
+    try {
+      text = await readFile(file, "utf8");
+    } catch (error) {
+      return { state: "unchecked", detail: `cannot read ${name} (${(error as NodeJS.ErrnoException).code ?? "unreadable"})` };
+    }
     if (FETCH.test(text) || ENDPOINT.test(text)) offenders.push(name);
   }
   return offenders.length === 0 ? { state: "intact", files: files.length } : { state: "breached", offenders };
