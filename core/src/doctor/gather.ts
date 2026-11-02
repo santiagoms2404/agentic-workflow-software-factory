@@ -115,7 +115,10 @@ export async function gatherDoctorRows(input: GatherDoctorInput): Promise<Enviro
     const start = performance.now();
     result = await probeQuota({
       routes: configuredQuotaProbeRoutes(routes), purpose: "interactive-preflight", now: input.now ?? new Date().toISOString(),
-      timeouts: { interactivePreflightMs: Math.max(...timeouts), phaseBoundaryMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.phaseBoundaryMs },
+      timeouts: {
+        interactivePreflightMs: Math.max(DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs, ...timeouts),
+        phaseBoundaryMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.phaseBoundaryMs,
+      },
       options: { cwd: configured.cwd, env: input.env, maxBuffer: 4 * 1024 * 1024 },
       resolveExecutable: resolver,
       runCommand: (executable, argv, options) => {
