@@ -1,11 +1,13 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { loadConfig } from "../config/load.ts";
 import {
   KNOWN_ADAPTER_KINDS,
   type AdapterEntry,
   type AwsfConfig,
 } from "../config/schema.ts";
+import type { ProjectCatalog } from "../registry/catalog-schema.ts";
 import { loadCatalog } from "../registry/catalog.ts";
 import type { Placement } from "../registry/placement-schema.ts";
 import { resolvePlanSources } from "../registry/plan-source.ts";
@@ -240,6 +242,52 @@ function planRepositoryRoot(planPath: string, plansRoot: string): string {
   return resolve(dirname(planPath), ...Array.from({ length: depth }, () => ".."));
 }
 
+function findCheckoutRoot(start: string): string | null {
+  let candidate = resolve(start);
+  while (true) {
+    if (existsSync(join(candidate, ".git"))) return candidate;
+    const parent = dirname(candidate);
+    if (parent === candidate) return null;
+    candidate = parent;
+  }
+}
+
+function isInside(path: string, root: string): boolean {
+  const offset = relative(root, path);
+  return offset === "" || (!offset.startsWith("..") && !isAbsolute(offset));
+}
+
+function planRepositoryId(catalog: ProjectCatalog): string | undefined {
+  const entry = Object.entries(catalog.repositories).find(([, repository]) => repository.role === "plan");
+  return entry?.[0];
+}
+
+function resolvePlanRepository(
+  catalogPath: string,
+  catalog: ProjectCatalog,
+  placement?: Placement,
+): { repositoryId: string; repositoryPath: string } | null {
+  const repositoryId = planRepositoryId(catalog);
+  if (repositoryId === undefined) return null;
+
+  const localCheckout = findCheckoutRoot(process.cwd());
+  const resolvedCatalogPath = resolve(catalogPath);
+  if (localCheckout !== null && isInside(resolvedCatalogPath, localCheckout)) {
+    return { repositoryId, repositoryPath: localCheckout };
+  }
+
+  if (placement === undefined || placement.project !== catalog.project.slug) {
+    return null;
+  }
+
+  const located = placement.repositories[repositoryId];
+  if (located === undefined) {
+    return null;
+  }
+
+  return { repositoryId, repositoryPath: located.path };
+}
+
 /**
  * Loads awsf.project.yaml, resolves its declared plan repository using W04's
  * placement rules, then reads that repository's awsf.config.yaml. Local auth
@@ -250,15 +298,28 @@ export async function resolveProjectQuotaRoutes(
 ): Promise<ResolvedProjectQuotaRoutes> {
   const catalog = loadCatalog(await readFile(input.catalogPath, "utf8"));
   const planSources = resolvePlanSources(input.catalogPath, catalog, input.placement);
+  let repositoryId: string;
+  let repositoryPath: string;
+
   const source = planSources[0];
-  if (source === undefined) {
-    throw new QuotaRouteResolutionError(
-      "E_QUOTA_PLAN_REPOSITORY_UNRESOLVED",
-      `project ${JSON.stringify(catalog.project.slug)} plan repository could not be resolved`,
-    );
+  if (source !== undefined) {
+    repositoryId = source.repositoryId;
+    repositoryPath = planRepositoryRoot(source.planPath, catalog.plans.root);
+  } else {
+    // A placed repository with awsf.config.yaml might contain 0 .html plan
+    // files. Resolve repository path directly rather than misdiagnosing the
+    // repository as unplaced and throwing E_QUOTA_PLAN_REPOSITORY_UNRESOLVED.
+    const resolved = resolvePlanRepository(input.catalogPath, catalog, input.placement);
+    if (resolved === null) {
+      throw new QuotaRouteResolutionError(
+        "E_QUOTA_PLAN_REPOSITORY_UNRESOLVED",
+        `project ${JSON.stringify(catalog.project.slug)} plan repository could not be resolved`,
+      );
+    }
+    repositoryId = resolved.repositoryId;
+    repositoryPath = resolved.repositoryPath;
   }
 
-  const repositoryPath = planRepositoryRoot(source.planPath, catalog.plans.root);
   const configPath = join(repositoryPath, "awsf.config.yaml");
   const config = loadConfig(await readFile(configPath, "utf8"));
   if (config.project.slug !== catalog.project.slug) {
@@ -271,7 +332,7 @@ export async function resolveProjectQuotaRoutes(
   const routes = mapConfiguredQuotaRoutes(config, input);
   return Object.freeze({
     project: catalog.project.slug,
-    planRepositoryId: source.repositoryId,
+    planRepositoryId: repositoryId,
     planRepositoryPath: repositoryPath,
     configPath,
     routes,
