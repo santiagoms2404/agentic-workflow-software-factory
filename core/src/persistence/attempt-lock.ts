@@ -3,8 +3,9 @@
 // function: lock -> validate -> append+fsync -> atomic status replace ->
 // project -> unlock.
 
-import { mkdir, open, readFile, unlink } from "node:fs/promises";
-import { dirname } from "node:path";
+import { randomBytes } from "node:crypto";
+import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { readJournalTail, type Journal, type JournalRecord } from "./journal.ts";
 import { writeStatus } from "./status-store.ts";
 
@@ -53,9 +54,9 @@ export async function readLockHolder(lockPath: string): Promise<LockHolder | nul
 
 /** Thrown when a reclaim is asked to remove a lock that a different holder now owns. */
 export class LockHolderChanged extends Error {
-  constructor(lockPath: string, expected: LockHolder, found: LockHolder | null) {
+  constructor(lockPath: string, expected: LockHolder | null, found: LockHolder | null) {
     super(
-      `refusing to reclaim ${lockPath}: it was held by pid ${expected.pid} at ${expected.acquiredAt}, ` +
+      `refusing to reclaim ${lockPath}: it was held by ${expected === null ? "an unnamed holder" : `pid ${expected.pid} at ${expected.acquiredAt}`}, ` +
         `and is now held by ${found === null ? "an unnamed holder" : `pid ${found.pid} at ${found.acquiredAt}`}`,
     );
     this.name = "LockHolderChanged";
@@ -68,8 +69,22 @@ export class LockHolderChanged extends Error {
  * file changed hands in between, a live host took it and this throws rather
  * than pulling the lock out from under it.
  */
-export async function reclaimLock(lockPath: string, expected: LockHolder): Promise<void> {
+export async function reclaimLock(lockPath: string, expected: LockHolder | null): Promise<void> {
   const found = await readLockHolder(lockPath);
+  if (expected === null) {
+    if (found !== null) {
+      throw new LockHolderChanged(lockPath, expected, found);
+    }
+    try {
+      await unlink(lockPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new LockHolderChanged(lockPath, expected, null);
+      }
+      throw err;
+    }
+    return;
+  }
   if (found === null || found.pid !== expected.pid || found.acquiredAt !== expected.acquiredAt) {
     throw new LockHolderChanged(lockPath, expected, found);
   }
@@ -121,14 +136,19 @@ export class AttemptLock {
       if (this.sealedState !== null) {
         throw new SealedAttempt(this.sealedState);
       }
-      await mkdir(dirname(this.lockPath), { recursive: true });
-      const handle = await open(this.lockPath, "wx", 0o600);
+      const dir = dirname(this.lockPath);
+      await mkdir(dir, { recursive: true });
+      const tmpPath = join(dir, `.${randomBytes(8).toString("hex")}.lock.tmp`);
+      const holder: LockHolder = { pid: process.pid, acquiredAt: new Date().toISOString() };
+      await writeFile(tmpPath, JSON.stringify(holder), { mode: 0o600 });
       try {
-        const holder: LockHolder = { pid: process.pid, acquiredAt: new Date().toISOString() };
-        await handle.writeFile(JSON.stringify(holder), "utf8");
+        await link(tmpPath, this.lockPath);
+      } finally {
+        await unlink(tmpPath).catch(() => {});
+      }
+      try {
         return await fn();
       } finally {
-        await handle.close();
         await unlink(this.lockPath);
       }
     } finally {

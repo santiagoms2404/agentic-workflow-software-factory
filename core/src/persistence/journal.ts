@@ -2,9 +2,28 @@
 // projection of. Append-only, fsynced before the write protocol's next step
 // may run, byte-prefix immutable by construction.
 
-import { mkdir, open, type FileHandle } from "node:fs/promises";
+import { mkdir, open, stat, type FileHandle } from "node:fs/promises";
 import { dirname } from "node:path";
 import { scrubCredentials, stringifyRedacted } from "../policy/redaction.ts";
+
+/** Fsyncs a directory descriptor so newly created directory entries survive power failure. */
+export async function syncDirectory(dir: string): Promise<void> {
+  let handle: FileHandle | null = null;
+  try {
+    handle = await open(dir, "r");
+    await handle.sync();
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EISDIR" || code === "EPERM" || code === "ENOTSUP" || code === "EBADF") {
+      return;
+    }
+    throw err;
+  } finally {
+    if (handle !== null) {
+      await handle.close();
+    }
+  }
+}
 
 /**
  * One line of `journal.jsonl`: the canonical event plus the journal's own
@@ -37,21 +56,39 @@ export interface JournalRecord<T> {
  * unterminated bytes are never removed: terminating them is the only
  * change, and it is an append.
  */
+export interface AppendOnlyLogOptions {
+  syncDir?: (dir: string) => Promise<void>;
+}
+
 class AppendOnlyLog {
   private handle: FileHandle | null = null;
   private readonly path: string;
+  private readonly syncDir: (dir: string) => Promise<void>;
   /** True once the file is known to end in a newline (or be empty). */
   private atLineStart = false;
 
-  constructor(path: string) {
+  constructor(path: string, options: AppendOnlyLogOptions = {}) {
     this.path = path;
+    this.syncDir = options.syncDir ?? syncDirectory;
   }
 
   private async ensureOpen(): Promise<FileHandle> {
     if (this.handle === null) {
-      await mkdir(dirname(this.path), { recursive: true });
+      const dir = dirname(this.path);
+      await mkdir(dir, { recursive: true });
+      let isNew = false;
+      try {
+        await stat(this.path);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+          isNew = true;
+        }
+      }
       this.handle = await open(this.path, "a+", 0o600);
       this.atLineStart = false;
+      if (isNew) {
+        await this.syncDir(dir);
+      }
     }
     return this.handle;
   }
@@ -283,14 +320,18 @@ export class TornJournalTailError extends Error {
  * surfacing a bare `SyntaxError`. A complete record that only lost its
  * newline is not torn: it is adopted, and the append starts on a new line.
  */
+export interface JournalOptions {
+  syncDir?: (dir: string) => Promise<void>;
+}
+
 export class Journal<T = unknown> {
   readonly path: string;
   private readonly log: AppendOnlyLog;
   private nextSeq: number | null = null;
 
-  constructor(path: string) {
+  constructor(path: string, options: JournalOptions = {}) {
     this.path = path;
-    this.log = new AppendOnlyLog(path);
+    this.log = new AppendOnlyLog(path, options);
   }
 
   private async ensureNextSeq(): Promise<number> {

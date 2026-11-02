@@ -1,10 +1,10 @@
 // `status.json` and `private/continuity.json` — atomically replaced, never
-// partially observable. Every write goes to a fresh temp file and is then
-// renamed into place; POSIX and NTFS both make `rename` a single atomic
-// syscall, so a concurrent reader either sees the old complete file or the
-// new complete file and nothing in between.
+// partially observable. Every write goes to a fresh temp file, is fsynced,
+// and is then renamed into place; POSIX and NTFS both make `rename` a single
+// atomic syscall, so a concurrent reader either sees the old complete file
+// or the new complete file and nothing in between.
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { scrubCredentials } from "../policy/redaction.ts";
@@ -13,8 +13,24 @@ async function writeAtomic(path: string, value: unknown, mode: number): Promise<
   const dir = dirname(path);
   await mkdir(dir, { recursive: true });
   const tmp = join(dir, `.${randomBytes(8).toString("hex")}.tmp`);
-  await writeFile(tmp, JSON.stringify(value), { mode });
+  const handle = await open(tmp, "w", mode);
+  try {
+    await handle.writeFile(JSON.stringify(value), "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
   await rename(tmp, path);
+  try {
+    const dirHandle = await open(dir, "r");
+    try {
+      await dirHandle.sync();
+    } finally {
+      await dirHandle.close();
+    }
+  } catch {
+    // Ignore platforms where directory fsync is unsupported
+  }
 }
 
 async function readJson<T>(path: string): Promise<T> {
@@ -23,7 +39,9 @@ async function readJson<T>(path: string): Promise<T> {
 
 async function tryReadJson<T>(path: string): Promise<T | null> {
   try {
-    return await readJson<T>(path);
+    const text = await readFile(path, "utf8");
+    if (text.trim().length === 0) return null;
+    return JSON.parse(text) as T;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw err;
