@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { attributionPanel } from "../../../dashboard/src/metrics-run.ts";
-import type { LinkedMetricsRun, RunFact } from "../../../dashboard/src/metrics-run.ts";
+import type { LinkedMetricsRun } from "../../../dashboard/src/metrics-run.ts";
 
 function fakeRun(overrides: Partial<LinkedMetricsRun> = {}): LinkedMetricsRun {
   return {

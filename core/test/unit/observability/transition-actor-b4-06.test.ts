@@ -81,7 +81,7 @@ test("B4-06: delegate transition is accepted by schema and transitionsForSession
           ...projection,
           stateRevision: idx + 2,
           evidence: {
-            ...projection.evidence,
+            ...(projection.evidence as Extract<typeof projection.evidence, { type: "transition" }>),
             id: `trans-${act}`,
             seq: idx + 2,
             actor: act,

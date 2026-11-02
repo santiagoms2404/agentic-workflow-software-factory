@@ -13,8 +13,10 @@
 // are the whole of invariant 2: truth is preserved, the display is
 // rebuildable, and invisible completion is impossible.
 
+import { existsSync, readdirSync, readlinkSync } from "node:fs";
 import { link, mkdir, readdir, rename, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { execSync } from "node:child_process";
 import type { JournalRecord } from "../persistence/journal.ts";
 import { scanJournal } from "../persistence/replay.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
@@ -140,6 +142,8 @@ export interface RebuildOptions {
    */
   decisions?: readonly DecisionRecord[];
   migrationsDir?: string;
+  /** Injectable rename for testing swap failure compensation. */
+  rename?: (from: string, to: string) => Promise<void>;
   /** Injectable so the retained file's name is deterministic in tests. */
   stamp?: () => string;
 }
@@ -219,6 +223,50 @@ export async function discoverAttempts(stateRoot: string): Promise<string[]> {
 }
 
 /**
+ * Verifies that the live database is not held open by concurrent readers or
+ * writers. Under POSIX rename, open file descriptors remain attached to the
+ * superseded inode, which would allow prior connections to invisibly keep
+ * reading or writing stale data without error (B4-15).
+ */
+/**
+ * Verifies that the live database is not held open by concurrent readers or
+ * writers. Under POSIX rename, open file descriptors remain attached to the
+ * superseded inode, which would allow prior connections to invisibly keep
+ * reading or writing stale data without error (B4-15).
+ */
+function assertNoActiveHandles(targetPath: string): void {
+  // Check within current process
+  if (existsSync("/proc/self/fd")) {
+    try {
+      const selfFds = readdirSync("/proc/self/fd");
+      for (const fd of selfFds) {
+        try {
+          const target = readlinkSync(`/proc/self/fd/${fd}`);
+          if (target === targetPath || target === `${targetPath}-wal` || target === `${targetPath}-shm`) {
+            throw new Error(`live database has active handles or locks: open in process (${target})`);
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message.startsWith("live database has active handles")) throw e;
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("live database has active handles")) throw err;
+    }
+  }
+
+  // Also check other processes (e.g. running dashboard) via fuser
+  try {
+    const fuserOut = execSync(`fuser "${targetPath}" 2>/dev/null`, { encoding: "utf8" }).trim();
+    if (fuserOut.length > 0) {
+      throw new Error(`live database has active handles or locks: held by process(es) ${fuserOut}`);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("live database has active handles")) throw err;
+    // fuser returns non-zero when no processes hold the file, which is normal
+  }
+}
+
+/**
  * Retains the file being replaced and swaps the candidate in.
  *
  * A hard link, not a copy or a move: the retained name and the live name are
@@ -228,18 +276,42 @@ export async function discoverAttempts(stateRoot: string): Promise<string[]> {
  * same act — a stale WAL left next to a brand-new database is how a
  * "successful" rebuild silently serves the old file's pages.
  */
-async function retainAndSwap(targetPath: string, candidatePath: string, stamp: string): Promise<string | null> {
+export async function retainAndSwap(
+  targetPath: string,
+  candidatePath: string,
+  stamp: string,
+  renameFn?: (from: string, to: string) => Promise<void>,
+): Promise<string | null> {
+  const doRename = renameFn ?? rename;
   let retainedPath: string | null = null;
+  const movedSidecars: string[] = [];
   if (await exists(targetPath)) {
+    assertNoActiveHandles(targetPath);
     retainedPath = `${targetPath}.superseded-${stamp}`;
     await link(targetPath, retainedPath);
     for (const suffix of ["-wal", "-shm"]) {
       if (await exists(`${targetPath}${suffix}`)) {
-        await rename(`${targetPath}${suffix}`, `${retainedPath}${suffix}`);
+        await doRename(`${targetPath}${suffix}`, `${retainedPath}${suffix}`);
+        movedSidecars.push(suffix);
       }
     }
   }
-  await rename(candidatePath, targetPath);
+  try {
+    await doRename(candidatePath, targetPath);
+  } catch (error) {
+    if (retainedPath !== null) {
+      for (const suffix of movedSidecars) {
+        try {
+          if (await exists(`${retainedPath}${suffix}`)) {
+            await doRename(`${retainedPath}${suffix}`, `${targetPath}${suffix}`);
+          }
+        } catch {
+          // best-effort compensation to restore WAL sidecars
+        }
+      }
+    }
+    throw error;
+  }
   return retainedPath;
 }
 
@@ -370,7 +442,14 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
     closeDatabase(db);
   }
 
-  const retainedPath = await retainAndSwap(options.targetPath, candidatePath, stamp);
+  let retainedPath: string | null;
+  try {
+    retainedPath = await retainAndSwap(options.targetPath, candidatePath, stamp, options.rename);
+  } catch (error) {
+    return refuse(
+      `swap failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   return {
     ok: true,
     targetPath: options.targetPath,

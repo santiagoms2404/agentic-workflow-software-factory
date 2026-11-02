@@ -11,10 +11,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recordShadowProposal } from "../../../src/delegate/shadow.ts";
 import { appendTaskDelegateProposal, readTaskDelegateProposals } from "../../../src/persistence/task-delegate.ts";
-import type { AttemptStatus } from "../../../src/state/tiers.ts";
+import type { AttemptStatus, AttemptEvent } from "../../../src/cli/commands/attempt.ts";
 import { DELEGATE_PROPOSAL_SCHEMA_ID, DELEGATE_PROPOSAL_TYPE } from "../../../src/delegate/proposal.ts";
 import { Journal } from "../../../src/persistence/journal.ts";
-import type { AttemptEvent } from "../../../src/observability/attempt-evidence.ts";
 import type { PhaseRecovery } from "../../../src/contracts/phase-recovery.ts";
 
 const SHA = "0123456789abcdef0123456789abcdef01234567";
@@ -83,16 +82,15 @@ test("B2-18: re-checks alreadyRecorded before appending in recordShadowProposal"
             facts: {
               stopKind: "ceiling-pause",
               sessionId: current.sessionId,
-              attemptRevision: current.revision,
               phaseId: null,
               edge: null,
               checkpointId: null,
               unstartedPhases: 0,
               review: null,
               quota: null,
-              ceiling: null,
+              ceiling: 5,
               isCorrection: false,
-            },
+            } as any,
           });
         }
         return {
