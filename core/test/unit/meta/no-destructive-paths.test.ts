@@ -13,16 +13,20 @@ import { repoRoot, walkFiles, relRepo } from "./_walk.ts";
  */
 const DESTRUCTIVE_REFSPEC_PATTERNS = [
   // A plus-prefixed refspec produced `(forced update)` at exit 0.
-  /(["'`])\+[^"'`\s:]+:refs\/[^"'`\s]+\1/,
+  /(["'])\+[a-zA-Z0-9_\-/]+:(?:refs\/)?[a-zA-Z0-9_\-/]+\1/,
   // An empty-source refspec produced `[deleted]` at exit 0.
-  /(["'`]):refs\/[^"'`\s]+\1/,
-  // An all-zeros-source refspec produced `[deleted]` at exit 0.
-  /(["'`])0{40}:refs\/[^"'`\s]+\1/,
+  /(["']):(?!(?:\/\d+|\/\/))(?:\b|refs\/)[a-zA-Z][a-zA-Z0-9_\-/]*\1/,
+  // An all-zeros-source refspec produced `[deleted]` at exit 0 (both 40 and 64 hex zero object ids).
+  /(["'])0{40,64}:(?:refs\/)?[a-zA-Z0-9_\-/]+\1/,
 ] as const;
 
 const FORBIDDEN = [
   /--force\b/,
-  /-f\b.*push/,
+  /(?:-f\b.*?\bpush\b|\bpush\b.*?-f\b)/,
+  /\[[^\]]*?["'`]push["'`][^\]]*?["'`](?:--delete|--prune|--mirror|-f)["'`][^\]]*?\]/,
+  /\[[^\]]*?["'`](?:--delete|--prune|--mirror|-f)["'`][^\]]*?["'`]push["'`][^\]]*?\]/,
+  /["'`]--delete["'`]/,
+  /["'`]--prune["'`]/,
   /rm\s+-rf/,
   /rmSync\s*\(/,
   /rmdirSync\s*\(/,
@@ -40,10 +44,12 @@ const FORBIDDEN = [
   // Git receives these as argv tokens, so a space/string scan cannot see the destructive pair.
   /["'`]worktree["'`]\s*,\s*["'`](?:remove|prune)["'`]/,
   /["'`]branch["'`]\s*,\s*["'`](?:-D|-d|--delete)["'`]/,
+  /branch\s+(?:-D|-d|--delete)\b/,
   /["'`]update-ref["'`]\s*,\s*["'`](?:-d|--delete)["'`]/,
   /["'`]reset["'`]\s*,\s*["'`]--hard["'`]/,
   // `clean -f` is destructive; this also covers combined forms such as `-fdx` and `-dfx`.
   /["'`]clean["'`]\s*,\s*["'`]-[a-z]*f[a-z]*["'`]/i,
+  /clean\s+-[a-z]*f[a-z]*\b/i,
   ...DESTRUCTIVE_REFSPEC_PATTERNS,
 ];
 
@@ -70,6 +76,10 @@ const ALLOWED_DELETES: readonly AllowedDelete[] = [
   { file: "core/src/execution/operation-lease.ts", line: "await unlink(pathFor(directory));" },
   // reclaimLock: recovery's one authorized repair, only against the exact holder it observed.
   { file: "core/src/persistence/attempt-lock.ts", line: "await unlink(lockPath);" },
+  // reclaimLock: recovery repair against an empty/unnamed lock file from interrupted atomic link.
+  { file: "core/src/persistence/attempt-lock.ts", line: "await unlink(lockPath);" },
+  // AttemptLock.withLock: cleaning up the temp file after atomic link.
+  { file: "core/src/persistence/attempt-lock.ts", line: "await unlink(tmpPath).catch(() => {});" },
   // AttemptLock.withLock: the holder releasing the `wx` lock file it created.
   { file: "core/src/persistence/attempt-lock.ts", line: "await unlink(this.lockPath);" },
 ];
@@ -147,7 +157,7 @@ test("every callback and promise delete spelling is an offender", () => {
   ]);
 });
 
-test("the four lock releases pass, wherever their lines sit", () => {
+test("the lock releases pass, wherever their lines sit", () => {
   const leasePath = "core/src/execution/operation-lease.ts";
   const lockPath = "core/src/persistence/attempt-lock.ts";
   const real = [leasePath, lockPath].map((path) => ({ path, text: readFileSync(join(repoRoot(), path), "utf8") }));
@@ -156,23 +166,26 @@ test("the four lock releases pass, wherever their lines sit", () => {
   // The same calls at other line numbers: the allowlist is keyed by line text, not position.
   const moved = [
     { path: leasePath, text: "\n\n    if (old !== null) await unlink(pathFor(directory));\n\n      await unlink(pathFor(directory));" },
-    { path: lockPath, text: "\n  await unlink(lockPath);\n\n\n\n        await unlink(this.lockPath);" },
+    {
+      path: lockPath,
+      text: "\n  await unlink(lockPath);\n  await unlink(lockPath);\n  await unlink(tmpPath).catch(() => {});\n\n\n\n        await unlink(this.lockPath);",
+    },
   ];
   assert.deepEqual(fenceHits(moved), { offenders: [], unused: [] });
 });
 
-test("a fifth delete is flagged, even when it copies an allowed line", () => {
+test("an unauthorized delete is flagged, even when it copies an allowed line", () => {
   const relate = { path: "core/src/workflow/relate.ts", text: 'import { unlink } from "node:fs/promises";\n  await unlink(lockPath);' };
   const lock = {
     path: "core/src/persistence/attempt-lock.ts",
-    text: "  await unlink(lockPath);\n  await unlink(this.lockPath);\n  await unlink(lockPath);",
+    text: "  await unlink(lockPath);\n  await unlink(lockPath);\n  await unlink(tmpPath).catch(() => {});\n  await unlink(this.lockPath);\n  await unlink(lockPath);",
   };
   const lease = {
     path: "core/src/execution/operation-lease.ts",
     text: "if (old !== null) await unlink(pathFor(directory));\nawait unlink(pathFor(directory));",
   };
   assert.deepEqual(fenceHits([relate, lock, lease]), {
-    offenders: ["core/src/workflow/relate.ts:2: await unlink(lockPath);", "core/src/persistence/attempt-lock.ts:3: await unlink(lockPath);"],
+    offenders: ["core/src/workflow/relate.ts:2: await unlink(lockPath);", "core/src/persistence/attempt-lock.ts:5: await unlink(lockPath);"],
     unused: [],
   });
 });
@@ -182,6 +195,8 @@ test("an allowlisted release that disappears leaves a stale entry, not a silent 
   assert.deepEqual(fenceHits([lease]).unused, [
     "core/src/execution/operation-lease.ts: if (old !== null) await unlink(pathFor(directory));",
     "core/src/persistence/attempt-lock.ts: await unlink(lockPath);",
+    "core/src/persistence/attempt-lock.ts: await unlink(lockPath);",
+    "core/src/persistence/attempt-lock.ts: await unlink(tmpPath).catch(() => {});",
     "core/src/persistence/attempt-lock.ts: await unlink(this.lockPath);",
   ]);
 });
@@ -197,4 +212,27 @@ test("the destructive refspec patterns bite", () => {
   for (const [index, pattern] of DESTRUCTIVE_REFSPEC_PATTERNS.entries()) {
     assert.match(syntheticOffenders[index] ?? "", pattern);
   }
+});
+
+test("short-name and 64-zero refspecs bite", () => {
+  assert.match('["+HEAD:main"]', DESTRUCTIVE_REFSPEC_PATTERNS[0]!);
+  assert.match('["+main:main"]', DESTRUCTIVE_REFSPEC_PATTERNS[0]!);
+  assert.match('[":main"]', DESTRUCTIVE_REFSPEC_PATTERNS[1]!);
+  assert.match('["0000000000000000000000000000000000000000:main"]', DESTRUCTIVE_REFSPEC_PATTERNS[2]!);
+  assert.match(`["${"0".repeat(64)}:refs/heads/main"]`, DESTRUCTIVE_REFSPEC_PATTERNS[2]!);
+});
+
+test("push-first and destructive argv spellings bite", () => {
+  const text = [
+    'runGit(g, ["push", "-f", remote, "main"]);',
+    'runGit(g, ["push", remote, "+HEAD:main"]);',
+    'runGit(g, ["push", remote, ":main"]);',
+    'runGit(g, ["push", "--delete", remote, "feature"]);',
+    'runGit(g, ["push", "--prune", remote]);',
+    'runGit(g, ["push", "--mirror", remote]);',
+    'runGit(g, ["branch", "-D", name]);',
+    'runGit(g, ["clean", "-fdx"]);',
+  ].join("\n");
+  const hits = fenceHits([{ path: "core/src/fixture/destructive.ts", text }]);
+  assert.equal(hits.offenders.length, 8);
 });

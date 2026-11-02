@@ -7,18 +7,7 @@ import { DRIVING_REL, drivingTextFiles } from "./_driving.ts";
 import { ABSOLUTE_PATH } from "./_fixture-scrub.ts";
 import { CREDENTIAL_PATTERNS } from "../../../src/policy/redaction.ts";
 
-/** The one predicate every sweep below shares, so the companion test proves the real thing. */
-function credentialShaped(text: string): boolean {
-  return CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text));
-}
-
-/**
- * AGENTS.md invariant 9 says "in fixtures **or anywhere else**", and the
- * ownership table says committed durable intent carries no machine paths and
- * no credentials. The fixtures walk above does not reach the repo root, so the
- * committed manifests get their own sweep.
- */
-const ROOT_MANIFESTS = ["package.json", "core/package.json", "dashboard/package.json", "awsf.config.yaml"];
+const ROOT_MANIFESTS = ["package.json", "core/package.json", "dashboard/package.json", "awsf.config.yaml", ".npmrc"];
 
 const LOCKFILE = "package-lock.json";
 
@@ -28,12 +17,23 @@ const PUBLIC_REGISTRY = "https://registry.npmjs.org/";
 /** Keys npm writes when a registry required authentication. None may be present. */
 const AUTH_KEYS = ["_auth", "_authToken", "auth", "authToken", "password", "token", "certfile", "keyfile"];
 
+/** An npm registry auth token pattern (e.g. in .npmrc or fixtures). */
+const NPM_TOKEN_PATTERN = /(?:\/\/.*?:_authToken=|\bnpm_[A-Za-z0-9]{36}\b|_authToken\s*=)/;
+
+/** The one predicate every sweep below shares, so the companion test proves the real thing. */
+function credentialShaped(text: string): boolean {
+  return CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text)) || NPM_TOKEN_PATTERN.test(text);
+}
+
 test("no credential-shaped values in test fixtures", () => {
   // `.jsonl` and `.md` are on this list because M4's real-adapter fixtures are
   // CAPTURED provider output plus a provenance note beside it. Bytes nobody
   // wrote by hand are exactly the bytes this sweep exists for.
   const files = walkFiles(join(repoRoot(), "core", "test", "fixtures"), [
     ".ts",
+    ".js",
+    ".mjs",
+    ".cjs",
     ".json",
     ".jsonl",
     ".md",
@@ -76,6 +76,8 @@ test("the credential sweep bites on a driving document — the walk above is vac
   const token = "sk-" + "ant-api03-EXAMPLE-NOT-A-REAL-KEY-000000";
   const specimen = ["Export it before you start:", "```bash", `export ANTHROPIC_API_KEY=${token}`, "```"].join("\n");
   assert.equal(credentialShaped(specimen), true, `a pasted token under ${DRIVING_REL} must be caught`);
+  const npmLine = "//registry.npmjs.org/:_authToken=npm_" + "0123456789abcdef0123456789abcdef";
+  assert.equal(credentialShaped(npmLine), true, "npm authToken in .npmrc or fixture must be caught");
   assert.equal(credentialShaped("Run `awsf status TASK` and read the budget line."), false);
 });
 
