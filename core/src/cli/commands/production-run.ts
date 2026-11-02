@@ -4232,14 +4232,35 @@ async function readRecoveryQuota(options: ProductionRunOptions, inspected: Recov
   if (route === undefined) throw new Error("resume quota route is unavailable");
   const infra = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   const observedAt = infra.now();
+  let reportedFailure: string | null = null;
+  let probeFailure: QuotaProbeFailure | null = null;
   const probe = await probeQuota({ runCommand: infra.runCommand, resolveExecutable: infra.resolveExecutable,
     routes: configuredQuotaProbeRoutes([route]), purpose: "phase-boundary", now: observedAt,
     timeouts: { interactivePreflightMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs, phaseBoundaryMs: threshold.probe_timeout_ms },
     options: { cwd: inspected.status.worktree!, env: HOST.process.env, maxBuffer: options.config.runtime.max_output_bytes },
-    journalFailure: () => {}, retainFailureBytes: async () => "discarded-before-authorization" });
+    journalFailure: (failure) => { reportedFailure = failure.reasonCode; probeFailure = failure; },
+    retainFailureBytes: retainQuotaFailureInAttempt(options.attemptDir, "recovery-preflight") });
   const rows = buildQuotaReadout({ routes: [route], probeResult: probe, defaultThreshold: threshold }).rows;
   const row = rows[0];
   if (rows.length !== 1 || row === undefined || row.verdict !== "above" || row.provider === null || row.scope === null || row.minutesToReset === null) {
+    if (probeFailure !== null) {
+      await persistAttempt(options.attemptDir, inspected.status.revision, {
+        kind: "attempt.updated",
+        next: nextRevision(inspected.status, {}),
+        evidence: {
+          type: "quota-snapshot",
+          attribution: "none",
+          scope: "account-window",
+          completedPhaseKey: "recovery-preflight",
+          nextPhaseKey: phase.id,
+          effectivePercentRemaining: row?.effectivePercentRemaining ?? null,
+          minutesToReset: row?.minutesToReset ?? null,
+          reasonCode: reportedFailure ?? row?.reasonCode ?? "unknown",
+          resolvedVersion: probe.resolvedVersion,
+          failure: probeFailure,
+        },
+      }, options.projectRecord);
+    }
     throw new Error("resume refused: selected quota is unknown, stale, ambiguous or below its threshold");
   }
   const old = inspected.checkpoint.quota;
