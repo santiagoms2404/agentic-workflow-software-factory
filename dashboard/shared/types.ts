@@ -299,7 +299,7 @@ export interface TransitionSummary {
   seq: number;
   from: string;
   to: string;
-  actor: "host" | "owner" | "human";
+  actor: "host" | "owner" | "human" | "delegate";
   edgeId: string;
   reason: { source: string; code: string | null; detail: string | null };
   spawnSite: boolean;

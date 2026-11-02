@@ -337,7 +337,7 @@ export interface TransitionRow {
   seq: number;
   from_state: string;
   to_state: string;
-  actor: "host" | "owner" | "human";
+  actor: "host" | "owner" | "human" | "delegate";
   edge_id: string;
   reason_source: string;
   reason_code: string | null;
