@@ -308,6 +308,11 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
     return unavailable(complete, parsed, resolvedVersion);
   };
 
+  const providerCsv = buildEnabledProviderCsv(input.routes);
+  if (providerCsv.length === 0) {
+    return unavailable({ reasonCode: "semantics-unresolved", providers: [null] });
+  }
+
   let executable: string;
   try {
     executable = input.resolveExecutable(QUOTA_AXI_EXECUTABLE, input.options.env);
@@ -362,7 +367,7 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
   try {
     result = input.runCommand(
       executable,
-      buildQuotaAxiArgv(buildEnabledProviderCsv(input.routes)),
+      buildQuotaAxiArgv(providerCsv),
       commandOptions,
     );
   } catch (error) {
