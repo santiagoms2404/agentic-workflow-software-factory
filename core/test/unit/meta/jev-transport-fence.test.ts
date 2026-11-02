@@ -14,8 +14,11 @@ import { repoRoot, walkFiles } from "./_walk.ts";
 const CORE_SRC = join(repoRoot(), "core", "src");
 const TRANSPORT = "core/src/decision/jev-transport.ts";
 
-/** The adapter fence's pattern, reused verbatim: bare `fetch(` or `globalThis.fetch`. */
-const FETCH = /(^|[^.\w])fetch\s*\(|globalThis\s*\.\s*fetch/;
+/**
+ * Bare `fetch(` or global fetch accessed via `globalThis` or `global`
+ * (dot or bracket notation), but not `something.fetch(` on an injected port.
+ */
+const FETCH = /(^|[^.\w$])fetch\s*\(|(?:globalThis|global)\s*(?:\.\s*fetch\b|\[\s*['"`]fetch['"`]\s*\])/;
 /** The decisions endpoint, by path, whatever host or quoting spells it. */
 const ENDPOINT = /api\/alpha\/decisions/;
 
@@ -47,6 +50,12 @@ test("the fence is load-bearing: both spellings are caught, an injected port is 
   assert.ok(FETCH.test("const response = await fetch (url);"));
   assert.ok(FETCH.test("await globalThis.fetch(url)"));
   assert.ok(FETCH.test("const send = globalThis . fetch;"));
+  assert.ok(FETCH.test("await global.fetch(url)"));
+  assert.ok(FETCH.test("const send = global . fetch;"));
+  assert.ok(FETCH.test("await globalThis['fetch'](url)"));
+  assert.ok(FETCH.test('await globalThis["fetch"](url)'));
+  assert.ok(FETCH.test("await global['fetch'](url)"));
+  assert.ok(FETCH.test('await global["fetch"](url)'));
   assert.equal(FETCH.test("await this.#http.fetch(url)"), false);
   assert.equal(FETCH.test("await prefetch(url)"), false);
   assert.ok(ENDPOINT.test(`"https://openrouter.ai/api/alpha/decisions"`));
@@ -65,7 +74,14 @@ test("the fence catches a planted fetch or endpoint in another core/src file", (
     plant("core/src/decision/elsewhere.ts", `export const call = () => fetch("https://example.invalid");`);
     plant("core/src/workflow/sneaky.ts", `export const send = globalThis.fetch;`);
     plant("core/src/cli/url.ts", `export const url = "https://openrouter.ai/api/alpha/decisions";`);
-    assert.deepEqual(offenders(FETCH, root).sort(), ["core/src/decision/elsewhere.ts", "core/src/workflow/sneaky.ts"]);
+    plant("core/src/workflow/global-fetch.ts", `export const send = global.fetch;`);
+    plant("core/src/workflow/bracket-fetch.ts", `export const send = globalThis['fetch'];`);
+    assert.deepEqual(offenders(FETCH, root).sort(), [
+      "core/src/decision/elsewhere.ts",
+      "core/src/workflow/bracket-fetch.ts",
+      "core/src/workflow/global-fetch.ts",
+      "core/src/workflow/sneaky.ts",
+    ]);
     assert.deepEqual(offenders(ENDPOINT, root), ["core/src/cli/url.ts"]);
   } finally {
     rmSync(root, { recursive: true, force: true });

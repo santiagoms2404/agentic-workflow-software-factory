@@ -14,6 +14,7 @@ const READ_FS = new Set([
   "realpath", "realpathSync", "stat", "statSync",
 ]);
 const PROCESS_START = new Set(["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"]);
+const FS_WRITES = /^(?:write|append|rename|remove|mkdir|unlink|rmdir|rm|copyFile|truncate|chmod|chown)/u;
 
 function violations(text: string): string[] {
   const source = ts.createSourceFile("doctor.ts", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -21,7 +22,7 @@ function violations(text: string): string[] {
   const databaseOpeners = new Set<string>();
   const nameOf = (node: ts.Expression): string => ts.isIdentifier(node) ? node.text
     : ts.isPropertyAccessExpression(node) ? node.name.text
-      : ts.isElementAccessExpression(node) && node.argumentExpression && ts.isStringLiteral(node.argumentExpression) ? node.argumentExpression.text : "";
+      : ts.isElementAccessExpression(node) && node.argumentExpression && (ts.isStringLiteral(node.argumentExpression) || ts.isNoSubstitutionTemplateLiteral(node.argumentExpression)) ? node.argumentExpression.text : "";
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const module = node.moduleSpecifier.text;
@@ -34,6 +35,7 @@ function violations(text: string): string[] {
         for (const item of imports) if (!READ_FS.has((item.propertyName ?? item.name).text)) errors.push("filesystem writer import");
       }
       if (/^(?:node:)?(?:child_process|worker_threads|cluster|sqlite)$/u.test(module)) errors.push("process or database constructor import");
+      if (/^(?:node:)?module$/u.test(module)) errors.push("dynamic module loader import");
       if (module.endsWith("transport-broker.ts")) {
         if (clause?.name || bindings && !ts.isNamedImports(bindings)) errors.push("unbounded transport import");
         for (const item of imports) if (!["resolveExecutable", "runSystemCommand"].includes((item.propertyName ?? item.name).text)) errors.push("process must use runSystemCommand");
@@ -50,9 +52,10 @@ function violations(text: string): string[] {
     }
     if (ts.isCallExpression(node)) {
       const name = nameOf(node.expression);
-      if (node.expression.kind === ts.SyntaxKind.ImportKeyword || name === "require") errors.push("dynamic import cannot conceal a writer");
+      if (node.expression.kind === ts.SyntaxKind.ImportKeyword || name === "require" || name === "getBuiltinModule" || name === "createRequire") errors.push("dynamic import cannot conceal a writer");
       if (PROCESS_START.has(name)) errors.push("process must use runSystemCommand");
       if (name === "kill" && !(node.arguments.length === 2 && node.arguments[1]?.getText(source) === "0")) errors.push("only PID liveness signal zero is read-only");
+      if (FS_WRITES.test(name)) errors.push("filesystem writer invocation");
       if (databaseOpeners.has(name) || name === "openDatabase") {
         const options = node.arguments[1];
         const readonly = options && ts.isObjectLiteralExpression(options) && options.properties.length === 1 && options.properties.every(property =>
@@ -68,7 +71,7 @@ function violations(text: string): string[] {
 }
 
 test("doctor command and every doctor module import no writer or lock and start no process outside runSystemCommand", () => {
-  const files = [join(repoRoot(), "core/src/cli/commands/doctor.ts"), ...walkFiles(join(repoRoot(), "core/src/doctor"), [".ts"])];
+  const files = [join(repoRoot(), "core/src/cli/commands/doctor.ts"), ...walkFiles(join(repoRoot(), "core/src/doctor"))];
   assert.ok(files.length > 1, "the doctor module tree must be scanned");
   assert.deepEqual(files.flatMap(file => violations(readFileSync(file, "utf8")).map(error => `${relRepo(file)}: ${error}`)), []);
 });
@@ -83,6 +86,11 @@ test("doctor fence rejects planted write imports, aliases, namespaces, locks, da
     'import fs from "node:fs";',
     'await import("node:fs/promises");',
     'const fs = require("node:fs");',
+    'const fs = process.getBuiltinModule("node:fs"); fs.writeFileSync("x", "y");',
+    'process.getBuiltinModule("node:fs").rmSync("x", { recursive: true });',
+    'import { createRequire } from "node:module"; createRequire(import.meta.url)("node:fs").unlinkSync(p);',
+    'process[`kill`](pid, "SIGTERM");',
+    'process["kill"](pid, "SIGTERM");',
     'import { acquireAttemptLock as read } from "../../persistence/attempt-lock.ts";',
     'import { AttemptLock as Read } from "../../persistence/attempt-lock.ts";',
     'import * as db from "../../observability/sqlite.ts";',

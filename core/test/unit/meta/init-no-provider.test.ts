@@ -28,9 +28,11 @@ const ALLOWED_LOCAL_MODULES = [
   "core/src/state/tiers.ts",
 ] as const;
 
-// The broker is the approved host-process boundary. It is deliberately a leaf
-// in this walk: init reaches only runSystemCommand through git/changes.ts, while
-// the broker's provider-launch implementation has separate adapter interfaces.
+// The broker is the approved host-process boundary. It is deliberately isolated
+// as a leaf in this entrypoint walk because init reaches only runSystemCommand
+// through git/changes.ts. Its runtime imports are explicitly evaluated and
+// isolated in separate tests below to prove that no provider, gate, recipe, or
+// workflow runner is reachable through this boundary.
 const TERMINAL_LOCAL_MODULES = new Set([
   "core/src/execution/transport-broker.ts",
 ]);
@@ -72,6 +74,58 @@ test("awsf init reaches only its host-side baseline allowlist", () => {
   assert.deepEqual(allowlistViolations, [], "the allowlist itself must preserve the baseline boundary");
 });
 
+test("git/changes imports only host system command execution from the broker", () => {
+  const changesPath = join(repoRoot(), "core/src/git/changes.ts");
+  const source = readFileSync(changesPath, "utf8");
+  const brokerImport = source.match(/import\s*\{([^}]+)\}\s*from\s*["'][^"']*transport-broker(?:\.ts)?["']/);
+  assert.ok(brokerImport && brokerImport[1], "git/changes must import from transport-broker");
+  const importedNames = brokerImport[1].split(",").map((s) => s.trim()).filter(Boolean);
+  assert.deepEqual(importedNames, ["runSystemCommand"]);
+});
+
+test("transport-broker runtime imports are evaluated and isolated from providers and gates", () => {
+  const brokerPath = join(repoRoot(), "core/src/execution/transport-broker.ts");
+  const brokerSource = readFileSync(brokerPath, "utf8");
+  STATIC_IMPORT.lastIndex = 0;
+  const brokerImports = [...brokerSource.matchAll(STATIC_IMPORT)]
+    .map((match) => match[1] ?? match[2] ?? match[3])
+    .filter((mod): mod is string => typeof mod === "string");
+
+  // 1. No runtime value imports from adapters (only type-only imports allowed)
+  const adapterImports = brokerImports.filter((mod) => mod.includes("adapters"));
+  assert.deepEqual(adapterImports, [], "transport-broker must have no runtime value imports from adapters");
+
+  // 2. No runtime value imports from gates
+  const gateImports = brokerImports.filter((mod) => mod.includes("gates"));
+  assert.deepEqual(gateImports, [], "transport-broker must have no runtime value imports from gates");
+
+  // 3. No runtime value imports from recipes
+  const recipeImports = brokerImports.filter((mod) => mod.includes("recipe"));
+  assert.deepEqual(recipeImports, [], "transport-broker must have no runtime value imports from recipes");
+
+  // 4. Under workflow/, only the turn reconnect admission verifier is imported
+  const workflowImports = brokerImports
+    .filter((mod) => mod.includes("workflow"))
+    .map((mod) => resolveLocalImport(brokerPath, mod));
+  assert.deepEqual(
+    workflowImports,
+    ["core/src/workflow/turn-reconnect-authorization.ts"],
+    "only turn-reconnect-authorization admission verifier is imported from workflow by transport-broker",
+  );
+
+  // 5. And turn-reconnect-authorization itself has no runtime provider/gate imports
+  const reconnectPath = join(repoRoot(), "core/src/workflow/turn-reconnect-authorization.ts");
+  const reconnectSource = readFileSync(reconnectPath, "utf8");
+  STATIC_IMPORT.lastIndex = 0;
+  const reconnectImports = [...reconnectSource.matchAll(STATIC_IMPORT)]
+    .map((match) => match[1] ?? match[2] ?? match[3])
+    .filter((mod): mod is string => typeof mod === "string");
+  const reconnectBad = reconnectImports.filter((mod) =>
+    mod.includes("adapters") || mod.includes("gates") || mod.includes("recipes"),
+  );
+  assert.deepEqual(reconnectBad, [], "turn-reconnect-authorization must have no runtime provider or gate imports");
+});
+
 function walkStaticImports(entrypoints: readonly string[]): Set<string> {
   const reachable = new Set<string>();
   const pending = [...entrypoints];
@@ -101,7 +155,9 @@ function walkStaticImports(entrypoints: readonly string[]): Set<string> {
 
 function resolveLocalImport(importer: string, specifier: string): string {
   const base = resolve(dirname(importer), specifier);
-  const candidates = extname(base) === "" ? [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")] : [base];
+  const candidates = extname(base) === ""
+    ? [base, `${base}.ts`, `${base}.tsx`, `${base}.mts`, `${base}.cts`, `${base}.js`, `${base}.mjs`, join(base, "index.ts")]
+    : [base];
   const resolved = candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
   assert.ok(resolved !== undefined, `cannot resolve ${JSON.stringify(specifier)} from ${relRepo(importer)}`);
   return relRepo(resolved);
