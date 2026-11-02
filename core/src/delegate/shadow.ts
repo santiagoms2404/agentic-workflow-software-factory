@@ -169,6 +169,7 @@ export async function recordShadowProposal(input: ShadowInput): Promise<ShadowOu
     allowedActs: [...allowedActs],
     facts,
   };
+  if (alreadyRecorded(await readTaskDelegateProposals(taskRoot), status)) return { recorded: false, reason: "already-recorded" };
   await appendTaskDelegateProposal(taskRoot, record);
   return { recorded: true, record };
 }
