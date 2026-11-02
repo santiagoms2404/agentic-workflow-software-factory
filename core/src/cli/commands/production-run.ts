@@ -4243,6 +4243,7 @@ async function readRecoveryQuota(options: ProductionRunOptions, inspected: Recov
   const rows = buildQuotaReadout({ routes: [route], probeResult: probe, defaultThreshold: threshold }).rows;
   const row = rows[0];
   if (rows.length !== 1 || row === undefined || row.verdict !== "above" || row.provider === null || row.scope === null || row.minutesToReset === null) {
+    // B2-08: journal and retain probe failure details when resume quota probe is unavailable
     if (probeFailure !== null) {
       await persistAttempt(options.attemptDir, inspected.status.revision, {
         kind: "attempt.updated",
