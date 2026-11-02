@@ -4,6 +4,8 @@
 // journal: given the same `JournalRecord` twice, the second application is a
 // no-op, and a failure never throws into the caller's phase — it degrades.
 
+import { existsSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { JournalRecord } from "../persistence/journal.ts";
 import { assertPlanAdmissionRecord, type PlanAdmissionRecord } from "../contracts/plan-admission.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
@@ -127,6 +129,52 @@ function workerColumnClause(purpose: RecordedAgentPurpose | undefined): string {
   return purpose === "support" ? " AND worker_provider IS NULL" : "";
 }
 
+export function persistDegradedMarker(
+  journalOrAttemptPath: string,
+  sessionId: string,
+  detail: unknown,
+): void {
+  try {
+    let dir = journalOrAttemptPath;
+    try {
+      if (!statSync(dir).isDirectory()) {
+        dir = dirname(dir);
+      }
+    } catch {
+      dir = dirname(dir);
+    }
+    const marker = JSON.stringify({
+      sessionId,
+      degradedAt: new Date().toISOString(),
+      detail: detail instanceof Error ? detail.message : String(detail ?? ""),
+    });
+    writeFileSync(join(dir, ".degraded"), marker, "utf8");
+    writeFileSync(join(dir, "observability-degraded"), marker, "utf8");
+  } catch {
+    // Best-effort durable marker
+  }
+}
+
+export function hasDegradedMarker(journalOrAttemptPath: string): boolean {
+  try {
+    let dir = journalOrAttemptPath;
+    try {
+      if (!statSync(dir).isDirectory()) {
+        dir = dirname(dir);
+      }
+    } catch {
+      dir = dirname(dir);
+    }
+    return (
+      existsSync(join(dir, ".degraded")) ||
+      existsSync(join(dir, "observability-degraded")) ||
+      existsSync(join(dir, ".observability-degraded"))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function projectAttemptStatus(
   db: DatabaseSync,
   status: AttemptStatusProjection,
@@ -195,6 +243,9 @@ export function projectAttemptStatus(
       flagPersisted = true;
     } catch {
       // The journal still owns the failed record when SQLite cannot flag itself.
+    }
+    if (!flagPersisted && status.journalPath) {
+      persistDegradedMarker(status.journalPath, status.sessionId, error);
     }
     return {
       ok: false,
@@ -317,6 +368,18 @@ export function projectDecision(db: DatabaseSync, record: DecisionRecord): void 
 }
 
 export function createSession(db: DatabaseSync, init: SessionInit): void {
+  const projectSlug = scrubCredentialString(init.projectSlug);
+  const taskId = scrubCredentialString(init.taskId);
+  let continuesTask = init.continuesTask === null ? null : scrubCredentialString(init.continuesTask);
+  if (continuesTask === null) {
+    const inherited = db.prepare(
+      "SELECT continues_task FROM sessions WHERE project_slug = ? AND task_id = ? AND continues_task IS NOT NULL LIMIT 1",
+    ).get(projectSlug, taskId) as { continues_task: string } | undefined;
+    if (inherited?.continues_task) {
+      continuesTask = inherited.continues_task;
+    }
+  }
+
   db.prepare(
     `INSERT OR IGNORE INTO sessions
        (session_id, project_slug, task_id, continues_task, group_id, plan_ref, attempt, workflow_id, risk_tier, is_protected,
@@ -324,9 +387,9 @@ export function createSession(db: DatabaseSync, init: SessionInit): void {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
   ).run(
     init.sessionId,
-    scrubCredentialString(init.projectSlug),
-    scrubCredentialString(init.taskId),
-    init.continuesTask === null ? null : scrubCredentialString(init.continuesTask),
+    projectSlug,
+    taskId,
+    continuesTask,
     // Written once, at session creation, because that is when it is decided.
     // Nothing later moves a run between groups.
     init.groupId === null ? null : scrubCredentialString(init.groupId),
@@ -459,10 +522,18 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
     case "ceiling-pause":
     case "ticket-block": {
       if (evidence.type !== "quota-pause" && evidence.type !== "ceiling-pause" && evidence.type !== "ticket-block" && evidence.phase !== null) applyAttemptEvidence(db, sessionId, sourceSeq, { type: "phase", phase: evidence.phase });
+      const startedAt =
+        evidence.type === "quota-pause" || evidence.type === "ceiling-pause" || evidence.type === "ticket-block"
+          ? evidence.checkpoint.createdAt
+          : evidence.type === "phase-result-ready"
+            ? (evidence.checkpoint.createdAt ?? evidence.phase.startedAt ?? evidence.phase.createdAt)
+            : evidence.type === "phase-accepted"
+              ? (evidence.phase.endedAt ?? evidence.phase.startedAt ?? evidence.phase.createdAt)
+              : (evidence.phase?.startedAt ?? evidence.phase?.createdAt ?? evidence.ownerInstruction?.amendment.confirmedAt ?? new Date().toISOString());
       db.prepare(`INSERT OR IGNORE INTO events
-        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json)
-        VALUES (?, ?, NULL, ?, ?, 'notice', ?, ?)`)
-        .run(`${sessionId}:recovery:${sourceSeq}:${evidence.type}`, sessionId, sourceSeq, sourceSeq, evidence.type, stringifyRedacted(evidence));
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name, payload_json, started_at)
+        VALUES (?, ?, NULL, ?, ?, 'notice', ?, ?, ?)`)
+        .run(`${sessionId}:recovery:${sourceSeq}:${evidence.type}`, sessionId, sourceSeq, sourceSeq, evidence.type, stringifyRedacted(evidence), startedAt);
       if (evidence.type === "resume-activation" && evidence.ownerInstruction != null) {
         const amendment = evidence.ownerInstruction.amendment;
         db.prepare(`INSERT OR IGNORE INTO events
@@ -850,6 +921,30 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
       db.prepare(`UPDATE sessions SET review_provider=?, review_verdict=? WHERE session_id=?`)
         .run(scrubCredentialString(evidence.provider), evidence.verdict, sessionId);
       return;
+    case "review-degradation":
+      db.prepare(`INSERT OR IGNORE INTO events
+        (event_id, session_id, phase_id, first_source_seq, last_source_seq, type, name,
+         payload_json, started_at) VALUES (?, ?, NULL, ?, ?, 'review_degradation', 'owner review-degradation grant', ?, ?)`)
+        .run(`${sessionId}:review-degradation:${sourceSeq}`, sessionId, sourceSeq, sourceSeq,
+          stringifyRedacted({
+            reason: evidence.reason, attempt: evidence.attempt,
+          }), evidence.at);
+      return;
+    case "command-occurrence-opened":
+    case "command-dispatch-intent":
+    case "command-dispatch-result":
+    case "command-occurrence-closed":
+    case "protected-commit-intent":
+    case "protected-lock-witness":
+    case "protected-grant":
+    case "protected-candidate":
+    case "protected-landing":
+    case "quota-snapshot":
+      return;
+    default: {
+      const _exhaustive: never = evidence;
+      return _exhaustive;
+    }
   }
 }
 
@@ -985,6 +1080,16 @@ export function projectEvent(
     } catch {
       // Best-effort: if even the degraded flag can't be written, the caller
       // still gets a notice back and the provider still isn't killed.
+    }
+    if (!flagPersisted) {
+      try {
+        const row = db.prepare("SELECT journal_path FROM sessions WHERE session_id = ?").get(ctx.sessionId) as { journal_path: string } | undefined;
+        if (row?.journal_path) {
+          persistDegradedMarker(row.journal_path, ctx.sessionId, err);
+        }
+      } catch {
+        // ignore
+      }
     }
     return {
       ok: false,
