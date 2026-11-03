@@ -35,11 +35,29 @@ export const REVIEW_EVIDENCE_GATE_ID = "review_evidence_present";
 export async function readAttemptEvidence(attemptDir: string): Promise<readonly AttemptEvidence[]> {
   const text = await readFile(join(attemptDir, "journal.jsonl"), "utf8");
   const evidence: AttemptEvidence[] = [];
-  for (const line of text.split("\n")) {
+  const lines = text.split("\n");
+  // Like scanJournalText, valid journal lines end with a newline so the last element
+  // is empty for clean journals; a non-empty last line indicates a torn trailing fragment.
+  const complete = lines.slice(0, -1);
+  for (const line of complete) {
     if (line.length === 0) continue;
-    const record = JSON.parse(line) as { event?: { evidence?: AttemptEvidence } };
-    const carried = record.event?.evidence;
-    if (carried !== undefined) evidence.push(carried);
+    try {
+      const record = JSON.parse(line) as { event?: { evidence?: AttemptEvidence } };
+      const carried = record.event?.evidence;
+      if (carried !== undefined) evidence.push(carried);
+    } catch {
+      continue;
+    }
+  }
+  const lastLine = lines[lines.length - 1] ?? "";
+  if (lastLine.length > 0) {
+    try {
+      const record = JSON.parse(lastLine) as { event?: { evidence?: AttemptEvidence } };
+      const carried = record.event?.evidence;
+      if (carried !== undefined) evidence.push(carried);
+    } catch {
+      // Torn trailing fragment, ignore cleanly like scanJournalText
+    }
   }
   return Object.freeze(evidence);
 }
@@ -214,6 +232,7 @@ export function recordedRoutes(
   }
 
   let worker: RecordedRoute | null = null;
+  let workerIsBuilder = false;
   let review: RecordedRoute | null = null;
   for (const record of evidence) {
     if (record.type !== "agent") continue;
@@ -227,9 +246,10 @@ export function recordedRoutes(
     };
     if (reviewPhaseIds.has(record.phaseId) || record.purpose === "review") {
       review = route;
-    } else if (record.purpose === "build") {
+    } else if (record.purpose === "build" || record.agent === "builder" || record.phaseId.endsWith(":builder")) {
       worker = route;
-    } else if (record.purpose !== "support" && worker === null) {
+      workerIsBuilder = true;
+    } else if (record.purpose !== "support" && (worker === null || !workerIsBuilder)) {
       // Legacy journals did not distinguish build from support. Preserve their
       // one recorded worker route without allowing a modern planner or
       // documenter to overwrite the candidate-producing provider.

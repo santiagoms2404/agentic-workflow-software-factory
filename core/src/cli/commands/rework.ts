@@ -37,7 +37,7 @@ import {
   type NormalizedEvent,
   type TokenUsage,
 } from "../../contracts/normalized-events.ts";
-import type { TestOutput } from "../../contracts/test-output.ts";
+import { type TestOutput, TEST_OUTPUT_TAIL_MAX_CHARS } from "../../contracts/test-output.ts";
 import { CallBudget } from "../../execution/call-budget.ts";
 import type { BarrierRecord, TerminationReport } from "../../execution/launcher-barrier.ts";
 import {
@@ -343,6 +343,10 @@ function bounded(value: string, maximum = MAX_EVIDENCE): string {
   return value.length <= maximum ? value : value.slice(0, maximum);
 }
 
+function safeTail(value: string, maximum = TEST_OUTPUT_TAIL_MAX_CHARS): string {
+  return value.length <= maximum ? value : value.slice(value.length - maximum);
+}
+
 function credentialSafeText(value: string, source: string, rejectPriorRedaction = false): string {
   const scrubbed = scrubCredentialString(value);
   if (scrubbed !== value || (rejectPriorRedaction && value.includes(REDACTED_VALUE))) {
@@ -620,9 +624,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   const infra: ReworkInfrastructure = { ...configuredInfra, createBroker: brokerOptions => {
     const delegate = configuredInfra.createBroker(brokerOptions);
     return { startProcess: async (registration, spec, signal) => {
-      delegatedReservations.add(reservationIdOf(registration));
-      try { return await delegate.startProcess(registration, spec, signal); }
-      catch (error) {
+      try {
+        const transport = await delegate.startProcess(registration, spec, signal);
+        delegatedReservations.add(reservationIdOf(registration));
+        return transport;
+      } catch (error) {
         // No returned transport means the caller cannot prove whether a child exists. Do not retry it.
         throw new ReworkRouteMismatch(`broker launch outcome is uncertain: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -1112,18 +1118,22 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     if (beforeCommitHead !== firstInspection.candidate) throw new ReworkCandidateMismatch(`agent changed HEAD to ${beforeCommitHead}; agents never commit`);
     // The default runner pins all four GIT_AUTHOR_*/GIT_COMMITTER_* to HOST_AUTHOR (H9: B8-04).
     const candidate = commitAsHost({ repository: status.worktree!, message: "fix: address owner rework request" });
-    const parent = runGit(systemGitRunner(status.worktree!), ["rev-parse", `${candidate}^`]).trim();
+    const git = systemGitRunner(status.worktree!);
+    const candidateIdentities = runGit(git, ["show", "-s", "--format=%an <%ae>|%cn <%ce>", candidate]).trim();
+    if (candidateIdentities !== `${OWNER}|${OWNER}`) {
+      throw new ReworkCandidateMismatch(`new candidate is not host-created under the owner identity: ${candidateIdentities}`);
+    }
+    const parent = runGit(git, ["rev-parse", `${candidate}^`]).trim();
     if (parent !== firstInspection.candidate) throw new ReworkCandidateMismatch(`new candidate parent ${parent} is not prior candidate ${firstInspection.candidate}`);
     await persist("attempt.updated", {
       candidateSha: candidate, budget: budget.snapshot(), lastActivityAt: infra.now(),
       lastActivity: `host created owner-identity candidate ${candidate} on prior candidate ${firstInspection.candidate}`,
     });
     for (const report of structural) await persistGate(report, candidate);
-    const advanced = headAdvanced({ baseSha: firstInspection.candidate, headSha: candidate, hostCommitExists: true });
+    const hostCommitExists = git(["cat-file", "-e", `${candidate}^{commit}`]).status === 0;
+    const advanced = headAdvanced({ baseSha: firstInspection.candidate, headSha: candidate, hostCommitExists });
     await persistGate(advanced, candidate);
     if (!advanced.passed) throw new PhaseGateFailure(phaseKey, [advanced]);
-
-    const git = systemGitRunner(status.worktree!);
     const headBeforeHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
     const cleanBeforeHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
     const hygieneResult = git(["diff", "--check", `${status.baseSha!}..${candidate}`, "--"]);
@@ -1235,10 +1245,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         cleanAfter: pins.clean && pins.head !== null, descendantQuiescence: "unproved", settledAt: infra.now(),
       } });
       }
-      const commandOutput = bounded(rawCommandOutput);
+      const commandOutput = safeTail(rawCommandOutput, TEST_OUTPUT_TAIL_MAX_CHARS);
       commands.push({ gateId, argv: [...configured.argv], exitCode: exit, durationMs, outputRef: outputRelative });
       if (exit !== 0) failures.push(`${gateId} exited ${exit}`);
-      outputTail = bounded(`${outputTail}\n${commandOutput}`);
+      outputTail = safeTail(outputTail.length === 0 ? commandOutput : `${outputTail}\n${commandOutput}`, TEST_OUTPUT_TAIL_MAX_CHARS);
       const cleanAfter = runGit(git, ["status", "--porcelain"]).trim().length === 0 && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
       if (!cleanAfter) {
         // The remaining gates are withheld on purpose: they must not run against
@@ -1515,17 +1525,19 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     };
 
     if (status.lifecycleState === "RUNNING") {
-      const failedPhase: PhaseEvidenceRecord = {
-        ...phase, status: "FAILED", startedAt: phase.startedAt ?? recoveryAt, endedAt: recoveryAt,
-        errorCode: failure.name, errorMessage: failure.message,
-      };
-      try {
-        await recoverPersist("attempt.updated", {
-          phase: { name: failedPhase.name, state: "FAILED", round: 0, maximumRounds: 0 },
-          budget: budget.snapshot(), process: null, lastActivityAt: recoveryAt,
-          lastActivity: `${failedPhase.key} failed closed`,
-        }, { type: "phase", phase: failedPhase });
-      } catch { /* L8 below is the mandatory durable settlement. */ }
+      if (phase.status !== "SUCCEEDED") {
+        const failedPhase: PhaseEvidenceRecord = {
+          ...phase, status: "FAILED", startedAt: phase.startedAt ?? recoveryAt, endedAt: recoveryAt,
+          errorCode: failure.name, errorMessage: failure.message,
+        };
+        try {
+          await recoverPersist("attempt.updated", {
+            phase: { name: failedPhase.name, state: "FAILED", round: 0, maximumRounds: 0 },
+            budget: budget.snapshot(), process: null, lastActivityAt: recoveryAt,
+            lastActivity: `${failedPhase.key} failed closed`,
+          }, { type: "phase", phase: failedPhase });
+        } catch { /* L8 below is the mandatory durable settlement. */ }
+      }
 
       // Refresh again because even a thrown phase projection may have committed.
       status = await readAttempt(options.attemptDir);
@@ -1695,3 +1707,5 @@ export async function reworkCommand(options: ReworkCommandOptions): Promise<Rewo
     throw safeFailure(error);
   }
 }
+
+export { safeTail };

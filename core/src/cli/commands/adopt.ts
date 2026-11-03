@@ -46,7 +46,10 @@ import {
   writeIntegrationCommit,
   type IntegrationPlan,
 } from "../../git/integration.ts";
-import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
+import {
+  createWorktree,
+  seedWorktreePaths,
+} from "../../git/worktrees.ts";
 import { scrubCredentialString } from "../../policy/redaction.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { diagnoseRecovery } from "../../observability/recovery-diagnostics.ts";
@@ -85,6 +88,7 @@ import {
   reviewFailureBlocker,
   reviewPhasesOf,
   type ReviewPhaseInfrastructure,
+  type ObservedProcessOutcome,
 } from "./review-phase.ts";
 import { candidatePathsBetween } from "../../workflow/review-evidence.ts";
 import { completedShift } from "../../workflow/candidate-seed.ts";
@@ -261,6 +265,10 @@ function bounded(value: string, maximum = 2_000): string {
   if (value.length <= maximum) return value;
   if (maximum <= 0) return "";
   return `${value.slice(0, maximum - 1)}…`;
+}
+
+function safeTail(value: string, maximum = TEST_OUTPUT_TAIL_MAX_CHARS): string {
+  return value.length <= maximum ? value : value.slice(value.length - maximum);
 }
 
 function credentialSafeGateOutput(value: string): string {
@@ -990,7 +998,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       candidateSha: pair.candidateSha,
       commands,
       failures,
-      outputTail: bounded(sections.join("\n\n"), TEST_OUTPUT_TAIL_MAX_CHARS),
+      outputTail: safeTail(sections.join("\n\n"), TEST_OUTPUT_TAIL_MAX_CHARS),
     };
     const aggregate = new GateReport("commands_pass");
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
@@ -1237,7 +1245,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     status = await readAttempt(attemptDir);
     if (status.lifecycleState !== "REVIEWING") throw failure;
     const registered = reviewState.processRecord as BarrierRecord | null;
-    if (registered !== null && !reviewState.processSettled) {
+    if (registered !== null && (!reviewState.processSettled || (reviewState.observed as ObservedProcessOutcome | null)?.settled === false)) {
       const at = infra.now();
       await persist("attempt.updated", { process: null, budget: budget.snapshot(), lastActivityAt: at }, {
         type: "process",
@@ -1252,6 +1260,16 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
         exitCode: reviewState.observed?.exitCode ?? null,
         exitSignal: null,
       });
+    }
+    if (reviewState.answered) {
+      await persist("attempt.updated", {
+        process: null,
+        budget: budget.snapshot(),
+        blocker: { code: "sqlite-projection-failed", detail: failure.message, ahead: null, behind: null },
+        lastActivityAt: infra.now(),
+        lastActivity: "advancement held at REVIEWING until observability rebuild",
+      });
+      return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: resumed !== null };
     }
     const classified = failure instanceof CandidateAdoptionRejected
       ? { code: "review-evidence-invalid", detail: failure.message }

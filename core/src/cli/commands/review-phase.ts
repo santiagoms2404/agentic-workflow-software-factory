@@ -1035,6 +1035,24 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         }
       } catch (error) {
         await silence.cancelled;
+        const exitObserved = state.observed !== null && state.observed.settled && state.observed.status === "EXITED";
+        const unobservedTransport = turnTransport as ProcessTransport | null;
+        if (unobservedTransport !== null && !exitObserved) {
+          try { await unobservedTransport.cancel("reviewer terminal unobserved"); }
+          catch { /* ignore */ }
+        }
+        if (state.processRecord !== null && !state.processSettled) {
+          const endedAt = infra.now();
+          const outcome: ObservedProcessOutcome = { status: "CANCELLED", exitCode: null, endedAt, settled: true };
+          state.observed = outcome;
+          await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, {
+            type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
+            record: state.processRecord, status: outcome.status,
+            registeredAt: state.releasedAt ?? endedAt, releasedAt: state.releasedAt, endedAt,
+            exitCode: null, exitSignal: null,
+          });
+          state.processSettled = true;
+        }
         throw silence.elapsed ? silenceFailure() : error;
       } finally {
         if (idle !== null) HOST.clearTimeout(idle);
@@ -1055,7 +1073,16 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         });
       }
       if (state.processRecord !== null) {
-        const outcome = state.observed ?? { status: "FAILED" as const, exitCode: null, endedAt, settled: false };
+        const exitObserved = state.observed !== null && state.observed.settled && state.observed.status === "EXITED";
+        const unobservedTransport = turnTransport as ProcessTransport | null;
+        if (unobservedTransport !== null && !exitObserved) {
+          try { await unobservedTransport.cancel("reviewer terminal unobserved"); }
+          catch { /* ignore */ }
+        }
+        const outcome = exitObserved
+          ? state.observed!
+          : { status: "CANCELLED" as const, exitCode: state.observed?.exitCode ?? null, endedAt, settled: true };
+        state.observed = outcome;
         await persist("attempt.updated", { process: null, lastActivityAt: outcome.endedAt }, {
           type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
           record: state.processRecord, status: outcome.status,
@@ -1198,6 +1225,27 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         }
         const held = attempt === 1 ? runOptions.reservation : budget.reserve({ cost: 1, subject: runOptions.retrySubject });
         if (attempt !== 1) {
+          const exitObserved = state.observed !== null && state.observed.settled && state.observed.status === "EXITED";
+          if (state.activeTransport !== null && !exitObserved) {
+            try { await state.activeTransport.cancel("reviewer attempt 1 cancelled before attempt 2"); }
+            catch { /* ignore */ }
+          }
+          if (state.processRecord !== null && !state.processSettled) {
+            const endedAt = infra.now();
+            const outcome: ObservedProcessOutcome = { status: "CANCELLED", exitCode: null, endedAt, settled: true };
+            state.observed = outcome;
+            await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, {
+              type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
+              record: state.processRecord, status: outcome.status,
+              registeredAt: state.releasedAt ?? endedAt, releasedAt: state.releasedAt, endedAt,
+              exitCode: null, exitSignal: null,
+            });
+            state.processSettled = true;
+          }
+          state.activeTransport = null;
+          state.processRecord = null;
+          state.processSettled = false;
+          state.observed = null;
           await persist("attempt.updated", {
             budget: budget.snapshot(), lastActivityAt: infra.now(),
             lastActivity: state.contractRetries > 0

@@ -47,6 +47,7 @@ import { CallBudget } from "../../execution/call-budget.ts";
 import type { BarrierRecord, TerminationReport } from "../../execution/launcher-barrier.ts";
 import { ProcessTransportBroker } from "../../execution/transport-broker.ts";
 import { assertClean, runGit, systemGitRunner } from "../../git/changes.ts";
+import { assertNoExecutionController } from "../../execution/operation-lease.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
@@ -136,6 +137,9 @@ export {
   ReplacementReviewInconsistent,
   ReplacementReviewMalformed,
   contractRetryPrompt,
+  classify as classifyReviewFailure,
+  inspectCandidate,
+  reconcileStaleReservation,
 };
 
 // ---------------------------------------------------------------------------
@@ -319,9 +323,15 @@ function inspectCandidate(status: AttemptStatus): CandidateInspection {
   if (worktree(["merge-base", "--is-ancestor", status.baseSha, status.candidateSha]).status !== 0) {
     throw new ReviewCandidateMoved("at preflight", "the recorded candidate is not descended from the canonical base");
   }
-  const identities = runGit(worktree, ["show", "-s", "--format=%an <%ae>|%cn <%ce>", status.candidateSha]).trim();
-  if (identities !== `${HOST_AUTHOR}|${HOST_AUTHOR}`) {
-    throw new ReviewCandidateMoved("at preflight", `the candidate is not host-created under the owner identity: ${identities}`);
+  const identities = runGit(worktree, ["log", "--format=%an <%ae>|%cn <%ce>", `${status.baseSha}..${status.candidateSha}`])
+    .split("\n")
+    .filter((identity) => identity.length > 0);
+  const foreignIdentity = identities.find((identity) => identity !== `${HOST_AUTHOR}|${HOST_AUTHOR}`);
+  if (identities.length === 0 || foreignIdentity !== undefined) {
+    throw new ReviewCandidateMoved(
+      "at preflight",
+      `the candidate range was not created entirely under the owner identity: ${foreignIdentity ?? "no candidate commit"}`,
+    );
   }
   if (worktree(["diff", "--check", `${status.baseSha}..${status.candidateSha}`, "--"]).status !== 0) {
     throw new ReviewCandidateMoved("at preflight", "the candidate fails `git diff --check`");
@@ -381,10 +391,10 @@ function validateAttempt(status: AttemptStatus, config: AwsfConfig): WorkflowRec
  * nothing about the three revalidations — so it is answered here and everything
  * else is deferred to the one classifier both commands read.
  */
-function classify(error: unknown): { code: string; detail: string; edge: "L17" } {
+export function classify(error: unknown): { code: string; detail: string; edge: "L17" } {
   const failure = safeFailure(error);
   const detail = `${failure.name}: ${failure.message}`;
-  if (failure instanceof ReviewCandidateMoved) {
+  if (failure instanceof ReviewCandidateMoved && failure.afterReview) {
     return { code: "review-evidence-invalid", detail, edge: "L17" };
   }
   return reviewFailureBlocker(failure, detail) ?? { code: "phase-abort", detail, edge: "L17" };
@@ -401,10 +411,10 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   let status = await readAttempt(options.attemptDir);
   credentialSafeText(status.request, "persisted original request", true);
 
-  // A prior process died holding this command's reservation. Reconcile before
-  // deciding anything: `awsf retry` refuses while a reservation is held, and an
-  // owner re-entry charged for a launch that never happened is confiscation.
-  if (status.lifecycleState === "REVIEWING" && status.budget.callsReserved > 0) {
+  // A prior process died holding this command's reservation or leaving a dead review.
+  // Reconcile before deciding anything: `awsf retry` refuses while a reservation is held,
+  // and an owner re-entry charged for a launch that never happened is confiscation.
+  if (status.lifecycleState === "REVIEWING") {
     status = await reconcileStaleReservation(options, status, infra);
     if (status.lifecycleState === "BLOCKED") return { status, confirmed: true };
   }
@@ -769,14 +779,14 @@ async function reconcileStaleReservation(
   status: AttemptStatus,
   infra: ReviewInfrastructure,
 ): Promise<AttemptStatus> {
+  await assertNoExecutionController(options.attemptDir);
   const evidence = await readAttemptEvidence(options.attemptDir);
+  const lastTransitionIndex = evidence.findLastIndex((record) => record.type === "transition");
+  if (lastTransitionIndex === -1 || (evidence[lastTransitionIndex] as { edgeId?: string }).edgeId !== "L25") return status;
   let launched = false;
-  let lastEdge: string | null = null;
-  for (const record of evidence) {
-    if (record.type === "transition") lastEdge = record.edgeId;
+  for (const record of evidence.slice(lastTransitionIndex + 1)) {
     if (record.type === "process" && record.status !== "REGISTERED") launched = true;
   }
-  if (lastEdge !== "L25") return status;
   const at = infra.now();
   const rewind = !launched && status.budget.ownerReentries > 0;
   const budget = {
@@ -784,7 +794,9 @@ async function reconcileStaleReservation(
     callsReserved: 0,
     ownerReentries: rewind ? status.budget.ownerReentries - 1 : status.budget.ownerReentries,
   };
-  const detail = `recovered a stale L25 reservation; ${rewind ? "no provider launched, so the owner re-entry was rewound" : "a provider had already launched, so the charge stands"}`;
+  const detail = status.budget.callsReserved > 0
+    ? `recovered a stale L25 reservation; ${rewind ? "no provider launched, so the owner re-entry was rewound" : "a provider had already launched, so the charge stands"}`
+    : `recovered a dead review process; ${rewind ? "no provider launched, so the owner re-entry was rewound" : "a provider had already launched, so the charge stands"}`;
   const code = "phase-abort";
   const decision = transition({
     from: "REVIEWING",
