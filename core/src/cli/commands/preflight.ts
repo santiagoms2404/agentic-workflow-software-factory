@@ -172,8 +172,9 @@ async function ancestors(stateRoot: string, project: string, taskId: string): Pr
   while (chain.length < MAX_CHAIN) {
     try {
       cursor = await declaredContinuation(stateRoot, project, cursor);
-    } catch {
-      break;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") break;
+      throw err;
     }
     if (cursor === null || cursor === taskId || chain.includes(cursor)) break;
     chain.push(cursor);
@@ -188,8 +189,9 @@ async function attemptStatuses(stateRoot: string, project: string, taskId: strin
   for (let attempt = 1; attempt <= (below === undefined ? latest ?? 0 : below - 1); attempt += 1) {
     try {
       statuses.push(await readAttempt(join(root, String(attempt))));
-    } catch {
-      // An attempt directory without a status holds no session to cite.
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw err;
     }
   }
   return statuses;
@@ -219,9 +221,11 @@ interface TaskScan {
   readonly tasks: ReadonlyArray<readonly [string, AttemptStatus[]]>;
 }
 
-/** The ticket ids a shift attempt selected, read from its status; null when it carries no selection. */
+/** The ticket ids an attempt selected, read from status shift or ticketSelection; null when unselected. */
 function selectedTickets(status: AttemptStatus): string[] | null {
-  return status.shift == null ? null : status.shift.tickets.map((ticket) => ticket.id);
+  if (status.shift != null) return status.shift.tickets.map((ticket) => ticket.id);
+  if (status.ticketSelection != null) return status.ticketSelection.tickets.map((ticket) => ticket.id);
+  return null;
 }
 
 /** Every task's status files, never a journal: the chain and the other tasks' requests and plan refs. */

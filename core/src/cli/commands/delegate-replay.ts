@@ -154,15 +154,11 @@ export async function delegateReplayCommand(options: DelegateReplayOptions): Pro
     });
     const decisionsDir = delegateStateDir(options.stateRoot);
     judge = async (facts, allowedActs) => {
-      try {
-        const decided = await decide(STOP_JUDGMENT, { stop: facts }, {
-          transport, taskRoot: decisionsDir, project: facts.project, taskId: facts.task, attempt: facts.attempt,
-          caller: { kind: "replay", name: facts.stopKind }, params: { allowedActs }, now, newId,
-        });
-        return { judgment: { outcome: decided.outcome, result: decided.policyResult }, decision: { recordId: decided.recordId, outcome: decided.outcome } };
-      } catch {
-        return { judgment: { outcome: "unavailable", result: null }, decision: { recordId: null, outcome: "unavailable" } };
-      }
+      const decided = await decide(STOP_JUDGMENT, { stop: facts }, {
+        transport, taskRoot: decisionsDir, project: facts.project, taskId: facts.task, attempt: facts.attempt,
+        caller: { kind: "replay", name: facts.stopKind }, params: { allowedActs }, now, newId,
+      });
+      return { judgment: { outcome: decided.outcome, result: decided.policyResult }, decision: { recordId: decided.recordId, outcome: decided.outcome } };
     };
   }
 

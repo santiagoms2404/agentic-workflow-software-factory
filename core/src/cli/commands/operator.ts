@@ -60,7 +60,7 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
         attempt: status.attempt,
         workflowId: status.workflow,
         riskTier: status.tier,
-        isProtected: false,
+        isProtected: (status as { isProtected?: boolean }).isProtected ?? false,
         requestText: status.request,
         callCeiling: ceilingFor(status.tier, status.budget.ceiling),
         configSnapshotJson: status.configSnapshotJson,

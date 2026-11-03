@@ -78,7 +78,14 @@ export interface ListSessionsOptions {
   state?: string;
 }
 
+export function sessionsForStage(db: DatabaseSync, projectSlug: string): SessionRow[] {
+  return db
+    .prepare(`SELECT ${SESSION_PUBLIC_COLUMNS} FROM sessions WHERE project_slug = ? ORDER BY started_at DESC, session_id`)
+    .all(projectSlug) as unknown as SessionRow[];
+}
+
 export function listSessions(db: DatabaseSync, opts: ListSessionsOptions = {}): SessionRow[] {
+
   const clauses = ["archived = ?"];
   const params: Array<string | number> = [opts.archived === true ? 1 : 0];
   if (opts.before !== undefined) {

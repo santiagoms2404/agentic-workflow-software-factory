@@ -1,4 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { loadCatalog } from "../../registry/catalog.ts";
 import type { ResolvedPlanSource } from "../../registry/plan-source.ts";
 import { TicketStore, type StoredTicket } from "../../persistence/ticket-store.ts";
 
@@ -13,7 +15,21 @@ export class TicketNotFound extends Error {
   }
 }
 
-export function ticketStoreFor(repository: string): TicketStore {
+export function ticketStoreFor(repository: string, plansRoot?: string): TicketStore {
+  if (plansRoot !== undefined) {
+    return new TicketStore(resolve(repository, plansRoot, "tickets"));
+  }
+  try {
+    const projectYaml = resolve(repository, "awsf.project.yaml");
+    if (existsSync(projectYaml)) {
+      const catalog = loadCatalog(readFileSync(projectYaml, "utf8"));
+      if (catalog.plans?.root) {
+        return new TicketStore(resolve(repository, catalog.plans.root, "tickets"));
+      }
+    }
+  } catch {
+    // Retain fallback
+  }
   return new TicketStore(resolve(repository, "specs", "tickets"));
 }
 
