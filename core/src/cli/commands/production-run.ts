@@ -759,6 +759,11 @@ export interface ProductionPlanRenderResult {
   readonly admission: PlanAdmissionRecord;
 }
 
+export function slugifyPlanStem(taskId: string): string {
+  const normalized = taskId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return normalized || "plan";
+}
+
 /** Writes and commits one rendered plan set inside the managed worktree only. */
 export async function renderProductionPlanIntoWorktree(input: {
   readonly worktree: string;
@@ -1125,7 +1130,7 @@ function phaseGates(
 
 /** Transport faults earn the one retry; a refusal, a breach, or exhausted quota never does. */
 export function isReviewTransportFailure(error: unknown): boolean {
-  if (error instanceof ProductionRouteUnavailable) return true;
+  if (error instanceof ProductionRouteUnavailable) return false;
   if (!(error instanceof AdapterError)) return false;
   // Quota is structurally never a retry, and a permission or contract failure
   // would fail identically the second time at the cost of another call.
@@ -1403,14 +1408,23 @@ async function validatePreparedRepository(status: AttemptStatus): Promise<void> 
   const head = runGit(worktreeGit, ["rev-parse", "HEAD"]).trim();
   const expectedHead = status.seed?.seedCandidateSha ?? status.baseSha;
   if (head !== expectedHead) {
-    throw new ProductionRepositoryMismatch(`PREPARED HEAD is ${head}, expected recorded initial HEAD ${expectedHead}`);
+    const isProveSeedReuse = status.workflow === PROVE_WORKFLOW_ID && (() => {
+      try {
+        return runGit(worktreeGit, ["rev-parse", "HEAD^"]).trim() === status.baseSha;
+      } catch {
+        return false;
+      }
+    })();
+    if (!isProveSeedReuse) {
+      throw new ProductionRepositoryMismatch(`PREPARED HEAD is ${head}, expected recorded initial HEAD ${expectedHead}`);
+    }
   }
   if (status.seed != null && runGit(canonicalGit, ["rev-parse", "HEAD"]).trim() !== status.baseSha) {
     throw new ProductionRepositoryMismatch("seeded target canonical HEAD differs from its integration base");
   }
 }
 
-type RecoveryInspection = Awaited<ReturnType<typeof inspectPhaseRecovery>>;
+export type RecoveryInspection = Awaited<ReturnType<typeof inspectPhaseRecovery>>;
 
 export async function productionRecoveryBinding(options: Pick<ProductionRunOptions, "config" | "configPath">, status: AttemptStatus): Promise<string> {
   const recipe = await attemptRecipe(options, status);
@@ -2107,7 +2121,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const stored = { ...envelope, rawOutputPath: rawRelative };
     const envelopePath = join(options.attemptDir, "envelopes", `${phaseId}-${envelope.correctionRound}.json`);
     await mkdir(dirname(envelopePath), { recursive: true });
-    if (existsSync(envelopePath)) throw new Error(`immutable envelope already exists: ${envelopePath}`);
+    if (existsSync(envelopePath) && storedEnvelopes.get(phaseId)?.correctionRound === envelope.correctionRound) throw new Error(`immutable envelope already exists: ${envelopePath}`);
     await writeFile(envelopePath, JSON.stringify(stored), { mode: 0o600 });
     await persist("attempt.updated", {}, { type: "envelope", phaseId: dbPhaseId(status.sessionId, phaseId), envelope: stored });
     storedEnvelopes.set(phaseId, stored);
@@ -3263,13 +3277,27 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const git = hostCommitGitRunner(worktree);
     assertClean(worktree, "before", git);
     const head = runGit(git, ["rev-parse", "HEAD"]).trim();
-    if (head !== status.baseSha) throw new Error(`the seed applies only at the pinned base ${status.baseSha!}; the worktree is at ${head}`);
-    // Host-private, outside the worktree the reviewer reads.
-    const patchPath = join(options.attemptDir, "private", `${phase.id}.patch`);
-    await mkdir(dirname(patchPath), { recursive: true });
-    await writeFile(patchPath, phase.seed.patch, { mode: 0o600 });
-    runGit(git, ["apply", "--whitespace=nowarn", patchPath]);
-    const committed = commitAsHost({ repository: worktree, message: phase.seed.message }, git);
+    let committed: string;
+    if (head !== status.baseSha) {
+      const parent = runGit(git, ["rev-parse", "HEAD^"]).trim();
+      const msg = runGit(git, ["log", "-1", "--format=%s"]).trim();
+      if (parent === status.baseSha && msg === phase.seed.message) {
+        committed = head;
+      } else {
+        throw new Error(`the seed applies only at the pinned base ${status.baseSha!}; the worktree is at ${head}`);
+      }
+    } else {
+      // Host-private, outside the worktree the reviewer reads.
+      const patchPath = join(options.attemptDir, "private", `${phase.id}.patch`);
+      await mkdir(dirname(patchPath), { recursive: true });
+      await writeFile(patchPath, phase.seed.patch, { mode: 0o600 });
+      runGit(git, ["apply", "--whitespace=nowarn", patchPath]);
+      await persist("attempt.updated", {
+        lastActivityAt: infra.now(),
+        lastActivity: `${phase.id}: host applying patch on base ${status.baseSha!}`,
+      });
+      committed = commitAsHost({ repository: worktree, message: phase.seed.message }, git);
+    }
     return {
       candidateSha: committed,
       output: {
@@ -3829,7 +3857,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             journalAdmission: admission => persist("attempt.updated", {}, undefined, admission),
           }) : await renderProductionPlanIntoWorktree({
             worktree: status.worktree!,
-            stem: status.taskId,
+            stem: slugifyPlanStem(status.taskId),
             plan: designPlanOutput!,
             identifierSet: planContext!.identifierSet,
             protectedPaths: options.config.policy.protected_paths,
@@ -4105,11 +4133,14 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     }
     const failedFrom = status.lifecycleState as TaskState;
     if (failedFrom === "GATING") {
-      await persist("attempt.updated", {
-        budget: budget.snapshot(), blocker: { code: "sqlite-projection-failed", detail: error instanceof Error ? error.message : String(error), ahead: null, behind: null },
-        lastActivityAt: infra.now(), lastActivity: "advancement held at GATING until observability rebuild",
-      });
-      return status;
+      const isProjection = error instanceof Error && error.message.toLowerCase().includes("projection");
+      if (isProjection) {
+        await persist("attempt.updated", {
+          budget: budget.snapshot(), blocker: { code: "sqlite-projection-failed", detail: error instanceof Error ? error.message : String(error), ahead: null, behind: null },
+          lastActivityAt: infra.now(), lastActivity: "advancement held at GATING until observability rebuild",
+        });
+        return status;
+      }
     }
     // L17 settles every review process that has already exited. The host keeps
     // the exact classification and never reinterprets a verdict: a failed
@@ -4272,7 +4303,7 @@ async function readRecoveryQuota(options: ProductionRunOptions, inspected: Recov
     threshold: threshold.minutes, observedAt, readoutDigest: recoveryDigest(row) };
 }
 
-async function prepareResumeInstruction(options: ProductionRunOptions, inspected: RecoveryInspection) {
+export async function prepareResumeInstruction(options: ProductionRunOptions, inspected: RecoveryInspection) {
   if (inspected.checkpoint.pending !== undefined) throw new Error("a saved reply cannot receive a new instruction before validation");
   const recipe = (await attemptRecipe(options, inspected.status))!;
   const ordinal = inspected.checkpoint.prefix.length + 1;
@@ -4301,9 +4332,13 @@ async function prepareResumeInstruction(options: ProductionRunOptions, inspected
   const bound = await recordedVisualBound(options.attemptDir);
   const visual = bound === null || !bound.phases.includes(phase.id) ? ""
     : visualReferencePrompt(plannedDelivery(bound, deliveryDirectory(options.attemptDir, `${inspected.status.sessionId}:${phase.id}:run`)));
+  const planAuthorSuffix = phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID
+    ? `\nHost-sealed spine selection: ${JSON.stringify(inspected.status.ticketSelection)}\nHost-provided session-runtime output directory: ${join(options.attemptDir, "private", PLAN_AUTHOR_WORKFLOW_ID)}\nWrite plan.html, build-prompts.md and tickets.json here only.\n`
+    : "";
   const originalPrompt = renderProductionRolePrompt(phase, previous, design ?? null, inspected.status.request, agent) +
     seedContext(inspected.status) + resumeInstructionContext(inspected.instructions) + protectedPromptContext(protectedGrantForPhase(options.attemptDir, phase.id)) + visual +
-    reviewDiffPrompt(phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID && previous?.schema === REVIEW_CONTEXT_SCHEMA_ID ? previous as ReviewContext : null);
+    reviewDiffPrompt(phase.schemaId === REVIEW_OUTPUT_SCHEMA_ID && previous?.schema === REVIEW_CONTEXT_SCHEMA_ID ? previous as ReviewContext : null) +
+    planAuthorSuffix;
   const seedAmendment = inspected.status.seed?.builderPhaseKey === phase.id ? inspected.status.seed.ownerAmendment : null;
   return { phaseKey: phase.id, ordinal, bundleDigest: recoveryDigest(bundle), originalPrompt, seedAmendment };
 }

@@ -54,6 +54,7 @@ import { TRAPS_USAGE, trapsCommand } from "./commands/traps.ts";
 import { stageCommand } from "./commands/stage.ts";
 import { locateAttempt, readAttempt } from "./commands/attempt.ts";
 import { recordShadowProposal } from "../delegate/shadow.ts";
+import type { DecisionRecord } from "../contracts/decision-record.ts";
 import { retryCommand } from "./commands/retry.ts";
 import { seedCommand } from "./commands/seed.ts";
 import { reviewCommand } from "./commands/review.ts";
@@ -270,6 +271,11 @@ function adoptionTerminal(provided: OwnerTerminal | undefined): OwnerTerminal {
   return provided ?? processOwnerTerminal();
 }
 
+export function cliWorktreeRoot(flag: string | undefined, envVal: string | undefined, stateRoot: string): string {
+  const envClean = envVal !== undefined && envVal.trim() !== "" ? envVal : undefined;
+  return resolve(flag ?? envClean ?? defaultWorktreeRoot(stateRoot));
+}
+
 export interface CliMainOptions {
   readonly argv?: readonly string[];
   readonly cwd?: string;
@@ -291,11 +297,12 @@ export interface CliMainOptions {
  * is withheld, so no test run can make a live Jev call; the proposal records
  * jev-unavailable instead.
  */
-async function shadowStop(
+export async function shadowStop(
   attemptDir: string,
   config: Parameters<typeof stopFactsPhases>[0]["config"],
   configPath: string,
   env: Readonly<Record<string, string | undefined>>,
+  projectDecision?: (record: DecisionRecord) => void,
 ): Promise<void> {
   try {
     const jevEnv = env.NODE_TEST_CONTEXT === undefined ? env : { ...env, OPENROUTER_API_KEY: undefined };
@@ -306,6 +313,7 @@ async function shadowStop(
         const { phases, roles } = await stopFactsPhases({ config, configPath }, await readAttempt(attemptDir));
         return { config: { phases }, roles };
       },
+      ...(projectDecision === undefined ? {} : { projectDecision }),
     });
   } catch {
     // The shadow owner only observes. A failure here leaves the run exactly as it returned.
@@ -322,6 +330,8 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const command = argv[0];
     if (command === undefined) throw new Error(USAGE);
     const parsed = parseArgs(argv.slice(1));
+    if (parsed.flags["state-root"] !== undefined && parsed.flags["state-root"].trim() === "") throw new Error("--state-root must not be empty");
+    if (parsed.flags["worktree-root"] !== undefined && parsed.flags["worktree-root"].trim() === "") throw new Error("--worktree-root must not be empty");
     if (parsed.tickets.length > 0 && command !== "new" && command !== "close") throw new Error("--ticket is supported only by awsf new and awsf close");
     const stateRoot = parsed.flags["state-root"] === undefined
       ? resolveStateRoot(env)
@@ -438,7 +448,16 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const intent = parsed.positionals.slice(2).join(" ");
       if (parsed.flags.plan !== undefined) throw new Error("ticket new/refine use the flat light store, never a paired --plan ticket");
       // Creation/refinement always use the flat store, not the catalog's default paired plan.
-      const store = await lightTicketStore(cwd);
+      let store;
+      try {
+        store = await lightTicketStore(cwd);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          store = ticketStoreFor(cwd);
+        } else {
+          throw error;
+        }
+      }
       const loaded = await store.load();
       const existing = loaded.find((record) => record.ticket?.id === id);
       if (action === "new" && existing !== undefined) throw new Error(`ticket ${id} already exists; use awsf ticket refine`);
@@ -464,7 +483,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         // enforces K1's closure field before preparing a tree or buying a call.
         await startCommand({
           attemptDir: created.attemptDir,
-          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+          worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
           configPath,
           ...(options.intakeExecution === undefined ? {} : { preflight: options.intakeExecution.preflight }),
           projectRecord: projection.project,
@@ -476,7 +495,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           assertAdvancement: projection.assertAdvancement,
           assertLaunchProjection: projection.assertLaunchPermitted,
         });
-        await shadowStop(created.attemptDir, config, configPath, env);
+        await shadowStop(created.attemptDir, config, configPath, env, projection.projectDecision);
         out(`${status.lifecycleState}: ${status.nextAction}`);
         if (status.lifecycleState === "AWAITING_OWNER") out(`Validated intake result for ${id}; ${status.nextAction}`);
         return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
@@ -637,7 +656,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const located = await locateAttempt(stateRoot, project, taskId, selectedAttempt);
       const result = await nextCommand(located.attemptDir, {
         stateRoot, config,
-        worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+        worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
       });
       if (parsed.flags.json === "true") out(JSON.stringify(result.model));
       else for (const line of result.lines) out(line);
@@ -664,6 +683,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       return 0;
     }
     if (command === "new") {
+      if (parsed.repositories.length !== 0) throw new Error("--repository is not supported by awsf new");
       const request = parsed.positionals.slice(1).join(" ").trim();
       if (request.length === 0) throw new Error("awsf new requires a request after the task id");
       const selection = selectWorkflow(
@@ -833,9 +853,10 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const located = await locateAttempt(stateRoot, project, taskId, selectedAttempt);
     switch (command) {
       case "start": {
+        if (parsed.routes.length !== 0) throw new Error("--route is not supported by awsf start");
         const status = await startCommand({
           attemptDir: located.attemptDir,
-          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+          worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
           configPath,
           // --stub injects the fixture preflight seam (the adapter probe, and with
           // it the start-time prompt check; the run composes prompts again before
@@ -864,7 +885,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const result = await preflightCommand({
           attemptDir: located.attemptDir,
           stateRoot,
-          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+          worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
           configPath,
           where: parsed.where,
           read: parsed.read,
@@ -876,6 +897,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         return result.measuredPassed ? 0 : 1;
       }
       case "run": {
+        if (parsed.routes.length !== 0) throw new Error("--route is not supported by awsf run");
         if (parsed.flags.stub === "true") {
           const liveMs = parsed.flags["live-ms"] === undefined ? 0 : Number(parsed.flags["live-ms"]);
           if (!Number.isInteger(liveMs) || liveMs < 0 || liveMs > 60_000) throw new Error("--live-ms must be an integer from 0 through 60000");
@@ -900,23 +922,24 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           });
         } catch (error) {
           // A run that seals the attempt and then reports it by throwing still stopped.
-          await shadowStop(located.attemptDir, config, configPath, env);
+          await shadowStop(located.attemptDir, config, configPath, env, projection.projectDecision);
           throw error;
         }
-        await shadowStop(located.attemptDir, config, configPath, env);
+        await shadowStop(located.attemptDir, config, configPath, env, projection.projectDecision);
         out(`${status.lifecycleState}: ${status.nextAction}`);
         const reportLine = (await statusCommand(located.attemptDir)).find((line) => line.startsWith("Run report:"));
         if (reportLine !== undefined) out(reportLine);
         return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
       case "resume": {
+        if (parsed.routes.length !== 0) throw new Error("--route is not supported by awsf resume");
         if (parsed.flags.stub !== undefined) throw new Error("resume does not support stub execution");
         const result = await resumeProductionCommand({ attemptDir: located.attemptDir, stateRoot, config, configPath,
           reason: parsed.flags.reason ?? "", ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
           terminal: options.terminal ?? processOwnerTerminal(),
           projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
           assertLaunchProjection: projection.assertLaunchPermitted });
-        if (result.confirmed) await shadowStop(located.attemptDir, config, configPath, env);
+        if (result.confirmed) await shadowStop(located.attemptDir, config, configPath, env, projection.projectDecision);
         out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
         return result.confirmed && result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
@@ -1157,7 +1180,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
             request: parsed.flags.request ?? "",
             routes: parsed.routes,
             ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
-            worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+            worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
             terminal: adoptionTerminal(options.terminal),
             config,
             configPath,
