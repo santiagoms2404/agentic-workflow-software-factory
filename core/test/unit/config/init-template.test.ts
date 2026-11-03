@@ -23,9 +23,9 @@ test("buildMinimalConfig uses the imported call-ceiling bounds", () => {
   const ceilings = buildMinimalConfig("ceiling-project").risk.call_ceiling;
 
   assert.deepEqual(ceilings, {
-    T0: MIN_CALL_CEILING,
-    T1: MIN_CALL_CEILING,
-    T2: MIN_CALL_CEILING,
+    T0: 1,
+    T1: 3,
+    T2: 5,
   });
   for (const ceiling of Object.values(ceilings)) {
     assert.ok(ceiling >= MIN_CALL_CEILING);

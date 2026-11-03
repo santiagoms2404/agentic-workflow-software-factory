@@ -1,7 +1,6 @@
 import type { Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { CONFIG_SCHEMA_ID, AwsfConfigSchema, type AwsfConfig } from "./schema.ts";
-import { MIN_CALL_CEILING } from "../state/tiers.ts";
 
 // Minimal awsf/v1 configuration inventory for buildMinimalConfig (T02).
 // This table records the schema and loader contract that determines every
@@ -35,10 +34,10 @@ export function buildMinimalConfig(slug: string): AwsfConfig {
     schema: CONFIG_SCHEMA_ID,
     project: { slug, default_workflow: "intake" },
     runtime: {
-      silence_timeout_seconds: 1,
-      process_grace_seconds: 0,
-      max_output_bytes: 1,
-      max_event_count: 1,
+      silence_timeout_seconds: 2700,
+      process_grace_seconds: 2,
+      max_output_bytes: 67108864,
+      max_event_count: 100000,
       seed_paths: [],
     },
     adapters: { claude: { kind: "claude-code", enabled: true } },
@@ -47,9 +46,9 @@ export function buildMinimalConfig(slug: string): AwsfConfig {
     workflows: { enabled: ["intake"] },
     gates: {},
     risk: {
-      default: "T0",
-      call_ceiling: { T0: MIN_CALL_CEILING, T1: MIN_CALL_CEILING, T2: MIN_CALL_CEILING },
-      correction_allowance: { auto: 0, owner: 0 },
+      default: "T1",
+      call_ceiling: { T0: 1, T1: 3, T2: 5 },
+      correction_allowance: { auto: 1, owner: 1 },
       paths: {},
     },
     policy: { protected_paths: ["AGENTS.md", "awsf.config.yaml"], protected_operations: [] },

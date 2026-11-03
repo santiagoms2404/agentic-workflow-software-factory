@@ -58,7 +58,7 @@ export function normalizeRepositoryPath(path: string): string {
   return normalized;
 }
 
-function normalizeGlob(glob: string): string {
+export function normalizeGlob(glob: string): string {
   if (glob.length === 0) throw new InvalidPolicyPath(glob, "empty globs grant nothing; use writes: []");
   if (hasControlCharacter(glob) || glob.includes("\\") || glob.startsWith("/") || /^[A-Za-z]:/.test(glob)) {
     throw new InvalidPolicyPath(glob, "globs must use relative POSIX separators");
