@@ -75,7 +75,7 @@ export interface StartCommandOptions {
   readonly stub?: boolean;
 }
 
-async function resolveAttemptRecipe(
+export async function resolveAttemptRecipe(
   status: AttemptStatus,
   config: ReturnType<typeof loadConfig>,
 ): Promise<WorkflowRecipe> {
@@ -404,13 +404,6 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
       protectedPaths: config.policy.protected_paths,
     });
   } catch (error) {
-    if (managed !== undefined) {
-      try {
-        runGit(systemGitRunner(current.repository), ["worktree", "remove", "--force", managed.path]);
-      } catch {
-        // ignore removal error
-      }
-    }
     const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     const blockedDecision = transition({
       from: current.lifecycleState,

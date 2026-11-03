@@ -225,13 +225,14 @@ export async function statusCommand(
   attemptDir: string,
   options: { readonly evidence?: boolean } = {},
 ): Promise<readonly string[]> {
-  const [status, records, report, relation] = await Promise.all([
+  const [status, report, relation] = await Promise.all([
     readAttempt(attemptDir),
-    readAttemptEvidence(attemptDir),
     locateRunReport(attemptDir),
     // `attemptDir` is `<task>/<attempt>`, so the task root is its parent.
     declaredContinuation(join(attemptDir, "..")),
   ]);
+  const needsRecords = options.evidence === true || status.shift != null || status.workflow === "shift";
+  const records = needsRecords ? await readAttemptEvidence(attemptDir) : [];
   const lines = [
     ...formatStatus(status), ...formatRelation(status, relation), ...formatGroup(status),
     `Closure: ${(await readClosure(attemptDir, status)).state} — closure is read from the journal, not inferred from ticket markers`,

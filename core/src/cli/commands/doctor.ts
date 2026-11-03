@@ -35,8 +35,9 @@ export async function doctorCommand(stateRoot: string): Promise<DoctorReport> {
 
   for (const attemptDir of attempts) {
     const label = attemptDir.slice(stateRoot.length + 1);
-    const holder = await readLockHolder(lockFilePath(attemptDir));
-    if (await exists(lockFilePath(attemptDir))) {
+    const lockPath = lockFilePath(attemptDir);
+    if (await exists(lockPath)) {
+      const holder = await readLockHolder(lockPath);
       const detail = holder === null ? "unnamed or malformed holder" : `pid ${holder.pid} since ${holder.acquiredAt}`;
       lines.push(`lock: ${label}: ${detail}`);
       if (holder === null || !pidIsLive(holder.pid)) findings.push(`stale lock: ${label}: ${detail}`);

@@ -22,9 +22,19 @@ export interface ClosureSnapshot {
   readonly blobs: ReadonlyMap<string, string>;
 }
 
+const SNAPSHOT_CACHE = new Map<string, ClosureSnapshot>();
+const BLOB_CACHE = new Map<string, Uint8Array>();
+
+export function clearClosureSnapshotCache(): void {
+  SNAPSHOT_CACHE.clear();
+  BLOB_CACHE.clear();
+}
+
 /** Registration is read independently from each committed tree, never a sealed ticket path. */
 export function readClosureSnapshot(git: GitRunner, sha: string): ClosureSnapshot {
   if (!/^[a-f0-9]{40}$/u.test(sha)) throw new Error("closure requires an exact commit SHA");
+  const cached = SNAPSHOT_CACHE.get(sha);
+  if (cached !== undefined) return cached;
   const catalog = loadCatalog(runGit(git, ["show", `${sha}:awsf.project.yaml`]));
   const root = catalog.plans.root.replace(/\/$/u, "");
   if (root.startsWith("/") || root.split("/").some(part => part === ".." || part === ".") || root.includes("\\")) throw new Error("closure refuses a plans root outside the canonical repository");
@@ -52,11 +62,17 @@ export function readClosureSnapshot(git: GitRunner, sha: string): ClosureSnapsho
     const blob = blobs.get(path);
     if (blob === undefined) continue;
     if (modes.get(path) !== "100644" && modes.get(path) !== "100755") throw new Error(`closure refuses non-regular registered path ${path}`);
-    const bytes = Buffer.from(runGit(git, ["cat-file", "blob", blob]), "utf8");
-    if (createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex") !== blob) throw new Error(`closure refuses non-UTF-8 or truncated registered blob ${path}`);
+    let bytes = BLOB_CACHE.get(blob);
+    if (bytes === undefined) {
+      bytes = Buffer.from(runGit(git, ["cat-file", "blob", blob]), "utf8");
+      if (createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex") !== blob) throw new Error(`closure refuses non-UTF-8 or truncated registered blob ${path}`);
+      BLOB_CACHE.set(blob, bytes);
+    }
     tree.set(path, bytes);
   }
-  return { tree, registry: { plans, lightTickets }, modes, blobs };
+  const snapshot: ClosureSnapshot = { tree, registry: { plans, lightTickets }, modes, blobs };
+  SNAPSHOT_CACHE.set(sha, snapshot);
+  return snapshot;
 }
 
 export function closureHead(git: GitRunner): string { return runGit(git, ["rev-parse", "HEAD"]).trim(); }

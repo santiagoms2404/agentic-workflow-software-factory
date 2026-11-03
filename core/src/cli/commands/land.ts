@@ -300,15 +300,19 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
     throw new Error("unreachable landing authorization");
   }
 
-  const seed = await verifiedTargetSeed(options.attemptDir, current);
-  const hasProtectedGrant = readProtectedState(options.attemptDir).grants.length > 0;
+  const [seed, protectedState, evidence] = await Promise.all([
+    verifiedTargetSeed(options.attemptDir, current),
+    readProtectedState(options.attemptDir),
+    readAttemptEvidence(options.attemptDir),
+  ]);
+  const hasProtectedGrant = protectedState.grants.length > 0;
   const inspection = inspectLanding(current.repository, current.candidateSha, undefined,
     seed === null && !hasProtectedGrant ? undefined : { integrationBaseSha: seed?.integrationBaseSha ?? current.baseSha! });
   if (seed !== null) {
     options.terminal.write(`Seeded candidate ${seed.seedCandidateSha}. Integration base pinned to ${seed.integrationBaseSha}. Fresh target assurance only.`);
     if (seed.ownerAmendment !== null) options.terminal.write(`Owner supplement: ${JSON.stringify(seed.ownerAmendment.text)}`);
   }
-  for (const line of resumeInstructionLines(await readAttemptEvidence(options.attemptDir))) options.terminal.write(line);
+  for (const line of resumeInstructionLines(evidence)) options.terminal.write(line);
   // Write while the attempt is still AWAITING_OWNER so the polling dashboard
   // can render the same record beside the terminal confirmation.
   await recordSummary(options, current, inspection);
@@ -320,11 +324,10 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
   // `requiredReviewPresent` is one boolean, and a human gate that saw only the
   // replacement verdict would never learn that a review had been replaced or
   // why — which is precisely what L25 is obliged to make visible.
-  for (const line of supersededReviewLines(recordedReviews(await readAttemptEvidence(options.attemptDir), current.sessionId))) {
+  for (const line of supersededReviewLines(recordedReviews(evidence, current.sessionId))) {
     options.terminal.write(line);
   }
   let protectedAuthorization: ProtectedCandidateAuthorization | null = null;
-  const protectedState = readProtectedState(options.attemptDir);
   if (protectedState.grants.length > 0) {
     const proof = inspectProtectedCandidate(options.attemptDir, current.candidateSha);
     assertProtectedPreservedBytes(proof);
