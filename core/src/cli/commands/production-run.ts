@@ -142,7 +142,7 @@ import {
   configuredQuotaProbeRoutes,
   mapConfiguredQuotaRoutes,
 } from "../../quota/routes.ts";
-import { boundCommandOutput, renderCommandEvidence } from "../../gates/command-evidence.ts";
+import { boundCommandOutput, renderBoundedEvidence, renderCommandEvidence } from "../../gates/command-evidence.ts";
 import { TEST_OUTPUT_TAIL_MAX_CHARS } from "../../contracts/test-output.ts";
 import {
   createCorrectionLaunchVerifier,
@@ -612,10 +612,6 @@ interface ReviewPhaseSubject {
   readonly candidatePaths: readonly string[];
   readonly evidence: ReviewContext | null;
   readonly expectation: ReviewEvidenceExpectation | null;
-}
-
-function safeTail(value: string, maximum = 4_000): string {
-  return value.length <= maximum ? value : value.slice(value.length - maximum);
 }
 
 function sumUsage(events: readonly NormalizedEvent[]): TokenUsage {
@@ -2396,7 +2392,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       summary: failures.length === 0 ? "all configured commands passed" : "configured commands failed",
       artifacts: [], notesForNextPhase: failures.length === 0 ? "await owner" : "inspect command evidence",
       passed: failures.length === 0, candidateSha, commands, failures,
-      outputTail: safeTail(renderedSections.join("\n\n"), TEST_OUTPUT_TAIL_MAX_CHARS),
+      outputTail: renderBoundedEvidence(renderedSections.join("\n\n"), TEST_OUTPUT_TAIL_MAX_CHARS),
     };
     const aggregate = new GateReport("commands_pass");
     for (const [gateId, configured] of Object.entries(options.config.gates)) {

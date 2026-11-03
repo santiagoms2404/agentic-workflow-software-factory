@@ -51,12 +51,29 @@ const HUNK_START = /^@@ /;
 /**
  * True when this diff text removes content.
  *
- * The `---` exclusion is the whole subtlety: every unified diff's own
- * `--- a/path` header begins with a hyphen, so the naive test would report that
- * an addition-only change removes lines.
+ * Outside a hunk, `--- a/path` headers begin with a hyphen and are excluded.
+ * Inside a hunk (after `@@ `), any line starting with `-` is a removal, even
+ * when its content begins with `--` (e.g. SQL comments or CSS custom properties,
+ * resulting in `---`) (B10-10).
  */
 export function diffRemovesLines(text: string): boolean {
-  return text.split("\n").some((line) => line.startsWith("-") && !line.startsWith("---"));
+  let insideHunk = false;
+  for (const line of text.split("\n")) {
+    if (HUNK_START.test(line)) {
+      insideHunk = true;
+      continue;
+    }
+    if (line.startsWith("diff ") || line.startsWith("*** ")) {
+      insideHunk = false;
+      continue;
+    }
+    if (insideHunk) {
+      if (line.startsWith("-")) return true;
+    } else {
+      if (line.startsWith("-") && !line.startsWith("---")) return true;
+    }
+  }
+  return false;
 }
 
 function parseSection(section: DiffFileSection): ParsedSection {

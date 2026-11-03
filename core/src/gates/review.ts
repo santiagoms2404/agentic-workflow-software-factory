@@ -95,12 +95,23 @@ function omittedEvidencePaths(context: ReviewContext): readonly string[] {
 function observedDeliveredReads(context: ReviewContext, events: readonly NormalizedEvent[], runId: string | undefined): ReadonlySet<string> {
   const read = new Set<string>();
   if (runId === undefined || context.diffDelivery === undefined) return read;
+  const completedOk = new Set<string>();
+  for (const event of events) {
+    if (event.runId === runId && event.kind === "tool.completed" && event.outcome === "ok") {
+      completedOk.add(event.toolCallId);
+    }
+  }
   for (const event of events) {
     if (event.runId !== runId || event.kind !== "tool.requested" || event.name.toLowerCase() !== "read") continue;
+    if (!completedOk.has(event.toolCallId)) continue;
     // Match an actual path value, never a substring (file.diff.extra), a grep,
     // a text.delta, or the reviewer's assertion in its output envelope.
     let input: unknown;
     try { input = JSON.parse(event.inputSummary); } catch { input = event.inputSummary; }
+    if (input !== null && typeof input === "object") {
+      const record = input as Record<string, unknown>;
+      if ("offset" in record || "limit" in record) continue;
+    }
     const values = typeof input === "string" ? [input] : input !== null && typeof input === "object"
       ? Object.values(input) : [];
     for (const file of context.diffDelivery.files) {

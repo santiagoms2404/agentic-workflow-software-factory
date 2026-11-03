@@ -23,10 +23,11 @@
 // unwindowed output is retained separately and privately; this is only what may
 // be shown to a model and written into an envelope.
 
+import { TEST_OUTPUT_TAIL_MAX_CHARS } from "../contracts/test-output.ts";
 import { scrubCredentialString } from "../policy/redaction.ts";
 
 /** The default budget, matching `TEST_OUTPUT_TAIL_MAX_CHARS` so the envelope field still fits. */
-export const DEFAULT_EVIDENCE_BUDGET = 4_000;
+export const DEFAULT_EVIDENCE_BUDGET = TEST_OUTPUT_TAIL_MAX_CHARS;
 
 /** Lines of context kept on each side of the first failure marker. */
 export const FAILURE_CONTEXT_LINES = 12;
@@ -103,11 +104,20 @@ function clip(value: string, maximum: number, from: "start" | "end"): string {
  */
 function failureWindow(
   lines: readonly string[],
+  lineStarts: readonly number[],
   markerIndex: number,
   contextLines: number,
   budget: number,
-): string {
+): { readonly text: string; readonly start: number; readonly end: number } {
   const marker = clip(lines[markerIndex] ?? "", budget, "start");
+  if (marker.length < (lines[markerIndex]?.length ?? 0)) {
+    const start = lineStarts[markerIndex]!;
+    return {
+      text: marker,
+      start,
+      end: start + marker.length,
+    };
+  }
   let used = marker.length;
   const after: string[] = [];
   for (let index = markerIndex + 1; index <= markerIndex + contextLines && index < lines.length; index += 1) {
@@ -123,7 +133,12 @@ function failureWindow(
     before.unshift(line);
     used += line.length + 1;
   }
-  return [...before, marker, ...after].join("\n");
+  const firstLine = markerIndex - before.length;
+  const lastLine = markerIndex + after.length;
+  const start = lineStarts[firstLine]!;
+  const end = lineStarts[lastLine]! + lines[lastLine]!.length;
+  const text = [...before, marker, ...after].join("\n");
+  return { text, start, end };
 }
 
 /**
@@ -183,14 +198,46 @@ export function boundCommandOutput(
     });
   }
 
+  const lineStarts: number[] = [];
+  let curr = 0;
+  for (let i = 0; i < lines.length; i += 1) {
+    lineStarts.push(curr);
+    curr += lines[i]!.length + 1;
+  }
+
   // Half the budget belongs to the failure window, and it is taken first. The
   // remaining half is split between head and tail. A window that comes in under
   // its share leaves the surplus to the other two rather than wasting it.
-  const failure = failureWindow(lines, markerIndex, contextLines, Math.floor(budget / 2));
+  // Head is clipped strictly before the failure window and tail strictly after,
+  // preventing overlap and double-counting (B10-09).
+  const failureInfo = failureWindow(lines, lineStarts, markerIndex, contextLines, Math.floor(budget / 2));
+  const failure = failureInfo.text;
+  const textBefore = output.slice(0, failureInfo.start);
+  const textAfter = output.slice(failureInfo.end);
+
   const remaining = budget - failure.length;
-  const headShare = Math.floor(remaining / 2);
-  const head = clip(output, headShare, "start");
-  const tail = clip(output, remaining - head.length, "end");
+  let head = "";
+  let tail = "";
+  if (remaining > 0) {
+    if (textBefore.length + textAfter.length <= remaining) {
+      head = textBefore;
+      tail = textAfter;
+    } else {
+      const headShare = Math.floor(remaining / 2);
+      const tailShare = remaining - headShare;
+      if (textBefore.length < headShare) {
+        head = textBefore;
+        tail = clip(textAfter, remaining - head.length, "end");
+      } else if (textAfter.length < tailShare) {
+        tail = textAfter;
+        head = clip(textBefore, remaining - tail.length, "start");
+      } else {
+        head = clip(textBefore, headShare, "start");
+        tail = clip(textAfter, remaining - head.length, "end");
+      }
+    }
+  }
+
   const kept = head.length + failure.length + tail.length;
   return Object.freeze({
     head,
