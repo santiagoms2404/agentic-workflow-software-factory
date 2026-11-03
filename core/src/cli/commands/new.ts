@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
 import { assertPlanAuthorSelection, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
 import { assertTicketSelection, type TicketSelection } from "../../contracts/ticket-selection-record.ts";
 import { join, resolve } from "node:path";
@@ -117,14 +116,11 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
   if (existing !== null) {
     const existingDir = join(root, String(existing));
     const status = await tryReadStatus<AttemptStatus>(statusFilePath(existingDir));
-    if (status === null) {
-      // B9-27: A failure or crash between journal append and status.json write leaves
-      // an uninitialized attempt directory with no status.json. Clean it up so awsf new
-      // can retry and mint attempt 1 rather than wedging the task.
-      await rm(existingDir, { recursive: true, force: true });
-    } else {
+    if (status !== null) {
       throw new Error(`${options.project}/${options.taskId} already has attempt ${existing}; use \`awsf retry\` after it is terminal`);
     }
+    // B9-27: If status.json is absent, the directory was created by an interrupted or failed
+    // attempt creation. Reusing it allows retry/new to proceed without violating invariant 8.
   }
   const attempt = 1;
   const dir = attemptDirectory(options.stateRoot, options.project, options.taskId, String(attempt));
@@ -193,19 +189,10 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
         seed.target.attempt !== 1 || seed.workflow !== status.workflow || status.tier !== 2 || status.continuesTask !== seed.source.taskId ||
         seed.configDigest !== sha256(status.configSnapshotJson) || seed.requestDigest !== sha256(status.request)) throw new Error("seed does not bind this new target");
   }
-  try {
-    return {
-      attemptDir: dir,
-      status: await persistAttempt(dir, null, { kind: "attempt.created", next: status,
-        ...(options.seed === undefined ? {} : { evidence: { type: "candidate-seed" as const, seed: options.seed } }),
-      }, options.projectRecord),
-    };
-  } catch (error) {
-    try {
-      await rm(dir, { recursive: true, force: true });
-    } catch {
-      // ignore cleanup error
-    }
-    throw error;
-  }
+  return {
+    attemptDir: dir,
+    status: await persistAttempt(dir, null, { kind: "attempt.created", next: status,
+      ...(options.seed === undefined ? {} : { evidence: { type: "candidate-seed" as const, seed: options.seed } }),
+    }, options.projectRecord),
+  };
 }

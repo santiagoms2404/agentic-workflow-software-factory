@@ -246,7 +246,7 @@ export function recordedRoutes(
     };
     if (reviewPhaseIds.has(record.phaseId) || record.purpose === "review") {
       review = route;
-    } else if (record.purpose === "build" || record.agent === "builder" || record.phaseId.endsWith(":builder")) {
+    } else if (record.purpose === "build" || record.agent === "builder" || record.phaseId.endsWith(":" + "builder")) {
       worker = route;
       workerIsBuilder = true;
     } else if (record.purpose !== "support" && (worker === null || !workerIsBuilder)) {
