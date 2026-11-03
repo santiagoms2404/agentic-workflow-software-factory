@@ -14,11 +14,8 @@ import { writeStatus } from "../persistence/status-store.ts";
 import { assertClean, runGit, type GitRunner } from "../git/changes.ts";
 import { reconcileHostCommit, type HostCommitReconciliation } from "../git/commit-reconcile.ts";
 import { planHostValidationRecovery, type HostValidationRecovery, type VerifyCandidateLedgerVerdict } from "./host-validation.ts";
-import { runSystemCommand } from "../execution/transport-broker.ts";
-const readOnlyGit = (repository: string): GitRunner => argv => runSystemCommand("git", ["-C", repository, ...argv], {
-  env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-    GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" }, timeoutMs: 30_000,
-});
+import { protectedReadOnlyGit } from "./protected-files.ts";
+const readOnlyGit = protectedReadOnlyGit;
 import type { PhaseEvidenceRecord } from "../observability/attempt-evidence.ts";
 import { acceptedResumeInstructions } from "./resume-instruction.ts";
 
@@ -197,15 +194,26 @@ export async function reconcileHostValidation(
   // Preflight states the plan and touches nothing.
   if (plan.action === "reconcile-protected") return Object.freeze({ plan, commit: null, candidateSha: inherited });
   if (plan.action === "replay") {
-    if (await savedResultTreeDigest(status.worktree!, git, seedPaths) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
     if (runGit(git, ["rev-parse", "HEAD"]).trim() !== checkpoint.worktreeHeadSha) throw new Error("recovery refused: HEAD moved during read-only host validation");
+    if (await savedResultTreeDigest(status.worktree!, git, seedPaths) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
     return Object.freeze({ plan, commit: null, candidateSha: inherited });
   }
   // The commit is already durable at this cut; what is unresolved is which
   // configured commands ran. The ledger names those that provably did not, and
   // only those are dispatched again. Preflight states the plan and acts on
   // nothing.
-  if (plan.action === "reconcile-commands") return Object.freeze({ plan, commit: null, candidateSha: inherited });
+  if (plan.action === "reconcile-commands") {
+    const recorded = progress.commitResult;
+    if (recorded === null) {
+      throw new Error("recovery refused: verify-candidate recovery has no recorded commit result");
+    }
+    const currentHead = runGit(git, ["rev-parse", "HEAD"]).trim();
+    const expectedHead = recorded.commitSha ?? checkpoint.worktreeHeadSha;
+    if (currentHead !== expectedHead) {
+      throw new Error("recovery refused: worktree HEAD does not match the durable commit");
+    }
+    return Object.freeze({ plan, commit: null, candidateSha: recorded.commitSha ?? inherited });
+  }
   const commit = await reconcileHostCommit(plan.intent, { worktree: status.worktree!, git });
   if (commit.outcome === "refused") throw new Error(`recovery refused: ${commit.reason}`);
   if (commit.outcome === "not-committed") {

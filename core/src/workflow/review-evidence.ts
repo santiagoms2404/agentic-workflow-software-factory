@@ -42,8 +42,10 @@ function tail(value: string, maximum: number): string {
  * unusual bytes in a filename intact, and `--no-renames` makes both sides of a
  * rename explicit.
  */
+const DIFF_ISOLATION_FLAGS = ["--no-color", "--no-ext-diff", "--no-textconv", "--no-renames"] as const;
+
 export function candidatePathsBetween(worktree: string, baseSha: string, candidateSha: string): readonly string[] {
-  const output = runGit(systemGitRunner(worktree), ["diff", "--name-only", "--no-renames", "-z", `${baseSha}..${candidateSha}`]);
+  const output = runGit(systemGitRunner(worktree), ["diff", "--name-only", ...DIFF_ISOLATION_FLAGS, "-z", `${baseSha}..${candidateSha}`]);
   return Object.freeze([...new Set(output.split("\0").filter((path) => path.length > 0))].sort());
 }
 
@@ -66,13 +68,13 @@ function candidateDiff(
 ): { readonly whole: string; readonly sections: readonly DiffFileSection[]; readonly stat: string; readonly insertions: number; readonly deletions: number } {
   const git = systemGitRunner(worktree);
   const range = `${baseSha}..${candidateSha}`;
-  const whole = runGit(git, ["diff", "--no-renames", range, "--"]);
+  const whole = runGit(git, ["diff", ...DIFF_ISOLATION_FLAGS, range, "--"]);
   // A fixed width, because the default depends on the terminal and evidence
   // that changes shape with the caller's window is not evidence.
-  const stat = runGit(git, ["diff", "--no-renames", "--stat=200,160", range, "--"]);
+  const stat = runGit(git, ["diff", ...DIFF_ISOLATION_FLAGS, "--stat=200,160", range, "--"]);
   let insertions = 0;
   let deletions = 0;
-  for (const record of runGit(git, ["diff", "--numstat", "--no-renames", "-z", range, "--"]).split("\0")) {
+  for (const record of runGit(git, ["diff", "--numstat", ...DIFF_ISOLATION_FLAGS, "-z", range, "--"]).split("\0")) {
     const fields = record.split("\t");
     if (fields.length < 3) continue;
     // Binary files report `-` for both counts; they are not zero-line changes,
@@ -82,7 +84,7 @@ function candidateDiff(
   }
   const sections = paths.map((path) => ({
     path,
-    text: runGit(git, ["--literal-pathspecs", "diff", "--no-renames", range, "--", path]),
+    text: runGit(git, ["--literal-pathspecs", "diff", ...DIFF_ISOLATION_FLAGS, range, "--", path]),
   }));
   return { whole, sections: Object.freeze(sections), stat, insertions, deletions };
 }

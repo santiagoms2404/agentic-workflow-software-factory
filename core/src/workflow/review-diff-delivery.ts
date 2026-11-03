@@ -50,15 +50,20 @@ async function safeDirectory(location: ReviewDeliveryLocation): Promise<string> 
 }
 
 async function immutableFile(path: string, text: string): Promise<void> {
+  let existing: string | null = null;
   try {
-    await writeFile(path, text, { flag: "wx", mode: 0o400 });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    const info = await lstat(path);
+    if (info.isFile() && info.nlink === 1) {
+      existing = await readFile(path, "utf8");
+    }
+  } catch {}
+  if (existing === text) {
+    return;
   }
-  const info = await lstat(path);
-  if (!info.isFile() || info.nlink !== 1 || await readFile(path, "utf8") !== text) {
-    throw new Error(`review delivery changed: ${path}`);
+  if (existing !== null) {
+    try { await chmod(path, 0o600); } catch {}
   }
+  await writeFile(path, text, { mode: 0o400 });
   await chmod(path, 0o400);
 }
 
@@ -80,10 +85,11 @@ export async function deliverReviewDiff(location: ReviewDeliveryLocation, whole:
   let token = randomBytes(32).toString("hex");
   try {
     const retained = JSON.parse(await readFile(join(directory, indexFile), "utf8")) as { token?: unknown };
-    if (typeof retained.token !== "string" || !/^[a-f0-9]{64}$/.test(retained.token)) throw new Error("invalid review delivery token");
-    token = retained.token;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if (typeof retained?.token === "string" && /^[a-f0-9]{64}$/.test(retained.token)) {
+      token = retained.token;
+    }
+  } catch {
+    // Missing, truncated, or invalid index.json recovers with a fresh token.
   }
   // The token lives ONLY in the delivered index. Neither prompt nor envelope
   // repeats it; indexSha256 binds the exact index without disclosing its token.

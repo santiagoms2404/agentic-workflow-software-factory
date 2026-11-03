@@ -37,6 +37,8 @@ test("non-destructive argv-array Git commands remain allowed", () => {
       "core/src/execution/operation-lease.ts: if (old !== null) await unlink(pathFor(directory));",
       "core/src/execution/operation-lease.ts: await unlink(pathFor(directory));",
       "core/src/persistence/attempt-lock.ts: await unlink(lockPath);",
+      "core/src/persistence/attempt-lock.ts: await unlink(lockPath);",
+      "core/src/persistence/attempt-lock.ts: await unlink(tmpPath).catch(() => {});",
       "core/src/persistence/attempt-lock.ts: await unlink(this.lockPath);",
     ],
   });

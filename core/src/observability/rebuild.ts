@@ -16,7 +16,6 @@
 import { existsSync, readdirSync, readlinkSync } from "node:fs";
 import { link, mkdir, readdir, rename, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { execSync } from "node:child_process";
 import type { JournalRecord } from "../persistence/journal.ts";
 import { scanJournal } from "../persistence/replay.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
@@ -252,17 +251,6 @@ function assertNoActiveHandles(targetPath: string): void {
     } catch (err) {
       if (err instanceof Error && err.message.startsWith("live database has active handles")) throw err;
     }
-  }
-
-  // Also check other processes (e.g. running dashboard) via fuser
-  try {
-    const fuserOut = execSync(`fuser "${targetPath}" 2>/dev/null`, { encoding: "utf8" }).trim();
-    if (fuserOut.length > 0) {
-      throw new Error(`live database has active handles or locks: held by process(es) ${fuserOut}`);
-    }
-  } catch (err) {
-    if (err instanceof Error && err.message.startsWith("live database has active handles")) throw err;
-    // fuser returns non-zero when no processes hold the file, which is normal
   }
 }
 

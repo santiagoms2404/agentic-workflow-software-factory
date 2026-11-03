@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 import type { AgentDefinition } from "../config/schema.ts";
+import { sha256 } from "../contracts/owner-amendment.ts";
 import { REDACTED_VALUE, scrubCredentialString } from "../policy/redaction.ts";
 
 export const PROMPT_COMPOSITION_VERSION = "awsf.prompt-composition/v1";
@@ -20,9 +20,7 @@ export interface PromptBundle {
   readonly evidence: PromptCompositionEvidence;
 }
 
-export function promptSha256(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
+export const promptSha256 = sha256;
 
 export interface ComposePromptBundleOptions {
   readonly configPath: string;
@@ -63,17 +61,21 @@ export class PromptCredentialRejected extends Error {
   }
 }
 
+function isEscaping(rel: string): boolean {
+  return isAbsolute(rel) || rel === ".." || rel.startsWith("../") || rel.startsWith("..\\");
+}
+
 async function readContainedPrompt(configPath: string, path: string): Promise<string> {
   if (isAbsolute(path)) throw new Error(`prompt path must be relative: ${path}`);
   const root = await realpath(dirname(resolve(configPath)));
   const candidate = resolve(root, path);
   const fromRoot = relative(root, candidate);
-  if (fromRoot === "" || fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
+  if (fromRoot === "" || isEscaping(fromRoot)) {
     throw new Error(`prompt path escapes the config context: ${path}`);
   }
   const physical = await realpath(candidate);
   const physicalFromRoot = relative(root, physical);
-  if (physicalFromRoot.startsWith("..") || isAbsolute(physicalFromRoot)) {
+  if (isEscaping(physicalFromRoot)) {
     throw new Error(`prompt symlink escapes the config context: ${path}`);
   }
   return readFile(physical, "utf8");
