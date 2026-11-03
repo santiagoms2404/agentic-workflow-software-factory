@@ -32,7 +32,8 @@ v3 is done when, for AWSF and for Smart Health:
 1. Every known trap is refused before any provider call, and every new stop
    becomes a trap with a test.
 2. Every stop and every cancel carries a recorded cause, the driver's included.
-3. Every driving session is recorded completely, across compactions.
+3. Every capture-permitted driving interaction is recorded across compactions,
+   with private capture and later-use eligibility enforced under AM1 below.
 4. Routes are chosen by a policy the owner approved, within the owner's
    subscriptions, with failover between providers.
 5. A user-testing validator checks behaviour against the acceptance criteria
@@ -50,6 +51,8 @@ Acceptance is measured, not asserted. The targets are in the last section.
 Automatic landing of any kind. Production deploys without the owner. Any
 unattended background daemon. Training on frontier-model output. Multi-user or
 team features, and offering AWSF or the harness as a product to others.
+Personal capability creation and reusable sharing are separate future product
+directions under AM5, not additional AWSF v3 workstreams or prerequisites.
 
 ## Decisions already taken — treat these as constraints, not questions
 
@@ -103,6 +106,151 @@ Each decision names the Questionable it closed in the assessment.
     the owner may land before Phase A's trap suite refuses every known trap.
 14. **No model emits an owner act.** Owner acts are absent from every action
     schema a model fills, in every harness, whatever the spelling.
+
+## Owner-approved scope amendment — AM1–AM5 (2026-10-17)
+
+The owner approved AM1–AM5 and explicitly authorized applying them to the
+planning artifacts. These requirements extend the existing W04/W08/W09 scope
+and add W10's narrow record-consumer obligation. They do not approve any deep
+plan, implementation, runtime adoption, provider spend or status change. The
+fourteen decisions above, workstream identities and dependency graph remain.
+
+### AM1 — Capture, privacy and permitted use
+
+Record every capture-permitted interaction across compactions. Show capture
+mode before submission. Private conversation is not persisted in the durable
+conversation store or promoted into shared knowledge. Outside-working-memory
+material may remain retained but is excluded from future agent context until
+explicitly restored. Corrections and retirement remain traceable where
+retention is permitted. Explain what forgetting can remove and what remains
+in append-only records, backups or provider systems. Never imply provider
+zero-retention.
+
+Capture permission does not itself authorize retrieval, export, training or
+execution. Every consumer, including W09 and W10, must enforce the relevant
+eligibility restrictions. Existing rules for training data, model thinking,
+private provider identifiers and credential-shaped content still bind. Private
+content must not survive indirectly in logs, summaries or derived datasets.
+Deep plans must specify and justify any retained private-mode metadata.
+
+Private mode cannot bypass required factory authorization or evidence. If an
+action needs a durable record, explain what must be retained and obtain
+explicit promotion of the necessary actionable scope before execution. This
+neither erases previous audit records nor creates a new execution grant.
+
+Measure capture coverage over capture-permitted asks within a known observation
+boundary. Report unexplained misses and unmeasured intervals separately.
+Intentional exclusion is not capture failure, but lost input must not be
+relabelled as intentionally excluded after the fact. An unknown denominator
+stays unknown. Do not retain private content merely to count its omission.
+The historical 41% baseline used the older definition and is not directly
+comparable until the measurement methods are reconciled.
+
+### AM2 — W04's record contract
+
+W04 still owns the archive in AWSF core, projection, scrubbing and direct-session
+accounting. Specify a versioned contract with stable project/session/source
+references, permitted original wording, corrections and eligibility. Retain
+sources across compactions and projection rebuilds. Scrubbed or redacted text
+must not be represented as an exact raw-input copy. Distinguish source material,
+assistant interpretation, accepted planning decisions and execution evidence
+through provenance or links to their authoritative records.
+
+W08 owns goal-thread association and reconciliation. A goal may span sessions
+and planning groups, but a session group is not redefined as a goal. The deep
+plans must state where associations are retained and which record owns each
+fact. W04 hands W08 a supported contract and fixtures, and W09/W10 the record
+and eligibility contract. It does not implement the conversation interface or
+create a second authority for factory state.
+
+### AM3 — W08's durable owner-goal conversation
+
+Provide project-separated goal threads across conversations, planning groups,
+plans and attempts. Distinguish tentative ideas, proposals and accepted
+decisions. Deliberate cross-project references do not merge context or access.
+Reopening a goal restores permitted sources, current evidence, accepted scope
+and unresolved decisions without asking the owner to reconstruct them.
+
+Browser disconnection does not itself stop an authorized foreground-host
+operation. After an explicit owner restart, reconcile current host records
+before describing or taking a continuation step. Reconnection grants no
+authority. Deliver retained completed results without repeating their effects,
+and preserve host reconciliation/refusal for unknown outcomes. Distinguish
+host-accepted queued input, unresolved delivery and unsubmitted input. A queued
+note or correction is not a scope grant. Mark decisions superseded by changed
+scope or evidence. Important updates explain the change, consequence, evidence
+and needed decision. Routine progress remains visible without repeated alerts.
+
+Use W04's contract and existing planning/host authority. Provide minimum
+explicit-context recovery without W09, which later adds selective retrieval.
+Preserve the design baseline, one repository per milestone, K3/K4 and the full
+real-drive acceptance. W05 owns leases/delegation, W06 routing and W14 external
+signals. No unattended process, automatic reboot start, new pause authority,
+public-user factory access, owner act or alternative scheduler is admitted.
+An owner-started foreground host remaining alive after browser closure does
+not authorize unattended operation after the owner's session ends.
+
+### AM4 — W09's scoped context
+
+Extend selective loading to W08's goal/session relationships using W04's
+permitted records. Preserve original-source links and distinguish current
+decisions, superseded proposals and execution evidence. Check project scope
+and current eligibility before retrieval. Summaries, forks, indexes and
+compacted history must not reintroduce private or excluded material. Keep
+originals retrievable where permitted and report unavailable evidence rather
+than reconstructing it. W08's minimal recovery is the predecessor interface,
+not a dependency on W09. Preserve capability-index, generated-doc, compaction
+and token/quality requirements without dropping accepted requirements to save
+tokens. A retrieval index is not another archive or lifecycle authority.
+
+### AM5 — Separate future creation and sharing scope
+
+Smart Health Platform is the planning owner for a separate future creation-and-
+sharing program, distinct from approved Smart Health V4. Smart Health is the
+first integration, not a permanent dependency for all creations. This is a
+planning-ownership decision only. Runtime repositories, deployment, economics,
+spine filenames and the eventual number of deep plans are not selected.
+
+Personal capability creation and reusable distribution may later consume
+admitted Marimba/factory interfaces. They are not AWSF v3 workstreams or
+prerequisites for the owner harness. Ordinary app-user permissions never grant
+software-owner authority. Existing-capability composition, restricted new
+behavior and shared platform changes remain separate possibilities. Sharing
+can distribute compositions without requiring a programmable runtime.
+
+Do not add AWSF workstream identifiers or change Smart Health V4 through this
+amendment. A later, separately authorized product spine may register unauthored
+deep plans once scope and placement are ready. Registration authorizes no
+implementation. Split plans by ownership, permission boundary or independently
+useful delivery, not document length.
+
+### Evidence, cost and alternatives
+
+The existing W04 archive/metrics scope does not specify private capture. W08's
+run panel does not explicitly promise goal continuity across sessions. W09's
+capability index does not specify goal-memory eligibility. The corresponding
+spine blocks and authoring prompts are the documentary baseline, not runtime
+proof. The least additional evidence is synthetic capture/rebuild, reconnect,
+reconciliation and scoped-retrieval fixtures in those deep plans, followed by
+their existing required live acceptance. No proof was run for this amendment.
+
+| Amendment | Added cost and limitation | Alternative without the addition |
+| --- | --- | --- |
+| AM1 | End-to-end capture/consumer checks and metric reconciliation. Local storage controls cannot establish provider retention. | Explicit nonprivate capture only, with no private-mode promise. This defers the accepted privacy experience. |
+| AM2 | Versioned provenance/eligibility contract and compatibility fixtures. Records alone do not understand goals. | Archive/metrics only, with explicit references in W08 and possible later format revision. |
+| AM3 | Goal associations, retained input/decision state and recovery journeys. Return-flow tests do not establish live subscription compatibility. | Existing run-oriented panel and manual handoff/context selection, leaving the coordination burden. |
+| AM4 | Retrieval filters, provenance and semantic-quality evaluation. No perfect-recall guarantee. | Capability/document index plus explicit goal-source loading. |
+| AM5 | Later product/privacy/permission/maintenance/cost decisions. No runtime or public-product approval. | Keep creation/sharing in research only until that program is ready. |
+
+W08 authoring needs W04's deep plan approved, not its implementation complete.
+Implementation that consumes the producer contract still waits for verified
+producer behavior and normal host gates. W09 continues to follow W08. Neither
+this distinction nor approval of the amendment changes `depends_on`, bypasses
+managed-run admission or moves a marker. Protected-path changes still require
+GA and owner commit ownership. No invariant, dependency or authority is relaxed.
+B2 and Pi Durable remain independent candidates. The proposed recovery proof
+remains unexecuted, and official subscription/adapter/live-recovery evidence is
+still required before recommending Pi Durable adoption.
 
 ## Terms
 
@@ -258,6 +406,6 @@ the assessment, measured on 2026-10-01.
 | Owner acts per landing | ≥ 2 | 1 |
 | Driver-preventable stops | 8 of 27 | 0 on known traps |
 | Driver prompt tokens per turn (median) | 168k | < 10k |
-| Owner asks captured | 41% | 100% |
+| Capture-permitted owner asks captured within the measured observation boundary | 41% (historical definition, not yet reconciled) | 100%, with unexplained misses and unmeasured intervals reported separately (AM1) |
 | Stops and cancels with a cause | 1 of 36 | all |
 | Validation share of phase time | 20% | about 35% |

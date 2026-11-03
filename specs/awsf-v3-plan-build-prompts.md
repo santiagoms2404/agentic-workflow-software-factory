@@ -66,6 +66,21 @@ assessment's Q1–Q16 are closed by them.
 
 ---
 
+## Owner-approved AM1–AM5 — 2026-10-17
+
+The intent's AM1–AM5 section is the canonical scope addition. T04/T08/T09 carry the
+record, goal-continuity and scoped-context requirements; T10 gains only the record-use
+eligibility obligation. Private capture and retained-but-excluded memory are distinct.
+The capture target covers permitted asks within a known measurement boundary, with
+loss and unmeasured intervals reported separately. The historical 41% is not yet
+comparable to that qualified target.
+
+Personal capability creation and reusable sharing remain outside AWSF v3 and approved
+Smart Health V4. Smart Health Platform owns their future planning, not an additional
+workstream here. No product registration, deep plan, implementation, runtime adoption
+or proof is authorized by this amendment. B2 and Pi Durable remain separate candidates.
+All markers, dependencies, repository boundaries and existing owner gates stay unchanged.
+
 ## Conventions used by every prompt
 
 **Marker discipline.** You are authoring. Do not flip any marker in `specs/awsf-v3-plan.html` and do
@@ -391,7 +406,8 @@ REPOSITORY: this AWSF checkout. You write only the deep plan, its build prompts 
 You are authoring a DEEP PLAN. You write no implementation code.
 
 EXECUTION
-  Manual, logged exception (gate GM). Record this session in the deep plan's Amendments.
+  Manual, logged exception (gate GM) only if W03 is not yet [x]; otherwise author it through
+  the factory as W03's deep plan describes. Record this session in the deep plan's Amendments.
   The deep plan's implementation tasks default to managed execution through the factory.
 
 PREDECESSORS
@@ -400,7 +416,7 @@ PREDECESSORS
 READ FIRST
   AGENTS.md - invariants 1, 6, 7, 9 and 10
   specs/awsf-v3-plan.html - the W04 block IN FULL, Questionables Q4 and Q11, gate GM
-  specs/awsf-v3-intent.md - decision 7 and the acceptance targets
+  specs/awsf-v3-intent.md - decision 7, the acceptance targets and owner-approved AM1/AM2
   specs/awsf-v3-assessment-and-direction.md - A14 and the KPI table
   core/src/observability/ - projector.ts, sqlite.ts and migrations/
   dashboard/shared/credential-patterns.ts
@@ -410,7 +426,27 @@ DO
   -build-prompts.md, and specs/tickets/awsf-v3-w04-session-record/ with a README.
   The driving-session archive moves into the state root, scrubbed with AWSF's credential
   patterns and projected, so the dashboard shows each driving session cycle by cycle across
-  compactions (A14). Measure owner asks captured. Log and count direct-session exceptions.
+  compactions (A14). Measure capture-permitted owner asks under AM1. Log and count
+  direct-session exceptions.
+  AM2: specify a versioned record contract with stable project/session/source references,
+  permitted original wording, corrections and capture/use eligibility. Required scrubbing
+  still applies; redacted content is not an exact raw-input copy. Preserve references across
+  compactions and projection rebuilds. Distinguish inputs, interpretations, accepted planning
+  decisions and execution evidence by provenance or authoritative references.
+  W08 owns goal associations and reconciliation. Do not redefine a session group as a goal,
+  implement its conversation interface here or create another authority for factory state.
+  Name the producer/consumer boundary and require the deep plans to locate associations and
+  identify fact ownership. Hand W08 a supported contract/fixtures and W09/W10 the eligibility
+  contract; retained material is not automatically usable.
+  AM1: private content is absent from durable capture, projections and derived records.
+  Retained-but-excluded content stays outside future context until explicitly restored.
+  Specify/justify any private-mode metadata and explain deletion/provider-retention limits.
+  Capture fixtures distinguish intentional exclusion, unexplained loss and unknown coverage.
+  Never reclassify a miss as intentional or retain private text merely to count its omission.
+  Unknown denominators stay unknown; reconcile the historical 41% before comparison.
+  Test linked sessions, multiple compactions, stable references, correction provenance and
+  eligibility through rebuilds using synthetic non-sensitive inputs. Preserve existing
+  direct-session accounting and scrubbing acceptance.
 
 DECIDED 2026-10-02 - APPLY, DO NOT REOPEN
   Q4 - the archiver lives in AWSF core; the harness writes the core format.
@@ -446,7 +482,8 @@ MARKERS
   Flip nothing.
 
 HANDOFF
-  Return dated findings for W08 and W10: the record format and where it lives.
+  Return dated findings for W08, W09 and W10: the versioned record format, where it lives,
+  stable source references, capture/use eligibility and producer/consumer fixtures.
 
 STOP WHEN
   The deep plan is authored, every open decision is surfaced, and the owner has it in hand.
@@ -724,12 +761,14 @@ EXECUTION
 
 PREDECESSORS
   W01's, W02's and W04's deep plans approved. K3 builds on K2, native capture uses W04's
-  format, and GR binds this workstream.
+  format, and GR binds this workstream. W04's deep plan must be approved for authoring;
+  W04's implementation need not be complete. Consuming builds still require verified producer
+  behavior and normal host admission. Do not change depends_on or make W09 a prerequisite.
 
 READ FIRST
   AGENTS.md - invariants 1, 3, 4, 11 and 13
   specs/awsf-v3-plan.html - the W08 block IN FULL, gate GR, Questionables Q4 and Q5
-  specs/awsf-v3-intent.md - Terms (L1-L4, K3, K4), decisions 6, 9 and 14
+  specs/awsf-v3-intent.md - Terms (L1-L4, K3, K4), decisions 6, 9 and 14, and AM1/AM3
   specs/awsf-v3-assessment-and-direction.md - N3, Q5-Q8
   W01's and W04's deep plans
   docs/driving/marimba/marimba-guard-rules.mts - the shared guard rules
@@ -749,6 +788,31 @@ DO
   The intents of decision 9. Native session capture in W04's format. The guard rules reused.
   The first surface is a text panel in the AWSF dashboard, launched and kept in the foreground
   like awsf dash (decision 6).
+  AM3: project-separated goal threads link conversations, groups, plans and attempts without
+  redefining groups. Keep tentative ideas, proposals and accepted decisions distinct. A
+  deliberate cross-project reference merges neither context nor access. Reopening restores
+  permitted sources, accepted scope, current evidence and unresolved decisions without owner
+  reconstruction. State where goal associations live and which record owns each fact.
+  Browser disconnect does not itself stop authorized foreground-host work. Explicit owner
+  restart reconciles current host records before continuation; reconnect grants nothing.
+  Redeliver completed results without repeating effects. Unknown outcomes retain host
+  reconciliation/refusal. Distinguish accepted queued input, unresolved delivery and
+  unsubmitted input; a note/correction grants no execution scope. Identify superseded
+  decisions. Important updates show change, consequence, evidence and needed decision;
+  routine progress stays visible without repeated alerts or silent plan amendments.
+  Use W04's contract and existing planning/host authority. Provide minimum explicit-context
+  recovery without W09, which later improves retrieval/compaction. Apply AM1 before capture
+  and use: visible private mode before submission, no indirect private-content retention,
+  outside-working-memory exclusion until restored and honest deletion/provider limits.
+  Actions needing durable evidence require explanation and explicit promotion of the
+  actionable scope; private mode cannot bypass authorization or required journal records.
+  Add synthetic reconnect/restart cases for stale authority, wrong-project context, private
+  or excluded content, uncertain input delivery, completed duplicates and unknown effects.
+  Keep the existing real-drive/K3/K4 acceptance. Return-flow tests do not prove live-provider
+  or subscription compatibility. No unattended process, automatic reboot start, new pause
+  authority, public-user factory access, owner act or alternative scheduler is admitted.
+  W05 owns delegation/leases, W06 routing and W14 external signals. The existing design
+  baseline remains binding; identify uncovered goal/privacy/recovery states explicitly.
   Milestones that write AWSF and milestones that write the harness repository are separate.
 
 DECIDED 2026-10-02 - APPLY, DO NOT REOPEN
@@ -785,7 +849,9 @@ MARKERS
 
 HANDOFF
   Return dated findings for W09, W10, W14 and W15: the intent list, the K3 schema source, and
-  how a surface or a pull attaches to the harness.
+  how a surface or a pull attaches to the harness. Include goal/source associations, input
+  delivery states, current-authority reconciliation and the minimal context interface W09
+  consumes without a reverse dependency.
 
 STOP WHEN
   The deep plan is authored, every open decision is surfaced, and the owner has it in hand.
@@ -817,7 +883,7 @@ PREDECESSORS
 READ FIRST
   AGENTS.md - invariants 1 and 10
   specs/awsf-v3-plan.html - the W09 block IN FULL
-  specs/awsf-v3-intent.md - decision 8 and the acceptance targets
+  specs/awsf-v3-intent.md - decision 8, the acceptance targets and owner-approved AM1/AM4
   specs/tickets/awsf-v3-plan/W09.md - its Handoff (W19 M6-M7's tasks)
   W03's and W08's deep plans
   W04's session record - the source of the per-turn token measurement
@@ -830,6 +896,18 @@ DO
   where they can be, with a drift test. Closed v2 specs out of the priming path.
   Baseline: a median 168k prompt tokens per driver turn. Target: under 10k, with no drop in the
   intent suite's score.
+  AM4: extend selective loading to W08's goal/session relationships and W04's permitted
+  records. Preserve original-source references and distinguish current decisions,
+  superseded proposals and execution evidence. Check project boundaries and current use
+  eligibility before retrieval. Summaries, forks, indexes and compacted history must not
+  reintroduce private/excluded content. Sources remain retrievable where permitted;
+  unavailable evidence is reported, never reconstructed.
+  Consume W08's minimum explicit-context recovery interface; do not make W08 depend on W09.
+  Keep the capability-index, generated-doc and compaction requirements. Test semantic
+  completeness, correction/supersession, source links and privacy/project exclusions on
+  the same eligible fixtures before/after loading, with measurement eligibility declared.
+  Saving tokens must not drop accepted requirements. The index is neither a second archive
+  nor a lifecycle authority. Retention/forgetting limits remain those of AM1.
 
 AMENDMENTS AND OWNER-SIDE WORK
   docs/driving/** is protected; W19's G19-D and G19-T carry over with M6-M7.
@@ -885,7 +963,7 @@ PREDECESSORS
 READ FIRST
   AGENTS.md - invariants 3, 4, 7 and 9
   specs/awsf-v3-plan.html - the W10 block IN FULL, gate GR, Questionable Q6
-  specs/awsf-v3-intent.md - decisions 1, 2 and 3
+  specs/awsf-v3-intent.md - decisions 1, 2 and 3, plus AM1's record-consumer obligation
   specs/awsf-v3-assessment-and-direction.md - Q1-Q3 with alternatives
   specs/awsf-v2-w16-openrouter-adapter.html - M1 done; what reshapes into the local provider
   specs/tickets/awsf-v3-plan/W10.md - its Handoff (W19 M8's tasks)
@@ -898,6 +976,11 @@ DO
   An A/B against Sol on the same suites, reported with intervals. W19 M8 carried.
   Every training record carries provenance, and a fence rejects any record containing
   frontier-model output (decision 2).
+  AM1 consumer obligation only: use W04's capture/use eligibility before dataset construction,
+  export, evaluation or training. Retained records are not automatically eligible. Reject
+  private/excluded content in derived datasets under that contract, with synthetic consumer
+  fixtures. Preserve every existing training-data prohibition and owner-side budget rule.
+  This adds no training run, model choice, runtime dependency or paid work.
 
 DECIDED 2026-10-02 - APPLY, DO NOT REOPEN
   Q6 - run all three bases (9B, 27B, 35B-A3B) untuned on the suites first, then fine-tune 9B
