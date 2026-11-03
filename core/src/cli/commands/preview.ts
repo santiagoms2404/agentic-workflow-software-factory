@@ -275,7 +275,7 @@ export async function previewCommand(options: PreviewCommandOptions): Promise<Pr
   }
   const candidate = { ...status, worktree: status.worktree, candidateSha: status.candidateSha };
   const repository = await deliveryOf(status);
-  const changed = runGit(systemGitRunner(status.worktree), ["diff", "--name-only", "-z", status.baseSha, status.candidateSha])
+  const changed = runGit(systemGitRunner(status.worktree), ["diff", "--name-only", "--no-renames", "-z", status.baseSha, status.candidateSha])
     .split("\0").filter((path) => path.length > 0);
   const plan = planPreview(repository.id, repository.repository.delivery, repository.repository.preview, changed);
 

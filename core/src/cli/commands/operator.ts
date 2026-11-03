@@ -13,7 +13,7 @@ import { declaredContinuation } from "../../persistence/task-relations.ts";
 import { readTaskAttributions } from "../../persistence/task-attributions.ts";
 import { readTaskDecisions } from "../../persistence/task-decisions.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
-import { readAttempt, withLegacyDefaults, type AttemptEvent } from "./attempt.ts";
+import { isTerminalStatus, readAttempt, withLegacyDefaults, type AttemptEvent } from "./attempt.ts";
 
 async function exists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
@@ -84,7 +84,7 @@ export async function gcCommand(stateRoot: string): Promise<readonly string[]> {
   const candidates: string[] = [];
   for (const dir of await discoverAttempts(stateRoot)) {
     const status = await readAttempt(dir);
-    if (["LANDED", "BLOCKED", "CANCELLED"].includes(status.lifecycleState)) candidates.push(`attempt: ${dir}`);
+    if (isTerminalStatus(status)) candidates.push(`attempt: ${dir}`);
   }
   try {
     for (const name of await readdir(stateRoot)) {

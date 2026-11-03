@@ -126,11 +126,10 @@ export interface RelateCommandResult {
 export function assertRelateReason(reason: string): string {
   const normalized = reason.trim().replace(/\s+/gu, " ");
   if (normalized.length === 0) throw new RelateReasonRequired();
-  const bounded = normalized.length <= MAX_REASON ? normalized : normalized.slice(0, MAX_REASON);
-  if (scrubCredentialString(bounded) !== bounded || bounded.includes(REDACTED_VALUE)) {
+  if (scrubCredentialString(normalized) !== normalized || normalized.includes(REDACTED_VALUE)) {
     throw new RelateCredentialRejected("relate reason");
   }
-  return bounded;
+  return normalized.length <= MAX_REASON ? normalized : normalized.slice(0, MAX_REASON);
 }
 
 /**

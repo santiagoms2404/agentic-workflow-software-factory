@@ -109,7 +109,7 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
   }
 
   const report = await (options.terminate ?? ((status) => terminateRecorded(status, options.attemptDir)))(reloaded);
-  if (reloaded.lifecycleState === "RUNNING" && !report.terminated) {
+  if ((reloaded.lifecycleState === "RUNNING" || reloaded.process !== null) && !report.terminated) {
     throw new Error(`cancellation incomplete; survivors [${report.survivors.join(", ")}]`);
   }
   const decision = transition({
@@ -120,7 +120,7 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
     reason: { source: "human", detail: reason },
     interactive: true,
     budget: reloaded.budget,
-    ...(reloaded.lifecycleState === "RUNNING"
+    ...(reloaded.lifecycleState === "RUNNING" || reloaded.process !== null
       ? { evidence: { treeTerminated: report.terminated, survivorsReported: true } }
       : {}),
   });

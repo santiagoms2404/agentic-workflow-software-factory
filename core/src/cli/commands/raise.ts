@@ -178,11 +178,10 @@ export function assertGrantCalls(calls: number): number {
 export function assertGrantReason(reason: string): string {
   const normalized = reason.trim().replace(/\s+/g, " ");
   if (normalized.length === 0) throw new CeilingRaiseReasonRequired();
-  const bounded = normalized.length <= MAX_REASON ? normalized : normalized.slice(0, MAX_REASON);
-  if (scrubCredentialString(bounded) !== bounded || bounded.includes(REDACTED_VALUE)) {
+  if (scrubCredentialString(normalized) !== normalized || normalized.includes(REDACTED_VALUE)) {
     throw new CeilingRaiseCredentialRejected("owner raise reason");
   }
-  return bounded;
+  return normalized.length <= MAX_REASON ? normalized : normalized.slice(0, MAX_REASON);
 }
 
 /** This task's effective ceiling: what it records, or its tier's documented default. */
