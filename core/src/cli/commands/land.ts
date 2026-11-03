@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readProtectedState, inspectProtectedCandidate, assertProtectedPreservedBytes } from "../../workflow/protected-grants.ts";
 import { assertProtectedCandidateAuthorization, protectedFactDigest, type ProtectedCandidateAuthorization } from "../../contracts/protected-grant.ts";
 import { recoveryDigest } from "../../contracts/phase-recovery.ts";
+import { runGit, systemGitRunner } from "../../git/changes.ts";
 import {
   completeLanding,
   inspectLanding,
@@ -233,6 +234,19 @@ async function finish(
       options.projectRecord,
     );
   } catch (error) {
+    // B9-26: If canonical HEAD has already moved to the approved candidate,
+    // the fast-forward succeeded. Sealing the attempt as BLOCKED would contradict
+    // Git (canonical HEAD == candidate) and prevent subsequent recovery.
+    // Leave the attempt in LANDING and rethrow so the owner can clean up and retry.
+    let headSha: string | null = null;
+    try {
+      headSha = runGit(systemGitRunner(status.repository), ["rev-parse", "HEAD"]).trim();
+    } catch {
+      // ignore git error and proceed with persistBlocked
+    }
+    if (headSha === candidate) {
+      throw error;
+    }
     const blocked = error instanceof LandingBlocked
       ? error
       : new LandingBlocked(recover ? "ambiguous-recovery" : "git-failure", error instanceof Error ? error.message : String(error));

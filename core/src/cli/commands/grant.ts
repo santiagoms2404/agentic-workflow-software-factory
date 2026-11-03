@@ -18,6 +18,7 @@ import { scrubCredentialString } from "../../policy/redaction.ts";
 export async function grantCommand(options: {
   attemptDir: string; config: AwsfConfig; configPath: string; stateRoot: string; phase: string; files: readonly string[];
   reason: string; terminal: OwnerTerminal; actor?: string; projectRecord?: AttemptProjector; sandboxProbe?: SandboxProbe;
+  now?: () => string;
 }) {
   if (!options.terminal.interactive || (options.actor ?? "human") !== "human") throw new Error("protected grant requires an interactive owner act");
   const phase = options.phase; const paths = Object.freeze([...options.files].sort()); const reason = options.reason;
@@ -41,15 +42,18 @@ export async function grantCommand(options: {
     seedPaths: options.config.runtime.seed_paths, // B10-02: seeds stay read-only under the grant too
     ...(options.sandboxProbe === undefined ? {} : { sandboxProbe: options.sandboxProbe }) });
   if (permission.sandboxBadge !== "os-enforced") throw new Error("protected grants require an OS-enforced sandbox; no tool-policy fallback");
-  const unsigned: ProtectedGrant = { schema: "awsf.protected-grant/v1", id: randomUUID(), generationId: randomUUID(), subject,
-    files: captureProtectedBaselines(subject.worktree, subject.preWriteHeadSha, paths), anchorRevision: current.revision,
-    reason, confirmedAt: new Date().toISOString(), digest: "" };
-  const grant = { ...unsigned, digest: protectedFactDigest(unsigned) }; assertProtectedGrant(grant);
+  const files = captureProtectedBaselines(subject.worktree, subject.preWriteHeadSha, paths);
   options.terminal.write(`One-use protected content grant for ${current.taskId}, attempt ${current.attempt}, phase ${phase}.`);
   options.terminal.write(`Pre-write HEAD: ${subject.preWriteHeadSha}. Integration base: ${subject.integrationBaseSha}.`);
-  for (const file of grant.files) options.terminal.write(`${JSON.stringify(file.path)}: ${file.blob ?? "new file"} (${file.mode ?? "100644 only"})`);
+  for (const file of files) options.terminal.write(`${JSON.stringify(file.path)}: ${file.blob ?? "new file"} (${file.mode ?? "100644 only"})`);
   options.terminal.write(`Reason: ${JSON.stringify(reason)}. No role/tool/mount expansion, correction, deletion, migration or landing approval is granted.`);
   if (!await options.terminal.confirm("Issue this exact one-use protected grant?")) return { status: current, confirmed: false };
+  // B9-12: Use options.now (or confirmation timestamp) for confirmedAt so digest and lastActivityAt reflect actual confirmation time.
+  const confirmedAt = (options.now ?? (() => new Date().toISOString()))();
+  const unsigned: ProtectedGrant = { schema: "awsf.protected-grant/v1", id: randomUUID(), generationId: randomUUID(), subject,
+    files, anchorRevision: current.revision,
+    reason, confirmedAt, digest: "" };
+  const grant = { ...unsigned, digest: protectedFactDigest(unsigned) }; assertProtectedGrant(grant);
   return withExecutionLease(options.attemptDir, async () => {
     assertClean(subject.worktree, "before", protectedReadOnlyGit(subject.worktree));
     if (recoveryDigest(await readAttempt(options.attemptDir)) !== recoveryDigest(current) ||

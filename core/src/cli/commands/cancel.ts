@@ -102,24 +102,30 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
   const confirmed = await options.terminal.confirm(`Cancel ${current.taskId} attempt ${current.attempt}?`);
   if (!confirmed) return { status: current, report: noTree() };
 
-  const report = await (options.terminate ?? ((status) => terminateRecorded(status, options.attemptDir)))(current);
-  if (current.lifecycleState === "RUNNING" && !report.terminated) {
+  // B9-11: Re-read attempt status after owner confirmation before signalling the process tree to verify revision has not moved.
+  const reloaded = await readAttempt(options.attemptDir);
+  if (reloaded.revision !== current.revision) {
+    throw new Error(`attempt revision changed: expected ${String(current.revision)}, found ${String(reloaded.revision)}`);
+  }
+
+  const report = await (options.terminate ?? ((status) => terminateRecorded(status, options.attemptDir)))(reloaded);
+  if (reloaded.lifecycleState === "RUNNING" && !report.terminated) {
     throw new Error(`cancellation incomplete; survivors [${report.survivors.join(", ")}]`);
   }
   const decision = transition({
-    from: current.lifecycleState,
+    from: reloaded.lifecycleState,
     to: "CANCELLED",
     actor: "human",
-    tier: current.tier,
+    tier: reloaded.tier,
     reason: { source: "human", detail: reason },
     interactive: true,
-    budget: current.budget,
-    ...(current.lifecycleState === "RUNNING"
+    budget: reloaded.budget,
+    ...(reloaded.lifecycleState === "RUNNING"
       ? { evidence: { treeTerminated: report.terminated, survivorsReported: true } }
       : {}),
   });
   const now = (options.now ?? ((): string => new Date().toISOString()))();
-  const next = nextRevision(current, {
+  const next = nextRevision(reloaded, {
     lifecycleState: decision.to,
     process: null,
     lastActivityAt: now,
@@ -127,10 +133,10 @@ export async function cancelCommand(options: CancelCommandOptions): Promise<{ st
   });
   const status = await persistAttempt(
     options.attemptDir,
-    current.revision,
+    reloaded.revision,
     { kind: "attempt.transitioned", next, evidence: {
-      type: "transition", id: `${current.sessionId}:${decision.edge}:${String(next.revision)}`,
-      seq: next.revision, from: current.lifecycleState, to: "CANCELLED", actor: "human",
+      type: "transition", id: `${reloaded.sessionId}:${decision.edge}:${String(next.revision)}`,
+      seq: next.revision, from: reloaded.lifecycleState, to: "CANCELLED", actor: "human",
       edgeId: decision.edge, reasonSource: "human", reasonCode: null, reasonDetail: reason,
       spawnSite: false, at: now,
     } },

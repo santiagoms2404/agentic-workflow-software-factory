@@ -19,7 +19,7 @@ import {
   PUBLISH_OUTPUT_SCHEMA_ID,
 } from "../../contracts/publish-output.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
-import { systemGitRunner, type GitRunner } from "../../git/changes.ts";
+import { runGit, systemGitRunner, type GitRunner } from "../../git/changes.ts";
 import { observePublishTarget, runPublish } from "../../git/publish.ts";
 import type { PublishOutcome } from "../../publish/argv.ts";
 import {
@@ -155,7 +155,29 @@ function repositoryIdFor(catalog: ProjectCatalog, placement: Placement | null, r
   return declared.length === 1 ? declared[0] ?? null : null;
 }
 
-async function publishPolicyFor(status: AttemptStatus, stateRoot: string): Promise<PublishPolicy | null> {
+/**
+ * Whether the candidate revision modified the project catalog `awsf.project.yaml` (B9-29).
+ * The publish allowlist is declared in `awsf.project.yaml`, so an untrusted modification
+ * in the candidate must never authorize or perform a publication.
+ */
+export function candidateModifiesProjectCatalog(
+  repository: string,
+  baseSha: string | null,
+  candidateSha: string | null,
+  runner?: GitRunner,
+): boolean {
+  if (baseSha === null || candidateSha === null || baseSha === candidateSha) return false;
+  const git = runner ?? systemGitRunner(repository);
+  const changed = runGit(git, ["diff", "--name-only", "-z", baseSha, candidateSha])
+    .split("\0")
+    .filter((path) => path.length > 0);
+  return changed.includes("awsf.project.yaml");
+}
+
+export async function publishPolicyFor(status: AttemptStatus, stateRoot: string, runner?: GitRunner): Promise<PublishPolicy | null> {
+  if (candidateModifiesProjectCatalog(status.repository, status.baseSha, status.candidateSha, runner)) {
+    return null;
+  }
   const catalog = await readCatalogAt(status.repository);
   if (catalog === null) return null;
   const id = repositoryIdFor(catalog, await readPlacementFor(stateRoot, status.project), status.repository);
@@ -205,11 +227,21 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
   // the argv site.
   if (current.lifecycleState === "PUBLISHED") throw new SealedAttempt("PUBLISHED");
   const actor = options.actor ?? "human";
+  const runner = options.gitRunner ?? systemGitRunner(current.repository);
+
+  // B9-29: The publish allowlist is in awsf.project.yaml. If the candidate
+  // modified awsf.project.yaml, refuse publication as unpublishable.
+  if (candidateModifiesProjectCatalog(current.repository, current.baseSha, current.candidateSha, runner)) {
+    return {
+      outcome: "unpublishable",
+      detail: `Publication refused: awsf.project.yaml was modified in candidate revision ${current.candidateSha ?? ""}; publish allowlist is protected against untrusted modification.`,
+    };
+  }
 
   // BEFORE any observation: a repository the catalog declares no policy for
   // never spawns Git at all. Reading a catalog and a placement is filesystem
   // work; the first Git process of this command is the one below it.
-  const policy = await publishPolicyFor(current, options.stateRoot);
+  const policy = await publishPolicyFor(current, options.stateRoot, runner);
   if (policy === null) {
     return {
       outcome: "unpublishable",
@@ -228,7 +260,6 @@ export async function publishCommand(options: PublishCommandOptions): Promise<Pu
 
   const remoteName = options.remoteName ?? policy.remotes[0]!;
   const branch = options.branch ?? policy.branches[0]!;
-  const runner = options.gitRunner ?? systemGitRunner(current.repository);
   const observed = observePublishTarget(current.repository, remoteName, branch, runner);
   const candidateSha = current.candidateSha ?? "";
   const repository: PublishRepositoryFacts = {

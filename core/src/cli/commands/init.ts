@@ -1,4 +1,4 @@
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { stringify as toYaml } from "yaml";
@@ -35,29 +35,61 @@ export async function initCommand(options: InitCommandOptions): Promise<InitComm
     else throw error;
   }
 
-  if (!exists) await mkdir(path, { recursive: true });
-
-  const runner = systemGitRunner(path);
-  runGit(runner, ["init"]);
-  await writeFile(join(path, "awsf.config.yaml"), toYaml(buildMinimalConfig(options.slug)), "utf8");
-  const commitSha = commitAsHost({ repository: path, message: "chore: awsf init baseline" });
-  const line = `Initialized ${path} at ${commitSha}.`;
-  const output: InitOutput = {
-    schema: INIT_OUTPUT_SCHEMA_ID,
-    producerStatus: "success",
-    summary: line,
-    artifacts: [],
-    notesForNextPhase: "",
-    kind: "host command result printed to stdout",
-    line,
-    commitSha,
-    path,
-  };
-  if (!Value.Check(InitOutputSchema, output)) {
-    throw new Error("host composed an invalid init envelope");
+  let createdDir = false;
+  if (!exists) {
+    await mkdir(path, { recursive: true });
+    createdDir = true;
   }
 
-  return output;
+  try {
+    const minimalConfig = buildMinimalConfig(options.slug);
+    const protectedPaths = minimalConfig.policy.protected_paths.includes("awsf.project.yaml")
+      ? minimalConfig.policy.protected_paths
+      : [...minimalConfig.policy.protected_paths, "awsf.project.yaml"];
+    const config = {
+      ...minimalConfig,
+      policy: {
+        ...minimalConfig.policy,
+        protected_paths: protectedPaths,
+      },
+    };
+
+    const runner = systemGitRunner(path);
+    runGit(runner, ["init"]);
+    await writeFile(join(path, "awsf.config.yaml"), toYaml(config), "utf8");
+    const commitSha = commitAsHost({ repository: path, message: "chore: awsf init baseline" });
+    const line = `Initialized ${path} at ${commitSha}.`;
+    const output: InitOutput = {
+      schema: INIT_OUTPUT_SCHEMA_ID,
+      producerStatus: "success",
+      summary: line,
+      artifacts: [],
+      notesForNextPhase: "",
+      kind: "host command result printed to stdout",
+      line,
+      commitSha,
+      path,
+    };
+    if (!Value.Check(InitOutputSchema, output)) {
+      throw new Error("host composed an invalid init envelope");
+    }
+
+    return output;
+  } catch (error) {
+    try {
+      if (createdDir) {
+        await rm(path, { recursive: true, force: true });
+      } else {
+        const entries = await readdir(path);
+        for (const entry of entries) {
+          await rm(join(path, entry), { recursive: true, force: true });
+        }
+      }
+    } catch {
+      // Best-effort cleanup so the path remains retryable.
+    }
+    throw error;
+  }
 }
 
 function hasCode(error: unknown, code: string): boolean {

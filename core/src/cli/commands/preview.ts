@@ -159,9 +159,31 @@ async function bundleFiles(root: string, prefix = ""): Promise<{ path: string; m
   return files.sort((left, right) => left.path.localeCompare(right.path));
 }
 
-const CONTENT_TYPES: Readonly<Record<string, string>> = {
-  html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8",
-  svg: "image/svg+xml", json: "application/json; charset=utf-8", png: "image/png", woff2: "font/woff2",
+export const CONTENT_TYPES: Readonly<Record<string, string>> = {
+  html: "text/html; charset=utf-8",
+  htm: "text/html; charset=utf-8",
+  js: "text/javascript; charset=utf-8",
+  mjs: "text/javascript; charset=utf-8",
+  cjs: "text/javascript; charset=utf-8",
+  css: "text/css; charset=utf-8",
+  svg: "image/svg+xml",
+  json: "application/json; charset=utf-8",
+  map: "application/json; charset=utf-8",
+  wasm: "application/wasm",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+  ico: "image/x-icon",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  txt: "text/plain; charset=utf-8",
+  xml: "application/xml; charset=utf-8",
+  webmanifest: "application/manifest+json; charset=utf-8",
 };
 
 /** Serves only the files this build wrote. Anything else, fresh or not, is a 404. */
@@ -288,34 +310,39 @@ export async function previewCommand(options: PreviewCommandOptions): Promise<Pr
   }
   const lease = { schema: "awsf.preview-server/v1", pid: process.pid, task: status.taskId, candidateSha: status.candidateSha } as const;
   await writeLease(options.stateRoot, { ...lease, state: "building", url: null });
-  let server: Server;
+  let server: Server | null = null;
   let built: Awaited<ReturnType<typeof build>>;
   try {
     built = await build(candidate, plan, repository, options);
     server = await serveBundle(built.root, built.fresh, options.port ?? 0);
+    const builtAt = options.now();
+    const address = server.address();
+    const url = `http://127.0.0.1:${String(typeof address === "object" && address !== null ? address.port : options.port)}/`;
+    await writeLease(options.stateRoot, { ...lease, state: "serving", url });
+    const written = await record({
+      ...base, recordedAt: builtAt,
+      build: { argv: [...built.argv], bundle: built.bundle, files: built.fresh.size },
+      server: { url, pid: process.pid },
+    });
+    options.write(`Built fresh at ${builtAt}: ${String(built.fresh.size)} file(s) in ${built.bundle}, every one written by this build.`);
+    options.write(`Preview serving at ${url} — the only preview server; stop it with Ctrl-C.`);
+    const liveServer = server;
+    return {
+      record: written,
+      server: liveServer,
+      close: async () => {
+        await new Promise<void>((done) => liveServer.close(() => done()));
+        await writeLease(options.stateRoot, { ...lease, state: "released", url });
+        // What was built stays recorded; where it was served no longer holds.
+        await record({ ...written, server: null });
+      },
+    };
   } catch (error) {
-    await writeLease(options.stateRoot, { ...lease, state: "released", url: null });
+    if (server !== null) {
+      const activeServer = server;
+      await new Promise<void>((done) => activeServer.close(() => done()));
+    }
+    await writeLease(options.stateRoot, { ...lease, state: "released", url: null }).catch(() => {});
     throw error;
   }
-  const builtAt = options.now();
-  const address = server.address();
-  const url = `http://127.0.0.1:${String(typeof address === "object" && address !== null ? address.port : options.port)}/`;
-  await writeLease(options.stateRoot, { ...lease, state: "serving", url });
-  const written = await record({
-    ...base, recordedAt: builtAt,
-    build: { argv: [...built.argv], bundle: built.bundle, files: built.fresh.size },
-    server: { url, pid: process.pid },
-  });
-  options.write(`Built fresh at ${builtAt}: ${String(built.fresh.size)} file(s) in ${built.bundle}, every one written by this build.`);
-  options.write(`Preview serving at ${url} — the only preview server; stop it with Ctrl-C.`);
-  return {
-    record: written,
-    server,
-    close: async () => {
-      await new Promise<void>((done) => server.close(() => done()));
-      await writeLease(options.stateRoot, { ...lease, state: "released", url });
-      // What was built stays recorded; where it was served no longer holds.
-      await record({ ...written, server: null });
-    },
-  };
 }

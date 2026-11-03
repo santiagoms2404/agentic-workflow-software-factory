@@ -84,6 +84,10 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
     worktree: null,
     baseSha: null,
     candidateSha: null,
+    // B9-18: Retrying a seeded attempt clears the candidate seed and base SHA.
+    // The candidate seed was validated only for its specific target attempt (attempt 1)
+    // and session. Attempt n+1 prepares freshly from canonical HEAD rather than inheriting
+    // the prior seed commit.
     ...(prior.seed === undefined ? {} : { seed: null }),
     recovery: null, activeOperation: null, advice: null,
     phase: null,
@@ -118,7 +122,9 @@ export async function retryCommand(options: RetryCommandOptions): Promise<{ atte
     planRef: prior.planRef,
     model: null,
     lastActivityAt: now,
-    lastActivity: `retry minted attempt ${attempt}; carried ${prior.budget.callsSpent} spent call(s) from attempt ${prior.attempt}`,
+    lastActivity: prior.seed != null
+      ? `retry minted attempt ${attempt}; cleared candidate seed from attempt ${prior.attempt}; carried ${prior.budget.callsSpent} spent call(s) from attempt ${prior.attempt}`
+      : `retry minted attempt ${attempt}; carried ${prior.budget.callsSpent} spent call(s) from attempt ${prior.attempt}`,
     nextAction: "", // persistAttempt renders the new attempt, never the prior record
     gatesPass: false,
     requiredReviewPresent: false,
