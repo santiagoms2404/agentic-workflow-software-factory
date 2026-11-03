@@ -8,6 +8,96 @@ marker, ticket or registered plan. It is evidence for a future
 - **Measured at:** `main` 07b20f9. `npm run test:unit` passed 2,534/2,534.
   Factory figures come from the machine-local state root and the Marimba
   session archive.
+- **Re-graded:** 2026-10-20, see the next section. The 2026-10-01 grade below
+  is kept as the baseline.
+
+---
+
+## Re-grade (2026-10-20): 56/100
+
+Measured at `main` a9c713f. `npm run test:unit` passed 3,597/3,597 (working
+tree included the uncommitted spec edits and one untracked B11 test). Factory figures come from
+`~/.local/state/awsf/awsf.db` and the attempt journals. Code quality comes from
+the read-only whole-project review of 335a184 (`D:\Santiago Marin\awsf-review`,
+859 findings over 85,643 lines). The "v3 window" is 2026-10-02 (spine 72f3826)
+to today. The Marimba corpus has no session after 2026-10-06, so driver tokens
+and capture were not re-measured.
+
+### What the record shows
+
+- **G1. The factory built v3.** In the v3 window, 44 of 47 commits on `main`
+  that touch `core/src` or `dashboard/src` sit inside a LANDED attempt's
+  base..candidate range (94%, up from 8%). The 3 direct ones are the owner-act
+  wiring for G01-C (f5c566a) and G03-C (8c12ec1), and a9c713f today. W01 and
+  W02 closed and W03 reached M6 through 22 landings, 7 of them shifts that
+  carried whole milestones (W02 M4+M5 in one run, W03 M4–M6 in one run).
+- **G2. Factory work stopped on 10-12.** The last attempt started on
+  2026-10-12. Since 10-15 the review fixes are being made outside the factory:
+  branch `fix/whole-project-review` holds 93 commits (76 touch code, +12,783
+  lines) driven by an openspec session, although the review's own A3 says to
+  drive them through AWSF. If it merges as is, the window's factory share falls
+  to 44 of 124 code commits (35%).
+- **G3. Factory code is no cleaner than direct code.** Blaming each finding's
+  line at 335a184: factory-landed lines are 10,089 of 85,909 (12%) and carry
+  5.7 bugs per kLOC (high + medium: 3.3) against 5.9 (3.4) in directly written
+  lines. High bugs are 0.9 per kLOC in factory code and 0.65 in direct code.
+  The factory's high hits are W03 closure and W01 preflight code: the closure
+  commit identity (H9, B1-01/B9-01), partial-shift closure (H23), closure
+  readout drift (M5), the unbounded K1 reason (M4) and the owner-act guard
+  (H13). Opposite-provider review and host gates did not stop these.
+- **G4. The trust story had holes.** The review confirmed gates that inherit
+  the Jev credential (H1), gate forgery through ignored files (H2), a sandbox
+  escape write (H3), a stub run that records a T2 journey and review (H4), a
+  quota stop that skips the mandatory T2 review (H5), and a `Claude-Session:`
+  trailer already on `main` (e04664e). The meta-test fences did not catch any
+  of them.
+- **G5. Owner load moved, not down.** Land rate rose to 63% (22 of 35 finished
+  attempts, was 25%). Every T2 landing now takes 3 owner acts (confirm, journey,
+  land; confirm since G01-C on 10-06), and 8 of 22 landings also needed a
+  ceiling raise.
+- **G6. Stops are explained and cheap.** All 4 cancels carry an attribution
+  cause. The 2 driver-caused stops (a wrong route provider, a free-text
+  request) were refused before any call. 4 of the 9 blocked attempts were
+  subscription quota exhaustion, the largest single cause.
+- **G7. Validation got its share.** Test and review phases took 35% of phase
+  time in the window (21.4 h of 60.4 h), against 23% before by the same
+  method. That meets the 35% target. There is still no user-testing validator.
+
+### Grade
+
+| Criterion (weight) | 10-01 | 10-20 | Why it moved |
+|---|---|---|---|
+| Whole lifecycle (15) | 7 | 8 | plan-author workflow enabled (G03-W) and runs close their own tickets (W03). Deploy, monitor and signals still absent |
+| Bring your own subscription (8) | 6 | 6 | unchanged: Claude Code and Codex on subscriptions |
+| Works where you work (5) | 2 | 2 | unchanged |
+| Routing and token cost (12) | 4 | 4 | routes still set by hand per task. Quota exhaustion is the top block cause (G6) |
+| Checkable "done" (10) | 9 | 7 | H2, H4 and H5 show the host's own record of "done" could be forged or skipped (G4) |
+| Independent validators (8) | 4 | 5 | validation at 35% of phase time (G7). No user-testing validator |
+| Long-running autonomy and owner load (10) | 3 | 5 | milestone-sized shifts, land rate 63%. Held down by 3 owner acts per landing (G5) |
+| Trust and permissions (7) | 6 | 4 | six high trust findings, two of them against invariants 11 and 13 (G4) |
+| Orchestrator reliability (7) | 2 | 4 | K1 preflight, K2 next, 21 traps. Driver stops refused at 0 calls (G6) |
+| Context management (6) | 3 | 3 | not re-measured. Corpus ends 10-06 with Marimba turns at p50 147k prompt tokens |
+| Agent readiness (6) | 4 | 4 | unchanged |
+| Learning from its own data (6) | 3 | 4 | every cancel has a cause, driver cause exists. 1 of 9 blocked attempts carries an attribution |
+| **Total** | **53** | **56** | |
+
+If `fix/whole-project-review` lands with H1–H24 and M1–M9 verified, checkable
+"done" returns to 9 and trust to 6: **60**. Routing it through the factory
+would also keep G1's share instead of losing it (G2).
+
+### KPIs (10-01 → 10-20)
+
+| KPI | 10-01 | 10-20 | Target |
+|---|---|---|---|
+| Factory share of code commits | 8% | 94% in the v3 window, 35% if the fix branch merges | ≥50% |
+| Land rate | 25% | 63% | ≥70% |
+| Owner acts per landing | ≥2 | 3, plus a raise on 8 of 22 | 1 |
+| Driver-preventable stops | 8 of 27 | 2 of 13 stops, both at 0 calls | 0 on known traps |
+| Driver prompt tokens per turn | 168k | not re-measured | <10k |
+| Requests captured | 41% | not re-measured | 100% |
+| Stops with a recorded cause | 1 of 36 | 5 of 13 attributed. All 13 carry a host reason code | all |
+| Validation share of phase time | 20% | 35% | ~35% |
+| Bug density, factory vs direct code | n/a | 5.7 vs 5.9 per kLOC | factory below direct |
 
 ---
 
