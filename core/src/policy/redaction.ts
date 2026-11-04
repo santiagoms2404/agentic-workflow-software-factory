@@ -6,7 +6,8 @@ export {
   scrubCredentialString,
 } from "../../../dashboard/shared/credential-patterns.ts";
 
-const CREDENTIAL_KEY = /^(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|secret|private[_-]?key|credential)$/i;
+const CREDENTIAL_KEY =
+  /(?:api[_-]?key|access[_-]?key|auth[_-]?key|secret[_-]?key|private[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|session[_-]?token|bearer[_-]?token|token(?!s)|password|passwd|passphrase|secret|credential|authorization)/i;
 
 export { REDACTED_VALUE };
 

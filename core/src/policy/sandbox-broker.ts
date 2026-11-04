@@ -7,6 +7,8 @@ import {
   assertClean,
   captureChangeSet,
   changedPaths,
+  changesSinceBase,
+  runGit,
   systemGitRunner,
   type ChangeSetFingerprint,
   type GitRunner,
@@ -128,21 +130,30 @@ export function assertSandboxRoots(request: Omit<SandboxRequest, "writes" | "pla
   const canonical = physical(request.canonicalRepository);
   const worktree = physical(request.worktree);
   const runtime = physical(request.sessionRuntime);
+  const canonicalState = physical(request.stateRoot);
   if (inside(worktree, canonical) || inside(canonical, worktree)) {
     throw new Error("the canonical repository and managed worktree must be disjoint");
   }
   if (inside(worktree, runtime) || inside(runtime, worktree)) {
     throw new Error("session runtime and the managed worktree must be disjoint writable roots");
   }
-  if (inside(canonical, runtime)) {
+  if (inside(canonical, runtime) || inside(runtime, canonical)) {
     throw new Error("session runtime may not make part of the canonical repository writable");
   }
-  const canonicalState = physical(request.stateRoot);
+  if (inside(canonical, canonicalState) || inside(canonicalState, canonical)) {
+    throw new Error("the state root and canonical repository must be disjoint");
+  }
+  if (inside(worktree, canonicalState) || inside(canonicalState, worktree)) {
+    throw new Error("the state root and managed worktree must be disjoint");
+  }
+  if (canonicalState === runtime || inside(runtime, canonicalState)) {
+    throw new Error("the state root may not reside inside session runtime");
+  }
   for (const [label, roots] of [["provider state root", request.providerWritableRoots], ["provider start file", request.providerReadableRoots]] as const) {
     for (const root of roots ?? []) {
       if (!isAbsolute(root)) throw new Error(`${label}s must be absolute machine-local paths`);
       const provider = physical(root);
-      for (const [name, other] of [["managed worktree", worktree], ["canonical repository", canonical], ["state root", canonicalState]] as const) {
+      for (const [name, other] of [["managed worktree", worktree], ["canonical repository", canonical], ["state root", canonicalState], ["session runtime", runtime]] as const) {
         if (inside(other, provider) || inside(provider, other)) {
           throw new Error(`a ${label} may not overlap the ${name}`);
         }
@@ -483,6 +494,7 @@ export class PermissionSession {
   /** B10-02: the seeds no read-only bind protects, with their phase-start fingerprint. */
   readonly #seeds: readonly (readonly [string, string])[];
   readonly #seedsBefore: ReadonlyMap<string, string>;
+  readonly #initialHead: string | null;
 
   constructor(request: PermissionSessionRequest) {
     assertSandboxRoots(request);
@@ -491,6 +503,13 @@ export class PermissionSession {
     this.profile = resolvePermissionProfile(request.profile, request.tools, request.writes);
     assertClean(request.worktree, "before", this.#git);
     this.before = captureChangeSet(request.worktree, this.#git);
+    let initialHead: string | null = null;
+    try {
+      initialHead = runGit(this.#git, ["rev-parse", "HEAD"]).trim();
+    } catch {
+      initialHead = null;
+    }
+    this.#initialHead = initialHead;
     const linux = request.platform === "linux" || (request.platform === undefined && process.platform === "linux");
     this.#osEnforced = linux && (request.sandboxProbe ?? hostProbe)("bwrap");
     this.sandboxBadge = linux ? (this.#osEnforced ? "os-enforced" : "tool-policy") : "unavailable";
@@ -519,10 +538,20 @@ export class PermissionSession {
   enforce(): PermissionResult {
     if (this.#request.protectedCapability !== undefined) assertProtectedOutput(this.#request.protectedCapability, this.#request.worktree);
     const after = captureChangeSet(this.#request.worktree, this.#git);
-    const mutations = changedPaths(this.before, after);
+    const uncommittedMutations = changedPaths(this.before, after);
+    let committedMutations: readonly string[] = [];
+    if (this.#initialHead !== null) {
+      try {
+        committedMutations = changesSinceBase(this.#request.worktree, this.#initialHead, this.#git);
+      } catch {
+        committedMutations = [];
+      }
+    }
+    const mutations = Object.freeze([...new Set([...uncommittedMutations, ...committedMutations])].sort());
     const violations = evaluatePathPolicy(mutations, {
       writes: this.profile.writes,
       protectedPaths: this.#request.protectedPaths,
+      caseSensitive: (this.#request.platform ?? process.platform) !== "win32",
       ...(this.#request.protectedCapability === undefined ? {} : { protectedCapability: this.#request.protectedCapability }),
     });
     // Git-ignored seeds never reach `mutations`; their fingerprint diff joins
