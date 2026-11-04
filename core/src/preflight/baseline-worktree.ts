@@ -9,8 +9,8 @@
 // checkout, and only after a clean-tree check: a dirty tree is refused and never
 // cleaned, because whatever made it dirty may be the evidence somebody needs.
 
-import { createReadStream, existsSync } from "node:fs";
-import { lstat, readdir, readlink, realpath } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { lstat, readdir, readFile, readlink, realpath } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { assertClean, runGit, systemGitRunner, type GitRunner } from "../git/changes.ts";
@@ -63,6 +63,8 @@ export class BaselineSeedStale extends Error {
   }
 }
 
+const fileDigestCache = new Map<string, { size: number; mtimeMs: number; digest: string }>();
+
 // Compare bytes rather than directory dates: edits inside an ignored directory
 // need not change its date. Symlinks are compared, never followed.
 async function seedDigest(path: string): Promise<string> {
@@ -73,9 +75,16 @@ async function seedDigest(path: string): Promise<string> {
     if (entry.isSymbolicLink()) hash.update(JSON.stringify(await readlink(path)));
     else if (entry.isDirectory()) for (const child of (await readdir(path)).sort()) await visit(resolve(path, child), `${name}/${child}`);
     else {
-      const bytes = createHash("sha256");
-      for await (const chunk of createReadStream(path)) bytes.update(chunk);
-      hash.update(bytes.digest("hex"));
+      const key = `${entry.dev}:${entry.ino}:${path}`;
+      const cached = fileDigestCache.get(key);
+      if (cached !== undefined && cached.size === entry.size && cached.mtimeMs === entry.mtimeMs) {
+        hash.update(cached.digest);
+      } else {
+        const content = await readFile(path);
+        const digest = createHash("sha256").update(content).digest("hex");
+        fileDigestCache.set(key, { size: entry.size, mtimeMs: entry.mtimeMs, digest });
+        hash.update(digest);
+      }
     }
   }
   await visit(path, "");
@@ -121,8 +130,17 @@ export async function prepareBaselineWorktree(request: BaselineWorktreeRequest):
       const retained = resolve(path, seed);
       const source = resolve(request.repository, seed);
       // trap-refusal-begin TR-18
-      if (existsSync(retained) && (!existsSync(source) || await seedDigest(retained) !== await seedDigest(source))) {
-        throw new BaselineSeedStale(retained);
+      if (existsSync(retained)) {
+        if (!existsSync(source)) {
+          throw new BaselineSeedStale(retained);
+        }
+        const [retainedDigest, sourceDigest] = await Promise.all([
+          seedDigest(retained),
+          seedDigest(source),
+        ]);
+        if (retainedDigest !== sourceDigest) {
+          throw new BaselineSeedStale(retained);
+        }
       }
       // trap-refusal-end TR-18
     }

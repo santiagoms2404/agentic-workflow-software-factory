@@ -15,7 +15,7 @@ import {
   type ProtectedPlanEntry,
   type RequestConfirmationRecord,
 } from "../contracts/driver-preflight.ts";
-import { matchesPathGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
+import { matchesPathGlob, normalizeGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import type { TaskState } from "../state/task-machine.ts";
 
 // K1's field evaluators (specs/awsf-v3-w01-driver-checks.html, K1's fields).
@@ -57,6 +57,15 @@ function matches(path: string, glob: string, caseSensitive: boolean): boolean {
 function invalidPath(path: string): string | null {
   try {
     normalizeRepositoryPath(path);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+function invalidGlob(glob: string): string | null {
+  try {
+    normalizeGlob(glob);
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
@@ -198,7 +207,12 @@ function omittablePrefixes(glob: string): string[] {
   const segments = glob.split("/");
   const literal = segments.findIndex((segment) => /[*?[]/u.test(segment));
   const count = literal === -1 ? segments.length : literal;
-  return Array.from({ length: Math.max(count, 1) }, (_, index) => index === 0 ? "" : `${segments.slice(0, index).join("/")}/`);
+  const prefixes = Array.from({ length: Math.max(count, 1) }, (_, index) => index === 0 ? "" : `${segments.slice(0, index).join("/")}/`);
+  if (literal > 0) {
+    const fullLiteralPrefix = `${segments.slice(0, literal).join("/")}/`;
+    if (!prefixes.includes(fullLiteralPrefix)) prefixes.push(fullLiteralPrefix);
+  }
+  return prefixes;
 }
 
 /** The protected spelling a candidate resolves to under a glob, or null. Naming a protected directory counts. */
@@ -340,6 +354,7 @@ function protectedHits(facts: ProtectedPathsFacts): ProtectedHit[] {
   for (const token of tokens) {
     for (const candidate of token.candidates) {
       for (const glob of facts.protectedPaths) {
+        if (invalidGlob(glob) !== null) continue;
         const path = protectedSpelling(candidate, glob);
         if (path !== null && !hits.has(path)) hits.set(path, { token: token.text, path, glob });
       }
@@ -351,6 +366,7 @@ function protectedHits(facts: ProtectedPathsFacts): ProtectedHit[] {
   for (const entry of facts.where) {
     if (invalidPath(entry) !== null) continue;
     for (const glob of facts.protectedPaths) {
+      if (invalidGlob(glob) !== null) continue;
       if (!hits.has(glob) && covers(glob, entry, false)) hits.set(glob, { token: glob, path: glob, glob });
     }
   }
@@ -367,6 +383,10 @@ function protectedHits(facts: ProtectedPathsFacts): ProtectedHit[] {
  */
 export function evaluateProtectedPaths(facts: ProtectedPathsFacts): ProtectedPathsResult {
   const problems: string[] = [];
+  for (const glob of facts.protectedPaths) {
+    const invalid = invalidGlob(glob);
+    if (invalid !== null) problems.push(`protected path glob ${JSON.stringify(glob)} is invalid: ${invalid}`);
+  }
   for (const entry of new Set(facts.read)) {
     const invalid = invalidPath(entry);
     if (invalid !== null) problems.push(`--read ${JSON.stringify(entry)} is not a repository path: ${invalid}`);

@@ -109,6 +109,11 @@ export function ticketCoverage(input: PlanAgreementInput): readonly PlanAgreemen
   const highest = Math.max(...numbers);
   const expected = Array.from({ length: highest }, (_, i) => i + 1);
   const messages: string[] = [];
+  const seenPlanNumbers = new Set<number>();
+  for (const task of input.plan) {
+    if (seenPlanNumbers.has(task.number)) messages.push(`duplicate plan task number ${task.number}`);
+    seenPlanNumbers.add(task.number);
+  }
   if (!sameNumbers(numbers, expected)) messages.push("ticket ids must be T01..Tnn with no gaps");
   const uncovered = input.plan.filter((task) => task.number <= highest && !numbers.includes(task.number));
   if (uncovered.length > 0) messages.push("a plan task below the highest ticket has no ticket");
@@ -128,12 +133,17 @@ export function ticketMilestoneStates(input: PlanAgreementInput): readonly PlanA
   const byNumber = new Map(input.plan.map((task) => [task.number, task]));
   const messages: string[] = [];
   for (const ticket of input.tickets) {
-    const marker = byNumber.get(ticket.number)?.milestoneMarker;
-    if (marker === "x" && ticket.state !== "done") {
-      messages.push(`${input.label}/${ticket.id}: milestone ${ticket.milestone} is [x] but ticket is ${ticket.state}`);
+    const rawMarker = byNumber.get(ticket.number)?.milestoneMarker;
+    const marker = rawMarker?.trim() ?? "";
+    const isDoneMarker = marker === "x" || marker === "X" || marker.toLowerCase() === "done";
+    if (isDoneMarker && ticket.state !== "done") {
+      messages.push(`${input.label}/${ticket.id}: milestone ${ticket.milestone} is [${rawMarker}] but ticket is ${ticket.state}`);
     }
     if (marker === "" && ticket.state === "done") {
       messages.push(`${input.label}/${ticket.id}: milestone ${ticket.milestone} is [] but ticket is done`);
+    }
+    if (marker !== "" && marker !== "x" && marker !== "wip" && marker !== "f") {
+      messages.push(`${input.label}/${ticket.id}: milestone ${ticket.milestone} has invalid marker [${rawMarker}]`);
     }
   }
   return violations(input, "MILESTONE_STATE", messages);
@@ -146,17 +156,19 @@ export function planTaskChecklists(input: PlanAgreementInput): readonly PlanAgre
 }
 
 export function ticketChecklistStates(input: PlanAgreementInput): readonly PlanAgreementViolation[] {
-  const byNumber = new Map(input.plan.map((task) => [task.number, task]));
   const messages: string[] = [];
   for (const ticket of input.tickets) {
-    const checklist = byNumber.get(ticket.number)?.checklist ?? [];
-    if (checklist.length === 0) continue; // guarded by planTaskChecklists
-    const allChecked = checklist.every((mark) => mark === "x");
-    if (allChecked && ticket.state !== "done") {
-      messages.push(`${input.label}/${ticket.id}: every plan checklist box is [x] but ticket is ${ticket.state}`);
-    }
-    if (!allChecked && ticket.state === "done") {
-      messages.push(`${input.label}/${ticket.id}: ticket is done but the plan still has unchecked boxes`);
+    const tasks = input.plan.filter((task) => task.number === ticket.number);
+    for (const task of tasks) {
+      const checklist = task.checklist ?? [];
+      if (checklist.length === 0) continue; // guarded by planTaskChecklists
+      const allChecked = checklist.every((mark) => mark === "x");
+      if (allChecked && ticket.state !== "done") {
+        messages.push(`${input.label}/${ticket.id}: every plan checklist box is [x] but ticket is ${ticket.state}`);
+      }
+      if (!allChecked && ticket.state === "done") {
+        messages.push(`${input.label}/${ticket.id}: ticket is done but the plan still has unchecked boxes`);
+      }
     }
   }
   return violations(input, "CHECKLIST_STATE", messages);

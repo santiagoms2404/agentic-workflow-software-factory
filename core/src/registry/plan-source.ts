@@ -57,10 +57,12 @@ export class PlanGrammarMismatchError extends Error {
   readonly plan: string;
   readonly format: ImplementedPlanFormat;
 
-  constructor(plan: string) {
+  constructor(plan: string, reason?: string) {
     super(
-      `plan ${JSON.stringify(plan)} declares format ${JSON.stringify("awsf-plan-html/v1")} `
-      + "but contains no Milestone M<digits> headings",
+      reason
+        ? `plan ${JSON.stringify(plan)} declares format ${JSON.stringify("awsf-plan-html/v1")} but ${reason}`
+        : `plan ${JSON.stringify(plan)} declares format ${JSON.stringify("awsf-plan-html/v1")} `
+          + "but contains no Milestone M<digits> headings",
     );
     this.name = "PlanGrammarMismatchError";
     this.plan = plan;
@@ -288,6 +290,7 @@ function planRepositoryId(catalog: ProjectCatalog): string {
 }
 
 function planStems(plansRoot: string): string[] {
+  if (!existsSync(plansRoot)) return [];
   return readdirSync(plansRoot, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".html"))
     .map((entry) => entry.name.slice(0, -".html".length))
@@ -320,7 +323,7 @@ export function resolvePlanSources(
     repositoryRoot = located.path;
   }
 
-  const plansRoot = join(repositoryRoot, catalog.plans.root);
+  const plansRoot = resolve(repositoryRoot, catalog.plans.root);
   const stems = planStems(plansRoot);
   return Object.freeze(stems.map((stem) => {
     const format = implementedFormat(catalog.plans.format, stem);

@@ -43,15 +43,10 @@ export interface GrantOwed {
   readonly grantId: string | null;
 }
 
-/**
- * Whether an exact granted file is under a planned path. A plan path is a file,
- * a directory spelling or a protected glob, matched as widely as the preflight
- * scan matched it, so case never decides a refusal on its own.
- */
-export function grantFileCovers(planPath: string, file: string): boolean {
+function isUnderPlanPath(planPath: string, target: string): boolean {
   for (const glob of [planPath, `${planPath.replace(/\/+$/u, "")}/**`]) {
     try {
-      if (matchesPathGlob(file, glob, false)) return true;
+      if (matchesPathGlob(target, glob, false)) return true;
     } catch {
       // An unparsable spelling covers nothing.
     }
@@ -59,12 +54,36 @@ export function grantFileCovers(planPath: string, file: string): boolean {
   return false;
 }
 
+/**
+ * Whether an exact granted file is under a planned path. A plan path is a file,
+ * a directory spelling or a protected glob, matched as widely as the preflight
+ * scan matched it, so case never decides a refusal on its own.
+ * When multiple paths are required under a protected glob, a single file cannot satisfy the requirement.
+ */
+export function grantFileCovers(planPath: string, file: string, requiredPaths?: readonly string[]): boolean {
+  if (requiredPaths !== undefined) {
+    const requiredUnderGlob = requiredPaths.filter((required) => isUnderPlanPath(planPath, required));
+    if (requiredUnderGlob.length > 1) {
+      return false;
+    }
+  }
+  return isUnderPlanPath(planPath, file);
+}
+
 /** The grant `phase` owes under the plan, or null when the plan names none or every planned path is covered. */
-export function grantOwedFor(plan: readonly ProtectedPlanEntry[], grants: readonly RecordedGrant[], phase: string): GrantOwed | null {
+export function grantOwedFor(plan: readonly ProtectedPlanEntry[], grants: readonly RecordedGrant[], phase: string, requiredPaths?: readonly string[]): GrantOwed | null {
   const planned = [...new Set(plan.filter((entry) => entry.phase === phase).map((entry) => entry.path))];
   if (planned.length === 0) return null;
   const grant = grants.find((candidate) => candidate.phase === phase) ?? null;
-  const paths = planned.filter((path) => !(grant?.files ?? []).some((file) => grantFileCovers(path, file)));
+  const paths = planned.filter((path) => {
+    if (requiredPaths !== undefined) {
+      const requiredUnderGlob = requiredPaths.filter((required) => isUnderPlanPath(path, required));
+      if (requiredUnderGlob.length > 1) {
+        return !requiredUnderGlob.every((required) => (grant?.files ?? []).some((file) => isUnderPlanPath(required, file)));
+      }
+    }
+    return !(grant?.files ?? []).some((file) => grantFileCovers(path, file, requiredPaths));
+  });
   return paths.length === 0 ? null : { phase, paths, grantId: grant?.id ?? null };
 }
 
@@ -73,7 +92,7 @@ export function grantOwedFor(plan: readonly ProtectedPlanEntry[], grants: readon
  * it and no recorded grant covers it. `pending` is the recipe's writing phases
  * not yet settled, in order; a later writing phase is never owed here.
  */
-export function grantOwedAt(plan: readonly ProtectedPlanEntry[], grants: readonly RecordedGrant[], pending: readonly string[]): GrantOwed | null {
+export function grantOwedAt(plan: readonly ProtectedPlanEntry[], grants: readonly RecordedGrant[], pending: readonly string[], requiredPaths?: readonly string[]): GrantOwed | null {
   const next = pending[0];
-  return next === undefined ? null : grantOwedFor(plan, grants, next);
+  return next === undefined ? null : grantOwedFor(plan, grants, next, requiredPaths);
 }
