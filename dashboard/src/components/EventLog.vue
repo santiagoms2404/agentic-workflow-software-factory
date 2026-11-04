@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import type { EventItem, EventsResponse } from "../../shared/types.ts";
 import { formatDuration } from "../display.ts";
 import { summarizeEvent } from "../event-summary.ts";
@@ -14,6 +14,17 @@ const error = ref<string | null>(null);
 const expanded = reactive(new Set<string>());
 const rawRows = reactive(new Set<string>());
 let timer: ReturnType<typeof setInterval> | undefined;
+
+watch(
+  () => props.sessionId,
+  () => {
+    cursor.value = 0;
+    events.value = [];
+    hasMore.value = false;
+    error.value = null;
+    void load();
+  },
+);
 
 const phaseEvents = computed(() => events.value.filter((event) => event.phaseId === props.phaseId));
 const foldedRows = computed(() => foldTextDeltaRuns(phaseEvents.value));

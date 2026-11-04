@@ -10,10 +10,10 @@ export const CREDENTIAL_PATTERNS: readonly RegExp[] = Object.freeze([
   /gh[opusr]_[A-Za-z0-9]{16,}/,
   /github_pat_[A-Za-z0-9_]{30,}/,
   /xox[baprs]-[A-Za-z0-9-]{10,}/,
-  /\bBearer\s+[A-Za-z0-9._~+/-]+=*/i,
-  /\bBasic\s+[A-Za-z0-9+/]{12,}={0,2}/i,
+  /\bBearer\s+[A-Za-z0-9._~+/-]{16,}=*/,
+  /\bBasic\s+(?:[A-Za-z0-9+/]{12,}={1,2}|(?=.*[0-9+/])[A-Za-z0-9+/]{12,}={0,2}|[A-Za-z0-9+/]{20,}={0,2})/,
   /\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
-  /\b(?:[a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/i,
+  /\b[a-z][a-z0-9+.-]{1,31}:\/\/[^\s/@:]+:[^\s/@]+@/i,
 ]);
 
 export function containsCredential(value: string): boolean {

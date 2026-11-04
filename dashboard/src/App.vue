@@ -114,12 +114,28 @@ function readEnabledWorkflows(value: unknown): readonly string[] {
 // journal every few seconds to render a heading would be an odd trade. A failed
 // read is not memoized: it rejects inside the memo, so the next poll reads
 // again, instead of one startup blip leaving the list empty for the page's life.
+let lastGroupsFetch = 0;
 const readGroups = memoizeUntilRejected(async () => {
   const response = await fetch("/api/v1/groups");
   if (!response.ok) throw new Error("Groups unavailable");
   groups.value = await response.json() as GroupsResponse;
+  lastGroupsFetch = Date.now();
 });
-function loadGroupsOnce(): Promise<void> {
+async function loadGroups(): Promise<void> {
+  const known = new Set(groups.value.groups.map((g) => g.group));
+  const hasUnseen = sessions.value.sessions.some((s) => s.groupId && !known.has(s.groupId));
+  if (hasUnseen && Date.now() - lastGroupsFetch > 1000) {
+    try {
+      const response = await fetch("/api/v1/groups");
+      if (response.ok) {
+        groups.value = await response.json() as GroupsResponse;
+        lastGroupsFetch = Date.now();
+      }
+    } catch {
+      // An empty or failing group list is not an error the sessions view should refuse
+    }
+    return;
+  }
   return readGroups().catch(() => {
     // An empty group list is not an error the sessions view should refuse to
     // render over; the failure is swallowed here, outside the memo, so it is
@@ -212,7 +228,7 @@ async function load(): Promise<void> {
     fetch("/api/v1/health"),
     dataRequest,
     loadSettingsOnce(),
-    loadGroupsOnce(),
+    loadGroups(),
   ]);
   if (kind !== readKind()) return;
   if (!nextHealth.ok) throw new Error("Dashboard data unavailable");

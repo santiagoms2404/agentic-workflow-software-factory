@@ -112,6 +112,54 @@ function usage(row: SessionRow): UsageTotals {
   };
 }
 
+function phaseUsage(db: DatabaseSync, sessionId: string, phaseId: string): UsageTotals {
+  const row = db.prepare(`SELECT 
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.inputTokens') END) AS input_tokens,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.outputTokens') END) AS output_tokens,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.cacheReadTokens') END) AS cache_read_tokens,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.cacheWriteTokens') END) AS cache_write_tokens,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.reasoningTokens') END) AS reasoning_tokens,
+      MIN(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.reasoningRelation') END) AS reasoning_relation,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.costUsd') END) AS estimated_cost_usd
+    FROM events WHERE session_id = ? AND phase_id = ?`).get(sessionId, phaseId) as {
+      input_tokens: number | null;
+      output_tokens: number | null;
+      cache_read_tokens: number | null;
+      cache_write_tokens: number | null;
+      reasoning_tokens: number | null;
+      reasoning_relation: string | null;
+      estimated_cost_usd: number | null;
+    } | undefined;
+
+  const input = row?.input_tokens ?? null;
+  const output = row?.output_tokens ?? null;
+  const cacheRead = row?.cache_read_tokens ?? null;
+  const cacheWrite = row?.cache_write_tokens ?? null;
+  const reasoning = row?.reasoning_tokens ?? null;
+  const relation = (row?.reasoning_relation as "included-in-output" | "additive" | "unknown") ?? "unknown";
+
+  let total: number | null = null;
+  if (input !== null || output !== null || reasoning !== null) {
+    const base = (input ?? 0) + (output ?? 0);
+    total = relation === "additive" ? base + (reasoning ?? 0) : base;
+  }
+
+  const hasUsage = total !== null;
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    cacheReadTokens: cacheRead,
+    cacheWriteTokens: cacheWrite,
+    reasoningTokens: reasoning,
+    totalTokens: total,
+    reasoningRelation: relation,
+    usageAuthority: hasUsage ? "provider" : "none",
+    estimatedCostUsd: row?.estimated_cost_usd ?? null,
+    costAuthority: row?.estimated_cost_usd !== null && row?.estimated_cost_usd !== undefined ? "provider" : "unavailable",
+    costPartial: false,
+  };
+}
+
 function phase(row: PhaseRow): PhaseSummary {
   return {
     phaseId: row.phase_id,
@@ -599,7 +647,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         }),
         envelopes,
         gates: gatesForSession(readDb, sessionId, phaseId).map(gate),
-        usage: usage(session),
+        usage: phaseUsage(readDb, sessionId, phaseId),
         agents: agentsForSession(readDb, sessionId).map(agent),
         processes: processesForSession(readDb, sessionId, phaseId).map(processSummary),
       };
