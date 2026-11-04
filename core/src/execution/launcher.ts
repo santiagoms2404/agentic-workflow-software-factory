@@ -112,35 +112,65 @@ function awaitRelease(): void {
   }
 }
 
-// argv[2] is the payload. argv[3], when present, is the run id — put there by
-// the broker so a human at a `ps` can tell which run a child blocked at the
-// barrier belongs to. It is never read here.
-const payload = ((): LaunchPayload => {
-  try {
-    return decodeLaunchPayload(process.argv[2] ?? "");
-  } catch (error) {
-    return die(LAUNCHER_EXIT.badPayload, error instanceof Error ? error.message : String(error));
+/**
+ * Resets signal dispositions for SIGPIPE and SIGXFSZ.
+ * In Node.js, SIGPIPE and SIGXFSZ are set to SIG_IGN by default.
+ * In POSIX, signals that are SIG_IGN remain SIG_IGN across execve, whereas
+ * signals with installed handlers are reset to SIG_DFL by the kernel on execve.
+ * Registering dummy listeners ensures the kernel resets them to default disposition.
+ */
+export function resetSignalDispositions(): void {
+  for (const signal of ["SIGPIPE", "SIGXFSZ"] as const) {
+    try {
+      process.on(signal, () => undefined);
+    } catch {
+      // Platform does not support this signal.
+    }
   }
-})();
-
-const execve = (process as unknown as { execve?: Execve }).execve;
-if (typeof execve !== "function") {
-  // Refused BEFORE the identity report, so the host never registers a process
-  // whose PID it could not have kept. Windows keeps PID stability a different
-  // way — suspended creation inside a Job Object — and that port is T11's.
-  die(LAUNCHER_EXIT.execUnavailable, "this runtime cannot execve; PID stability is not available");
 }
 
-fs.writeSync(IDENTITY_FD, formatIdentityLine(readIdentity()));
-awaitRelease();
+function isEntryPoint(): boolean {
+  if (!process.argv[1]) return false;
+  if (process.execArgv.includes("--test") || process.argv.includes("--test")) return false;
+  const script = process.argv[1].replace(/\\/g, "/");
+  const filename = (import.meta.filename ?? "").replace(/\\/g, "/");
+  return Boolean(filename && script === filename) || script.endsWith("/launcher.ts") || script.endsWith("/launcher.js");
+}
 
-// Closed before the exec so the provider never inherits the control channel.
-// A provider holding fd4 could read its own release token; a provider holding
-// fd3 could forge an identity for the next launch.
-fs.closeSync(IDENTITY_FD);
-fs.closeSync(RELEASE_FD);
+if (isEntryPoint()) {
+  // argv[2] is the payload. argv[3], when present, is the run id — put there by
+  // the broker so a human at a ps can tell which run a child blocked at the
+  // barrier belongs to. It is never read here.
+  const payload = ((): LaunchPayload => {
+    try {
+      return decodeLaunchPayload(process.argv[2] ?? "");
+    } catch (error) {
+      return die(LAUNCHER_EXIT.badPayload, error instanceof Error ? error.message : String(error));
+    }
+  })();
 
-// PID preserved. stdin/stdout/stderr are inherited across the replacement, so
-// the prompt the broker writes next lands in the provider, not in a launcher
-// that no longer exists.
-execve(payload.executable, [payload.executable, ...payload.argv], process.env as Record<string, string>);
+  const execve = (process as unknown as { execve?: Execve }).execve;
+  if (typeof execve !== "function") {
+    // Refused BEFORE the identity report, so the host never registers a process
+    // whose PID it could not have kept. Windows keeps PID stability a different
+    // way — suspended creation inside a Job Object — and that port is T11's.
+    die(LAUNCHER_EXIT.execUnavailable, "this runtime cannot execve; PID stability is not available");
+  }
+
+  fs.writeSync(IDENTITY_FD, formatIdentityLine(readIdentity()));
+  awaitRelease();
+
+  // Closed before the exec so the provider never inherits the control channel.
+  // A provider holding fd4 could read its own release token; a provider holding
+  // fd3 could forge an identity for the next launch.
+  fs.closeSync(IDENTITY_FD);
+  fs.closeSync(RELEASE_FD);
+
+  // Reset signal dispositions for SIGPIPE and SIGXFSZ so the child does not inherit SIG_IGN.
+  resetSignalDispositions();
+
+  // PID preserved. stdin/stdout/stderr are inherited across the replacement, so
+  // the prompt the broker writes next lands in the provider, not in a launcher
+  // that no longer exists.
+  execve(payload.executable, [payload.executable, ...payload.argv], process.env as Record<string, string>);
+}

@@ -1,4 +1,5 @@
 // Host-owned change-set capture. Agents never receive a Git command capability.
+import { createHash } from "node:crypto";
 import { runSystemCommand } from "../execution/transport-broker.ts";
 
 export interface GitResult {
@@ -65,7 +66,16 @@ export function captureChangeSet(repository: string, runner = systemGitRunner(re
     const added = record.slice(0, first);
     const deleted = record.slice(first + 1, second);
     const path = record.slice(second + 1);
-    if (path) fingerprint.set(path, `${added},${deleted}`);
+    if (path) {
+      let contentHash = "";
+      try {
+        const diffOutput = runGit(runner, ["diff", "HEAD", "--", path]);
+        contentHash = ":" + createHash("sha256").update(diffOutput).digest("hex").slice(0, 16);
+      } catch {
+        // Fall back to line counts if diff command is unavailable (e.g. minimal mock runner)
+      }
+      fingerprint.set(path, `${added},${deleted}${contentHash}`);
+    }
   }
   for (const path of runGit(runner, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")) {
     if (path) fingerprint.set(path, "untracked");

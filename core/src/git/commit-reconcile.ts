@@ -10,6 +10,43 @@ const MAX_CONTENT_BYTES = 64 * 1024 * 1024;
 export class HostCommitContentUnavailable extends Error {}
 
 /**
+ * Normalize commit message whitespace to match git commit -m behavior:
+ * - strip leading and trailing blank lines
+ * - strip trailing whitespace per line
+ * - collapse consecutive blank lines
+ */
+export function normalizeCommitMessage(message: string): string {
+  const lines = message
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map(line => line.trimEnd());
+  while (lines.length > 0 && lines[0] === "") {
+    lines.shift();
+  }
+  while (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  const collapsed: string[] = [];
+  let prevEmpty = false;
+  for (const line of lines) {
+    if (line === "") {
+      if (!prevEmpty) {
+        collapsed.push(line);
+        prevEmpty = true;
+      }
+    } else {
+      collapsed.push(line);
+      prevEmpty = false;
+    }
+  }
+  return collapsed.join("\n");
+}
+
+export interface HostCommitContentDigestOptions {
+  readonly lstat?: (path: string) => Promise<{ isSymbolicLink(): boolean; isFile(): boolean; mode: number; size: number }>;
+}
+
+/**
  * Exactly what a host commit against `parentSha` would contain, read from the
  * working tree without touching the index, the object store or a byte of the
  * tree itself.
@@ -21,14 +58,27 @@ export class HostCommitContentUnavailable extends Error {}
  * — which is what lets one function answer both "has it happened yet" and "is
  * what happened the thing that was intended".
  */
-export async function hostCommitContentDigest(worktree: string, parentSha: string, git: GitRunner): Promise<string> {
+export async function hostCommitContentDigest(
+  worktree: string,
+  parentSha: string,
+  git: GitRunner,
+  options?: HostCommitContentDigestOptions,
+): Promise<string> {
+  const statFn = options?.lstat ?? lstat;
   const rows: unknown[] = [];
   let bytes = 0;
   for (const path of changesSinceBase(worktree, parentSha, git)) {
     const absolute = join(worktree, path);
     let info;
-    try { info = await lstat(absolute); }
-    catch { rows.push({ path, removed: true }); continue; }
+    try {
+      info = await statFn(absolute);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        rows.push({ path, removed: true });
+        continue;
+      }
+      throw error;
+    }
     if (info.isSymbolicLink()) { rows.push({ path, mode: info.mode, link: await readlink(absolute) }); continue; }
     if (!info.isFile()) throw new HostCommitContentUnavailable(`commit intent covers a special filesystem node: ${path}`);
     bytes += info.size;
@@ -60,9 +110,14 @@ const refuse = (reason: string): HostCommitReconciliation => Object.freeze({ out
  */
 export async function reconcileHostCommit(
   intent: HostCommitIntent,
-  options: { readonly worktree: string; readonly git: GitRunner },
+  options: {
+    readonly worktree: string;
+    readonly git: GitRunner;
+    readonly lstat?: (path: string) => Promise<{ isSymbolicLink(): boolean; isFile(): boolean; mode: number; size: number }>;
+  },
 ): Promise<HostCommitReconciliation> {
-  const { worktree, git } = options;
+  const { worktree, git, lstat: statOverride } = options;
+  const digestOpts = statOverride ? { lstat: statOverride } : undefined;
   if (git(["cat-file", "-e", `${intent.parentSha}^{commit}`]).status !== 0) {
     return refuse("the recorded pre-commit revision is not a commit object in this repository");
   }
@@ -70,7 +125,7 @@ export async function reconcileHostCommit(
   const clean = runGit(git, ["status", "--porcelain"]).trim().length === 0;
 
   if (head === intent.parentSha) {
-    if (await hostCommitContentDigest(worktree, intent.parentSha, git) !== intent.contentDigest) {
+    if (await hostCommitContentDigest(worktree, intent.parentSha, git, digestOpts) !== intent.contentDigest) {
       return refuse("HEAD is still the recorded pre-commit revision but the retained working tree no longer matches the recorded intent");
     }
     return Object.freeze({ outcome: "not-committed" as const });
@@ -87,7 +142,7 @@ export async function reconcileHostCommit(
   if (parents.length !== 1 || parents[0] !== intent.parentSha) {
     return refuse("the created commit does not have the recorded pre-commit revision as its only parent");
   }
-  if (runGit(git, ["log", "-1", "--format=%B", commitSha]).replace(/\n+$/, "") !== intent.message.replace(/\n+$/, "")) {
+  if (normalizeCommitMessage(runGit(git, ["log", "-1", "--format=%B", commitSha])) !== normalizeCommitMessage(intent.message)) {
     return refuse("the created commit carries a different message than the recorded intent");
   }
   if (runGit(git, ["log", "-1", "--format=%an <%ae>", commitSha]).trim() !== intent.author ||
@@ -99,7 +154,7 @@ export async function reconcileHostCommit(
   if (paths.length !== intent.committedPaths.length || paths.some((path, index) => path !== intent.committedPaths[index])) {
     return refuse("the created commit changes a different set of paths than the recorded intent");
   }
-  if (await hostCommitContentDigest(worktree, intent.parentSha, git) !== intent.contentDigest) {
+  if (await hostCommitContentDigest(worktree, intent.parentSha, git, digestOpts) !== intent.contentDigest) {
     return refuse("the created commit carries different content than the recorded intent");
   }
   return Object.freeze({ outcome: "committed" as const, commitSha });

@@ -395,14 +395,14 @@ export interface BarrierOutcome {
  * anything still running, and did it cost a call?
  */
 export class RegistrationFailed extends Error {
-  readonly step: BarrierStep | "start";
+  readonly step: BarrierStep | "start" | "spending";
   readonly cancellation: TerminationReport | null;
   readonly reservation: Reservation | null;
   /** Set when the refund itself failed — a second fault, never allowed to hide the first. */
   readonly refundError: unknown;
 
   constructor(options: {
-    step: BarrierStep | "start";
+    step: BarrierStep | "start" | "spending";
     cause: unknown;
     cancellation: TerminationReport | null;
     reservation: Reservation | null;
@@ -500,7 +500,7 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
   // host's code — the kill simulation drives it, and a tracer will later — and
   // one that throws outside this guard would orphan a gated child holding a
   // reservation nobody returned.
-  let at: BarrierStep = "launched";
+  let at: BarrierStep | "spending" = "launched";
   let spent = false;
   try {
     await step("launched");
@@ -519,13 +519,14 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
     const reservation = refundable ? ledger.spendOnGo(record.reservationId)
       : settlement === "reconnect" ? options.reattach!(durableRecord) : null;
     spent = true;
-    at = "spent";
+    at = "spending";
     if (settlement === "reconnect") await options.onReattached!(durableRecord, reservation!);
     else if (reservation !== null) await onSpent?.(durableRecord, reservation);
     else await onCorrection?.(durableRecord);
+    at = "spent";
     await step("spent");
+    abortCheck();
     if (settlement === "reconnect") {
-      abortCheck();
       options.beforeReconnectGo!();
     }
 
@@ -545,7 +546,13 @@ export async function runLauncherBarrier(options: LauncherBarrierOptions): Promi
     // Only an unspent reservation is refundable. Once `spendOnGo` has run, the
     // release token may or may not have reached the child, and the ledger does
     // not guess: it bills the call and leaves the journal to reconcile.
-    const refund = spent || !refundable
+    // Clean abandonment without survivors is required before refunding.
+    const cleanlyAbandoned =
+      cancelError === null &&
+      cancellation !== null &&
+      cancellation.terminated === true &&
+      cancellation.survivors.length === 0;
+    const refund = spent || !refundable || !cleanlyAbandoned
       ? { reservation: null, error: null }
       : refundQuietly(ledger, record.reservationId);
     throw new RegistrationFailed({

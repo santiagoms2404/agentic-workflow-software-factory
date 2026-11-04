@@ -132,7 +132,7 @@ export class LivenessMonitor {
     this.#silenceMs = options.silenceMs ?? SILENCE_WINDOW_MS;
     this.#timeoutMs = options.timeoutMs ?? 0;
     this.#pollMs = options.pollMs ?? MONITOR_POLL_MS;
-    this.#now = options.now ?? ((): number => Date.now());
+    this.#now = options.now ?? ((): number => Number(process.hrtime.bigint() / 1_000_000n));
     this.#terminate = options.terminate;
     this.#startedAt = this.#now();
     this.#lastActivityAt = this.#startedAt;
@@ -188,7 +188,7 @@ export class LivenessMonitor {
       this.#blindPolls += 1;
     }
     if (cpu !== null) {
-      if (this.#lastCpu !== null && cpu !== this.#lastCpu) this.#lastActivityAt = this.#now();
+      if (this.#lastCpu !== null && cpu > this.#lastCpu) this.#lastActivityAt = this.#now();
       this.#lastCpu = cpu;
     }
 

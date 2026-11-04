@@ -488,6 +488,9 @@ export class ProcessTransportBroker implements TransportBroker {
     const reservationId = reservationIdOf(registration);
     assertSpecSafe(registration, spec, reservationId);
     const executable = resolveExecutable(spec.executable, spec.env);
+    if (edge !== null) {
+      this.#assertTaskEdgeLaunch(registration as ProcessRegistration);
+    }
     const evidence = phaseEvidence ?? correctionEvidence ?? (reconnectEvidence === null ? null : {
       taskSessionId: reconnectEvidence.registration.taskSessionId, workflowId: reconnectEvidence.registration.workflowId,
       phaseId: reconnectEvidence.registration.phaseId, phaseOrdinal: reconnectEvidence.registration.phaseOrdinal,
@@ -579,6 +582,19 @@ export class ProcessTransportBroker implements TransportBroker {
     return proof;
   }
 
+  /** Distinct validator for task-edge transitions. Checks site and held reservation. */
+  #assertTaskEdgeLaunch(registration: ProcessRegistration): LegalEdge {
+    const edge = assertSpawnSite(registration);
+    const reservation = this.#options.ledger.reservation(registration.reservationId);
+    if (reservation === undefined || reservation.state !== "held" || reservation.cost !== 1) {
+      throw new SpawnRegistrationInvalid(
+        registration.runId,
+        "reservation is unknown, settled, or not exactly one held call",
+      );
+    }
+    return edge;
+  }
+
   /** Distinct validator for launches that are not task transitions. Runs before spawn(). */
   #assertAgentPhaseLaunch(registration: AgentPhaseProcessRegistration): AgentPhaseLaunchEvidence {
     const refuse = (detail: string): never => {
@@ -659,7 +675,9 @@ export class ProcessTransportBroker implements TransportBroker {
     }
 
     const verifier = this.#options.correctionLaunchVerifier;
-    if (verifier === undefined) return refuse("the trusted correction verifier is not installed");
+    if (verifier === undefined || this.#options.onCorrection === undefined) {
+      return refuse("the trusted correction verifier or durable evidence callback is not installed");
+    }
     const evidence = verifier.verify(registration);
     const exact =
       evidence.taskSessionId === registration.taskSessionId &&

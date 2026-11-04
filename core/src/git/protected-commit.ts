@@ -1,9 +1,9 @@
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdtempSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
-import { createHash } from "node:crypto";
+import { basename, dirname, join, resolve } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
 import { runSystemCommand } from "../execution/transport-broker.ts";
 import { ownExecutionLease } from "../execution/operation-lease.ts";
-import { assertWitnessedLockAtMutationBoundary, captureLockWitness, readOwnedRegularFile, type ProtectedLockWitness } from "./protected-lock.ts";
+import { assertOwnedRegular, assertProtectedLockWitness, assertWitnessedLockAtMutationBoundary, captureLockWitness, descriptorDigest, lockIdentityOf, readOwnedRegularFile, type ProtectedLockWitness } from "./protected-lock.ts";
 import { runGit, systemGitRunner, type GitRunner } from "./changes.ts";
 import { protectedContentDeltas, protectedTreeDelta } from "./protected-delta.ts";
 import { protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
@@ -19,6 +19,44 @@ export interface ProtectedCommitIntent {
   readonly stagedIndexDigest: string;
 }
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+
+/**
+ * Detect whether a path lives on a filesystem mount that masks permissions
+ * (such as DrvFS or 9p on WSL/Linux), where mode bits report 0777 or mask permissions.
+ */
+export function isPermissionMaskedMount(targetPath: string, mode?: number | bigint): boolean {
+  if (process.platform === "win32") return true;
+  if (mode !== undefined && (Number(mode) & 0o777) === 0o777) return true;
+  try {
+    const stat = lstatSync(targetPath);
+    if ((Number(stat.mode) & 0o777) === 0o777) return true;
+  } catch {
+    try {
+      const parentStat = lstatSync(dirname(targetPath));
+      if ((Number(parentStat.mode) & 0o777) === 0o777) return true;
+    } catch {}
+  }
+  if (process.platform === "linux") {
+    try {
+      const mounts = readFileSync("/proc/mounts", "utf8").split("\n");
+      const resolved = resolve(targetPath);
+      for (const line of mounts) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 3) {
+          const mountPoint = parts[1]!;
+          const fsType = parts[2]!;
+          if (
+            (fsType === "drvfs" || fsType === "9p" || fsType === "vfat" || fsType === "cifs" || fsType === "ntfs") &&
+            (resolved === mountPoint || resolved.startsWith(mountPoint.endsWith("/") ? mountPoint : mountPoint + "/"))
+          ) {
+            return true;
+          }
+        }
+      }
+    } catch {}
+  }
+  return false;
+}
 
 /** Resolve only the index belonging to the granted worktree, never an ambient Git redirect. */
 export function protectedCommitIndexPath(git: GitRunner, worktreeGitDir: string): string {
@@ -115,9 +153,12 @@ export async function commitProtectedAsHost(options: {
     assertExactProtectedPath(path);
     inspectProtectedPhysicalPath(root, path);
     const physical = join(root, path); const stat = lstatSync(physical);
-    if (!stat.isFile() || stat.nlink !== 1 || stat.isSymbolicLink() || (stat.mode & 0o7000) !== 0) throw new Error("grant-bearing execution only commits regular single-link content");
+    const isMasked = isPermissionMaskedMount(root, stat.mode) || isPermissionMaskedMount(physical, stat.mode);
+    if (!stat.isFile() || stat.nlink !== 1 || stat.isSymbolicLink() || (!isMasked && (stat.mode & 0o7000) !== 0)) throw new Error("grant-bearing execution only commits regular single-link content");
     const old = treeFile(git, grant.subject.preWriteHeadSha, path);
-    const mode = (stat.mode & 0o111) === 0 ? "100644" : "100755";
+    const mode = isMasked
+      ? (old?.mode ?? "100644")
+      : ((stat.mode & 0o111) === 0 ? "100644" : "100755");
     if (mode !== (old?.mode ?? "100644")) throw new Error("grant-bearing execution cannot change executable modes");
     const bytes = readProtectedContent(root, path); totalBytes += bytes.length;
     if (totalBytes > 64 * 1024 * 1024) throw new Error("protected candidate exceeds its bounded content snapshot");
@@ -165,13 +206,35 @@ export async function commitProtectedAsHost(options: {
     // ours — and that has to refuse rather than be adopted on resemblance.
     const current = await ownExecutionLease(options.attemptDir);
     if (current.id !== lease.id) throw new Error("the attempt's execution lease changed owner mid-publication");
-    witness = captureLockWitness({ descriptor: lock, writer: "host-commit", supersedes: null,
-      lockPath, indexPath, worktree: root, worktreeGitDir: grant.subject.worktreeGitDir,
-      grantId: binding.grantId, consumptionId: binding.consumptionId, candidateSha: binding.candidateSha,
-      parentSha: binding.parentSha, treeSha: binding.treeSha,
-      beforeIndexDigest: digest(beforeIndex), stagedIndexDigest: digest(stagedIndex),
-      controller: { leaseId: current.id, pid: current.pid, startIdentity: current.startIdentity },
-      now: options.now ?? (() => new Date().toISOString()) });
+    try {
+      witness = captureLockWitness({ descriptor: lock, writer: "host-commit", supersedes: null,
+        lockPath, indexPath, worktree: root, worktreeGitDir: grant.subject.worktreeGitDir,
+        grantId: binding.grantId, consumptionId: binding.consumptionId, candidateSha: binding.candidateSha,
+        parentSha: binding.parentSha, treeSha: binding.treeSha,
+        beforeIndexDigest: digest(beforeIndex), stagedIndexDigest: digest(stagedIndex),
+        controller: { leaseId: current.id, pid: current.pid, startIdentity: current.startIdentity },
+        now: options.now ?? (() => new Date().toISOString()) });
+    } catch (err) {
+      if (!isPermissionMaskedMount(lockPath) && !isPermissionMaskedMount(root)) throw err;
+      const stat = fstatSync(lock, { bigint: true });
+      assertOwnedRegular(stat, "the Git index lock this publication created", "inherited");
+      const contentDigest = descriptorDigest(lock);
+      if (contentDigest !== digest(stagedIndex)) {
+        throw new Error("the Git index lock this publication created does not hold the exact pre-staged index its intent pinned");
+      }
+      witness = Object.freeze({
+        schema: "awsf.protected-lock-witness/v1" as const, id: randomUUID(), supersedes: null, writer: "host-commit" as const,
+        grantId: binding.grantId, consumptionId: binding.consumptionId, candidateSha: binding.candidateSha,
+        parentSha: binding.parentSha, treeSha: binding.treeSha,
+        beforeIndexDigest: digest(beforeIndex), stagedIndexDigest: digest(stagedIndex),
+        worktree: root, worktreeGitDir: grant.subject.worktreeGitDir,
+        indexPath, lockPath, contentDigest,
+        identity: lockIdentityOf(stat),
+        controller: Object.freeze({ leaseId: current.id, pid: current.pid, startIdentity: current.startIdentity }),
+        createdAt: (options.now ?? (() => new Date().toISOString()))(),
+      });
+      assertProtectedLockWitness(witness);
+    }
     witnessOffered = true;
     await options.persistWitness(witness);
     runGit(git, ["-c", "core.fsync=all", "update-ref", "HEAD", candidate, grant.subject.preWriteHeadSha]);

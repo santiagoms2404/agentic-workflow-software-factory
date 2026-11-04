@@ -20,15 +20,20 @@ async function writeLease(directory: string, lease: Holder): Promise<void> {
   // A crash before this rename leaves only a unique staging file. Readers use
   // the canonical path exclusively, so the next claim can safely publish anew.
   await rename(temporary, target);
-  const parent = await open(directory, "r");
-  try { await parent.sync(); } finally { await parent.close(); }
+  try {
+    const parent = await open(directory, "r");
+    try { await parent.sync(); } finally { await parent.close(); }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "EISDIR" && code !== "EPERM" && code !== "ENOTSUP" && code !== "EBADF") throw err;
+  }
 }
 
 async function holder(directory: string): Promise<Holder | null> {
   try {
     const path = pathFor(directory);
     const info = await lstat(path);
-    if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0 || info.nlink !== 1 || (process.getuid !== undefined && info.uid !== process.getuid())) throw new Error("unsafe execution lease");
+    if (!info.isFile() || info.isSymbolicLink() || (process.platform !== "win32" && (info.mode & 0o077) !== 0) || (process.platform !== "win32" && info.nlink !== 1) || (process.getuid !== undefined && info.uid !== process.getuid())) throw new Error("unsafe execution lease");
     const value = JSON.parse(await readFile(path, "utf8")) as Holder;
     if (!Number.isSafeInteger(value.pid) || value.pid < 1 || typeof value.id !== "string" || !value.id || typeof value.startIdentity !== "string" || !value.startIdentity) throw new Error("ambiguous execution lease");
     return value;
@@ -45,6 +50,12 @@ async function holder(directory: string): Promise<Holder | null> {
 export async function ownExecutionLease(directory: string): Promise<Holder> {
   const current = await holder(directory);
   if (current === null || current.pid !== process.pid) throw new Error("this process does not hold the attempt's execution lease");
+  if (current.startIdentity) {
+    const self = createHostPort({ command: runSystemCommand }).census().find(row => row.pid === process.pid && row.alive);
+    if (!self?.startIdentity || self.startIdentity !== current.startIdentity) {
+      throw new Error("this process does not hold the attempt's execution lease");
+    }
+  }
   return current;
 }
 
