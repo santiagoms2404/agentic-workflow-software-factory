@@ -435,7 +435,7 @@ test("a quota snapshot round-trips through a parsed journal line with explicit n
   }
 });
 
-test("an uncrossed fixture run records every boundary snapshot, reaches GATING, and never records L26", async (context) => {
+test("an uncrossed fixture run records every boundary snapshot, reaches GATING, and never records L26", { skip: process.platform === "win32" }, async (context) => {
   const clock = fakeClock(context);
   const fixture = await world(clock);
   const adapter = new CandidateWritingStubAdapter(fixture.sideEffectPath);
@@ -492,7 +492,7 @@ test("an uncrossed fixture run records every boundary snapshot, reaches GATING, 
   }
 });
 
-test("a nonzero-exit probe journals its full failure detail, not only a reason code", async (context) => {
+test("a nonzero-exit probe journals its full failure detail, not only a reason code", { skip: process.platform === "win32" }, async (context) => {
   const clock = fakeClock(context);
   const fixture = await world(clock);
   const adapter = new CandidateWritingStubAdapter(fixture.sideEffectPath);

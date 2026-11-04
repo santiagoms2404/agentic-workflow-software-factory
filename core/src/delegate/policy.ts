@@ -12,7 +12,7 @@
 // never executable, whatever the input (INV-3).
 
 import type { StopJudgmentResult, StopJudgmentWaitReason } from "../decision/question-sets/stop-judgment.ts";
-import { raiseActsNeeded } from "../cli/commands/shift.ts";
+import { raiseActsNeeded } from "../state/tiers.ts";
 import type { ReviewFindingFact, StopFacts, StopFactsConfig, StopKind } from "./stop-facts.ts";
 
 export const PROPOSED_ACT_NAMES = [

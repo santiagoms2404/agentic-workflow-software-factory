@@ -100,13 +100,19 @@ export function journalPhases(records: readonly JournalRecord<AttemptEvent>[]): 
   for (const record of records) {
     const evidence = record.event.evidence;
     if (evidence?.type === "phase") phases.set(evidence.phase.key, { ordinal: evidence.phase.ordinal, kind: evidence.phase.kind, owner: evidence.phase.owner });
-    if (evidence?.type === "agent-start") routes.set(evidence.phaseId, evidence.adapterId);
+    if (evidence?.type === "agent-start") {
+      routes.set(evidence.phaseId, evidence.adapterId);
+      const colonIndex = evidence.phaseId.indexOf(":");
+      if (colonIndex >= 0) {
+        routes.set(evidence.phaseId.slice(colonIndex + 1), evidence.adapterId);
+      }
+    }
   }
   const ordered = [...phases.entries()].sort(([, left], [, right]) => left.ordinal - right.ordinal);
   const roles: Record<string, string> = {};
   const list: StopFactsPhase[] = ordered.map(([id, phase]) => {
     if (phase.kind === "agent") roles[id] = phase.owner;
-    return { id, ticket: null, route: phase.kind === "agent" ? routes.get(id) ?? UNRECORDED_ROUTE : null };
+    return { id, ticket: null, route: phase.kind === "agent" ? routes.get(id) ?? (id.includes(":") ? routes.get(id.slice(id.indexOf(":") + 1)) : undefined) ?? UNRECORDED_ROUTE : null };
   });
   return { config: { phases: list }, roles };
 }

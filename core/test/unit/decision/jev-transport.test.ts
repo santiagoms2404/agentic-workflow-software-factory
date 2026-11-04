@@ -47,7 +47,7 @@ function validBody(overrides: Record<string, unknown> = {}): Record<string, unkn
       },
       risk: {
         type: "score",
-        score: 0.97,
+        score: 1,
         legend: { "0": "low", "1": "medium", "2": "high" },
         probabilities: { "0": 0.3, "1": 0.43, "2": 0.27 },
         confidence: 0.4,
@@ -219,6 +219,11 @@ test("a score out of range or with a foreign legend is a contract error", async 
   stubFetch(t, [() => json(outOfRange)]);
   expectOutcome(await transport().ask("state", QUESTIONS), "contract-error");
 
+  const fractional = validBody();
+  (fractional.answers as Record<string, Record<string, unknown>>).risk!.score = 1.5;
+  stubFetch(t, [() => json(fractional)]);
+  expectOutcome(await transport().ask("state", QUESTIONS), "contract-error");
+
   const foreignLegend = validBody();
   (foreignLegend.answers as Record<string, Record<string, unknown>>).risk!.legend = { "0": "low", "1": "mid", "2": "high" };
   stubFetch(t, [() => json(foreignLegend)]);
@@ -242,13 +247,16 @@ test("the key is read once, at construction", async (t) => {
   expectOutcome(await jev.ask("state", QUESTIONS), "answered");
 });
 
-test("the switch turned off is a typed refusal before validation, redaction or egress", async (t) => {
+test("the switch turned off is a typed refusal before redaction or egress, but validation runs first", async (t) => {
   const calls = stubFetch(t, [() => json(validBody())]);
   const jev = transport({ projectSwitch: "off" });
   assert.equal(jev.available, false);
   const result = expectOutcome(await jev.ask("state", QUESTIONS), "refused-by-switch");
   assert.match(result.detail, /off/);
   assert.equal(calls.length, 0);
+
+  // Invalid question sets throw QuestionValidationError even when the switch is off (B2-37)
+  await assert.rejects(jev.ask("state", {} as JevQuestions), QuestionValidationError);
 });
 
 test("the catalog carries decision.jev, defaulting to on, and rejects anything else", () => {

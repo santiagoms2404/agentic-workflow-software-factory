@@ -29,15 +29,51 @@ export interface PlanningReadOptions {
   readonly project: string;
 }
 
+function isJournalReplayError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (
+    error instanceof TypeError ||
+    error instanceof ReferenceError ||
+    error instanceof RangeError ||
+    error instanceof SyntaxError ||
+    error.name === "AssertionError"
+  ) {
+    return false;
+  }
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === "ENOENT" || code === "EACCES" || code === "EPERM") return true;
+  const msg = error.message.toLowerCase();
+  return (
+    msg.includes("journal") ||
+    msg.includes("corrupt") ||
+    msg.includes("digest") ||
+    msg.includes("schema") ||
+    msg.includes("revision") ||
+    msg.includes("event") ||
+    msg.includes("proposal") ||
+    msg.includes("prerequisite") ||
+    msg.includes("split") ||
+    msg.includes("unit") ||
+    msg.includes("symlink") ||
+    msg.includes("append")
+  );
+}
+
 export async function listGroupSummaries(options: PlanningReadOptions): Promise<GroupsResponse> {
   const groups: GroupSummary[] = [];
   const unreadable: string[] = [];
   for (const group of await listGroupIds(options.stateRoot, options.project)) {
+    let tree: GroupTree;
     try {
-      groups.push(groupSummary(await readGroupTree({ ...options, group })));
-    } catch {
-      unreadable.push(group);
+      tree = await readGroupTree({ ...options, group });
+    } catch (error) {
+      if (isJournalReplayError(error)) {
+        unreadable.push(group);
+        continue;
+      }
+      throw error;
     }
+    groups.push(groupSummary(tree));
   }
   // Newest first: the group a reader is most likely looking for is the one they
   // were just driving. A group with no input has no time and sorts last.

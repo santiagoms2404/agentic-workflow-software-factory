@@ -302,13 +302,13 @@ export async function resolveProjectQuotaRoutes(
   let repositoryPath: string;
 
   const source = planSources[0];
-  if (source !== undefined) {
+  if (source !== undefined && catalog.plans?.root) {
     repositoryId = source.repositoryId;
     repositoryPath = planRepositoryRoot(source.planPath, catalog.plans.root);
   } else {
     // A placed repository with awsf.config.yaml might contain 0 .html plan
-    // files. Resolve repository path directly rather than misdiagnosing the
-    // repository as unplaced and throwing E_QUOTA_PLAN_REPOSITORY_UNRESOLVED.
+    // files, or catalog.plans may lack root. Resolve repository path directly rather
+    // than misdiagnosing the repository as unplaced and throwing E_QUOTA_PLAN_REPOSITORY_UNRESOLVED.
     const resolved = resolvePlanRepository(input.catalogPath, catalog, input.placement);
     if (resolved === null) {
       throw new QuotaRouteResolutionError(

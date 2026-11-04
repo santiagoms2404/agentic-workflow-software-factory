@@ -296,7 +296,7 @@ export function validateJevResponse(response: unknown, questions: JevQuestions):
       throw new ContractError(`Undeclared choice returned: ${id}`);
     }
     if (q.type === "score") {
-      if (!isNonNegative(answer.score) || answer.score > keys.length - 1) {
+      if (!isNonNegative(answer.score) || !Number.isInteger(answer.score) || answer.score > keys.length - 1) {
         throw new ContractError(`Score out of range: ${id}`);
       }
       const legend = answer.legend;
@@ -381,16 +381,21 @@ export class JevTransport {
     return this.#projectSwitch === "on" && this.#key !== undefined;
   }
 
+  /** The transport's configured model. */
+  get model(): string {
+    return this.#model;
+  }
+
   /**
    * Ask Jev. Every ending is a typed outcome; only a request that could never be
    * valid throws (QuestionValidationError), before anything is sent.
    */
   async ask(state: JevState, questions: JevQuestions, options: JevAskOptions = {}): Promise<JevOutcome> {
+    const requestedModel = options.model ?? this.#model;
+    validateJevRequest(state, questions, requestedModel);
     if (this.#projectSwitch === "off") {
       return { outcome: "refused-by-switch", detail: "Jev is switched off for this project (decision.jev: off)." };
     }
-    const requestedModel = options.model ?? this.#model;
-    validateJevRequest(state, questions, requestedModel);
 
     // Redaction runs on the values before the body is serialized, so nothing
     // unredacted is ever turned into wire text.

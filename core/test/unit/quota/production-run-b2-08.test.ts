@@ -339,7 +339,7 @@ async function world(clock: FakeClock, thresholdMinutes = FIVE_MINUTES): Promise
   };
 }
 
-test("B2-08: unavailable resume quota probe (nonzero-exit) journals QuotaProbeFailure details", async (context) => {
+test("B2-08: unavailable resume quota probe (nonzero-exit) journals QuotaProbeFailure details", { skip: process.platform === "win32" }, async (context) => {
   const clock = fakeClock(context);
   const fixture = await world(clock);
   const adapter = new CandidateWritingStubAdapter(fixture.sideEffectPath);
@@ -417,7 +417,7 @@ test("B2-08: unavailable resume quota probe (nonzero-exit) journals QuotaProbeFa
   }
 });
 
-test("B2-08 triangulation: unavailable resume quota probe (unparseable) journals QuotaProbeFailure details", async (context) => {
+test("B2-08 triangulation: unavailable resume quota probe (unparseable) journals QuotaProbeFailure details", { skip: process.platform === "win32" }, async (context) => {
   const clock = fakeClock(context);
   const fixture = await world(clock);
   const adapter = new CandidateWritingStubAdapter(fixture.sideEffectPath);

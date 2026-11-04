@@ -163,7 +163,7 @@ function toRecord<Params>(
       // Nothing was built, so nothing was redacted and no body exists (T01 C1).
       return {
         ...base,
-        requestedModel: context.model ?? JEV_DEFAULT_MODEL,
+        requestedModel: (context.transport as any).model ?? context.model ?? JEV_DEFAULT_MODEL,
         outcome: "refused-by-switch",
         detail: scrubCredentialString(result.detail),
         answers: null,

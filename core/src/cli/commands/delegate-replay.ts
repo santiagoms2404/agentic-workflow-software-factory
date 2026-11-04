@@ -26,6 +26,7 @@ import { readTaskDelegateProposals } from "../../persistence/task-delegate.ts";
 import { appendDelegateReplays, delegateStateDir, readDelegateReplays } from "../../persistence/delegate-replays.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
 import { jevSwitchOf, type JevSwitch } from "../../registry/catalog-schema.ts";
+import { readPlacement } from "../../registry/placement.ts";
 import { pairAttempt, type Pair } from "../../delegate/agreement.ts";
 import type { PhaseRoles } from "../../delegate/policy.ts";
 import {
@@ -78,10 +79,41 @@ interface AttemptSource {
   readonly records: readonly JournalRecord<AttemptEvent>[];
 }
 
-async function projectSwitch(catalogPath: string | undefined): Promise<JevSwitch> {
-  if (catalogPath === undefined) return "on";
+export async function projectSwitch(
+  catalogPath?: string,
+  repositoryOrStatus?: string | { readonly repository?: string },
+  stateRoot?: string,
+  project?: string,
+): Promise<JevSwitch> {
+  let resolvedPath = catalogPath;
+  const repository = typeof repositoryOrStatus === "string" ? repositoryOrStatus : repositoryOrStatus?.repository;
+  if (resolvedPath === undefined && repository) {
+    resolvedPath = join(repository, "awsf.project.yaml");
+  }
+  if (resolvedPath === undefined && stateRoot !== undefined && project !== undefined) {
+    try {
+      const placement = await readPlacement(stateRoot, project);
+      for (const repo of Object.values(placement.repositories)) {
+        const candidate = join(repo.path, "awsf.project.yaml");
+        try {
+          await readFile(candidate, "utf8");
+          resolvedPath = candidate;
+          break;
+        } catch {
+          // keep searching
+        }
+      }
+      if (resolvedPath === undefined) {
+        const first = Object.values(placement.repositories)[0];
+        if (first) resolvedPath = join(first.path, "awsf.project.yaml");
+      }
+    } catch {
+      // placement not found
+    }
+  }
+  if (resolvedPath === undefined) return "on";
   try {
-    return jevSwitchOf(loadCatalog(await readFile(catalogPath, "utf8")));
+    return jevSwitchOf(loadCatalog(await readFile(resolvedPath, "utf8")));
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ENOENT" ? "on" : "off";
   }
@@ -148,8 +180,14 @@ export async function delegateReplayCommand(options: DelegateReplayOptions): Pro
       options.terminal.write("replay: not confirmed; nothing asked and nothing written");
       return { mode, recorded: [], skipped: 0, pairs: [], confirmed: false };
     }
+    const firstStatus = attempts[0]?.records[0]?.event.next ?? attempts[0]?.records.at(-1)?.event.next;
     const transport = options.transport ?? new JevTransport({
-      projectSwitch: await projectSwitch(options.catalogPath),
+      projectSwitch: await projectSwitch(
+        options.catalogPath,
+        firstStatus,
+        options.stateRoot,
+        options.project ?? firstStatus?.project,
+      ),
       ...(options.env === undefined ? {} : { env: options.env }),
     });
     const decisionsDir = delegateStateDir(options.stateRoot);

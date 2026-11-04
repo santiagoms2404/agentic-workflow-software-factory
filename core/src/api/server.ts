@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AwsfConfig } from "../config/schema.ts";
+import type { ResolvedPlanSource } from "../registry/plan-source.ts";
 import { createApiRouter, type ApiRouter } from "./routes.ts";
 import { errorResponse, sendResponse } from "./responses.ts";
 import { assertLoopbackBind, type LoopbackHost } from "./security.ts";
@@ -7,8 +8,11 @@ import { assertLoopbackBind, type LoopbackHost } from "./security.ts";
 export interface ApiServerOptions {
   readonly dbPath: string;
   readonly config: AwsfConfig;
-  readonly host?: LoopbackHost;
-  readonly port?: number;
+  readonly host?: LoopbackHost | undefined;
+  readonly port?: number | undefined;
+  readonly repository?: string | undefined;
+  readonly stateRoot?: string | undefined;
+  readonly planSources?: readonly ResolvedPlanSource[] | undefined;
 }
 
 export interface RunningApiServer {
@@ -32,7 +36,13 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
     throw new RangeError("API port must be an integer from 0 through 65535");
   }
 
-  const router = createApiRouter({ dbPath: options.dbPath, config: options.config });
+  const router = createApiRouter({
+    dbPath: options.dbPath,
+    config: options.config,
+    ...(options.repository !== undefined ? { repository: options.repository } : {}),
+    ...(options.stateRoot !== undefined ? { stateRoot: options.stateRoot } : {}),
+    ...(options.planSources !== undefined ? { planSources: options.planSources } : {}),
+  });
   const nodeServer = createServer((request, response) => {
     void router.dispatch({
       method: request.method ?? "GET",
@@ -48,19 +58,24 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
     nodeServer,
     router,
     async start(): Promise<RunningApiServer> {
-      await new Promise<void>((resolve, reject) => {
-        const onError = (error: Error): void => {
-          nodeServer.off("listening", onListening);
-          reject(error);
-        };
-        const onListening = (): void => {
-          nodeServer.off("error", onError);
-          resolve();
-        };
-        nodeServer.once("error", onError);
-        nodeServer.once("listening", onListening);
-        nodeServer.listen(port, host);
-      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const onError = (error: Error): void => {
+            nodeServer.off("listening", onListening);
+            reject(error);
+          };
+          const onListening = (): void => {
+            nodeServer.off("error", onError);
+            resolve();
+          };
+          nodeServer.once("error", onError);
+          nodeServer.once("listening", onListening);
+          nodeServer.listen(port, host);
+        });
+      } catch (error) {
+        router.close();
+        throw error;
+      }
       const address = nodeServer.address();
       if (address === null || typeof address === "string") {
         router.close();

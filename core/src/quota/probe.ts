@@ -203,7 +203,8 @@ interface NumericVersion {
 }
 
 function numericVersion(text: string): NumericVersion | null {
-  const match = /(?:^|\D)v?(\d+)\.(\d+)\.(\d+)(?:\D|$)/u.exec(text.trim());
+  const specific = /quota-axi\s+v?(\d+)\.(\d+)\.(\d+)/u.exec(text);
+  const match = specific ?? /(?:^|\D)v?(\d+)\.(\d+)\.(\d+)(?:\D|$)/u.exec(text.trim());
   if (match === null) return null;
   const parts = [Number(match[1]), Number(match[2]), Number(match[3])] as const;
   if (!parts.every(Number.isSafeInteger)) return null;
@@ -303,7 +304,7 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
     const complete: QuotaProbeFailure = {
       ...failure,
       retainedPath,
-      ...(retentionFailed ? { retentionFailed: true as const } : {}),
+      ...(retentionFailed && { retentionFailed: true as const }),
     };
     return unavailable(complete, parsed, resolvedVersion);
   };

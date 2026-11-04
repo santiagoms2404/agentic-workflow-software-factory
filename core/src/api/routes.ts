@@ -1,8 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { queryPlanBacklog } from "../backlog.ts";
 import { PlanTicketReader } from "../persistence/plan-tickets.ts";
 import { loadCatalog } from "../registry/catalog.ts";
+import type { ProjectCatalog } from "../registry/catalog-schema.ts";
+import type { Placement } from "../registry/placement-schema.ts";
 import { resolvePlanSources, type ResolvedPlanSource } from "../registry/plan-source.ts";
 import { classifyPlans } from "../registry/plan-kind.ts";
 import { readLandingSummary } from "../persistence/landing-summary.ts";
@@ -366,12 +368,12 @@ export interface ApiRouterOptions {
   readonly dbPath: string;
   readonly config: AwsfConfig;
   /** Resolved catalog plans; the list response never receives paths or bodies. */
-  readonly planSources?: readonly ResolvedPlanSource[];
+  readonly planSources?: readonly ResolvedPlanSource[] | undefined;
   /** Checkout whose catalog is re-resolved on each read when `planSources` is absent. */
-  readonly repository?: string;
+  readonly repository?: string | undefined;
   /** Defaults to the directory containing the projection database. */
-  readonly stateRoot?: string;
-  readonly open?: typeof openDatabase;
+  readonly stateRoot?: string | undefined;
+  readonly open?: typeof openDatabase | undefined;
 }
 
 export interface ApiRouter {
@@ -395,12 +397,27 @@ function readCatalogText(catalogPath: string): string | null {
   }
 }
 
+function repositoryPlacement(catalog: ProjectCatalog, repository: string): Placement {
+  const planRepo = Object.entries(catalog.repositories).find(([, r]) => r.role === "plan");
+  const repositoryId = planRepo ? planRepo[0] : "plans";
+  return {
+    version: "awsf.placement/v1",
+    project: catalog.project.slug,
+    repositories: {
+      [repositoryId]: { path: resolve(repository) },
+    },
+  };
+}
+
 /** Resolves dashboard ticket stores through the repository's declared catalog. */
 export function resolveTicketPlanSources(repository = process.cwd()): readonly ResolvedPlanSource[] {
   const catalogPath = resolve(repository, CATALOG_FILE);
   const text = readCatalogText(catalogPath);
   if (text === null) return Object.freeze([]);
-  return resolvePlanSources(catalogPath, loadCatalog(text));
+  const catalog = loadCatalog(text);
+  const plansRoot = resolve(repository, catalog.plans.root);
+  readdirSync(plansRoot);
+  return resolvePlanSources(catalogPath, catalog, repositoryPlacement(catalog, repository));
 }
 
 /**
@@ -416,7 +433,9 @@ function resolveBoardPlanSources(repository: string): readonly ResolvedPlanSourc
       + "so light-tier tickets under specs/tickets are listed by `awsf backlog`, not here");
   }
   const catalog = loadCatalog(text);
-  const sources = resolvePlanSources(catalogPath, catalog);
+  const plansRoot = resolve(repository, catalog.plans.root);
+  readdirSync(plansRoot);
+  const sources = resolvePlanSources(catalogPath, catalog, repositoryPlacement(catalog, repository));
   // A declared default plan whose ticket directory is missing used to read as
   // an empty group, so the board was empty with HTTP 200 (B2-02's second case).
   // The CLI refuses the same layout since W04 task 20 landed (B7-06, owner call
@@ -435,7 +454,17 @@ const PLAN_UNRESOLVED = "PlanUnresolved" satisfies PlanResolutionError["code"];
 /** The resolver's own message, with the checkout path shown as `.`: plan reads never send paths. */
 function planResolutionError(error: unknown, repository: string): PlanResolutionError {
   const message = error instanceof Error ? error.message : String(error);
-  return Object.freeze({ code: PLAN_UNRESOLVED, message: message.split(repository).join(".") });
+  const escapedRepo = JSON.stringify(repository).slice(1, -1);
+  const normalizedRepo = repository.replace(/\\/g, "/");
+  let sanitized = message
+    .split(escapedRepo).join(".")
+    .split(repository).join(".")
+    .split(normalizedRepo).join(".");
+  sanitized = sanitized.replace(/(['"]?)\.(\\[^'"\s]+)(['"]?)/g, (_match, q1, pathPart, q2) => {
+    return `${q1}.${pathPart.replace(/\\/g, "/")}${q2}`;
+  });
+  sanitized = sanitized.replace(/\/{2,}/g, "/");
+  return Object.freeze({ code: PLAN_UNRESOLVED, message: sanitized });
 }
 
 interface PlanCatalog {
@@ -495,37 +524,38 @@ function routeParams(routePath: string, segments: readonly string[]): Record<str
 export function createApiRouter(options: ApiRouterOptions): ApiRouter {
   const opener = options.open ?? openDatabase;
   const readDb = opener(options.dbPath, { readonly: true });
-  const planningStateRoot = options.stateRoot ?? dirname(options.dbPath);
-  // The catalog is re-resolved on every read rather than once at startup, so a
-  // plan authored while `awsf dash` is up reaches the backlog without a
-  // restart. The reader is rebuilt only when the resolved plan set changes,
-  // keeping its per-file cache across ordinary polls.
-  //
-  // A catalog that fails to resolve is never a silent skip (inv 12, owner
-  // decision O4; B2-02, B2-03, B2-04, B2-17). It used to be one twice over: an
-  // ENOENT anywhere became an empty board with HTTP 200, and any other failure
-  // kept the last good set with nothing said. Now the dashboard stays up but
-  // says what it shows: with no good set yet the plan reads refuse with
-  // `PlanUnresolved` and the resolver's message, and a last good set is served
-  // only beside `stale: true` and that message. The router starts either way.
-  let plans: PlanCatalog | null = options.planSources === undefined ? null : planCatalog(options.planSources);
-  let planError: PlanResolutionError | null = null;
-  const currentPlans = (): PlanRead => {
-    if (options.planSources !== undefined) return { catalog: plans, error: null };
-    const repository = resolve(options.repository ?? process.cwd());
-    try {
-      const sources = resolveBoardPlanSources(repository);
-      if (plans === null || planCatalogKey(sources) !== plans.key) plans = planCatalog(sources);
-      planError = null;
-    } catch (error) {
-      planError = planResolutionError(error, repository);
-    }
-    return { catalog: plans, error: planError };
-  };
-  currentPlans();
-  let archiveDb: DatabaseSync | null = null;
+  try {
+    const planningStateRoot = options.stateRoot ?? dirname(options.dbPath);
+    // The catalog is re-resolved on every read rather than once at startup, so a
+    // plan authored while `awsf dash` is up reaches the backlog without a
+    // restart. The reader is rebuilt only when the resolved plan set changes,
+    // keeping its per-file cache across ordinary polls.
+    //
+    // A catalog that fails to resolve is never a silent skip (inv 12, owner
+    // decision O4; B2-02, B2-03, B2-04, B2-17). It used to be one twice over: an
+    // ENOENT anywhere became an empty board with HTTP 200, and any other failure
+    // kept the last good set with nothing said. Now the dashboard stays up but
+    // says what it shows: with no good set yet the plan reads refuse with
+    // `PlanUnresolved` and the resolver's message, and a last good set is served
+    // only beside `stale: true` and that message. The router starts either way.
+    let plans: PlanCatalog | null = options.planSources === undefined ? null : planCatalog(options.planSources);
+    let planError: PlanResolutionError | null = null;
+    const currentPlans = (): PlanRead => {
+      if (options.planSources !== undefined) return { catalog: plans, error: null };
+      const repository = resolve(options.repository ?? process.cwd());
+      try {
+        const sources = resolveBoardPlanSources(repository);
+        if (plans === null || planCatalogKey(sources) !== plans.key) plans = planCatalog(sources);
+        planError = null;
+      } catch (error) {
+        planError = planResolutionError(error, repository);
+      }
+      return { catalog: plans, error: planError };
+    };
+    currentPlans();
+    let archiveDb: DatabaseSync | null = null;
 
-  const handlers: Readonly<Record<ApiRouteName, ApiHandler>> = {
+    const handlers: Readonly<Record<ApiRouteName, ApiHandler>> = {
     health: safely(() => {
       const status = projectionHealth(readDb);
       return jsonResponse({ ok: true, project: options.config.project.slug, ...status } satisfies HealthResponse);
@@ -776,4 +806,8 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       archiveDb?.close();
     },
   };
+  } catch (error) {
+    readDb.close();
+    throw error;
+  }
 }

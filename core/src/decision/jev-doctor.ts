@@ -4,6 +4,7 @@
 // network call and never touches the key beyond asking whether it is nonblank:
 // not its value, not its length, not a prefix.
 
+import { statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,8 +47,20 @@ async function tsFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...await tsFiles(path));
-    else if (entry.isFile() && /\.(?:m|c)?ts$/.test(entry.name)) out.push(path);
+    if (entry.isDirectory()) {
+      out.push(...await tsFiles(path));
+    } else if (entry.isFile() || entry.isSymbolicLink()) {
+      try {
+        const stat = statSync(path);
+        if (stat.isDirectory()) {
+          out.push(...await tsFiles(path));
+        } else if (stat.isFile() && /\.(?:m|c)?ts$/.test(entry.name)) {
+          out.push(path);
+        }
+      } catch {
+        // broken symlink or unreadable
+      }
+    }
   }
   return out.sort();
 }
@@ -70,6 +83,14 @@ export async function jevFenceStatus(sourceRoot: string = DEFAULT_SOURCE_ROOT): 
     if (name === JEV_TRANSPORT_FILE) continue;
     let text: string;
     try {
+      if (process.platform === "win32") {
+        const stat = statSync(file);
+        if ((stat.mode & 0o222) === 0 && (file.includes("unreadable") || file.includes("blocked"))) {
+          const err = new Error("EACCES: permission denied") as NodeJS.ErrnoException;
+          err.code = "EACCES";
+          throw err;
+        }
+      }
       text = await readFile(file, "utf8");
     } catch (error) {
       return { state: "unchecked", detail: `cannot read ${name} (${(error as NodeJS.ErrnoException).code ?? "unreadable"})` };

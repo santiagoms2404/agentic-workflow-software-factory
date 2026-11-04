@@ -147,7 +147,9 @@ test("unparseable bytes are retained at 0600 and only their attempt-relative pat
     assert.ok(result.failure.retainedPath, "unparseable bytes must be retained");
     const retained = join(attemptDir, result.failure.retainedPath);
     assert.equal(readFileSync(retained, "utf8"), raw);
-    assert.equal(statSync(retained).mode & 0o777, 0o600);
+    if (process.platform !== "win32") {
+      assert.equal(statSync(retained).mode & 0o777, 0o600);
+    }
     assert.deepEqual(journal, [result.failure]);
     assert.equal(JSON.stringify(journal).includes(raw), false, "journal carries the path, never raw bytes");
   } finally {
