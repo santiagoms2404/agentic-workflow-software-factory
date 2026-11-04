@@ -24,7 +24,7 @@ export async function withClosureJournal<T>(attemptDir: string, project: Attempt
   return new AttemptLock(lockFilePath(attemptDir)).withLock(async () => {
     const records = await closureJournalRecords(attemptDir);
     let status = deriveAttemptStatus(records);
-    if (status === null || status.lifecycleState !== "LANDED") throw new Error("closure requires a LANDED attempt");
+    if (status === null || (status.lifecycleState !== "LANDED" && status.lifecycleState !== "PUBLISHED")) throw new Error("closure requires a LANDED attempt");
     const journal = new Journal<AttemptEvent>(journalFilePath(attemptDir));
     const append = async (evidence: ClosureEvidence): Promise<void> => {
       const next = nextRevision(status!, { lastActivity: evidence.type, lastActivityAt: evidence.type === "closure-intent" ? evidence.intent.at : evidence.record.at });

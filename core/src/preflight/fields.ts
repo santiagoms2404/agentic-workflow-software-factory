@@ -208,7 +208,7 @@ function omittablePrefixes(glob: string): string[] {
   const literal = segments.findIndex((segment) => /[*?[]/u.test(segment));
   const count = literal === -1 ? segments.length : literal;
   const prefixes = Array.from({ length: Math.max(count, 1) }, (_, index) => index === 0 ? "" : `${segments.slice(0, index).join("/")}/`);
-  if (literal > 0) {
+  if (literal > 0 && !glob.endsWith("/**")) {
     const fullLiteralPrefix = `${segments.slice(0, literal).join("/")}/`;
     if (!prefixes.includes(fullLiteralPrefix)) prefixes.push(fullLiteralPrefix);
   }
@@ -217,7 +217,10 @@ function omittablePrefixes(glob: string): string[] {
 
 /** The protected spelling a candidate resolves to under a glob, or null. Naming a protected directory counts. */
 function protectedSpelling(candidate: string, glob: string): string | null {
+  const firstSegment = glob.split("/")[0];
+  const startsWithFirst = firstSegment && candidate.startsWith(`${firstSegment}/`);
   for (const prefix of omittablePrefixes(glob)) {
+    if (startsWithFirst && prefix !== "") continue;
     const path = `${prefix}${candidate}`;
     // Flat light tickets are files, not paired-ticket directories. Appending
     // a synthetic descendant would misclassify tickets/Tnn.md under */**.

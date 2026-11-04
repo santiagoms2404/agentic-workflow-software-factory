@@ -1,3 +1,4 @@
+import { posix } from "node:path";
 import { isMap, isScalar, parseDocument } from "yaml";
 import { parsePlanTicketBody } from "../persistence/plan-ticket-body.ts";
 import { planAgreement, lightTicketAgreement, type AgreementTicket, type PlanAgreementViolation, type SectionBBlock } from "../registry/plan-agreement.ts";
@@ -97,9 +98,12 @@ export function agreementTicket(source: string, path: string): AgreementTicket {
   if (fm.depends_on !== undefined && (!Array.isArray(fm.depends_on) || fm.depends_on.some((dep) => typeof dep !== "string"))) {
     throw new ClosureTreeError(path, "depends_on must be a string array");
   }
+  const tier = typeof fm.tier === "number" && Number.isInteger(fm.tier)
+    ? fm.tier
+    : (fm.tier === undefined ? undefined : (fm.tier as unknown as number));
   return {
     id: String(fm.id), number: Number(String(fm.id).slice(1)), title: String(fm.title),
-    milestone: String(fm.milestone), tier: fm.tier === undefined ? undefined : Number(fm.tier),
+    milestone: String(fm.milestone), tier,
     state: String(fm.state), depends_on: (fm.depends_on as string[]) ?? [],
     workflow: fm.workflow === undefined ? undefined : String(fm.workflow),
     task_class: fm.task_class, serves: fm.serves === undefined ? undefined : fm.serves as string[],
@@ -111,6 +115,41 @@ export function agreementTicket(source: string, path: string): AgreementTicket {
 export function treeAgreement(tree: ClosureTree, registry: ClosureRegistry): readonly PlanAgreementViolation[] {
   const knownStems = registry.plans.map((source) => source.label);
   const out: PlanAgreementViolation[] = [];
+  const ticketRoots = new Map<string, { project?: string; repositoryId?: string }>();
+  for (const source of registry.plans) {
+    const root = posix.dirname(source.ticketsPath.replace(/\\/g, "/"));
+    if (!ticketRoots.has(root)) {
+      ticketRoots.set(root, { project: source.project, repositoryId: source.repositoryId });
+    }
+  }
+  const knownTicketPaths = new Set(registry.plans.map((source) => source.ticketsPath.replace(/\\/g, "/")));
+  for (const [ticketsRoot, owner] of ticketRoots) {
+    const prefix = `${ticketsRoot}/`;
+    const dirs = new Set<string>();
+    for (const rawPath of tree.keys()) {
+      const path = rawPath.replace(/\\/g, "/");
+      if (path.startsWith(prefix)) {
+        const rest = path.slice(prefix.length);
+        const slash = rest.indexOf("/");
+        if (slash !== -1) {
+          dirs.add(rest.slice(0, slash));
+        }
+      }
+    }
+    for (const dir of [...dirs].sort()) {
+      const ticketsPath = `${ticketsRoot}/${dir}`;
+      if (!knownTicketPaths.has(ticketsPath)) {
+        const label = owner.project
+          ? (owner.repositoryId ? `${owner.project}/${owner.repositoryId}/${dir}` : `${owner.project}/${dir}`)
+          : dir;
+        out.push({
+          plan: dir,
+          rule: "TICKET_COVERAGE",
+          message: `plan source ${label} has a ticket set but no resolved plan. A ticket set without a plan cannot be checked against anything.`,
+        });
+      }
+    }
+  }
   for (const source of registry.plans) {
     if (source.format !== "awsf-plan-html/v1") throw new UnsupportedPlanFormatError(source.format, source.label);
     let plan;

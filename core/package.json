@@ -6,5 +6,10 @@
   "dependencies": {
     "@sinclair/typebox": "0.34.14",
     "yaml": "2.6.1"
+  },
+  "scripts": {
+    "typecheck": "npm --prefix .. run typecheck:core",
+    "lint": "npm --prefix .. run lint",
+    "test": "node -e \"const cp=require('node:child_process'),fs=require('node:fs'),path=require('node:path'),repoRoot=path.resolve(__dirname,'..'),args=process.argv.slice(1).map(a=>{const n=a.split(path.sep).join('/').replace(/^\\.\\//,'');return n.startsWith('core/')?n:fs.existsSync(path.join(repoRoot,'core',n))?'core/'+n:n});process.exit(cp.spawnSync(process.execPath,['--experimental-strip-types','--test',...(args.length?args:['core/test/unit/**/*.test.ts'])],{cwd:repoRoot,stdio:'inherit'}).status??0)\""
   }
 }

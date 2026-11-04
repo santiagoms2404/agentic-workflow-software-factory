@@ -348,7 +348,7 @@ export function decisionTree(group: import("./model.ts").Group): GroupTree {
     return { id, taskId: current.taskId, current: revision(current), superseded: records.slice(0, -1).map(revision) };
   });
 
-  const byTask: Record<string, { proposals: string[]; asks: string[] }> = {};
+  const byTask: Record<string, { proposals: string[]; asks: string[] }> = Object.create(null);
   const entry = (task: string): { proposals: string[]; asks: string[] } => (byTask[task] ??= { proposals: [], asks: [] });
   for (const proposal of proposals) for (const task of proposal.tasks) entry(task).proposals.push(proposal.id);
   for (const ask of asks) for (const task of ask.narrative.tasks) entry(task).asks.push(ask.inputId);

@@ -21,8 +21,42 @@ export interface StageTransitionRow extends TransitionRow {
   readonly session_id: string;
 }
 
-interface ResolvedProjectValue {
+export interface ResolvedProjectValue {
   readonly slug: string;
+  readonly isRegistered?: boolean;
+  readonly repositories?: Readonly<Record<string, unknown>>;
+}
+
+const LIVE_STATES = new Set([
+  "DRAFT",
+  "PREPARED",
+  "RUNNING",
+  "GATING",
+  "REVIEWING",
+  "LANDING",
+]);
+
+function isSuccessfulSession(session: SessionRow | undefined): boolean {
+  if (session === undefined) return false;
+  if (session.lifecycle_state === "BLOCKED" || session.lifecycle_state === "CANCELLED") {
+    return false;
+  }
+  if (LIVE_STATES.has(session.lifecycle_state)) {
+    return false;
+  }
+  return true;
+}
+
+function isProjectRegistered(project: ResolvedProjectValue): boolean {
+  if (project.isRegistered !== undefined) return project.isRegistered;
+  const p = project as unknown as Record<string, unknown>;
+  if (p.repositories !== undefined && typeof p.repositories === "object" && p.repositories !== null) {
+    return Object.keys(p.repositories).length > 0;
+  }
+  if (p.placement !== undefined || p.catalog !== undefined) {
+    return true;
+  }
+  return false;
 }
 
 export interface StageJournalRows {
@@ -72,7 +106,19 @@ function compareEvidence(left: StageEnvelopeRow, right: StageEnvelopeRow, phases
 /** Answers where the project is and what the owner types next. It never acts. */
 export function resolveStage(project: ResolvedProjectValue, rows: StageJournalRows): StageResolution {
   const sessions = rows.sessions.filter((session) => session.project_slug === project.slug);
+  const registered = isProjectRegistered(project);
+
   if (sessions.length === 0) {
+    if (registered) {
+      const current = STAGES[1];
+      const next = STAGES[2];
+      return {
+        current: current.id,
+        next: next.id,
+        ownerAct: stageCommand(next),
+        evidence: null,
+      };
+    }
     const first = STAGES[0];
     return {
       current: "before S1",
@@ -93,12 +139,18 @@ export function resolveStage(project: ResolvedProjectValue, rows: StageJournalRo
   const envelopes = rows.envelopes.filter((envelope) =>
     sessionIds.has(envelope.session_id)
     && phaseById.get(envelope.phase_id)?.session_id === envelope.session_id
-    && envelope.valid === 1,
+    && envelope.valid === 1
+    && isSuccessfulSession(sessionById.get(envelope.session_id)),
   );
 
-  let currentIndex = -1;
+  let currentIndex = registered ? 1 : -1;
   for (const session of sessions) {
-    currentIndex = Math.max(currentIndex, stageIndexForWorkflow(session.workflow_id));
+    if (!isSuccessfulSession(session)) continue;
+    const stageIndex = stageIndexForWorkflow(session.workflow_id);
+    const stage = STAGES[stageIndex];
+    if (stage !== undefined && stage.blocked) {
+      currentIndex = Math.max(currentIndex, stageIndex);
+    }
   }
   for (const envelope of envelopes) {
     const session = sessionById.get(envelope.session_id);

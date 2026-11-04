@@ -111,26 +111,32 @@ export async function checklist(group: Group, stateRoot: string, asOf: string): 
     const row: Row = { id: unit.id, revision: unit.revision, title: unit.title, disposition: unit.disposition,
       delivery: "unknown", conditions: [], observed: [], evidence: [] };
     try {
-      row.observed = await observedAttempts(stateRoot, group.project, unit.taskId);
-      row.evidence = row.observed.map((attempt) => `${attempt.journal}@${attempt.sha256}`);
-      const plan = await registeredPlan(unit, stateRoot, group.project);
-      if (plan) row.evidence.push(plan.reference);
-      const binding = group.bindings.filter((value) => value.unit === unit.id && value.revision === unit.revision).at(-1);
-      const latest = row.observed.at(-1);
-      if (!latest) row.delivery = binding ? "stale" : "todo";
-      else if (!binding || binding.sessionId !== latest.sessionId || binding.attempt !== latest.attempt) {
-        row.delivery = "stale";
-        row.conditions.push("execution is not bound to this unit revision");
-      } else {
-        row.delivery = delivery(latest.state);
-        if (unit.completion === "landed" && ["LANDED", "PUBLISHED"].includes(latest.state) && latest.candidateSha) row.delivery = "done";
-      }
       if (unit.completion === "owner-accepted") {
         const acceptance = group.acceptances.filter((value) => value.unit === unit.id && value.revision === unit.revision && value.contract === null).at(-1);
         if (acceptance) {
           for (const ref of acceptance.evidence) await verifyReference(ref);
           row.evidence.push(`owner-decision:${acceptance.decision}`, ...acceptance.evidence.map((ref) => `${ref.path}@${ref.sha256}`));
           row.delivery = "done";
+        }
+      }
+      try {
+        row.observed = await observedAttempts(stateRoot, group.project, unit.taskId);
+      } catch (error) {
+        if (row.delivery !== "done") throw error;
+      }
+      row.evidence = row.observed.map((attempt) => `${attempt.journal}@${attempt.sha256}`);
+      const plan = await registeredPlan(unit, stateRoot, group.project);
+      if (plan) row.evidence.push(plan.reference);
+      const binding = group.bindings.filter((value) => value.unit === unit.id && value.revision === unit.revision).at(-1);
+      const latest = row.observed.at(-1);
+      if (row.delivery !== "done") {
+        if (!latest) row.delivery = binding ? "stale" : "todo";
+        else if (!binding || binding.sessionId !== latest.sessionId || binding.attempt !== latest.attempt) {
+          row.delivery = "stale";
+          row.conditions.push("execution is not bound to this unit revision");
+        } else {
+          row.delivery = delivery(latest.state);
+          if (unit.completion === "landed" && ["LANDED", "PUBLISHED"].includes(latest.state) && latest.candidateSha) row.delivery = "done";
         }
       }
       if (row.delivery === "done" && plan && !plan.done) {
@@ -158,7 +164,7 @@ export async function checklist(group: Group, stateRoot: string, asOf: string): 
       let satisfied = target.revision === prerequisite.revision && target.disposition === "active";
       if (prerequisite.kind === "implementation") satisfied &&= rows.find((value) => value.id === target.id)?.delivery === "done";
       else {
-        const accepted = group.acceptances.find((value) => value.unit === target.id && value.revision === prerequisite.revision && value.contract === prerequisite.contract);
+        const accepted = group.acceptances.filter((value) => value.unit === target.id && value.revision === prerequisite.revision && value.contract === prerequisite.contract).at(-1);
         satisfied &&= accepted !== undefined;
         if (accepted) {
           try { for (const ref of accepted.evidence) await verifyReference(ref); } catch { satisfied = false; }

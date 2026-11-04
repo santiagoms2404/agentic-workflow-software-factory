@@ -75,7 +75,7 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
     refuse("E_CLOSURE_OPTIONS", "closure requires an attempt, or --commit with repository, project directory, project and --plan");
   }
   const status = ownerCommit ? null : await readAttempt(options.attemptDir!);
-  if (status !== null && status.lifecycleState !== "LANDED") refuse("E_CLOSURE_NOT_LANDED", "closure requires a LANDED attempt");
+  if (status !== null && status.lifecycleState !== "LANDED" && status.lifecycleState !== "PUBLISHED") refuse("E_CLOSURE_NOT_LANDED", "closure requires a LANDED attempt");
   const sealed = status?.shift ?? status?.ticketSelection;
   if (status !== null && (sealed == null || sealed.tickets.length === 0 || status.planRef !== sealed.plan || status.baseSha === null || status.candidateSha === null)) {
     refuse("E_CLOSURE_SELECTION", "closure requires a sealed ticket selection and recorded base and candidate");
