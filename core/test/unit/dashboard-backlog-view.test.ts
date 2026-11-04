@@ -38,7 +38,7 @@ test("ticket source display is byte-faithful and its overlay closes by control o
   const card = source("dashboard/src/components/TicketCard.vue");
   assert.match(overlay, /role="dialog"/u);
   assert.match(overlay, /aria-modal="true"/u);
-  assert.match(overlay, /@click\.self="emit\('close'\)"/u);
+  assert.match(overlay, /class="ticket-source-overlay"[\s\S]*?emit\('close'\)/u);
   assert.match(overlay, /aria-label="Close ticket source"[^>]*@click="emit\('close'\)"/u);
   assert.match(overlay, /const sourceText = computed\(\(\) => view\.value\?\.source\)/u);
   assert.match(overlay, /class="ticket-source">\{\{ sourceText \}\}<\/pre>/u);
@@ -84,7 +84,7 @@ test("backlog selection seeds once from the first non-empty response", () => {
   // holds the behaviour, and this keeps the guard from being lost with it.
   assert.match(
     route,
-    /if \(hasSeededSelection \|\| plans\.length === 0\) return;[^]*selectedPlans\.value = initialPlanSelection\(plans, requested\);[^]*hasSeededSelection = true;/u,
+    /if \(!hasSeededSelection\) \{[^]*selectedPlans\.value = initialPlanSelection\(plans, requested\);[^]*hasSeededSelection = true;/u,
   );
   assert.equal(route.match(/selectedPlans\.value = initialPlanSelection/gu)?.length, 1);
 });

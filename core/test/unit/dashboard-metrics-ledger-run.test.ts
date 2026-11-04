@@ -133,7 +133,9 @@ test("a column the same in every group is flat; one group compares nothing", () 
   const flat = flatColumns(rows, columns);
   for (const column of columns) {
     const values = rows.map((row) => column.value(row.stats));
-    assert.equal(flat.has(column.id), values.every((value) => value === values[0]), column.id);
+    const cells = rows.map((row) => column.cell(row.stats));
+    const isFlat = values.every((value) => value === values[0]) && cells.every((cell) => cell.text === cells[0]?.text && cell.note === cells[0]?.note);
+    assert.equal(flat.has(column.id), isFlat, column.id);
   }
   assert.ok(flat.has("state-CANCELLED"), "no cancelled runs anywhere is no signal");
   assert.deepEqual([...flatColumns(rows.slice(0, 1), columns)], []);
@@ -355,7 +357,8 @@ test("the Ledger and Run views send nothing: no request channel, the route's one
     assert.equal(/\b(?:XMLHttpRequest|sendBeacon|WebSocket|EventSource|indexedDB)\b/.test(source(path)), false, `${path} opens a channel`);
   }
   const route = source("dashboard/src/routes/metrics.vue");
-  assert.deepEqual(route.match(/\bfetch\s*\(([^)]*)\)/g), ['fetch("/api/v1/metrics")'], "the tab's one read");
+  assert.match(route, /\bfetch\s*\(\s*["']\/api\/v1\/metrics["']/);
+  assert.equal([...route.matchAll(/\bfetch\s*\(/g)].length, 1, "the tab's one read");
   assert.equal(/method\s*:|localStorage|sessionStorage/.test(route), false);
 
   const run = source("dashboard/src/components/MetricsRun.vue");

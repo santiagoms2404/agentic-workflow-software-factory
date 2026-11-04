@@ -10,6 +10,7 @@ const props = defineProps<{
   error: string | undefined;
 }>();
 const emit = defineEmits<{ close: [] }>();
+const dialog = ref<HTMLElement | null>(null);
 const closeControl = ref<HTMLButtonElement | null>(null);
 const copyStatus = ref("");
 const view = computed(() => props.source === undefined ? null : ticketSourceView(props.source));
@@ -17,9 +18,47 @@ const prompt = computed(() => view.value?.buildPrompt ?? null);
 const sourceText = computed(() => view.value?.source);
 let opener: HTMLElement | null = null;
 let priorBodyOverflow = "";
+let mousedownOnOverlay = false;
+
+function onBackdropMousedown(event: MouseEvent): void {
+  mousedownOnOverlay = event.target === event.currentTarget;
+}
+
+function onBackdropMouseup(event: MouseEvent): void {
+  if (mousedownOnOverlay && event.target === event.currentTarget) {
+    emit("close");
+  }
+  mousedownOnOverlay = false;
+}
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === "Escape") emit("close");
+  if (event.key === "Escape") {
+    emit("close");
+    return;
+  }
+  if (event.key === "Tab") {
+    if (!dialog.value) return;
+    const focusable = dialog.value.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey) {
+      if (document.activeElement === first || !dialog.value.contains(document.activeElement)) {
+        event.preventDefault();
+        last?.focus();
+      }
+    } else {
+      if (document.activeElement === last || !dialog.value.contains(document.activeElement)) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+  }
 }
 
 async function copyBuildPrompt(): Promise<void> {
@@ -49,8 +88,13 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div class="ticket-source-overlay" @click.self="emit('close')">
+    <div
+      class="ticket-source-overlay"
+      @mousedown="onBackdropMousedown"
+      @mouseup="onBackdropMouseup"
+    >
       <section
+        ref="dialog"
         class="ticket-source-dialog"
         role="dialog"
         aria-modal="true"

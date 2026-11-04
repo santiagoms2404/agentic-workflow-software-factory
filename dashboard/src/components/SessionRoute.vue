@@ -17,13 +17,15 @@ async function loadPhase(): Promise<void> {
   const phaseId = props.selectedPhaseId;
   const sequence = ++requestSequence;
   if (phaseId === null) {
-    detail.value = null;
+    loadingPhase.value = false;
     phaseError.value = null;
+    detail.value = null;
     lastScrolledPhaseId = null;
     return;
   }
   loadingPhase.value = true;
   phaseError.value = null;
+  detail.value = null;
   try {
     const response = await fetch(`/api/v1/sessions/${encodeURIComponent(props.session.sessionId)}/phases/${encodeURIComponent(phaseId)}`);
     if (!response.ok) throw new Error("Phase evidence unavailable");

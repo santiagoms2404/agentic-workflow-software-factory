@@ -213,7 +213,7 @@ test("a drop stays where it was dropped, and only a reset undoes it", () => {
   // Exposed so the route's own control can call it; what else rides alongside
   // it belongs to whatever test put it there.
   assert.match(map, /defineExpose\(\{[^}]*\breset\b[^}]*\}\)/u);
-  assert.match(route, /@click="map\?\.reset\(\)">reset the map</u);
+  assert.match(route, /@click="(?:map\?\.)?reset\(\)">reset the map</u);
 });
 
 test("selecting is one press and opening is two, and neither eats the other", () => {

@@ -31,7 +31,13 @@ export function usePolling(poll: () => Promise<void>, mode: () => PollMode) {
       schedule();
     }
   };
-  const onFocus = () => { void voidPoll(); };
+  const onFocus = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+    void voidPoll();
+  };
 
   onMounted(() => {
     window.addEventListener("focus", onFocus);

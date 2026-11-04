@@ -182,7 +182,11 @@ function onPointerMove(event: PointerEvent): void {
 
 function open(node: CanvasNode): void {
   const href = openHref(node, props.route);
-  if (href !== null) location.hash = href;
+  if (href !== null) {
+    location.hash = href;
+  } else {
+    emit("update:selected", props.selected === node.id ? null : node.id);
+  }
 }
 
 function onPointerUp(event: PointerEvent): void {
@@ -251,6 +255,14 @@ function onKeydown(event: KeyboardEvent): void {
   event.preventDefault();
 }
 
+function onDotKeydown(event: KeyboardEvent, node: CanvasNode): void {
+  if (event.key === " " || event.key === "Spacebar") {
+    event.stopPropagation();
+    event.preventDefault();
+    emit("update:selected", props.selected === node.id ? null : node.id);
+  }
+}
+
 function measure(): void {
   const rect = surface.value?.getBoundingClientRect();
   if (rect !== undefined && rect.width > 0) viewport.value = { width: rect.width, height: rect.height };
@@ -317,6 +329,7 @@ defineExpose({ fit, reset, focusNode });
       @blur="hovered = null"
       @mouseenter="hovered = node.id"
       @mouseleave="hovered = null"
+      @keydown="onDotKeydown($event, node)"
       @keydown.enter.stop.prevent="open(node)"
       @dblclick.stop.prevent="open(node)"
     />

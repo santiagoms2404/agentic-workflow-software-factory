@@ -84,6 +84,15 @@ function keepPins(next: ReadonlyMap<string, Point>): void {
   writePins(store, next);
 }
 
+function reset(): void {
+  if (map.value !== null) {
+    map.value.reset();
+  } else {
+    pinned.value = new Map();
+    writePins(store, pinned.value);
+  }
+}
+
 function go(next: Partial<CanvasRoute>): void {
   location.hash = canvasRouteHash({ ...props.route, ...next });
 }
@@ -123,7 +132,12 @@ const chain = computed<readonly SessionCard[]>(() =>
   (opened.value?.sessionIds ?? []).map((id) => byId.value.get(id)).filter((run): run is SessionCard => run !== undefined));
 
 const at = ref(0);
-watch(() => props.route.opened, () => { at.value = 0; reason.value = null; });
+let reasonSeq = 0;
+watch(() => props.route.opened, () => {
+  at.value = 0;
+  reason.value = null;
+  reasonSeq++;
+});
 watch(chain, (next) => { at.value = clampIndex(at.value, next.length); });
 
 const middle = computed(() => chain.value[clampIndex(at.value, chain.value.length)]);
@@ -140,18 +154,45 @@ const relation = computed(() => relationBetween(previous.value, middle.value));
  * for the middle run only, and only when the pair is actually a continuation.
  */
 const reason = ref<string | null>(null);
-watch([middle, relation], async ([run, link]) => {
-  reason.value = null;
-  if (run === undefined || link === null || link.kind !== "continuation") return;
-  try {
-    const response = await fetch(`/api/v1/sessions/${encodeURIComponent(run.sessionId)}/events`);
-    if (!response.ok) return;
-    const payload = await response.json() as EventsResponse;
-    reason.value = relationReason(payload.events);
-  } catch {
-    // A reason that cannot be fetched is shown as unavailable, never invented.
-  }
-});
+watch(
+  [
+    () => middle.value?.sessionId,
+    () => (relation.value as { id?: string } | null)?.id ?? (relation.value?.kind === "continuation" ? relation.value.task : relation.value?.kind ?? null),
+  ],
+  async ([sessionId], [oldSessionId]) => {
+    const seq = ++reasonSeq;
+    if (sessionId !== oldSessionId) reason.value = null;
+    const run = middle.value;
+    const link = relation.value;
+    if (run === undefined || link === null || link.kind !== "continuation" || !sessionId) {
+      reason.value = null;
+      return;
+    }
+    try {
+      let after = 0;
+      let foundReason: string | null = null;
+      let hasMore = true;
+      while (hasMore && foundReason === null) {
+        const url = after > 0
+          ? `/api/v1/sessions/${encodeURIComponent(sessionId)}/events?after=${after}&limit=500`
+          : `/api/v1/sessions/${encodeURIComponent(sessionId)}/events?limit=500`;
+        const response = await fetch(url);
+        if (seq !== reasonSeq) return;
+        if (!response.ok) return;
+        const payload = await response.json() as EventsResponse;
+        if (seq !== reasonSeq) return;
+        foundReason = relationReason(payload.events);
+        hasMore = payload.hasMore;
+        after = payload.cursor;
+        if (!payload.events.length) break;
+      }
+      if (seq !== reasonSeq) return;
+      reason.value = foundReason;
+    } catch {
+      // A reason that cannot be fetched is shown as unavailable, never invented.
+    }
+  },
+);
 
 /* --- The opened driving session: its journal, three ways ------------------ */
 
@@ -166,8 +207,10 @@ const tree = ref<GroupTree | null>(null);
 const treeError = ref<string | null>(null);
 const slides = computed(() => decisionSlides(tree.value));
 const slideAt = ref(0);
+let treeSeq = 0;
 
 watch(() => opened.value?.kind === "session" ? opened.value.ref : null, async (group) => {
+  const seq = ++treeSeq;
   tree.value = null;
   treeError.value = null;
   view.value = "slides";
@@ -175,6 +218,7 @@ watch(() => opened.value?.kind === "session" ? opened.value.ref : null, async (g
   if (group === null || group === undefined) return;
   try {
     const response = await fetch(`/api/v1/groups?group=${encodeURIComponent(group)}`);
+    if (seq !== treeSeq) return;
     if (!response.ok) {
       treeError.value = response.status === 404
         ? "No planning journal exists for this driving session."
@@ -182,12 +226,14 @@ watch(() => opened.value?.kind === "session" ? opened.value.ref : null, async (g
       return;
     }
     const payload = await response.json() as GroupTree;
+    if (seq !== treeSeq) return;
     if (payload.group !== group) {
       treeError.value = "The journal returned did not match this driving session.";
       return;
     }
     tree.value = payload;
   } catch {
+    if (seq !== treeSeq) return;
     treeError.value = "The journal could not be read.";
   }
 }, { immediate: true });
@@ -203,17 +249,21 @@ const openedPlan = computed(() =>
     : null);
 const tickets = ref<readonly BacklogTicket[]>([]);
 const ticketsError = ref<string | null>(null);
+let ticketsSeq = 0;
 
-watch(openedPlan, async (plan) => {
+watch(() => openedPlan.value?.id, async (planId) => {
+  const seq = ++ticketsSeq;
   ticketsError.value = null;
-  if (plan === null) return;
+  if (planId === null || planId === undefined) return;
   // Fetched when a plan is opened rather than with the board, because the
   // ticket set is large and nothing else on this screen needs it.
   try {
     const response = await fetch("/api/v1/tickets");
+    if (seq !== ticketsSeq) return;
     if (!response.ok) { ticketsError.value = "The ticket set could not be read."; return; }
     tickets.value = (await response.json() as TicketsResponse).tickets;
   } catch {
+    if (seq !== ticketsSeq) return;
     ticketsError.value = "The ticket set could not be read.";
   }
 }, { immediate: true });
@@ -263,7 +313,7 @@ watch(shown, (next) => {
           <!-- The only way back to how it first drew, which is what makes
                keeping an arrangement safe: drop a dot anywhere and it stays
                there until this is pressed. -->
-          <button type="button" class="session-filter-control" @click="map?.reset()">reset the map</button>
+          <button type="button" class="session-filter-control" @click="reset()">reset the map</button>
         </div>
         <!-- A filter REMOVES a kind and takes its lines with it. Selecting a dot
              does not: it dims the others and removes nothing. Two controls that
