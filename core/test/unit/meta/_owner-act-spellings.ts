@@ -53,7 +53,9 @@ export function shellFenceLines(source: string): string[] {
  * Like doc-reconciliation, this reads written invocations, not shell intent.
  */
 export function invocationPrefixes(line: string): string[] {
-  const invocation = /(?:^|[\s;|&])((?:npm\s+[^\n;|&]*?\bawsf(?:\s+--[^\s]+)*|node\s+[^\n;|&]*?\bcore\/src\/cli\/main\.ts|(?:just|yarn|pnpm|bun|npx)\s+[^\n;|&]*?\bawsf|awsf)(?:\s+--(?=\s|$))?)\s+(?=[a-z][\w-]*\b)/gu;
+  // A launcher may follow a quote or an opening parenthesis (`bash -c 'npx awsf …'`, `$(npx awsf …)`), and a bin
+  // may be path-prefixed (`./node_modules/.bin/awsf`). Each of those is its own prefix, never a bare-awsf suffix.
+  const invocation = /(?:^|[\s;|&'"`(])((?:npm\s+[^\n;|&]*?\bawsf(?:\s+--[^\s]+)*|node\s+[^\n;|&]*?\bcore\/src\/cli\/main\.ts|(?:just|yarn|pnpm|bun|npx)\s+[^\n;|&]*?\bawsf|(?:[^\s;|&'"`()]*\/)?awsf)(?:\s+--(?=\s|$))?)\s+(?=[a-z][\w-]*\b)/gu;
   return [...line.matchAll(invocation)].map((match) => (match[1] ?? "").replace(/\s+/gu, " "));
 }
 

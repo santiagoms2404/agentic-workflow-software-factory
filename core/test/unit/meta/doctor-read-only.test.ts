@@ -23,6 +23,20 @@ function violations(text: string): string[] {
   const nameOf = (node: ts.Expression): string => ts.isIdentifier(node) ? node.text
     : ts.isPropertyAccessExpression(node) ? node.name.text
       : ts.isElementAccessExpression(node) && node.argumentExpression && (ts.isStringLiteral(node.argumentExpression) || ts.isNoSubstitutionTemplateLiteral(node.argumentExpression)) ? node.argumentExpression.text : "";
+  // Imports are hoisted in an ES module, so an alias may be written before the import that binds it.
+  // Collect every openDatabase binding before the source-order walk checks any call.
+  const collectOpeners = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && !node.importClause?.isTypeOnly) {
+      const bindings = node.importClause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const item of bindings.elements) {
+          if (!item.isTypeOnly && (item.propertyName ?? item.name).text === "openDatabase") databaseOpeners.add(item.name.text);
+        }
+      }
+    }
+    ts.forEachChild(node, collectOpeners);
+  };
+  collectOpeners(source);
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const module = node.moduleSpecifier.text;
@@ -47,7 +61,6 @@ function violations(text: string): string[] {
       for (const item of imports) {
         const name = (item.propertyName ?? item.name).text;
         if (/^(?:write|append|rename|remove|mkdir|unlink|rmdir|rm|acquire.*Lock|with.*Lock|AttemptLock|persist|projectJournal|rebuildDatabase)/u.test(name)) errors.push("writer or lock import");
-        if (name === "openDatabase") databaseOpeners.add(item.name.text);
       }
     }
     if (ts.isCallExpression(node)) {
@@ -106,4 +119,11 @@ test("doctor fence rejects planted write imports, aliases, namespaces, locks, da
     'commands.execFile("provider", []);',
   ]) assert.ok(violations(planted).length > 0, `planted defect must turn the fence red: ${planted}`);
   assert.deepEqual(violations('import { access, readFile as inspect } from "node:fs/promises"; import { openDatabase as read } from "../../observability/sqlite.ts"; read("x", { readonly: true }); process.kill(pid, 0);'), []);
+});
+
+test("an aliased writable database open is refused even when the call is written before its hoisted import", () => {
+  const expected = ["database must be opened explicitly readonly"];
+  assert.deepEqual(violations('read("x", { readonly: false }); import { openDatabase as read } from "../../observability/sqlite.ts";'), expected);
+  assert.deepEqual(violations('function inspect() { return read("x", { readonly: false }); }\nimport { openDatabase as read } from "../../observability/sqlite.ts";'), expected);
+  assert.deepEqual(violations('read("x", { readonly: true }); import { openDatabase as read } from "../../observability/sqlite.ts";'), []);
 });

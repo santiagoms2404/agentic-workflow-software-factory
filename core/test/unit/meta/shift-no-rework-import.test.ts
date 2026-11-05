@@ -27,11 +27,18 @@ const SRC = join(repoRoot(), "core", "src");
 const PATTERN = /(['"])[^'"\n]*\/rework\.ts\1/;
 const RUNNER = "core/src/cli/commands/production-run.ts";
 
+/** `prove.ts` and its siblings (`prove-readout.ts`), but not a word that merely begins with the same letters. */
+function isProveModuleName(name: string): boolean {
+  return /^prove(?:[.-]|$)/u.test(name);
+}
+
+function isFenced(file: string): boolean {
+  return file === RUNNER || file.split("/").includes("shift") || basename(file).startsWith("shift")
+    || file.split("/").includes("prove") || isProveModuleName(basename(file));
+}
+
 function fenced(): string[] {
-  return walkFiles(SRC)
-    .map(relRepo)
-    .filter((file) => file === RUNNER || file.split("/").includes("shift") || basename(file).startsWith("shift")
-      || file.split("/").includes("prove") || basename(file) === "prove.ts");
+  return walkFiles(SRC).map(relRepo).filter(isFenced);
 }
 
 test("the fence scope holds every shift module, every prove module and the runner", () => {
@@ -50,4 +57,11 @@ test("no shift module, no prove module and not the runner imports rework.ts", ()
 test("the detector sees the import when one is added", () => {
   assert.equal(PATTERN.test('import { reworkCommand } from "../../cli/commands/rework.ts";\n'), true);
   assert.equal(PATTERN.test("const { reworkCommand } = await import('./rework.ts');\n"), true);
+});
+
+test("a prove sibling is fenced the way prove.ts is, and an unrelated word that starts alike is not", () => {
+  for (const name of ["prove.ts", "prove-readout.ts", "prove-compare.mts"]) assert.equal(isProveModuleName(name), true, name);
+  for (const name of ["provenance.ts", "provider.ts", "proven-facts.ts"]) assert.equal(isProveModuleName(name), false, name);
+  assert.equal(isFenced("core/src/cli/commands/prove-readout.ts"), true);
+  assert.equal(isFenced("core/src/cli/commands/provenance.ts"), false);
 });

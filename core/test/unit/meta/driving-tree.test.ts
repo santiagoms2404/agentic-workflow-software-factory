@@ -37,7 +37,7 @@ test(`${DRIVING_REL} is scanned at all — the tree exists and both walkers reac
   assert.deepEqual(
     docs.filter((doc) => !text.has(doc)),
     [],
-    "the credential and shell:true sweeps walk fewer files than the document fences do",
+    "the credential and shell-option sweeps walk fewer files than the document fences do",
   );
 
   // The router is the tree's entry point; a driving tree without it is a pile of

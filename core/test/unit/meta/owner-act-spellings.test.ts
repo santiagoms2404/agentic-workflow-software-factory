@@ -81,6 +81,16 @@ test("separator-bearing unknown prefixes are extracted whole and remain uncovere
   assert.equal(OWNER_ACT_ROWS.filter(row => row.expected === null).length, 0);
 });
 
+test("a launcher inside quotes, inside command substitution, or path-prefixed is its own uncovered prefix", () => {
+  assert.deepEqual(invocationPrefixes("bash -c 'npx awsf land T01'"), ["npx awsf"]);
+  assert.deepEqual(invocationPrefixes("echo $(npx awsf land T01)"), ["npx awsf"]);
+  assert.deepEqual(invocationPrefixes("./node_modules/.bin/awsf land T01"), ["./node_modules/.bin/awsf"]);
+  assert.deepEqual(uncoveredPrefixes(["bash -c 'npx awsf land T01'", "echo $(npx awsf land T01)", "./node_modules/.bin/awsf land T01"]),
+    ["npx awsf", "npx awsf", "./node_modules/.bin/awsf"]);
+  // The covered spellings keep their own prefix, quoted or not.
+  assert.deepEqual(uncoveredPrefixes(["echo \"awsf land T01\"", "npm run awsf -- land T01"]), []);
+});
+
 test("the document scanner covers console and HTML fences, prefix directories, and ignores comments/prose", () => {
   const specimen = [
     "Prose: `yarn awsf land T01` is not a shell claim.",

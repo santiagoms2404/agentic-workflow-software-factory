@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync, type Dirent } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { parse } from "yaml";
 import { TICKET_TASK_CLASSES } from "../../../src/contracts/ticket.ts";
@@ -39,6 +40,27 @@ const CATALOG = join(ROOT, "awsf.project.yaml");
 
 /** `T01` for a task plan, `W01` for a spine whose units are workstreams. */
 const TICKET_FILE = /^[TW]\d\d\.md$/;
+/** The one markdown file a ticket set may carry that is not a ticket. */
+const SET_README = "README.md";
+
+/** Markdown in a ticket set that the ticket pattern does not read. Refused, never silently dropped from the check. */
+function misnamedTicketFiles(names: readonly string[]): string[] {
+  return names.filter((name) => name.endsWith(".md") && name !== SET_README && !TICKET_FILE.test(name));
+}
+
+/**
+ * A set is a directory, or a link to one. A symlinked set still names a plan that must exist, and a dangling link
+ * is a set nothing can resolve, so it counts too.
+ */
+function isTicketSet(path: string, entry: Dirent): boolean {
+  if (entry.isDirectory()) return true;
+  if (!entry.isSymbolicLink()) return false;
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return true;
+  }
+}
 
 interface PlanSet {
   /** What every failure message names, so a red test says WHICH plan drifted. */
@@ -63,8 +85,8 @@ function planSets(): PlanSet[] {
   for (const [ticketsRoot, owner] of ticketRoots) {
     if (!existsSync(ticketsRoot)) continue;
     for (const entry of readdirSync(ticketsRoot, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
       const expectedPath = join(ticketsRoot, entry.name);
+      if (!isTicketSet(expectedPath, entry)) continue;
       assert.ok(
         sources.some((source) => source.ticketsPath === expectedPath),
         `plan source ${owner.project}/${owner.repositoryId}/${entry.name} has a ticket set but no resolved plan. ` +
@@ -95,9 +117,10 @@ function planTasks(set: PlanSet): ParsedAwsfPlan {
 }
 
 function tickets(set: PlanSet): AgreementTicket[] {
-  return readdirSync(set.tickets)
+  const names = readdirSync(set.tickets).sort();
+  assert.deepEqual(misnamedTicketFiles(names), [], `${set.label}: a markdown file that is not a Tnn.md or Wnn.md ticket is unchecked against its plan`);
+  return names
     .filter((name) => TICKET_FILE.test(name))
-    .sort()
     .map((name) => {
       const raw = readFileSync(join(set.tickets, name), "utf8");
       const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(raw);
@@ -226,4 +249,26 @@ test("every ticket directory pairs with a plan and its build prompts", () => {
   const labels = planSets().map((set) => set.label);
   assert.ok(labels.includes("awsf-plan"), `the v1 set is missing; found ${labels.join(", ")}`);
   assert.equal(new Set(labels).size, labels.length, `two ticket sets share a label: ${labels.join(", ")}`);
+});
+
+test("a misnamed markdown ticket is refused, and README.md is the only non-ticket file a set may carry", () => {
+  assert.deepEqual(misnamedTicketFiles(["README.md", "T01.md", "W02.md", "T5.md", "T100.md", "notes.md"]), ["T5.md", "T100.md", "notes.md"]);
+  assert.deepEqual(misnamedTicketFiles(["README.md", "T01.md", "W02.md", ".gitkeep"]), [], "a non-markdown entry is not a ticket");
+});
+
+test("a symlinked ticket set is a set, and a file entry is not", () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-ticket-set-link-"));
+  try {
+    mkdirSync(join(root, "real-set"));
+    writeFileSync(join(root, "stray.md"), "not a set\n");
+    symlinkSync(join(root, "real-set"), join(root, "linked-set"), "dir");
+    symlinkSync(join(root, "no-such-set"), join(root, "dangling-set"), "dir");
+    const entries = new Map(readdirSync(root, { withFileTypes: true }).map((entry): [string, Dirent] => [entry.name, entry]));
+    assert.equal(isTicketSet(join(root, "real-set"), entries.get("real-set")!), true);
+    assert.equal(isTicketSet(join(root, "linked-set"), entries.get("linked-set")!), true, "a symlinked set is still a set");
+    assert.equal(isTicketSet(join(root, "dangling-set"), entries.get("dangling-set")!), true, "a dangling link is still a set");
+    assert.equal(isTicketSet(join(root, "stray.md"), entries.get("stray.md")!), false, "a plain file is not a set");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -12,7 +12,14 @@ export function repoRoot(): string {
 // widening defaults cannot repair a fence that supplies its own narrower list.
 export const CODE_EXTS = [".ts", ".tsx", ".vue", ".mts", ".cts", ".js", ".mjs", ".cjs"] as const;
 
-export function walkFiles(dir: string, exts: readonly string[] = CODE_EXTS): string[] {
+/** Directories a walk skips by default. A fence that must read build output passes its own list. */
+export const DEFAULT_PRUNE = ["node_modules", "dist", ".git"] as const;
+
+export function walkFiles(
+  dir: string,
+  exts: readonly string[] = CODE_EXTS,
+  prune: readonly string[] = DEFAULT_PRUNE,
+): string[] {
   const out: string[] = [];
   let entries: string[];
   try {
@@ -21,11 +28,11 @@ export function walkFiles(dir: string, exts: readonly string[] = CODE_EXTS): str
     return out;
   }
   for (const entry of entries) {
-    if (entry === "node_modules" || entry === "dist" || entry === ".git") continue;
+    if (prune.includes(entry)) continue;
     const full = join(dir, entry);
     const st = statSync(full);
     if (st.isDirectory()) {
-      out.push(...walkFiles(full, exts));
+      out.push(...walkFiles(full, exts, prune));
     } else if (exts.some((ext) => entry.endsWith(ext))) {
       out.push(full);
     }

@@ -98,9 +98,30 @@ test("the detector sees each offence when one is added", () => {
   assert.deepEqual(offences('const edge = "L21";'), ["names a landing state or edge"]);
 });
 
+/** Every property name in a schema, at any depth: a nested object carries the same fields as the top level. */
+function propertyNames(node: unknown): string[] {
+  if (Array.isArray(node)) return node.flatMap(propertyNames);
+  if (typeof node !== "object" || node === null) return [];
+  const record = node as Record<string, unknown>;
+  const declared = record.properties !== null && typeof record.properties === "object" ? Object.keys(record.properties) : [];
+  return [...declared, ...Object.values(record).flatMap(propertyNames)];
+}
+
+/** A key a timer could act on. Capitalised time words count; the `At` suffix is a timestamp and is case-sensitive. */
+function isTimeShaped(key: string): boolean {
+  return /deadline|expir|timeout|ttl|until|due|time/iu.test(key) || key.endsWith("At");
+}
+
 test("nothing a shift or a replay records carries a time a timer could act on", () => {
-  const keys = [ShiftManifestSchema, ShiftManifestTicketSchema, ReplayRecordSchema].flatMap((schema) => Object.keys(schema.properties));
-  assert.deepEqual(keys.filter((key) => /deadline|expir|timeout|ttl|until|due|time|At$/u.test(key)), []);
+  const keys = [ShiftManifestSchema, ShiftManifestTicketSchema, ReplayRecordSchema].flatMap(propertyNames);
+  assert.deepEqual(keys.filter(isTimeShaped), []);
+});
+
+test("the time-key check sees capitalised time words and nested properties", () => {
+  for (const key of ["maxDeadline", "retryUntil", "wallClockTimeoutMs", "deadlineAt", "Expiry"]) assert.equal(isTimeShaped(key), true, key);
+  assert.equal(isTimeShaped("format"), false, "a word that merely ends in the letters at is not a timestamp");
+  assert.deepEqual(propertyNames({ properties: { budget: { properties: { maxDeadline: {} } } } }).filter(isTimeShaped), ["maxDeadline"]);
+  assert.deepEqual(propertyNames({ type: "array", items: { properties: { retryUntil: {} } } }).filter(isTimeShaped), ["retryUntil"]);
 });
 
 test("L20 is the only way into LANDING, and it is human and interactive with no tier exemption", () => {

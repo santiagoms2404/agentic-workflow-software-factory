@@ -82,19 +82,48 @@ function resolveSourceImport(
   return candidates.find((candidate) => sourceFiles.has(candidate)) ?? null;
 }
 
-function buildRelativeImportGraph(): ReadonlyMap<string, readonly string[]> {
+/**
+ * A dynamic `import(...)` read from the syntax tree. A string or an unsubstituted template names its module
+ * and joins the graph. Any other argument (an interpolated template, a variable) cannot be followed, so it is
+ * reported as unresolved, not skipped.
+ */
+function dynamicImports(path: string, source: string): { readonly specifiers: string[]; readonly unresolved: string[] } {
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const specifiers: string[] = [];
+  const unresolved: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      const argument = node.arguments[0];
+      if (argument !== undefined && (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument))) {
+        specifiers.push(argument.text);
+      } else {
+        unresolved.push(`${path}:${String(file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1)}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return { specifiers, unresolved };
+}
+
+function buildRelativeImportGraph(): { readonly graph: ReadonlyMap<string, readonly string[]>; readonly unresolved: readonly string[] } {
   const files = walkFiles(SOURCE_ROOT);
   const sourceFiles = new Set(files);
   const graph = new Map<string, readonly string[]>();
+  const unresolved: string[] = [];
 
   for (const file of files) {
-    const neighbors = relativeImportSpecifiers(readFileSync(file, "utf8"))
+    const text = readFileSync(file, "utf8");
+    const dynamic = dynamicImports(relRepo(file), text);
+    unresolved.push(...dynamic.unresolved);
+    const specifiers = [...relativeImportSpecifiers(text), ...dynamic.specifiers.filter((specifier) => /^\.\.?\//u.test(specifier))];
+    const neighbors = specifiers
       .map((specifier) => resolveSourceImport(file, specifier, sourceFiles))
       .filter((target): target is string => target !== null)
       .map(relRepo);
     graph.set(relRepo(file), Object.freeze([...new Set(neighbors)].sort()));
   }
-  return graph;
+  return { graph, unresolved };
 }
 
 /** The map keys are the complete reachable closure; each value is its shortest path from start. */
@@ -265,8 +294,24 @@ function productionInlineResolver(source: ts.SourceFile): ts.Block {
   return matches[0]!;
 }
 
+test("every dynamic import in core source names its module with a literal the graph can follow", () => {
+  const { unresolved } = buildRelativeImportGraph();
+  assert.deepEqual(unresolved, [], "an unresolvable dynamic import can bridge workflow to quota; name the module with a literal");
+});
+
+test("the transitive graph follows quoted, template and interpolated dynamic imports", () => {
+  const planted = dynamicImports("core/src/workflow/planted.ts", [
+    "const a = await import(\"../quota/readout.ts\");",
+    "const b = await import(`../quota/readout.ts`);",
+    "const c = await import(`../quota/${name}.ts`);",
+    "const d = await import(modulePath);",
+  ].join("\n"));
+  assert.deepEqual(planted.specifiers, ["../quota/readout.ts", "../quota/readout.ts"]);
+  assert.deepEqual(planted.unresolved, ["core/src/workflow/planted.ts:3", "core/src/workflow/planted.ts:4"]);
+});
+
 test("workflow cannot transitively reach quota modules", () => {
-  const graph = buildRelativeImportGraph();
+  const { graph } = buildRelativeImportGraph();
   const starts = [...graph.keys()].filter((file) => file.startsWith(WORKFLOW_PREFIX)).sort();
   const violations: string[] = [];
 
@@ -313,25 +358,35 @@ test("quota route readout has exactly the closed descriptive field list", () => 
   );
 });
 
+const FORBIDDEN_QUOTA_NAME = /(?:quota.*(?:delta|cost|spent|pertask)|(?:delta|cost|spent|pertask).*quota)/iu;
+
+/**
+ * Names a forbidden quota attribution could hide behind: identifiers, private names (`#quotaSpent`), and string
+ * keys written as identifiers (`{ "quotaSpent": 1 }`, `readout["quota_cost"]`). Prose in a string is not a name.
+ */
+function forbiddenQuotaNames(source: ts.SourceFile): string[] {
+  const found: string[] = [];
+  const visit = (node: ts.Node): void => {
+    const text = ts.isIdentifier(node) || ts.isPrivateIdentifier(node) ? node.text
+      : (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && /^[\w$#.-]+$/u.test(node.text) ? node.text
+        : undefined;
+    if (text !== undefined && FORBIDDEN_QUOTA_NAME.test(text.replaceAll("_", "").replaceAll("-", ""))) {
+      const position = source.getLineAndCharacterOfPosition(node.getStart(source));
+      found.push(`${relRepo(source.fileName)}:${String(position.line + 1)}:${String(position.character + 1)} ${text}`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
 test("core source declares no quota delta, cost, spent, or per-task identifier", () => {
   const { program } = sourceProgram();
   const violations: string[] = [];
-  const forbidden = /(?:quota.*(?:delta|cost|spent|pertask)|(?:delta|cost|spent|pertask).*quota)/iu;
 
   for (const source of program.getSourceFiles()) {
-    const relativePath = relRepo(source.fileName);
-    if (!relativePath.startsWith("core/src/")) continue;
-    const visit = (node: ts.Node): void => {
-      if (ts.isIdentifier(node)) {
-        const normalized = node.text.replaceAll("_", "").replaceAll("-", "");
-        if (forbidden.test(normalized)) {
-          const position = source.getLineAndCharacterOfPosition(node.getStart(source));
-          violations.push(`${relativePath}:${String(position.line + 1)}:${String(position.character + 1)} ${node.text}`);
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
+    if (!relRepo(source.fileName).startsWith("core/src/")) continue;
+    violations.push(...forbiddenQuotaNames(source));
   }
 
   assert.equal(
@@ -339,4 +394,18 @@ test("core source declares no quota delta, cost, spent, or per-task identifier",
     0,
     ["quota-derived task attribution identifiers are forbidden:", ...violations.map((detail) => `  ${detail}`)].join("\n"),
   );
+});
+
+test("the quota-name scan reads private, quoted-key and element-key spellings, not only plain identifiers", () => {
+  for (const text of [
+    "const quota_spent = 3;",
+    "class Ledger { #quotaSpent = 0; }",
+    "const readout = { 'quotaSpent': 1 };",
+    "readout['quota_cost'] = 2;",
+  ]) {
+    const source = ts.createSourceFile("planted.ts", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    assert.ok(forbiddenQuotaNames(source).length > 0, text);
+  }
+  const prose = ts.createSourceFile("planted.ts", 'throw new Error("quota pause, then the cost is reported");', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  assert.deepEqual(forbiddenQuotaNames(prose), [], "a message that mentions quota and cost is prose, not a name");
 });

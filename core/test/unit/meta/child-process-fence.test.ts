@@ -21,9 +21,11 @@ const PATTERN = /(['"])(node:)?child_process\1|\b(?:import|require|getBuiltinMod
 const ROOTS = ["core/src", "dashboard/src", "docs/driving"];
 const CODE_EXTS = [".ts", ".tsx", ".vue", ".mts", ".cts", ".js", ".mjs", ".cjs"];
 const TEST_FILE = /\.(test|spec)\.[^/]+$/;
+// Only dependencies are skipped. A `dist` folder under a root is shipped code as far as this fence is concerned.
+const READ_PRUNE = ["node_modules", ".git"];
 
 export function offenders(base: string): string[] {
-  return ROOTS.flatMap((root) => walkFiles(join(base, root), CODE_EXTS))
+  return ROOTS.flatMap((root) => walkFiles(join(base, root), CODE_EXTS, READ_PRUNE))
     .map((f) => relative(base, f).split("\\").join("/"))
     .filter((f) => f !== ALLOWED)
     .filter((f) => !TEST_FILE.test(f))
@@ -54,7 +56,9 @@ test("the fence flags a spawn under every walked root", () => {
     write(base, "dashboard/src/components/Sneaky.vue", `<script setup lang="ts">\n${SPAWN_IMPORT}</script>\n`);
     write(base, "docs/driving/marimba/sneaky.mts", SPAWN_REQUIRE);
     write(base, "docs/driving/marimba/sneaky.pi.ts", SPAWN_IMPORT);
+    write(base, "core/src/dist/packed.mjs", SPAWN_REQUIRE);
     assert.deepEqual(offenders(base), [
+      "core/src/dist/packed.mjs",
       "core/src/sneaky.ts",
       "dashboard/src/components/Sneaky.vue",
       "dashboard/src/composables/sneaky.ts",
