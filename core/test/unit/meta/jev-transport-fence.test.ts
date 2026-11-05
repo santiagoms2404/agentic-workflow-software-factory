@@ -9,25 +9,43 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
-import { JEV_ENDPOINT_REFERENCE as ENDPOINT, JEV_FETCH_REFERENCE as FETCH } from "../../../src/decision/jev-transport.ts";
+import {
+  JEV_ENDPOINT_REFERENCE as ENDPOINT,
+  JEV_FETCH_REFERENCE as FETCH,
+} from "../../../src/decision/jev-transport.ts";
 import { repoRoot, walkFiles } from "./_walk.ts";
 
 const CORE_SRC = join(repoRoot(), "core", "src");
 const TRANSPORT = "core/src/decision/jev-transport.ts";
+const HTTPS_CLIENT = /\b(?:from\s*|import\s*\(\s*|require\s*\(\s*)(["'`])(?:node:)?https\1/;
+interface Source { readonly path: string; readonly text: string }
+const cachedSources = new Map<string, readonly Source[]>();
+
+function coreSources(root = repoRoot()): readonly Source[] {
+  const cached = cachedSources.get(root);
+  if (cached !== undefined) return cached;
+  const coreSrc = root === repoRoot() ? CORE_SRC : join(root, "core", "src");
+  const sources = walkFiles(coreSrc).map((file) => ({
+    path: relative(root, file).split(sep).join("/"),
+    text: readFileSync(file, "utf8"),
+  }));
+  cachedSources.set(root, sources);
+  return sources;
+}
 
 /** Files under `root` (a checkout) whose core/src text matches, the transport excepted. */
 function offenders(pattern: RegExp, root = repoRoot()): string[] {
-  const coreSrc = root === repoRoot() ? CORE_SRC : join(root, "core", "src");
-  return walkFiles(coreSrc)
-    .map((file) => relative(root, file).split(sep).join("/"))
-    .filter((file) => file !== TRANSPORT)
-    .filter((file) => pattern.test(readFileSync(join(root, file), "utf8")));
+  return coreSources(root)
+    .filter(({ path }) => path !== TRANSPORT)
+    .filter(({ text }) => pattern.test(text))
+    .map(({ path }) => path);
 }
 
 test("the Jev transport exists where the invariant names it, and calls fetch itself", () => {
   const text = readFileSync(join(repoRoot(), TRANSPORT), "utf8");
   assert.ok(FETCH.test(text), `${TRANSPORT} should hold the one fetch call`);
   assert.ok(ENDPOINT.test(text), `${TRANSPORT} should name the decisions endpoint`);
+  assert.equal(HTTPS_CLIENT.test(text), false, `${TRANSPORT} uses the shared fetch transport, not an alternate HTTPS client`);
 });
 
 test("no file in core/src but the Jev transport calls global fetch", () => {
@@ -36,6 +54,10 @@ test("no file in core/src but the Jev transport calls global fetch", () => {
 
 test("no file in core/src but the Jev transport names the decisions endpoint", () => {
   assert.deepEqual(offenders(ENDPOINT), []);
+});
+
+test("no other core source imports a second HTTPS client", () => {
+  assert.deepEqual(offenders(HTTPS_CLIENT), []);
 });
 
 test("the fence is load-bearing: both spellings are caught, an injected port is not", () => {
@@ -60,6 +82,9 @@ test("the fence is load-bearing: both spellings are caught, an injected port is 
   assert.equal(FETCH.test("// fetch is documented here"), false);
   assert.ok(ENDPOINT.test(`"https://openrouter.ai/api/alpha/decisions"`));
   assert.ok(ENDPOINT.test("`${origin}/api/alpha/decisions`"));
+  assert.ok(HTTPS_CLIENT.test('import { request as send } from "node:https";'));
+  assert.ok(HTTPS_CLIENT.test('const send = require("https").request;'));
+  assert.equal(HTTPS_CLIENT.test('import { createServer } from "node:http";'), false);
 });
 
 test("the fence catches a planted fetch or endpoint in another core/src file", () => {
@@ -80,6 +105,7 @@ test("the fence catches a planted fetch or endpoint in another core/src file", (
     plant("core/src/workflow/bound-fetch.ts", `const send = fetch.bind(globalThis);`);
     plant("core/src/workflow/destructured-fetch.ts", `const { fetch: send } = globalThis;`);
     plant("core/src/workflow/self-fetch.ts", `export const send = self.fetch;`);
+    plant("core/src/workflow/https-client.ts", 'import { request as send } from "node:https";\nexport const call = (endpoint: string) => send(endpoint);');
     assert.deepEqual(offenders(FETCH, root).sort(), [
       "core/src/decision/elsewhere.ts",
       "core/src/workflow/aliased-fetch.ts",
@@ -91,6 +117,7 @@ test("the fence catches a planted fetch or endpoint in another core/src file", (
       "core/src/workflow/sneaky.ts",
     ]);
     assert.deepEqual(offenders(ENDPOINT, root), ["core/src/cli/url.ts"]);
+    assert.deepEqual(offenders(HTTPS_CLIENT, root), ["core/src/workflow/https-client.ts"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

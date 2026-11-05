@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseDocument } from "yaml";
 import { TICKET_WORKFLOWS } from "../../../src/contracts/ticket.ts";
-import { relRepo, repoRoot, walkFiles } from "./_walk.ts";
+import { DEFAULT_PRUNE, relRepo, repoRoot, walkFiles } from "./_walk.ts";
 
 // W17: a ticket names its own route; a shift is the container that runs
 // tickets, never a route a ticket may name. TICKET_WORKFLOWS stays narrow, and
@@ -12,6 +12,7 @@ import { relRepo, repoRoot, walkFiles } from "./_walk.ts";
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/u;
 const TICKET_ID = /^[TW]\d+$/u;
+const CHECKOUT_PRUNE = [...DEFAULT_PRUNE, ".worktrees"];
 
 /** A top-level scalar read from the frontmatter's own lines, for a block the YAML parser rejects. */
 function lineField(frontmatter: string, key: string): string | undefined {
@@ -58,7 +59,9 @@ test("the detector still sees a shift ticket that a YAML error, a byte-order mar
 test("no ticket anywhere in the checkout declares workflow: shift", () => {
   const offenders: string[] = [];
   let tickets = 0;
-  for (const path of walkFiles(repoRoot(), [".md"])) {
+  const markdownFiles = walkFiles(repoRoot(), [".md"], CHECKOUT_PRUNE);
+  assert.equal(markdownFiles.some((path) => /[\\/]\.worktrees[\\/]/u.test(path)), false, "nested checkouts are not part of this checkout's ticket inventory");
+  for (const path of markdownFiles) {
     const ticket = ticketWorkflow(readFileSync(path, "utf8"));
     if (ticket === null) continue;
     tickets += 1;

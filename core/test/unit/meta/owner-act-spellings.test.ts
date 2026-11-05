@@ -77,8 +77,6 @@ test("separator-bearing unknown prefixes are extracted whole and remain uncovere
     assert.deepEqual(uncoveredPrefixes([`${line} && awsf status T01`]), [prefix]);
   }
   assert.equal(OWNER_ACT_SPELLINGS.length, 7);
-  assert.equal(OWNER_ACT_SPELLINGS.filter(row => row.knownGapF17).length, 0);
-  assert.equal(OWNER_ACT_ROWS.filter(row => row.expected === null).length, 0);
 });
 
 test("a launcher inside quotes, inside command substitution, or path-prefixed is its own uncovered prefix", () => {

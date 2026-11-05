@@ -146,12 +146,10 @@ const GUARD_ROWS: readonly GuardRow[] = [
   ...OWNER_ACT_ROWS.map(
     (row): GuardRow => ({
       id: `owner-act shell matrix · ${row.label}`,
-      why: row.expected === null
-        ? "KNOWN GAP F17: G01-G must fix the protected guard and flip this row to deny"
-        : "an imported owner act in a W01-Q7 spelling must be denied",
+      why: "an imported owner act in a W01-Q7 spelling must be denied",
       payload: bash(row.command),
-      expect: row.expected === null ? "allow" : "deny",
-      mentions: row.expected === null ? [] : [new RegExp(`\\b${row.act}\\b`)],
+      expect: "deny",
+      mentions: [new RegExp(`\\b${row.act}\\b`)],
     }),
   ),
   {

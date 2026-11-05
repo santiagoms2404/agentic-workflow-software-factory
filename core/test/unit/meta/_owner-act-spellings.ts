@@ -2,14 +2,14 @@ import { OWNER_ACT_LIST, ownerActName } from "../../../../docs/driving/marimba/o
 
 /** W01-Q7, decided 2026-10-04. Expectations are pinned, never learned from the guard. */
 export const OWNER_ACT_SPELLINGS = [
-  { id: "direct", prefix: "awsf", knownGapF17: false },
-  { id: "just", prefix: "just awsf", knownGapF17: false },
+  { id: "direct", prefix: "awsf" },
+  { id: "just", prefix: "just awsf" },
   // F17 closed by G01-G: these five spellings are denied in BOTH harnesses.
-  { id: "npm", prefix: "npm run awsf --", knownGapF17: false },
-  { id: "npm-script-silent", prefix: "npm run awsf --silent --", knownGapF17: false },
-  { id: "npm-prefix", prefix: "npm --prefix <dir> run awsf --", knownGapF17: false },
-  { id: "npm-run-silent", prefix: "npm run --silent awsf --", knownGapF17: false },
-  { id: "node", prefix: "node --experimental-strip-types core/src/cli/main.ts", knownGapF17: false },
+  { id: "npm", prefix: "npm run awsf --" },
+  { id: "npm-script-silent", prefix: "npm run awsf --silent --" },
+  { id: "npm-prefix", prefix: "npm --prefix <dir> run awsf --" },
+  { id: "npm-run-silent", prefix: "npm run --silent awsf --" },
+  { id: "node", prefix: "node --experimental-strip-types core/src/cli/main.ts" },
 ] as const;
 
 /**
@@ -25,8 +25,8 @@ export const OWNER_ACT_LIST_ROWS = OWNER_ACT_LIST.flatMap((entry) => OWNER_ACT_S
     reach: entry.reach,
     spelling: spelling.id,
     command: `${spelling.prefix.replace("<dir>", "./fixture-project")} ${entry.verb} T01${entry.flag === undefined ? "" : ` ${entry.flag} T02`}`,
-    expected: spelling.knownGapF17 ? null : act,
-    label: `${act} / ${spelling.id}${spelling.knownGapF17 ? " / KNOWN GAP F17 (G01-G)" : ""}`,
+    expected: act,
+    label: `${act} / ${spelling.id}`,
   };
 }));
 

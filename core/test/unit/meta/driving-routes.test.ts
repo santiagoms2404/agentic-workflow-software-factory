@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { relRepo } from "./_walk.ts";
-import { DRIVING_REL, drivingDir, drivingDocs } from "./_driving.ts";
+import { DRIVING_REL, drivingDir, drivingDocs, routes } from "./_driving.ts";
 
 // A route table names the documents a driving session is told to load. A row
 // pointing at a file that does not exist is exactly the drift "reference, never
@@ -52,17 +52,6 @@ const ROUTER = join(drivingDir(), "skills", "awsf", "SKILL.md");
  * BY PATH — this would report it, and the right answer then is to make the
  * router unambiguous rather than to loosen the matcher.
  */
-export const ROUTE = /`((?:[\w.-]+\/)+[\w.-]+\.md)`/g;
-
-/**
- * Exported because driving-contract.test.ts asserts the contract declares NO
- * route, and that has to be the SAME property this file checks. Two copies of
- * one regex is how a property quietly stops being one property.
- */
-export function routes(markdown: string): string[] {
-  return [...new Set([...markdown.matchAll(ROUTE)].map((match) => match[1] ?? ""))];
-}
-
 /**
  * Every route in `markdown` that does not land on a real file inside the tree,
  * as `route — what is wrong`.

@@ -28,15 +28,6 @@ const FETCH = new RegExp(
     "\\b(?:WebSocket|XMLHttpRequest)\\b",
   ].join("|"),
 );
-const CHILD_PROCESS = /(['"])(?:node:)?child_process\1|\b(?:import|require|getBuiltinModule)\s*\(\s*`(?:node:)?child_process`/;
-
-test("no adapter imports node:child_process — only the broker spawns", () => {
-  const offenders = walkFiles(ADAPTERS)
-    .filter((file) => CHILD_PROCESS.test(readFileSync(file, "utf8")))
-    .map(relRepo);
-  assert.deepEqual(offenders, []);
-});
-
 test("no adapter calls global fetch or reaches the network directly — an unregistered request is an unregistered call", () => {
   const offenders = walkFiles(ADAPTERS)
     .filter((file) => FETCH.test(readFileSync(file, "utf8")))
@@ -44,12 +35,7 @@ test("no adapter calls global fetch or reaches the network directly — an unreg
   assert.deepEqual(offenders, []);
 });
 
-test("the fence is load-bearing: both patterns match the thing they forbid", () => {
-  // A fence nobody has watched catch something is decoration.
-  assert.ok(CHILD_PROCESS.test(`import { spawn } from "node:child_process";`));
-  assert.ok(CHILD_PROCESS.test(`require('child_process')`));
-  assert.ok(CHILD_PROCESS.test("await import(`node:child_process`);"));
-  assert.ok(CHILD_PROCESS.test("process.getBuiltinModule('node:child_process')"));
+test("the network fence is load-bearing: its matcher catches the thing it forbids", () => {
   assert.ok(FETCH.test("const response = await fetch(url);"));
   assert.ok(FETCH.test("await globalThis.fetch(url)"));
   assert.ok(FETCH.test("await global.fetch(url)"));

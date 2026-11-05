@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 import { repoRoot, walkFiles, relRepo } from "./_walk.ts";
 
 /**
@@ -89,6 +90,53 @@ interface Source {
   text: string;
 }
 
+function literalString(node: ts.Expression): string | null {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  return null;
+}
+
+function destructiveArgv(tokens: readonly string[]): boolean {
+  const has = (token: string): boolean => tokens.includes(token);
+  if (has("push")) {
+    if (has("-f") || has("--force") || has("--delete") || has("--prune") || has("--mirror")) return true;
+    if (tokens.some((token) => /^\+[^:]+:.+$/u.test(token) || /^:[^:]+$/u.test(token) || /^0{40,64}:.+$/u.test(token))) return true;
+  }
+  if (has("worktree") && (has("remove") || has("prune"))) return true;
+  if (has("branch") && (has("-D") || has("-d") || has("--delete"))) return true;
+  if (has("update-ref") && (has("-d") || has("--delete"))) return true;
+  if (has("reset") && has("--hard")) return true;
+  return has("clean") && tokens.some((token) => /^-[a-z]*f[a-z]*$/iu.test(token));
+}
+
+/** Literal argv arrays at known process/Git boundaries; token order is immaterial to the deny rules. */
+function destructiveArgvLines(path: string, text: string): number[] {
+  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const lines: number[] = [];
+  const argvIndex = (call: ts.CallExpression): number | null => {
+    if (!ts.isIdentifier(call.expression)) return null;
+    switch (call.expression.text) {
+      case "runGit": return 1;
+      case "runSystemCommand":
+      case "spawn":
+      case "spawnSync": return 1;
+      default: return null;
+    }
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const index = argvIndex(node);
+      const argument = index === null ? undefined : node.arguments[index];
+      if (argument !== undefined && ts.isArrayLiteralExpression(argument)) {
+        const tokens = argument.elements.map(literalString).filter((token): token is string => token !== null);
+        if (destructiveArgv(tokens)) lines.push(argument.getStart(source));
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return lines;
+}
+
 /**
  * Every line of `sources` a FORBIDDEN pattern hits, minus the allowlisted ones.
  * An allowlist entry excuses one line, once: a second identical delete in the
@@ -104,6 +152,9 @@ export function fenceHits(sources: readonly Source[]): { offenders: string[]; un
       for (const match of text.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))) {
         hitLines.add(text.slice(0, match.index).split("\n").length - 1);
       }
+    }
+    for (const position of destructiveArgvLines(path, text)) {
+      hitLines.add(text.slice(0, position).split("\n").length - 1);
     }
     const lines = text.split("\n");
     for (const index of [...hitLines].sort((a, b) => a - b)) {
@@ -154,6 +205,25 @@ test("every callback and promise delete spelling is an offender", () => {
     "core/src/fixture/spellings.ts:3: await rmdir(path);",
     "core/src/fixture/spellings.ts:4: await fs.promises.rmdir(path);",
     "core/src/fixture/spellings.ts:5: const drop = fs.promises.rm;",
+  ]);
+});
+
+test("async and promise unlink, rm and rmdir calls all bite", () => {
+  const text = [
+    "await unlink(path);",
+    "await rm(path, { recursive: true });",
+    "await rmdir(path);",
+    "await fs.promises.unlink(path);",
+    "await fs.promises.rm(path, { recursive: true });",
+    "await fs.promises.rmdir(path);",
+  ].join("\n");
+  assert.deepEqual(fenceHits([{ path: "core/src/fixture/async-delete.ts", text }]).offenders, [
+    "core/src/fixture/async-delete.ts:1: await unlink(path);",
+    "core/src/fixture/async-delete.ts:2: await rm(path, { recursive: true });",
+    "core/src/fixture/async-delete.ts:3: await rmdir(path);",
+    "core/src/fixture/async-delete.ts:4: await fs.promises.unlink(path);",
+    "core/src/fixture/async-delete.ts:5: await fs.promises.rm(path, { recursive: true });",
+    "core/src/fixture/async-delete.ts:6: await fs.promises.rmdir(path);",
   ]);
 });
 
@@ -235,4 +305,22 @@ test("push-first and destructive argv spellings bite", () => {
   ].join("\n");
   const hits = fenceHits([{ path: "core/src/fixture/destructive.ts", text }]);
   assert.equal(hits.offenders.length, 8);
+});
+
+test("literal argv checks survive multiline and reordered command tokens", () => {
+  const text = [
+    "runGit(g, [",
+    '  "push",',
+    "  remote,",
+    '  "-f",',
+    '  "HEAD:main",',
+    "]);",
+    'runGit(g, ["+HEAD:main", remote, "push"]);',
+    'runGit(g, [":main", "push", remote]);',
+    'runGit(g, ["--delete", remote, "push", branch]);',
+    'runGit(g, ["remove", path, "worktree"]);',
+    'runGit(g, [name, "-D", "branch"]);',
+  ].join("\n");
+  const hits = fenceHits([{ path: "core/src/fixture/reordered.ts", text }]);
+  assert.equal(hits.offenders.length, 6);
 });

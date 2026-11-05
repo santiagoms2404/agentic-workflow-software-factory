@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { walkFiles } from "./_walk.ts";
+import { sourceImportCandidates, walkFiles } from "./_walk.ts";
 
 for (const ext of [".ts", ".tsx", ".vue", ".mts", ".cts", ".js", ".mjs", ".cjs"]) {
   test(`default walker reaches nested ${ext} code`, (t) => {
@@ -46,8 +46,29 @@ test("explicit extensions replace defaults and remain in force during recursion"
   assert.deepEqual(walkFiles(root, []), []);
 });
 
-test("a missing directory still yields no files", (t) => {
+test("a missing scan root refuses unless the caller marks it optional", (t) => {
   const root = mkdtempSync(join(tmpdir(), "awsf-walk-missing-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  assert.deepEqual(walkFiles(join(root, "absent")), []);
+  const absent = join(root, "absent");
+  assert.throws(() => walkFiles(absent), { code: "ENOENT" });
+  assert.deepEqual(walkFiles(absent, undefined, undefined, { allowMissingRoot: true }), []);
+});
+
+test("source import candidates cover every walked suffix and preserve explicit paths", () => {
+  const base = join(tmpdir(), "awsf-import-candidates", "module");
+  const candidates = sourceImportCandidates(base);
+  assert.ok(candidates.includes(`${base}.vue`));
+  assert.ok(candidates.includes(`${base}.mts`));
+  assert.ok(candidates.includes(join(base, "index.ts")));
+  assert.deepEqual(sourceImportCandidates(`${base}.mts`), [`${base}.mts`]);
+});
+
+test("the walker follows file and directory links while pruning ordinary directories", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-walk-links-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "target"));
+  writeFileSync(join(root, "target", "module.ts"), "export const fixture = 1;\n");
+  symlinkSync(join(root, "target", "module.ts"), join(root, "linked.ts"));
+  symlinkSync(join(root, "target"), join(root, "linked-dir"), "dir");
+  assert.deepEqual(walkFiles(root).sort(), [join(root, "linked.ts"), join(root, "linked-dir", "module.ts"), join(root, "target", "module.ts")].sort());
 });

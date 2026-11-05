@@ -111,8 +111,14 @@ function assertOnlyStart(sources: readonly Source[]): void {
   assert.deepEqual(outside, [], "only start.ts may request DRAFT to PREPARED");
 }
 
-function coreSources(): Source[] {
-  return walkFiles(join(repoRoot(), "core", "src")).map((file) => ({ path: relRepo(file), text: readFileSync(file, "utf8") }));
+let cachedCoreSources: readonly Source[] | undefined;
+
+function coreSources(): readonly Source[] {
+  if (cachedCoreSources === undefined) {
+    cachedCoreSources = walkFiles(join(repoRoot(), "core", "src"))
+      .map((file) => ({ path: relRepo(file), text: readFileSync(file, "utf8") }));
+  }
+  return cachedCoreSources;
 }
 
 test("start.ts is the only module under core/src that requests a transition to PREPARED", () => {

@@ -33,6 +33,33 @@ export function justRecipes(justfile: string): Map<string, string> {
   return recipes;
 }
 
+/** Keep the unknown-invocation rule identical across the README, driving tree, and cheatsheet. */
+export function unknownInvocations(
+  texts: readonly string[],
+  scripts: Readonly<Record<string, string>>,
+  cliCommands: readonly string[],
+  recipes: ReadonlyMap<string, string>,
+): string[] {
+  return [
+    ...commandsIn(texts, NPM_RUN)
+      .filter((script) => !(script in scripts))
+      .map((script) => `npm run ${script}`),
+    ...commandsIn(texts, AWSF_CLI)
+      .filter((command) => !cliCommands.includes(command))
+      .map((command) => `awsf ${command}`),
+    ...commandsIn(texts, JUST_TARGET)
+      .filter((target) => !recipes.has(target))
+      .map((target) => `just ${target}`),
+  ];
+}
+
+const ROUTE = /`((?:[\w.-]+\/)+[\w.-]+\.md)`/g;
+
+/** Routes are relative markdown paths; this helper is shared without importing another test module. */
+export function routes(markdown: string): string[] {
+  return [...new Set([...markdown.matchAll(ROUTE)].map((match) => match[1] ?? ""))];
+}
+
 /**
  * The driving-document tree: the owner-side skill and command documents that
  * teach a driving session how to operate AWSF.
@@ -78,9 +105,9 @@ export const DRIVING_TEXT_EXTS = [
 ];
 
 export function drivingDocs(): string[] {
-  return walkFiles(drivingDir(), DRIVING_DOC_EXTS);
+  return walkFiles(drivingDir(), DRIVING_DOC_EXTS, undefined, { allowMissingRoot: true });
 }
 
 export function drivingTextFiles(): string[] {
-  return walkFiles(drivingDir(), DRIVING_TEXT_EXTS);
+  return walkFiles(drivingDir(), DRIVING_TEXT_EXTS, undefined, { allowMissingRoot: true });
 }

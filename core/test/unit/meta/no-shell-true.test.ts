@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 import { CODE_EXTS, repoRoot, relRepo } from "./_walk.ts";
 import { drivingTextFiles } from "./_driving.ts";
 
@@ -42,6 +43,60 @@ function enablesShell(path: string, text: string): boolean {
   const exempt = path === REFUSAL_ROW.path ? text.split("\n").find((line) => line.trim() === REFUSAL_ROW.row) : undefined;
   return SHELL_ENABLED.test(exempt === undefined ? text : text.replace(exempt, ""));
 }
+
+function brokerChildProcessBindings(source: string): string[] {
+  const file = ts.createSourceFile("transport-broker.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const bindings: string[] = [];
+  for (const statement of file.statements) {
+    if (ts.isImportEqualsDeclaration(statement) && ts.isExternalModuleReference(statement.moduleReference)
+      && ts.isStringLiteral(statement.moduleReference.expression)
+      && ["node:child_process", "child_process"].includes(statement.moduleReference.expression.text)) {
+      bindings.push("unsupported import form");
+      continue;
+    }
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)
+      || !["node:child_process", "child_process"].includes(statement.moduleSpecifier.text)) continue;
+    const clause = statement.importClause;
+    const named = clause?.namedBindings;
+    if (clause === undefined || named === undefined || !ts.isNamedImports(named) || clause.name !== undefined) {
+      bindings.push("unsupported import form");
+      continue;
+    }
+    for (const element of named.elements) {
+      bindings.push(`${clause.isTypeOnly || element.isTypeOnly ? "type" : "value"}:${element.name.text}`);
+    }
+  }
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callsImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const callsRequire = ts.isIdentifier(node.expression) && node.expression.text === "require";
+      const builtinLookup = (ts.isPropertyAccessExpression(node.expression)
+        && node.expression.name.text === "getBuiltinModule")
+        || (ts.isElementAccessExpression(node.expression)
+          && node.expression.argumentExpression !== undefined
+          && ts.isStringLiteralLike(node.expression.argumentExpression)
+          && node.expression.argumentExpression.text === "getBuiltinModule");
+      if (callsImport || callsRequire || builtinLookup) bindings.push("dynamic module lookup");
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return bindings.sort();
+}
+
+test("the broker imports only spawn APIs and the ChildProcess type", () => {
+  const source = readFileSync(join(repoRoot(), "core/src/execution/transport-broker.ts"), "utf8");
+  assert.deepEqual(brokerChildProcessBindings(source), [
+    "type:ChildProcess",
+    "type:SpawnSyncOptionsWithBufferEncoding",
+    "type:SpawnSyncReturns",
+    "value:spawn",
+    "value:spawnSync",
+  ]);
+  assert.deepEqual(brokerChildProcessBindings('import { execSync } from "node:child_process";'), ["value:execSync"]);
+  assert.deepEqual(brokerChildProcessBindings('const api = await import("node:child_process");'), ["dynamic module lookup"]);
+  assert.deepEqual(brokerChildProcessBindings('const api = process["getBuiltinModule"]("node:child_process");'), ["dynamic module lookup"]);
+});
 
 test("no shell option enables a shell in tracked code or the driving-document tree", () => {
   // The walk must reach the code the broader invariant names, not only the two trees the first fence began with.

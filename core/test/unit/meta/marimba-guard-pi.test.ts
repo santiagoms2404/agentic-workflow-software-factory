@@ -238,18 +238,7 @@ test("fence 1 admits the observe-or-stop names, and reads no MCP server's nouns"
   }
 });
 
-test("the three rows the shell guard owns alone are named, not silently absent", () => {
-  // Each is about the shell guard's OWN mechanism, and each is why the pi port
-  // has a different failure mode rather than the same one.
-  const bashOnly = {
-    "payload · malformed JSON": "pi delivers a typed event, so there is no payload for a parser to reject",
-    "payload · empty": "the same fail-open shape, which only a stdin hook protocol has",
-    "machine · the payload parser cannot run": "an external interpreter is the shell guard's own mechanism; this port parses nothing",
-  };
-  assert.equal(Object.keys(bashOnly).length, 3);
-  for (const [row, why] of Object.entries(bashOnly)) {
-    assert.ok(why.length > 0, row);
-  }
+test("the pi binding announces itself at session start", () => {
   // The replacement failure mode is non-loading, so the binding must announce
   // itself. Without this the extension can be absent and silent.
   assert.match(PI_GUARD, /session_start/u);

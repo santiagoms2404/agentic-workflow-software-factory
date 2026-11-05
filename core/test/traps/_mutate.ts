@@ -17,6 +17,8 @@ export interface MutantOptions {
   readonly file: string;
   /** Only demonstration fixtures override this; real traps use this checkout. */
   readonly sourceRoot?: string;
+  /** Mutate and restore a caller-owned demonstration tree instead of copying it again. */
+  readonly reuseSourceTree?: boolean;
 }
 export interface MutantResult { readonly wallTimeMs: number; readonly output: string; readonly exitCode: number }
 
@@ -29,12 +31,18 @@ export function runMutant(options: MutantOptions): MutantResult {
   const file = relative(sourceRoot, resolve(options.file));
   assert.ok(!isAbsolute(file) && !file.startsWith("..") && file.endsWith(".test.ts"), "trap test must be inside its source tree");
   assert.match(options.id, /^TR-\d{2,}$/u);
-  const scratch = mkdtempSync(join(tmpdir(), "awsf-trap-mutant-"));
+  const reuseSourceTree = options.reuseSourceTree === true;
+  assert.ok(!reuseSourceTree || options.sourceRoot !== undefined, "only an explicit demonstration tree may be reused");
+  const scratch = reuseSourceTree ? sourceRoot : mkdtempSync(join(tmpdir(), "awsf-trap-mutant-"));
+  let mutatedPath: string | undefined;
+  let sourceBeforeMutation: string | undefined;
   try {
-    for (const path of ["core/src", "core/test", "dashboard/shared", "prompts", "awsf.config.yaml", "awsf.project.yaml", "package.json"]) {
-      if (existsSync(join(sourceRoot, path))) cpSync(join(sourceRoot, path), join(scratch, path), { recursive: true, dereference: false });
+    if (!reuseSourceTree) {
+      for (const path of ["core/src", "core/test", "dashboard/shared", "prompts", "awsf.config.yaml", "awsf.project.yaml", "package.json"]) {
+        if (existsSync(join(sourceRoot, path))) cpSync(join(sourceRoot, path), join(scratch, path), { recursive: true, dereference: false });
+      }
+      symlinkSync(realpathSync(join(ROOT, "node_modules")), join(scratch, "node_modules"), "dir");
     }
-    symlinkSync(realpathSync(join(ROOT, "node_modules")), join(scratch, "node_modules"), "dir");
     const configPath = join(scratch, "awsf.config.yaml");
     const configuredProtected = existsSync(configPath) ? loadConfig(readFileSync(configPath, "utf8")).policy.protected_paths : [];
     const pairs = markerPairs(treeFiles(scratch, "core/src"), [...PROTECTED_TRAP_PATHS, ...configuredProtected]);
@@ -42,7 +50,9 @@ export function runMutant(options: MutantOptions): MutantResult {
     assert.equal(selected.length, 1, `${options.id}: expected exactly one refusal marker pair in scratch copy`);
     const pair = selected[0]!;
     const path = join(scratch, pair.path);
-    const lines = readFileSync(path, "utf8").split("\n");
+    sourceBeforeMutation = readFileSync(path, "utf8");
+    mutatedPath = path;
+    const lines = sourceBeforeMutation.split("\n");
     lines.splice(pair.begin + 1, pair.end - pair.begin - 1);
     writeFileSync(path, lines.join("\n"));
     const label = refusalAssertion(options.id);
@@ -66,8 +76,12 @@ export function runMutant(options: MutantOptions): MutantResult {
     `${options.id}: mutant did not fail its refusal assertion\n${output}`);
     return { wallTimeMs: performance.now() - started, output, exitCode: child.status! };
   } finally {
-    // Only this invocation's synthetic scratch tree is removed.
-    rmSync(scratch, { recursive: true, force: true });
+    if (reuseSourceTree) {
+      if (mutatedPath !== undefined && sourceBeforeMutation !== undefined) writeFileSync(mutatedPath, sourceBeforeMutation);
+    } else {
+      // Only this invocation's synthetic scratch tree is removed.
+      rmSync(scratch, { recursive: true, force: true });
+    }
   }
 }
 

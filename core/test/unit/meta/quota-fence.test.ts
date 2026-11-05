@@ -1,7 +1,6 @@
-// This is the repository's FIRST transitive fence. Existing fences are direct
-// text scans, but INV-1 says workflow code may not reach the quota module at
-// all. A direct-import scan is satisfied by putting one intermediate file
-// between workflow and quota, so this fence follows the full relative-import
+// This is a transitive fence: INV-1 says workflow code may not reach the quota
+// module at all. A direct-import scan is satisfied by putting one intermediate
+// file between workflow and quota, so this fence follows the full relative-import
 // graph and reports every hop it found.
 //
 // The routing leg is necessarily weaker, and the weakness is explicit here.
@@ -15,11 +14,12 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import ts from "typescript";
 import { QUOTA_ROUTE_READOUT_FIELDS } from "../../../src/quota/readout.ts";
-import { relRepo, repoRoot, walkFiles } from "./_walk.ts";
+import { relRepo, repoRoot, walkFiles, sourceImportCandidates } from "./_walk.ts";
+import { functionDeclaration, repoSourceFile, sourceProgram } from "./_type-program.ts";
 
 const SOURCE_ROOT = join(repoRoot(), "core", "src");
 const WORKFLOW_PREFIX = "core/src/workflow/";
@@ -76,10 +76,7 @@ function resolveSourceImport(
   sourceFiles: ReadonlySet<string>,
 ): string | null {
   const target = resolve(dirname(importer), specifier);
-  const candidates = extname(target) === ""
-    ? [target, `${target}.ts`, `${target}.tsx`, `${target}.vue`, join(target, "index.ts"), join(target, "index.tsx")]
-    : [target];
-  return candidates.find((candidate) => sourceFiles.has(candidate)) ?? null;
+  return sourceImportCandidates(target).find((candidate) => sourceFiles.has(candidate)) ?? null;
 }
 
 /**
@@ -149,30 +146,6 @@ function reachablePaths(
   return paths;
 }
 
-let cachedSourceProgram: { readonly program: ts.Program; readonly checker: ts.TypeChecker } | undefined;
-
-function sourceProgram(): { readonly program: ts.Program; readonly checker: ts.TypeChecker } {
-  if (cachedSourceProgram !== undefined) return cachedSourceProgram;
-  const configPath = join(repoRoot(), "tsconfig.json");
-  const loaded = ts.readConfigFile(configPath, ts.sys.readFile);
-  if (loaded.error !== undefined) {
-    throw new Error(ts.flattenDiagnosticMessageText(loaded.error.messageText, "\n"));
-  }
-  const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, repoRoot());
-  const program = ts.createProgram({
-    rootNames: walkFiles(SOURCE_ROOT),
-    options: parsed.options,
-  });
-  cachedSourceProgram = { program, checker: program.getTypeChecker() };
-  return cachedSourceProgram;
-}
-
-function repoSourceFile(program: ts.Program, relativePath: string): ts.SourceFile {
-  const expected = resolve(repoRoot(), relativePath);
-  const source = program.getSourceFiles().find((candidate) => resolve(candidate.fileName) === expected);
-  assert.notEqual(source, undefined, `missing source file ${relativePath}`);
-  return source!;
-}
 
 function quotaDeclarations(symbol: ts.Symbol, checker: ts.TypeChecker): readonly string[] {
   const resolved = (symbol.flags & ts.SymbolFlags.Alias) === 0
@@ -212,13 +185,6 @@ function quotaTypes(
     }
   }
   return [...origins];
-}
-
-function functionDeclaration(source: ts.SourceFile, name: string): ts.FunctionDeclaration {
-  const matches = source.statements.filter((statement): statement is ts.FunctionDeclaration =>
-    ts.isFunctionDeclaration(statement) && statement.name?.text === name);
-  assert.equal(matches.length, 1, `${relRepo(source.fileName)} must declare exactly one ${name}`);
-  return matches[0]!;
 }
 
 function referencedQuotaExports(

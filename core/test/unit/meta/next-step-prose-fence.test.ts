@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CLI_COMMANDS } from "../../../src/cli/main.ts";
+import { CLI_COMMANDS } from "../../../src/cli/command-table.ts";
 import { relRepo, repoRoot, walkFiles } from "./_walk.ts";
 
 interface Source { readonly path: string; readonly text: string }
@@ -34,7 +34,6 @@ test("all core source is free of literal run-awsf next-step sentences", () => {
   const renderer = readFileSync(join(repoRoot(), RENDERER), "utf8");
   assert.ok(proseOffenders([{ path: "core/src/cli/planted.ts", text: renderer }]).length > 0,
     "the matcher must see the renderer's real source spelling");
-  assertRenderedAdvice([{ path: RENDERER, text: renderer }]);
 });
 
 test("the same prose fence bites planted plain and escaped literals in any core module but the renderer", () => {

@@ -1,6 +1,8 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 import { randomUUID } from "node:crypto";
+import { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "./command-table.ts";
+export { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "./command-table.ts";
 import { existsSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
@@ -68,16 +70,7 @@ import { watchCommand } from "./commands/watch.ts";
 import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, sealShiftSelection, shiftPlanReadout } from "./commands/shift.ts";
 
-/** The complete owner-facing command table; documentation reconciles against it. */
-export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "preflight", "confirm", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "close", "publish", "cancel", "retry",
-  "relate", "doctor", "traps", "gc", "dash", "routes", "metrics", "metrics export", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
-]);
-
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
-
-/** Flags that take no value. Documentation reconciles against this too. */
-export const CLI_BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence", "json", "advise"]);
 
 interface ParsedArgs {
   readonly positionals: readonly string[];

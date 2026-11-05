@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync, type Dirent } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { parse } from "yaml";
+import { agreementTicket, sectionBBlocks } from "../../../src/closure/tree.ts";
 import { TICKET_TASK_CLASSES } from "../../../src/contracts/ticket.ts";
 import { loadCatalog } from "../../../src/registry/catalog.ts";
 import {
@@ -122,50 +122,25 @@ function tickets(set: PlanSet): AgreementTicket[] {
   return names
     .filter((name) => TICKET_FILE.test(name))
     .map((name) => {
-      const raw = readFileSync(join(set.tickets, name), "utf8");
-      const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(raw);
-      assert.ok(match, `${name} has no frontmatter block`);
-      const fm = parse(match[1] ?? "") as Record<string, unknown>;
-      const body = match[2] ?? "";
-      const split = body.split("## Build prompt\n\n");
-      assert.equal(split.length, 2, `${name} has no single "## Build prompt" section`);
-      return {
-        id: String(fm.id),
-        number: Number(String(fm.id).slice(1)),
-        title: String(fm.title),
-        milestone: String(fm.milestone),
-        tier: fm.tier === undefined ? undefined : Number(fm.tier),
-        state: String(fm.state),
-        depends_on: (fm.depends_on as string[]) ?? [],
-        workflow: fm.workflow === undefined ? undefined : String(fm.workflow),
-        task_class: fm.task_class,
-        serves: fm.serves === undefined ? undefined : (fm.serves as string[]),
-        prompt: (split[1] ?? "").replace(/\n+$/, ""),
-      };
+      const path = join(set.tickets, name);
+      return agreementTicket(readFileSync(path, "utf8"), path);
     });
 }
 
-function sectionBPrompts(set: PlanSet): Map<number, { title: string; prompt: string }> {
-  const md = readFileSync(set.prompts, "utf8");
-  const sectionB = md.split("# Section B — Task prompts (recommended)")[1] ?? "";
-  const out = new Map<number, { title: string; prompt: string }>();
-  const heads = [...sectionB.matchAll(/^### T(\d+) — (.+)$/gm)];
-  for (const [index, head] of heads.entries()) {
-    const start = (head.index ?? 0) + head[0].length;
-    const end = heads[index + 1]?.index ?? sectionB.length;
-    out.set(Number(head[1]), { title: (head[2] ?? "").trim(), prompt: sectionB.slice(start, end).trim() });
-  }
-  return out;
-}
+const agreementInputCache = new Map<string, PlanAgreementInput>();
 
 function agreementInput(set: PlanSet): PlanAgreementInput {
-  return {
+  const cached = agreementInputCache.get(set.plan);
+  if (cached !== undefined) return cached;
+  const input = {
     label: set.label,
     plan: planTasks(set),
     tickets: tickets(set),
-    sectionB: sectionBPrompts(set),
+    sectionB: sectionBBlocks(readFileSync(set.prompts, "utf8")),
     knownStems: set.knownStems,
   };
+  agreementInputCache.set(set.plan, input);
+  return input;
 }
 
 function checkRule(rule: PlanAgreementRule): void {

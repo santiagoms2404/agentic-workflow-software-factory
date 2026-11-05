@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CLI_COMMANDS } from "../../../src/cli/main.ts";
+import { CLI_COMMANDS } from "../../../src/cli/command-table.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import { LEGAL_EDGES, TASK_STATES } from "../../../src/state/task-machine.ts";
 import { DEFAULT_CALL_CEILINGS, TIERS } from "../../../src/state/tiers.ts";
-import { AWSF_CLI, JUST_TARGET, NPM_RUN, commandsIn, justRecipes } from "./_driving.ts";
+import { AWSF_CLI, JUST_TARGET, NPM_RUN, commandsIn, justRecipes, unknownInvocations } from "./_driving.ts";
 import { repoRoot } from "./_walk.ts";
 
 // ---------------------------------------------------------------------------
@@ -181,19 +181,7 @@ function visibleText(html: string): string {
 }
 
 function unknownCommands(html: string): string[] {
-  const blocks = commandBlocks(html);
-  const recipes = justRecipes(JUSTFILE);
-  return [
-    ...commandsIn(blocks, NPM_RUN)
-      .filter((script) => !(script in PACKAGE.scripts))
-      .map((script) => `npm run ${script}`),
-    ...commandsIn(blocks, AWSF_CLI)
-      .filter((command) => !CLI_COMMANDS.includes(command))
-      .map((command) => `awsf ${command}`),
-    ...commandsIn(blocks, JUST_TARGET)
-      .filter((target) => !recipes.has(target))
-      .map((target) => `just ${target}`),
-  ];
+  return unknownInvocations(commandBlocks(html), PACKAGE.scripts, CLI_COMMANDS, justRecipes(JUSTFILE));
 }
 
 test("the cheatsheet exists at its one required path", () => {

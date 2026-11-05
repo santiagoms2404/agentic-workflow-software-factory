@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "../../../src/cli/main.ts";
+import { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "../../../src/cli/command-table.ts";
 import { repoRoot, relRepo, walkFiles } from "./_walk.ts";
 import {
   AWSF_CLI,
@@ -12,6 +12,7 @@ import {
   commandsIn,
   drivingDocs,
   justRecipes,
+  unknownInvocations,
 } from "./_driving.ts";
 
 const ROOT = repoRoot();
@@ -31,7 +32,7 @@ function validationSection(): string {
 function commandText(source: string, html = false): string[] {
   return html
     ? [...source.matchAll(/<code>([\s\S]*?)<\/code>/g)].map((match) => match[1] ?? "")
-    : [...source.matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "");
+    : [...source.matchAll(/`([^`\n]+)`/g)].map((match) => match[1] ?? "");
 }
 
 const DOCUMENTED = [...commandText(README), ...commandText(validationSection(), true)];
@@ -47,6 +48,7 @@ test("awsf command extraction recognizes every invocation form", () => {
     commandsIn(["awsf land TASK", npmInvocation, "just awsf land TASK"], AWSF_CLI),
     ["land", "land", "land"],
   );
+  assert.deepEqual(commandText("`awsf status`\n```bash\nawsf frobnicate\n```\n`awsf doctor`"), ["awsf status", "awsf doctor"]);
   assert.deepEqual(commandsIn(["npm run awsf -- db rebuild"], AWSF_CLI), ["db rebuild"]);
   assert.deepEqual(commandsIn(["just awsf doctor"], JUST_TARGET), ["awsf"]);
 });
@@ -109,17 +111,7 @@ test("every command in a driving-document shell fence exists", () => {
   const offenders: string[] = [];
   for (const file of drivingDocs()) {
     const lines = fencedShellLines(readFileSync(file, "utf8"));
-    const unknown = [
-      ...commandsIn(lines, NPM_RUN)
-        .filter((script) => !(script in PACKAGE.scripts))
-        .map((script) => `npm run ${script}`),
-      ...commandsIn(lines, AWSF_CLI)
-        .filter((command) => !CLI_COMMANDS.includes(command))
-        .map((command) => `awsf ${command}`),
-      ...commandsIn(lines, JUST_TARGET)
-        .filter((target) => !recipes.has(target))
-        .map((target) => `just ${target}`),
-    ];
+    const unknown = unknownInvocations(lines, PACKAGE.scripts, CLI_COMMANDS, recipes);
     offenders.push(...[...new Set(unknown)].map((name) => `${relRepo(file)}: ${name}`));
   }
   assert.deepEqual(offenders, []);
@@ -223,7 +215,7 @@ function paragraphs(markdown: string): string[] {
 
 /** Backticked `awsf <command>` and `--flag` subjects a denial paragraph names. */
 function deniedSubjects(paragraph: string): { commands: string[]; flags: string[] } {
-  const quoted = [...paragraph.matchAll(/`([^`]+)`/gu)].map((match) => match[1] ?? "");
+  const quoted = [...paragraph.matchAll(/`([^`\n]+)`/gu)].map((match) => match[1] ?? "");
   return {
     commands: commandsIn(quoted, AWSF_CLI),
     flags: quoted.flatMap((text) => [...text.matchAll(/--([a-z][\w-]*)/gu)].map((match) => match[1] ?? "")),
@@ -267,6 +259,7 @@ test("no driving document denies a command or flag the CLI actually has", () => 
 
 test("the denial fence bites on the three sections that carried this defect, and spares judgement prose", () => {
   const flags = liveFlags();
+  assert.deepEqual(deniedSubjects("`unclosed\n`awsf status`"), { commands: ["status"], flags: [] });
 
   // Verbatim from the cookbooks before this change. Each must be reported.
   const historical = [

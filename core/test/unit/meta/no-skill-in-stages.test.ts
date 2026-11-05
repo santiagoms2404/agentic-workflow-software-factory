@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import ts from "typescript";
 
@@ -15,7 +15,8 @@ import { intakeWorkflow } from "../../../src/workflow/recipes/intake.ts";
 import { planBuildTestWorkflow } from "../../../src/workflow/recipes/plan-build-test.ts";
 import { simpleSdlcWorkflow } from "../../../src/workflow/recipes/simple-sdlc.ts";
 import { DRIVING_REL } from "./_driving.ts";
-import { relRepo, repoRoot, walkFiles } from "./_walk.ts";
+import { relRepo, repoRoot, sourceImportCandidates, walkFiles } from "./_walk.ts";
+import { sourceProgram } from "./_type-program.ts";
 
 // INV-3's fence, legs one and two. Leg one reads the bytes a stage's prompt
 // sends. Leg two reads what a stage module's code can reach.
@@ -256,7 +257,9 @@ interface ImportEdge {
 }
 
 function sourceFileAt(path: string): ts.SourceFile {
-  return ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const source = sourceProgram(SOURCE_ROOT).program.getSourceFile(resolve(path));
+  assert.ok(source !== undefined, `the checked source program omitted ${relRepo(path)}`);
+  return source;
 }
 
 function relativeImports(file: string, sourceFiles: ReadonlySet<string>): readonly ImportEdge[] {
@@ -267,10 +270,7 @@ function relativeImports(file: string, sourceFiles: ReadonlySet<string>): readon
       const specifier = match[2];
       if (specifier === undefined) continue;
       const unresolved = resolve(dirname(file), specifier);
-      const candidates = extname(unresolved) === ""
-        ? [unresolved, `${unresolved}.ts`, `${unresolved}.tsx`, join(unresolved, "index.ts"), join(unresolved, "index.tsx")]
-        : [unresolved];
-      const target = candidates.find((candidate) => sourceFiles.has(candidate));
+      const target = sourceImportCandidates(unresolved).find((candidate) => sourceFiles.has(candidate));
       if (target === undefined) continue;
       const relativeTarget = relRepo(target);
       if (!edges.has(relativeTarget)) edges.set(relativeTarget, source.slice(0, match.index).split("\n").length);
@@ -279,10 +279,14 @@ function relativeImports(file: string, sourceFiles: ReadonlySet<string>): readon
   return [...edges].map(([target, line]) => ({ target, line }));
 }
 
+let cachedRelativeImportGraph: ReadonlyMap<string, readonly ImportEdge[]> | undefined;
+
 function buildRelativeImportGraph(): ReadonlyMap<string, readonly ImportEdge[]> {
+  if (cachedRelativeImportGraph !== undefined) return cachedRelativeImportGraph;
   const files = walkFiles(SOURCE_ROOT);
   const sourceFiles = new Set(files);
-  return new Map(files.map((file) => [relRepo(file), relativeImports(file, sourceFiles)]));
+  cachedRelativeImportGraph = new Map(files.map((file) => [relRepo(file), relativeImports(file, sourceFiles)]));
+  return cachedRelativeImportGraph;
 }
 
 /** Each map value is the shortest relative-import chain from a stage source, hop by hop. */
@@ -522,22 +526,6 @@ interface Reached {
   readonly depth: number;
 }
 
-let cachedProgram: { readonly program: ts.Program; readonly checker: ts.TypeChecker } | undefined;
-
-/** A checked program over `core/src`, so a symbol can be followed to its declaration. */
-function sourceProgram(): { readonly program: ts.Program; readonly checker: ts.TypeChecker } {
-  if (cachedProgram !== undefined) return cachedProgram;
-  const configPath = join(repoRoot(), "tsconfig.json");
-  const loaded = ts.readConfigFile(configPath, ts.sys.readFile);
-  if (loaded.error !== undefined) {
-    throw new Error(ts.flattenDiagnosticMessageText(loaded.error.messageText, "\n"));
-  }
-  const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, repoRoot());
-  const program = ts.createProgram({ rootNames: walkFiles(SOURCE_ROOT), options: parsed.options });
-  cachedProgram = { program, checker: program.getTypeChecker() };
-  return cachedProgram;
-}
-
 function stringProperty(node: ts.ObjectLiteralExpression, name: string): string | null {
   for (const property of node.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
@@ -665,7 +653,11 @@ function reachTarget(declaration: ts.Declaration): boolean {
  * reported with only its endpoint tells a reader what was reached but not which
  * edge to cut.
  */
+const cachedClosureReaches = new Map<ts.Node, readonly Reached[]>();
+
 function closureReach(closure: GateClosure, checker: ts.TypeChecker): readonly Reached[] {
+  const cached = cachedClosureReaches.get(closure.run);
+  if (cached !== undefined) return cached;
   const entered = new Set<ts.Node>([closure.run]);
   const reached: Reached[] = [{ node: closure.run, chain: [`gate ${closure.gate}`], depth: 0 }];
   let cursor = 0;
@@ -693,6 +685,7 @@ function closureReach(closure: GateClosure, checker: ts.TypeChecker): readonly R
     };
     visit(current.node);
   }
+  cachedClosureReaches.set(closure.run, reached);
   return reached;
 }
 

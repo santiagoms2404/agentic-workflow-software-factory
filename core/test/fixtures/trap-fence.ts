@@ -15,13 +15,18 @@ export const PROTECTED_TRAP_PATHS = [
 export function treeFiles(root: string, directory: string): SourceFile[] {
   const out: SourceFile[] = [];
   function walk(dir: string): void {
-    for (const entry of readdirSync(dir).sort()) {
-      if (["node_modules", ".git", "dist"].includes(entry)) continue;
-      const path = join(dir, entry);
-      const stat = lstatSync(path);
-      if (stat.isSymbolicLink()) throw new Error(`trap tree contains symlink: ${path}`);
-      if (stat.isDirectory()) walk(path);
-      else if (entry.endsWith(".ts")) out.push({ path: relative(root, path).split("\\").join("/"), text: readFileSync(path, "utf8") });
+    const entries = readdirSync(dir, { withFileTypes: true }).sort((left, right) =>
+      left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
+    for (const entry of entries) {
+      if (["node_modules", ".git", "dist"].includes(entry.name)) continue;
+      const path = join(dir, entry.name);
+      if (entry.isSymbolicLink()) throw new Error(`trap tree contains symlink: ${path}`);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.isFile() && entry.name.endsWith(".ts")) {
+        out.push({ path: relative(root, path).split("\\").join("/"), text: readFileSync(path, "utf8") });
+      } else if (!entry.isFile() && lstatSync(path).isFile() && entry.name.endsWith(".ts")) {
+        out.push({ path: relative(root, path).split("\\").join("/"), text: readFileSync(path, "utf8") });
+      }
     }
   }
   walk(join(root, directory));

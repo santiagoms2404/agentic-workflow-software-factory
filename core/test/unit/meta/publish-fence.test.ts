@@ -8,7 +8,6 @@
 // only the real tree's silence.
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 import ts from "typescript";
@@ -20,7 +19,8 @@ import {
   type PublishStatusFacts,
 } from "../../../src/publish/authorize.ts";
 import { TASK_STATES } from "../../../src/state/task-machine.ts";
-import { relRepo, repoRoot, walkFiles } from "./_walk.ts";
+import { relRepo, repoRoot } from "./_walk.ts";
+import { functionDeclaration, repoSourceFile, sourceLocation, sourceProgram } from "./_type-program.ts";
 
 const SOURCE_ROOT = join(repoRoot(), "core", "src");
 const AUTHORIZE_FILE = "core/src/publish/authorize.ts";
@@ -82,37 +82,6 @@ function pushSites(fileName: string, text: string): readonly string[] {
   return sites;
 }
 
-let cachedSourceProgram: { readonly program: ts.Program; readonly checker: ts.TypeChecker } | undefined;
-
-function sourceProgram(): { readonly program: ts.Program; readonly checker: ts.TypeChecker } {
-  if (cachedSourceProgram !== undefined) return cachedSourceProgram;
-  const configPath = join(repoRoot(), "tsconfig.json");
-  const loaded = ts.readConfigFile(configPath, ts.sys.readFile);
-  if (loaded.error !== undefined) {
-    throw new Error(ts.flattenDiagnosticMessageText(loaded.error.messageText, "\n"));
-  }
-  const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, repoRoot());
-  const program = ts.createProgram({
-    rootNames: walkFiles(SOURCE_ROOT),
-    options: parsed.options,
-  });
-  cachedSourceProgram = { program, checker: program.getTypeChecker() };
-  return cachedSourceProgram;
-}
-
-function repoSourceFile(program: ts.Program, relativePath: string): ts.SourceFile {
-  const expected = resolve(repoRoot(), relativePath);
-  const source = program.getSourceFiles().find((candidate) => resolve(candidate.fileName) === expected);
-  assert.notEqual(source, undefined, `missing source file ${relativePath}`);
-  return source!;
-}
-
-function functionDeclaration(source: ts.SourceFile, name: string): ts.FunctionDeclaration {
-  const matches = source.statements.filter((statement): statement is ts.FunctionDeclaration =>
-    ts.isFunctionDeclaration(statement) && statement.name?.text === name);
-  assert.equal(matches.length, 1, `${relRepo(source.fileName)} must declare exactly one ${name}`);
-  return matches[0]!;
-}
 
 function interfaceDeclaration(source: ts.SourceFile, name: string): ts.InterfaceDeclaration {
   const matches = source.statements.filter((statement): statement is ts.InterfaceDeclaration =>
@@ -147,11 +116,6 @@ function typeContainsSymbol(
     }
   }
   return false;
-}
-
-function sourceLocation(source: ts.SourceFile, node: ts.Node): string {
-  const position = source.getLineAndCharacterOfPosition(node.getStart(source));
-  return `${relRepo(source.fileName)}:${String(position.line + 1)}:${String(position.character + 1)}`;
 }
 
 function derivationViolations(
@@ -287,8 +251,13 @@ const REFSPEC: PublishRefspec = {
 };
 
 test("the push token exists only in publish/argv.ts", () => {
-  const sites = walkFiles(SOURCE_ROOT, SCANNED_EXTENSIONS)
-    .filter((file) => pushSites(file, readFileSync(file, "utf8")).length > 0)
+  const { program, rootNames } = sourceProgram(SOURCE_ROOT, SCANNED_EXTENSIONS);
+  const sites = rootNames
+    .filter((file) => {
+      const source = program.getSourceFile(file);
+      assert.ok(source !== undefined, `program omitted scanned source ${relRepo(file)}`);
+      return pushSites(file, source.text).length > 0;
+    })
     .map(relRepo)
     .sort();
 
@@ -334,7 +303,7 @@ test("the push detector ignores method calls, prose and the --push flag", () => 
 });
 
 test("publish argv derives only from the branded authorization type", () => {
-  const { program, checker } = sourceProgram();
+  const { program, checker } = sourceProgram(SOURCE_ROOT, SCANNED_EXTENSIONS);
   const authorizeSource = repoSourceFile(program, AUTHORIZE_FILE);
   const argvSource = repoSourceFile(program, ARGV_FILE);
   const planDeclaration = interfaceDeclaration(authorizeSource, "AuthorizedPublishPlan");
