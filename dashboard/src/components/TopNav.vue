@@ -78,7 +78,7 @@ onUnmounted(() => {
       </svg>
       <strong class="brand">{{ project }}</strong>
       <span class="sep">›</span>
-      <a href="#/sessions" :aria-current="!sessionId && !settings ? 'page' : false">sessions</a>
+      <a href="#/sessions" :aria-current="!sessionId && !settings && !backlog && !groups && !canvas && !metrics ? 'page' : false">sessions</a>
       <template v-if="sessionId">
         <span class="sep">›</span>
         <a :href="`#/sessions/${sessionId}`" :aria-current="!phaseName ? 'page' : false">{{ sessionId.slice(0, 8) }}</a>

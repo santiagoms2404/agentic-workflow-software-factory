@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { SessionCard } from "../../shared/types.ts";
 import {
   FAILURE_CLASSES,
@@ -24,6 +24,14 @@ const open = ref<FailureClass | null>(null);
 const shown = computed(() => open.value === null ? [] : failures.value.filter((held) => held.failure === open.value));
 const codes = computed(() => open.value === null ? [] : failureCodes(failures.value, open.value));
 const expanded = ref<string | null>(null);
+
+/** A class whose last failed phase has gone closes with it, rather than leaving an empty panel open with no control to close it. */
+watch(present, (classes) => {
+  if (open.value !== null && !classes.includes(open.value)) {
+    open.value = null;
+    expanded.value = null;
+  }
+});
 
 function toggle(failure: FailureClass): void {
   open.value = open.value === failure ? null : failure;

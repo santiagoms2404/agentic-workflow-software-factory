@@ -3,9 +3,19 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { repoRoot } from "./meta/_walk.ts";
+import type { CanvasEdge, CanvasGraph, CanvasNode } from "../../../dashboard/src/canvas-graph.ts";
+import { layoutGraph } from "../../../dashboard/src/canvas-layout.ts";
 
 function source(path: string): string {
   return readFileSync(join(repoRoot(), path), "utf8");
+}
+
+function canvasNode(id: string): CanvasNode {
+  return { id, kind: "run", label: id, weight: 1, sessionIds: [], ref: null };
+}
+
+function canvasGraph(nodes: readonly CanvasNode[], edges: readonly CanvasEdge[]): CanvasGraph {
+  return { nodes, edges, clusters: [], unplaced: [] };
 }
 
 test("B14-04: CanvasMap supports Enter/Space selection and navigation fallback", () => {
@@ -55,4 +65,68 @@ test("B14-13 & B14-14: TicketSourceOverlay handles backdrop mouse tracking and f
   assert.match(overlay, /event\.key === "Tab"/u);
   assert.match(overlay, /event\.shiftKey/u);
   assert.match(overlay, /ref="dialog"/u);
+});
+
+test("B14-29: EventLog keeps its error alert until the next result replaces it", () => {
+  const events = source("dashboard/src/components/EventLog.vue");
+  const load = events.match(/async function load\(\): Promise<void> \{([\s\S]*?)\n\}/u);
+  assert.ok(load, "load defined");
+  const body = load[1] ?? "";
+  // The reset ran before every request, so a failing endpoint removed and
+  // re-inserted the alert on each one-second tick.
+  assert.doesNotMatch(body.slice(0, body.indexOf("try {")), /error\.value = null/u);
+  // The message is cleared only once a response has actually come back.
+  assert.match(body, /\} while \(more\);[\s\S]*?error\.value = null;\s*\} catch/u);
+  // The empty-phase note holds through a poll: it hides only until the first
+  // attempt has settled, not for the length of every request.
+  assert.match(events, /v-if="!phaseEvents\.length && settled"/u);
+  assert.doesNotMatch(events, /v-if="!phaseEvents\.length && !loading"/u);
+});
+
+test("B14-30: the ask line cut counts characters, so an astral character is never split", () => {
+  const tree = source("dashboard/src/components/GroupDecisionTree.vue");
+  assert.doesNotMatch(tree, /line\.slice\(0, 119\)/u);
+  assert.match(tree, /const characters = Array\.from\(line\);/u);
+  assert.match(tree, /characters\.length <= 120 \? line : `\$\{characters\.slice\(0, 119\)\.join\(""\)\}…`/u);
+});
+
+test("B14-31: a failure class whose last failed phase goes away closes its panel", () => {
+  const view = source("dashboard/src/components/RunFailures.vue");
+  assert.match(view, /import \{ computed, ref, watch \} from "vue";/u);
+  assert.match(
+    view,
+    /watch\(present, \(classes\) => \{\s*if \(open\.value !== null && !classes\.includes\(open\.value\)\) \{\s*open\.value = null;/u,
+  );
+});
+
+test("B14-32: the sessions crumb is the current page only on the sessions list", () => {
+  const nav = source("dashboard/src/components/TopNav.vue");
+  assert.match(
+    nav,
+    /:aria-current="!sessionId && !settings && !backlog && !groups && !canvas && !metrics \? 'page' : false"/u,
+  );
+});
+
+test("B14-34: the relayout key moves when an edge is added between nodes already drawn", () => {
+  const map = source("dashboard/src/components/CanvasMap.vue");
+  // The key carries the edges, because the layout's spring force reads them.
+  assert.match(map, /const shape = computed\(\(\) => JSON\.stringify\(\[[\s\S]*?props\.graph\.edges/u);
+  // An edge alone moves the settled layout, so a key that ignores edges goes stale.
+  const ids = ["a", "b", "c", "d", "e", "f"];
+  const nodes = ids.map((id) => canvasNode(`run:${id}`));
+  const bare = layoutGraph(canvasGraph(nodes, []));
+  const linked = layoutGraph(canvasGraph(nodes, [{ from: "run:a", to: "run:f", kind: "membership" }]));
+  const moved = nodes.filter((node) => {
+    const before = bare.positions.get(node.id);
+    const after = linked.positions.get(node.id);
+    return before?.x !== after?.x || before?.y !== after?.y;
+  });
+  assert.ok(moved.length > 0, "one extra edge moves at least one settled position");
+});
+
+test("B14-35: a late phase response scrolls only this route's own drawer", () => {
+  const route = source("dashboard/src/components/SessionRoute.vue");
+  assert.doesNotMatch(route, /document\.querySelector/u);
+  assert.match(route, /<PhaseDetailDrawer [^>]*ref="drawer"/u);
+  assert.match(route, /drawer\.value\?\.\$el/u);
 });

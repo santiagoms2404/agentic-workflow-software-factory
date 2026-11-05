@@ -61,10 +61,15 @@ const hovered = ref<string | null>(null);
 
 /**
  * The layout is recomputed when the graph changes, never on every poll of
- * unchanged rows: the node ids are stable and sorted, so this key only moves
- * when something was actually added or removed.
+ * unchanged rows: the node ids and the edges are stable and sorted, so this key
+ * only moves when something was actually added or removed. Edges belong in it:
+ * the spring force pulls along every edge, so a link added between dots already
+ * on the map moves the settled layout even though no node changed.
  */
-const shape = computed(() => props.graph.nodes.map((node) => node.id).join("|"));
+const shape = computed(() => JSON.stringify([
+  props.graph.nodes.map((node) => node.id),
+  props.graph.edges.map((edge) => [edge.from, edge.to, edge.kind]),
+]));
 const pins = computed(() => retainedPins(props.graph, props.pinned));
 
 function relayout(): void {

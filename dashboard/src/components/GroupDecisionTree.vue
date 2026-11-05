@@ -17,7 +17,9 @@ function askLine(inputId: string | null): string {
   if (inputId === null) return "no recorded ask precedes this";
   const text = askText.value.get(inputId) ?? "";
   const line = text.split("\n").map((value) => value.trim()).find((value) => value.length > 0) ?? "";
-  return line.length <= 120 ? line : `${line.slice(0, 119)}…`;
+  // Counted and cut in characters: a UTF-16 cut can split an astral character and leave a lone surrogate.
+  const characters = Array.from(line);
+  return characters.length <= 120 ? line : `${characters.slice(0, 119).join("")}…`;
 }
 </script>
 

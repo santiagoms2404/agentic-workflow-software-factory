@@ -10,6 +10,8 @@ const events = ref<EventItem[]>([]);
 const cursor = ref(0);
 const hasMore = ref(false);
 const loading = ref(false);
+/** True once an attempt for the current session has finished, so the empty note does not blink on every poll. */
+const settled = ref(false);
 const error = ref<string | null>(null);
 const expanded = reactive(new Set<string>());
 const rawRows = reactive(new Set<string>());
@@ -21,6 +23,7 @@ watch(
     cursor.value = 0;
     events.value = [];
     hasMore.value = false;
+    settled.value = false;
     error.value = null;
     void load();
   },
@@ -41,7 +44,6 @@ function json(value: unknown): string { return JSON.stringify(value, null, 2); }
 async function load(): Promise<void> {
   if (loading.value) return;
   loading.value = true;
-  error.value = null;
   try {
     let more = false;
     do {
@@ -54,9 +56,14 @@ async function load(): Promise<void> {
       more = page.hasMore;
       hasMore.value = page.hasMore;
     } while (more);
+    // Cleared only once a response has come back, so a failing endpoint keeps the same alert in place.
+    error.value = null;
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : "Event log unavailable";
-  } finally { loading.value = false; }
+  } finally {
+    loading.value = false;
+    settled.value = true;
+  }
 }
 onMounted(() => { void load(); timer = setInterval(() => void load(), 1_000); });
 onUnmounted(() => clearInterval(timer));
@@ -66,7 +73,7 @@ onUnmounted(() => clearInterval(timer));
   <section class="event-log" aria-label="Chronological phase events">
     <header><h3>Events ({{ phaseEvents.length }})</h3><span>chronological · canonical timestamps</span></header>
     <p v-if="error" role="alert" class="empty-note">{{ error }}</p>
-    <div v-if="!phaseEvents.length && !loading" class="empty-note">No events recorded for this phase.</div>
+    <div v-if="!phaseEvents.length && settled" class="empty-note">No events recorded for this phase.</div>
     <article v-for="row in foldedRows" :key="row.id" class="event-row" :class="`event-${row.type}`">
       <button type="button" :aria-expanded="expanded.has(row.id)" @click="toggle(row.id)">
         <time>{{ new Date(row.startedAt).toLocaleTimeString([], { hour12: false }) }}</time>

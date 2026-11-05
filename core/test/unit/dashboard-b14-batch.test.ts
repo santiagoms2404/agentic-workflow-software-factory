@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { usePolling } from "../../../dashboard/src/composables/usePolling.ts";
 
 function source(relPath: string): string {
   return readFileSync(new URL(`../../../${relPath}`, import.meta.url), "utf8");
+}
+
+/** Lets promise continuations run while fake timers stay frozen. */
+function flush(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 describe("Batch 14 findings in composables and routes", () => {
@@ -110,5 +116,61 @@ describe("Batch 14 findings in composables and routes", () => {
     assert.ok(loadMatch, "load defined");
     const loadBody = loadMatch[1] ?? "";
     assert.match(loadBody, /AbortSignal\.timeout\(\s*10_?000\s*\)/, "fetch passes AbortSignal.timeout(10000)");
+  });
+
+  it("B14-33: backlog.vue reselects when the requested plan changes, not only at the first seed", () => {
+    const code = source("dashboard/src/routes/backlog.vue");
+    assert.match(code, /const requestedId = requested \?\? null;/u, "the requested plan is normalised once");
+    assert.match(code, /if \(!hasSeededSelection \|\| requestedId !== appliedRequest\) \{/u, "a different request reseeds");
+    assert.match(code, /selectedPlans\.value = initialPlanSelection\(plans, requestedId\);/u, "the new request is applied");
+    assert.match(code, /appliedRequest = requestedId;/u, "the applied request is remembered");
+  });
+
+  it("B14-36: a poll that never settles releases the in-flight guard after a bounded wait", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    t.mock.method(console, "warn", () => {});
+    let calls = 0;
+    const state = usePolling(() => {
+      calls += 1;
+      return new Promise<void>(() => {});
+    }, () => "live");
+    void state.refresh();
+    assert.equal(state.polling.value, true, "the first poll is in flight");
+    t.mock.timers.tick(30_000);
+    await flush();
+    assert.equal(state.polling.value, false, "the wait gave up on the poll, so the guard is released");
+    assert.equal(state.failedAttempts.value, 1, "a poll that never settles counts as a failed attempt");
+    // Live cadence is 500 ms, doubled once by the failed attempt.
+    t.mock.timers.tick(1_000);
+    assert.equal(calls, 2, "the scheduler polls again");
+  });
+
+  it("B14-36: a poll that settles inside the wait is unaffected by the bound", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    t.mock.method(console, "warn", () => {});
+    let release: () => void = () => {};
+    const state = usePolling(() => new Promise<void>((resolve) => { release = resolve; }), () => "live");
+    void state.refresh();
+    t.mock.timers.tick(29_000);
+    release();
+    await flush();
+    assert.equal(state.polling.value, false);
+    assert.equal(state.failedAttempts.value, 0, "a settled poll is not a failure");
+    assert.notEqual(state.lastPollAt.value, null, "the settled poll is recorded");
+  });
+
+  it("B14-36: a poll that rejects still counts as a failed attempt and reschedules", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    t.mock.method(console, "warn", () => {});
+    let calls = 0;
+    const state = usePolling(async () => {
+      calls += 1;
+      throw new Error("server unavailable");
+    }, () => "live");
+    await state.refresh();
+    assert.equal(state.failedAttempts.value, 1);
+    assert.equal(state.polling.value, false);
+    t.mock.timers.tick(1_000);
+    assert.equal(calls, 2, "the failed attempt backs off and polls again");
   });
 });

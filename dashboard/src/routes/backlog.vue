@@ -14,6 +14,8 @@ const collapsedPlans = ref<readonly string[]>([]);
 const expandedColumns = ref<readonly string[]>([]);
 let knownPlans: readonly string[] = [];
 let hasSeededSelection = false;
+/** The plan the URL named when the selection was last seeded. */
+let appliedRequest: string | null = null;
 const planFilter = ref<PlanFilter>("both");
 const activeTicket = ref<BacklogTicket | null>(null);
 const ticketSources = ref<Readonly<Record<string, string>>>({});
@@ -25,9 +27,13 @@ watch(
   ([plans, requested]) => {
     if (plans.length === 0) return;
     const currentPlanIds = plans.map((plan) => plan.id);
-    if (!hasSeededSelection) {
-      selectedPlans.value = initialPlanSelection(plans, requested);
+    const requestedId = requested ?? null;
+    // A different plan in the URL reselects, as a fresh visit would. The same
+    // request arriving again on a poll does not, so the reader's choice holds.
+    if (!hasSeededSelection || requestedId !== appliedRequest) {
+      selectedPlans.value = initialPlanSelection(plans, requestedId);
       hasSeededSelection = true;
+      appliedRequest = requestedId;
     } else {
       selectedPlans.value = admitNewFilterValues(knownPlans, currentPlanIds, selectedPlans.value);
     }
