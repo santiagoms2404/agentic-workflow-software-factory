@@ -212,6 +212,15 @@ test("stats folds every aggregate the prototype computes", () => {
   assert.equal(s.landedPerAgentHour, 1);
 });
 
+test("B13-24: landed per agent-hour counts only the landings whose time was measured", () => {
+  const measured = [row({ minutes: 60 }), row({ minutes: 60 })];
+  const unmeasured = [row({ minutes: null }), row({ minutes: null })];
+  const s = stats([...measured, ...unmeasured], PRICE);
+  assert.equal(s.landed, 4, "all four runs landed");
+  assert.equal(s.agentHours, 2, "only the timed minutes are agent time");
+  assert.equal(s.landedPerAgentHour, 1, "two timed landings in two agent-hours, not four in two");
+});
+
 test("stats on no rows reports no rates rather than zeros", () => {
   const s = stats([], PRICE);
   assert.equal(s.firstPass.p, null);
@@ -312,6 +321,26 @@ test("verdicts: overkill starts at exactly 1.5× the cheaper route's cost", () =
   ], "builder", "first-pass", "list-per-row", PRICE)).find((verdict) => verdict.key === "claude/opus@high")!;
   assert.equal(at(3).tag, "overkill");
   assert.equal(at(2.99).tag, "frontier");
+});
+
+test("B13-18, B13-19: a zero-cost route is never an overkill comparator, so no verdict reads NaN or Infinity", () => {
+  const free = verdicts(frontier([
+    ...rows(20, 18, { route: OPUS_HIGH, usd: 6 }),
+    ...rows(20, 18, { route: SONNET_HIGH, usd: 0 }),
+  ], "builder", "first-pass", "list-per-row", PRICE));
+  const byKey = Object.fromEntries(free.map((verdict) => [verdict.key, verdict]));
+  assert.equal(byKey["claude/opus@high"]?.tag, "frontier");
+  assert.equal(byKey["claude/sonnet@high"]?.tag, "frontier");
+  for (const verdict of free) assert.doesNotMatch(verdict.text, /NaN|Infinity/);
+
+  const bothFree = verdicts(frontier([
+    ...rows(20, 18, { route: OPUS_HIGH, usd: 0 }),
+    ...rows(20, 18, { route: SONNET_HIGH, usd: 0 }),
+  ], "builder", "first-pass", "list-per-row", PRICE));
+  for (const verdict of bothFree) {
+    assert.notEqual(verdict.tag, "overkill", verdict.key);
+    assert.doesNotMatch(verdict.text, /NaN|Infinity/);
+  }
 });
 
 test("recommend picks the cheapest route whose first-pass interval overlaps the best route's", () => {

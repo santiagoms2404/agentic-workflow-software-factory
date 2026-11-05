@@ -223,7 +223,7 @@ export function parseMetricsRoute(hash: string): MetricsRouteState {
     },
     untested: params.get("untested") === "1",
     group: readOne(params, "group", LEDGER_GROUPS, DEFAULT_METRICS_ROUTE.group),
-    families: params.has("cols") ? orderFamilies(readList(params.get("cols")!)) : DEFAULT_FAMILIES,
+    families: readFamilies(params),
     sort: {
       column: params.has("sort") && safeDecode(params.get("sort")!).length > 0 ? safeDecode(params.get("sort")!) : DEFAULT_SORT.column,
       dir: readOne(params, "dir", ["asc", "desc"] as const, DEFAULT_SORT.dir),
@@ -234,6 +234,19 @@ export function parseMetricsRoute(hash: string): MetricsRouteState {
 /** Known families only, in the pills' order; an empty list is a Ledger with its first column alone. */
 function orderFamilies(values: readonly string[]): ColumnFamily[] {
   return COLUMN_FAMILIES.filter((family) => values.includes(family));
+}
+
+/**
+ * `cols=` is the round trip of "every family off", so an empty value means no
+ * families. A value that names only families this build does not know falls
+ * back like any other unknown parameter, instead of blanking the Ledger (B13-22).
+ */
+function readFamilies(params: Map<string, string>): readonly ColumnFamily[] {
+  if (!params.has("cols")) return DEFAULT_FAMILIES;
+  const requested = readList(params.get("cols")!);
+  if (requested.length === 0) return [];
+  const known = orderFamilies(requested);
+  return known.length === 0 ? DEFAULT_FAMILIES : known;
 }
 
 function sameList(a: readonly string[] = [], b: readonly string[] = []): boolean {

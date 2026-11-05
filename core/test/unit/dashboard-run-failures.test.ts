@@ -55,6 +55,20 @@ test("the three kinds of failure that demand different answers stay apart", () =
   }
 });
 
+test("B13-26: a provider's not-now answer is quota even when the record carries no code", () => {
+  assert.equal(classifyFailure(null, "You have hit your ChatGPT usage limit (plus plan). Try again in ~155 min. (E_QUOTA_EXHAUSTED)"), "quota");
+  assert.equal(classifyFailure(null, "ENOENT: no such file or directory"), "unclassified", "a message without the token is still unclassified");
+});
+
+test("B13-27: a code named like an Object.prototype member is unclassified, not a function", () => {
+  for (const code of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+    assert.equal(classifyFailure(code), "unclassified", code);
+  }
+  assert.deepEqual(failureCounts(runFailures([run("a", "BLOCKED", [phase("x", 1, "FAILED", "constructor")])])), {
+    refusal: 0, review: 0, quota: 0, harness: 0, unclassified: 1,
+  });
+});
+
 test("a failure this dashboard has not been taught to read is shown, never guessed at", () => {
   // The codes are `Error` subclass NAMES thrown from production-run.ts, not a
   // designed vocabulary — core has one of those but it never reaches the

@@ -10,6 +10,7 @@ import { classifyPlans } from "../registry/plan-kind.ts";
 import { readLandingSummary } from "../persistence/landing-summary.ts";
 import { locateRunReport } from "../observability/run-report.ts";
 import { attemptDir } from "../persistence/platform-paths.ts";
+import { TASK_STATES } from "../state/task-machine.ts";
 import type { DatabaseSync } from "../observability/sqlite.ts";
 import { openDatabase, setSessionArchived } from "../observability/sqlite.ts";
 import {
@@ -89,10 +90,9 @@ export const API_ROUTE_TABLE = Object.freeze([
 
 export type ApiRouteName = (typeof API_ROUTE_TABLE)[number]["name"];
 
-const LIFECYCLE_STATES: readonly LifecycleState[] = [
-  "DRAFT", "PREPARED", "RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER",
-  "LANDING", "LANDED", "BLOCKED", "CANCELLED",
-];
+// The machine's own vocabulary, so a state the machine adds (PUBLISHED, B13-16)
+// is filterable without a second copy here to fall behind.
+const LIFECYCLE_STATES: readonly LifecycleState[] = TASK_STATES;
 
 function parseJson(value: string): unknown {
   try { return JSON.parse(value) as unknown; } catch { return null; }
@@ -361,6 +361,8 @@ function allowedNextActions(state: string): string[] {
   if (state === "PREPARED") return ["run in terminal"];
   if (state === "AWAITING_OWNER") return ["inspect owner gate in terminal"];
   if (["RUNNING", "GATING", "REVIEWING", "LANDING"].includes(state)) return ["watch"];
+  // The owner's publish act (L27) is open from LANDED, and nothing else said so (B13-17).
+  if (state === "LANDED") return ["publish in terminal"];
   return [];
 }
 

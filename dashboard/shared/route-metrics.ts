@@ -333,6 +333,8 @@ export function stats(rows: readonly MetricsRow[], price: RowPrice): Stats {
   const prices = rows.map(price).filter((value): value is number => value !== null);
   const listTotal = prices.length === 0 ? null : total(prices);
   const minutes = total(rows.map((row) => row.minutes ?? 0));
+  // Throughput counts landings over the same timed rows it divides by, so an untimed run adds to neither side (B13-24).
+  const landedTimed = runsOf(rows.filter((row) => row.minutes !== null)).filter((run) => run.stateGroup === "LANDED").length;
   return {
     n: rows.length,
     settled: settled.length,
@@ -374,7 +376,7 @@ export function stats(rows: readonly MetricsRow[], price: RowPrice): Stats {
     recovered: total(rows.map((row) => row.recovered)),
     corrected: total(rows.map((row) => row.corrected)),
     agentHours: minutes / 60,
-    landedPerAgentHour: minutes > 0 ? landed / (minutes / 60) : null,
+    landedPerAgentHour: minutes > 0 ? landedTimed / (minutes / 60) : null,
   };
 }
 
@@ -671,7 +673,8 @@ export function verdicts(front: Frontier): Verdict[] {
       return { key: point.key, tag: "underpowered", against: best.key, ratio: null,
         text: stated(point, `Underpowered next to ${verdictLabel(best)}: upper bound ${pct(interval.hi)} is below its lower bound ${pct(best.interval.lo)}.`) };
     }
-    const cheaper = eligible.filter((other) => other !== point && other.x * OVERKILL_RATIO <= point.x && overlaps(other.interval, interval))
+    // A zero-cost route is no comparator: nothing is "N× less" than zero, and the ratio below would divide by it (B13-18, B13-19).
+    const cheaper = eligible.filter((other) => other !== point && other.x > 0 && other.x * OVERKILL_RATIO <= point.x && overlaps(other.interval, interval))
       .sort((a, b) => a.x - b.x || (a.key < b.key ? -1 : 1))[0];
     if (cheaper !== undefined) {
       const ratio = point.x / cheaper.x;

@@ -301,6 +301,29 @@ test("session before cursors normalize to the stored millisecond timestamp form"
   } finally { router.close(); fixture.close(); }
 });
 
+test("B13-16: the state filter admits every lifecycle state the machine has, PUBLISHED included", async () => {
+  const fixture = apiFixture();
+  fixture.writer.prepare("UPDATE sessions SET lifecycle_state = 'PUBLISHED' WHERE session_id = 'session-1'").run();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  try {
+    const published = await router.dispatch(request("/api/v1/sessions?state=PUBLISHED"));
+    assert.equal(published.status, 200);
+    assert.deepEqual((published.body as SessionsResponse).sessions.map((session) => session.sessionId), ["session-1"]);
+    assert.equal((await router.dispatch(request("/api/v1/sessions?state=NOT_A_STATE"))).status, 400);
+  } finally { router.close(); fixture.close(); }
+});
+
+test("B13-17: a landed run's detail names the owner's publish act rather than no next action", async () => {
+  const fixture = apiFixture();
+  fixture.writer.prepare("UPDATE sessions SET lifecycle_state = 'LANDED' WHERE session_id = 'session-1'").run();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  try {
+    const detail = await router.dispatch(request("/api/v1/sessions/session-1"));
+    assert.equal(detail.status, 200);
+    assert.deepEqual((detail.body as SessionDetailResponse).allowedNextActions, ["publish in terminal"]);
+  } finally { router.close(); fixture.close(); }
+});
+
 test("malformed and out-of-range query values are wrapped and do not poison later requests", async () => {
   const fixture = apiFixture();
   const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });

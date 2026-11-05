@@ -169,13 +169,15 @@ export interface KindShare {
 }
 
 /**
- * The row's list-price equivalent split by token kind, at the card's rates.
+ * The row's list-price equivalent split by token kind. The shares come from
+ * the card's rates, and the bars are scaled to `listUsd`, the figure the List
+ * column beside them shows, so the bars always add up to that column (B13-23).
  * Reasoning joins output only when a usage event called it additive, as
- * `listEquivalentUsd` counts it. `null` when the row is unpriced.
+ * `listEquivalentUsd` counts it. `null` when the row is unpriced or has no figure.
  */
-export function listByKind(row: Pick<MetricsRoleRow, "route" | "resolvedModel" | "tokens">): KindShare[] | null {
+export function listByKind(row: Pick<MetricsRoleRow, "route" | "resolvedModel" | "tokens">, listUsd: number | null): KindShare[] | null {
   const pricing = priceRow(row);
-  if (!pricing.priced) return null;
+  if (!pricing.priced || listUsd === null) return null;
   const { rate } = pricing;
   const t = row.tokens;
   const reasoning = t.reasoningRelation === "additive" ? t.reasoningTokens ?? 0 : 0;
@@ -186,7 +188,8 @@ export function listByKind(row: Pick<MetricsRoleRow, "route" | "resolvedModel" |
     output: (((t.outputTokens ?? 0) + reasoning) * rate.output) / 1_000_000,
   };
   const total = TOKEN_KINDS.reduce((sum, kind) => sum + usd[kind], 0);
-  return TOKEN_KINDS.map((kind) => ({ kind, usd: usd[kind], share: total === 0 ? 0 : usd[kind] / total }));
+  const share = (kind: TokenKind): number => (total === 0 ? 0 : usd[kind] / total);
+  return TOKEN_KINDS.map((kind) => ({ kind, usd: share(kind) * listUsd, share: share(kind) }));
 }
 
 export interface RoleLine {
@@ -245,7 +248,7 @@ export function roleLines(rows: readonly MetricsRoleRow[], price: RowPrice, cont
         firstPass: firstPassMark(row),
         tokens: `${formatTokens(row.tokens.cacheReadTokens)} · ${formatTokens(row.tokens.outputTokens)}`,
         list: formatListEquivalent(price(row)),
-        byKind: listByKind(row),
+        byKind: listByKind(row, price(row)),
       };
     });
 }

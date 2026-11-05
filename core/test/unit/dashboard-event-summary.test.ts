@@ -106,3 +106,17 @@ test("unknown event kinds use an em dash", () => {
   const item = event("future.event", { message: "ignored" }, { name: "named" });
   assert.equal(summarizeEvent(item), "—");
 });
+
+test("B13-21: a cut text never leaves half of a surrogate pair behind", () => {
+  const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+  // The 157th code unit is the high half of an emoji: the cut backs off one unit.
+  const straddled = summarizeTextDelta(event("text.delta", { text: `${"a".repeat(156)}😀${"b".repeat(10)}` }));
+  assert.equal(straddled, `${"a".repeat(156)}...`);
+  assert.doesNotMatch(straddled, lone);
+  // A run of pairs cut at a pair boundary keeps every whole pair it can.
+  const pairs = summarizeTextDelta(event("text.delta", { text: "😀".repeat(100) }));
+  assert.equal(pairs, `${"😀".repeat(78)}...`);
+  assert.doesNotMatch(pairs, lone);
+  // Text inside the limit is untouched.
+  assert.equal(summarizeTextDelta(event("text.delta", { text: "x".repeat(160) })), "x".repeat(160));
+});

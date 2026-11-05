@@ -14,6 +14,7 @@ import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
 import { loadAllSessions } from "./session-pages.ts";
 import { memoizeUntilRejected } from "./memo-loader.ts";
+import { readSequence } from "./latest-read.ts";
 import { planBanner, sessionsPlanBanner, type PlanBanner } from "./plan-banner.ts";
 import { DEFAULT_METRICS_ROUTE, isMetricsRoute, parseMetricsRoute, readRoleColors, type MetricsRouteState } from "./metrics-lens.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
@@ -213,11 +214,14 @@ function readKind(): ReadKind {
   return selectedId.value ? `session:${selectedId.value}` : "sessions";
 }
 
+/** A poll and a hashchange can overlap; only the read started last may publish (B13-25). */
+const reads = readSequence();
 async function load(): Promise<void> {
   // A paged read publishes only a complete projection. The kind is taken again
   // after the awaits, and a poll whose view changed while it loaded publishes
   // nothing, so one view's response is never read as another's.
   const kind = readKind();
+  const read = reads.begin();
   // The metrics tab polls its own payload; the shell needs only health here.
   const dataRequest = kind === "metrics" ? Promise.resolve(null)
     : kind === "settings" ? fetch("/api/v1/adapters")
@@ -231,6 +235,7 @@ async function load(): Promise<void> {
     loadGroups(),
   ]);
   if (kind !== readKind()) return;
+  if (!reads.isNewest(read)) return;
   if (!nextHealth.ok) throw new Error("Dashboard data unavailable");
   health.value = await nextHealth.json() as HealthResponse;
   if (kind === "metrics") {

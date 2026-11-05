@@ -106,9 +106,15 @@ export function summarizeCeilingGrant(item: EventItem): string {
   return from !== null && to !== null && reason !== null ? `${from} → ${to} calls · ${reason}` : "—";
 }
 
+/** The first `units` UTF-16 code units, never ending on the high half of a surrogate pair (B13-21). */
+function headUnits(text: string, units: number): string {
+  const lastKept = text.charCodeAt(units - 1);
+  return text.slice(0, lastKept >= 0xd800 && lastKept <= 0xdbff ? units - 1 : units);
+}
+
 export function summarizeTextDelta(item: EventItem): string {
   const text = stringValue(payloadOf(item), "text") ?? "—";
-  return text.length > 160 ? `${text.slice(0, 157)}...` : text;
+  return text.length > 160 ? `${headUnits(text, 157)}...` : text;
 }
 
 export function summarizeEvent(item: EventItem): string {

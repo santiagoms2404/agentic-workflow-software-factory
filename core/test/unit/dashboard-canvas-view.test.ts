@@ -68,6 +68,15 @@ test("the whole canvas state survives a reload and a back button, because it is 
   assert.equal(parseCanvasRoute("#/canvas?sel=run:s1").opened, null);
 });
 
+test("B13-20: a malformed escaped node id keeps its raw text rather than throwing out of the route parser", () => {
+  // A stray percent sign in a pasted canvas link: the same fallback the board's
+  // own route parser uses, so the canvas opens instead of stopping the page.
+  assert.equal(parseCanvasRoute("#/canvas/100%").opened, "100%");
+  assert.equal(parseCanvasRoute("#/canvas/%E0%A4%A?kinds=run").opened, "%E0%A4%A");
+  assert.equal(parseCanvasRoute("#/canvas/run%3As1").opened, "run:s1", "valid escapes still decode");
+  assert.equal(parseCanvasRoute("#/canvas/a+b").opened, "a+b", "a path segment keeps a literal plus");
+});
+
 test("an unreadable or empty URL means every kind, never an empty map", () => {
   // A map showing nothing reads as a broken screen rather than as a filter, and
   // there would be no control left on it to undo the filter with.

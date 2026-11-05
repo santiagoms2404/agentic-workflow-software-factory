@@ -197,6 +197,9 @@ test("column families and the sort live in the hash and flip as the pills and he
 
   assert.deepEqual(parseMetricsRoute("#/metrics?cols=cost,pie,outcome").families, ["outcome", "cost"], "unknown families drop, order is the pills'");
   assert.deepEqual(parseMetricsRoute("#/metrics?cols=").families, []);
+  // B13-22: a value that names only unknown families falls back as any other unknown parameter does.
+  assert.deepEqual(parseMetricsRoute("#/metrics?cols=bogus").families, DEFAULT_FAMILIES, "unknown-only is the default, not an empty Ledger");
+  assert.deepEqual(parseMetricsRoute("#/metrics").families, DEFAULT_FAMILIES);
   assert.equal(metricsRouteHash(parseMetricsRoute("#/metrics?cols=")), "#/metrics?cols=");
   assert.deepEqual(parseMetricsRoute("#/metrics?dir=sideways").sort, { column: COUNT_COLUMN, dir: "desc" });
 });
@@ -281,13 +284,24 @@ test("the per-role table: design role order, tool counts, first-pass marks and l
   assert.equal(builder.toolMix, `R${row.tools.read} S${row.tools.search} E${row.tools.edit} X${row.tools.exec} O${row.tools.other}`);
   assert.equal(builder.gates, `${row.gates.pass}/${row.gates.total}`);
   assert.equal(builder.list, formatListEquivalent(listPrice(row)));
-  const kinds = listByKind(row)!;
+  const kinds = listByKind(row, listPrice(row))!;
   assert.deepEqual(kinds.map((kind) => kind.kind), ["input", "cache read", "cache write", "output"]);
   assert.ok(Math.abs(kinds.reduce((sum, kind) => sum + kind.usd, 0) - listPrice(row)!) < 1e-9, "the kinds add up to the row's list equivalent");
   assert.ok(Math.abs(kinds.reduce((sum, kind) => sum + kind.share, 0) - 1) < 1e-9);
   const additive = { ...row, tokens: { ...row.tokens, reasoningRelation: "additive" as const, reasoningTokens: 1_000_000 } };
-  assert.ok(Math.abs(listByKind(additive)!.reduce((sum, kind) => sum + kind.usd, 0) - listPrice(additive)!) < 1e-9, "additive reasoning joins output");
-  assert.equal(listByKind({ ...row, resolvedModel: "not-a-card-id" }), null, "an unpriced row has no bars");
+  assert.ok(Math.abs(listByKind(additive, listPrice(additive))!.reduce((sum, kind) => sum + kind.usd, 0) - listPrice(additive)!) < 1e-9, "additive reasoning joins output");
+  assert.equal(listByKind({ ...row, resolvedModel: "not-a-card-id" }, listPrice(row)), null, "an unpriced row has no bars");
+  // B13-23: the bars follow the figure the List column shows, whatever price the caller passed.
+  const injected = listByKind(row, 42)!;
+  assert.ok(Math.abs(injected.reduce((sum, kind) => sum + kind.usd, 0) - 42) < 1e-9, "an injected price is what the bars add up to");
+  assert.ok(Math.abs(injected[0]!.share - kinds[0]!.share) < 1e-9, "the shares stay at the card's rates");
+  assert.equal(listByKind(row, null), null, "no list figure, no bars");
+  const injectedLines = roleLines(rows, () => 42, { ...context, allRows: payload.roleRows });
+  assert.ok(injectedLines.some((line) => line.byKind !== null), "at least one role is priced");
+  for (const line of injectedLines) {
+    if (line.byKind === null) continue;
+    assert.ok(Math.abs(line.byKind.reduce((sum, kind) => sum + kind.usd, 0) - 42) < 1e-9, `${line.role}: bars add up to the List column`);
+  }
 
   assert.equal(firstPassMark({ settled: false, firstPass: false, blockedHere: false }), "open");
   assert.equal(firstPassMark({ settled: true, firstPass: true, blockedHere: false }), "yes");
