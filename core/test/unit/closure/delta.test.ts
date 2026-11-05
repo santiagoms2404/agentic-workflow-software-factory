@@ -17,6 +17,21 @@ function refused(after: ReadonlyMap<string, Uint8Array>, kind: ClosureDeltaRefus
   return result.refusal;
 }
 
+test("B12-17: refusal context windows never begin or end inside a UTF-8 character", () => {
+  // The offset sits at an odd distance from the two-byte run, so both 24-byte window edges fall mid-character.
+  const text = (last: string) => `${"é".repeat(40)}a${last}${"é".repeat(40)}`;
+  const before = tree();
+  before.set("unrelated.txt", Buffer.from(text("Z")));
+  const after = new Map(before);
+  after.set("unrelated.txt", Buffer.from(text("Y")));
+  const result = closureDelta(before, after, registry);
+  assert.equal(result.ok, false);
+  if (result.ok) throw new Error("expected refusal");
+  for (const context of [result.refusal.beforeContext, result.refusal.afterContext]) {
+    assert.equal(context.includes("�"), false, JSON.stringify(context));
+  }
+});
+
 test("an unchanged complete tree passes agreement without changing arbitrary binary bytes", () => {
   assert.deepEqual(closureDelta(tree(), tree(), registry), { ok: true, changes: [] });
 });

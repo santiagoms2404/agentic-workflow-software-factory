@@ -97,9 +97,10 @@ function stageIndexForWorkflow(workflowId: string): number {
 function compareEvidence(left: StageEnvelopeRow, right: StageEnvelopeRow, phases: ReadonlyMap<string, PhaseRow>): number {
   const leftOrdinal = phases.get(left.phase_id)?.ordinal ?? -1;
   const rightOrdinal = phases.get(right.phase_id)?.ordinal ?? -1;
-  return leftOrdinal - rightOrdinal
+  // A phase ordinal is unique only within its session, so time orders evidence across sessions and the ordinal only breaks ties.
+  return left.created_at.localeCompare(right.created_at)
+    || leftOrdinal - rightOrdinal
     || left.correction_round - right.correction_round
-    || left.created_at.localeCompare(right.created_at)
     || left.envelope_id.localeCompare(right.envelope_id);
 }
 

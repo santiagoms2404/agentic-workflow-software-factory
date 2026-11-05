@@ -281,6 +281,26 @@ test("B12-14: successful S3 followed by BLOCKED S4 stays at S3 with next S4", ()
   });
 });
 
+test("B12-23: stage evidence comes from the newer session even when its phase ordinal is lower", () => {
+  const slug = "test-proj";
+  const older = makeSession(slug, "design-to-plan", "LANDED", "sess-older");
+  const newer = makeSession(slug, "design-to-plan", "LANDED", "sess-newer");
+  // Ordinals are unique only within a session, so the older session's phase can carry the higher ordinal.
+  const olderPhase = makePhase(older.session_id, "ph-older", 6);
+  const newerPhase = makePhase(newer.session_id, "ph-newer", 2);
+  const olderEnvelope = { ...makeEnvelope(older.session_id, olderPhase.phase_id, "awsf.document-output/v1", 1), created_at: "2026-01-01T00:00:00.000Z" };
+  const newerEnvelope = { ...makeEnvelope(newer.session_id, newerPhase.phase_id, "awsf.document-output/v1", 1), created_at: "2026-02-01T00:00:00.000Z" };
+  const rows: StageJournalRows = {
+    sessions: [older, newer],
+    phases: [olderPhase, newerPhase],
+    envelopes: [olderEnvelope, newerEnvelope],
+    transitions: [],
+  };
+  const res = resolveStage({ slug, isRegistered: true }, rows);
+  assert.equal(res.current, "design-to-plan");
+  assert.deepEqual(res.evidence, { schemaId: "awsf.document-output/v1", phaseId: "ph-newer" });
+});
+
 test("B12-14: successful S3 and S4 advance to build completed / next publish", () => {
   const slug = "test-proj";
   const registeredProject: ResolvedProjectValue = { slug, isRegistered: true };

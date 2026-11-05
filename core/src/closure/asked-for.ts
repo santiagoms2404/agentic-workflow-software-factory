@@ -136,9 +136,13 @@ function stable(value: unknown): string {
   return JSON.stringify(value) ?? "undefined";
 }
 
-/** Resolve both snapshots independently. No sealed file path participates. */
+/**
+ * Resolve both snapshots independently. No sealed file path participates. The
+ * after snapshot's registry is required: a caller that omits it must not
+ * silently resolve the after tree through the before snapshot's registry.
+ */
 export function compareAskedFor(before: ClosureTree, after: ClosureTree, registry: ClosureRegistry,
-  selected: readonly AskedForSelection[], afterRegistry: ClosureRegistry = registry): AskedForResult {
+  selected: readonly AskedForSelection[], afterRegistry: ClosureRegistry): AskedForResult {
   const differences: AskedForDifference[] = [];
   try {
     for (const selection of selected) {

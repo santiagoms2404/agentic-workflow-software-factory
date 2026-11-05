@@ -66,7 +66,18 @@ export async function observedAttempts(stateRoot: string, project: string, task:
   if (canonical(names) !== canonical(await readNames())) throw new Error("concurrent attempt creation");
   return found;
 }
+/** A refusal of the registered plan authority. The checklist names it on the row, not as a generic lookup gap. */
+class PlanAuthorityRefusal extends Error {}
+
 async function registeredPlan(unit: Unit, stateRoot: string, project: string): Promise<{ done: boolean; reference: string } | null> {
+  try {
+    return await readRegisteredPlan(unit, stateRoot, project);
+  } catch (error) {
+    throw new PlanAuthorityRefusal((error as Error).message);
+  }
+}
+
+async function readRegisteredPlan(unit: Unit, stateRoot: string, project: string): Promise<{ done: boolean; reference: string } | null> {
   if (!unit.plan) return null;
   const { catalog: path, stem, task, sourceSha256 } = unit.plan;
   const catalog = loadCatalog(await readFile(path, "utf8"));
@@ -78,7 +89,10 @@ async function registeredPlan(unit: Unit, stateRoot: string, project: string): P
   if (!source) throw new Error("registered plan source unresolved");
   const html = await readFile(source.planPath, "utf8");
   if (hash(html) !== sourceSha256) throw new Error("registered plan source revision changed");
-  const planTask = parseAwsfPlanHtmlV1(html, stem).find((value) => value.number === Number(task.slice(1)));
+  // Exactly one task may carry the number, as closure requires; a duplicate is refused, never read from its first copy.
+  const planTasks = parseAwsfPlanHtmlV1(html, stem).filter((value) => value.number === Number(task.slice(1)));
+  if (planTasks.length > 1) throw new Error(`registered plan task ${task} is not unique`);
+  const planTask = planTasks[0];
   const ticketText = await readFile(join(source.ticketsPath, `${task}.md`), "utf8");
   const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/u.exec(ticketText);
   if (!planTask || !match) throw new Error("registered ticket or task missing");
@@ -89,7 +103,7 @@ async function registeredPlan(unit: Unit, stateRoot: string, project: string): P
   const index = blocks.findIndex((block) => block[1]?.[0] === task[0] && Number(block[1]?.slice(1)) === Number(task.slice(1)));
   const block = blocks[index];
   if (!block || prompt !== section.slice(block.index! + block[0].length, blocks[index + 1]?.index ?? section.length).trim()
-    || ticket.id !== task || ticket.title !== block[2] || ticket.milestone !== planTask.milestone) throw new Error("registered plan/ticket compatibility mismatch");
+    || ticket.id !== task || ticket.title !== block[2]?.trim() || ticket.milestone !== planTask.milestone) throw new Error("registered plan/ticket compatibility mismatch");
   if (!["todo", "wip", "done", "failed"].includes(String(ticket.state)) || planTask.checklist.length === 0
     || !Array.isArray(ticket.depends_on) || ticket.depends_on.some((id) => typeof id !== "string" || id >= task)
     || canonical(ticket.serves ?? []) !== canonical(planTask.serves)) throw new Error("registered plan/ticket vocabulary or coverage mismatch");
@@ -149,7 +163,9 @@ export async function checklist(group: Group, stateRoot: string, asOf: string): 
       }
     } catch (error) {
       row.delivery = /stale|changed|concurrent|mismatch/u.test((error as Error).message) ? "stale" : "unknown";
-      row.conditions.push("evidence lookup incomplete: refresh execution and source references");
+      row.conditions.push(error instanceof PlanAuthorityRefusal
+        ? `registered plan refused: ${error.message}`
+        : "evidence lookup incomplete: refresh execution and source references");
     }
     if (unit.decisions.length > 0) row.conditions.push(...unit.decisions.map((decision) => `unresolved: ${decision}`));
     if (unit.disposition === "deferred") row.conditions.push(`deferred: ${unit.reason}. Revisit: ${unit.revisit}. Active attempts are unchanged.`);

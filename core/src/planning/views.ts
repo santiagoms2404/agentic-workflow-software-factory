@@ -277,7 +277,12 @@ function treeChange(change: Change): TreeChange {
 
 function firstLine(text: string): string {
   const line = text.split("\n").map((value) => value.trim()).find((value) => value.length > 0) ?? "";
-  return line.length <= TITLE_BUDGET ? line : `${line.slice(0, TITLE_BUDGET - 1)}…`;
+  if (line.length <= TITLE_BUDGET) return line;
+  // Cut before a surrogate pair rather than through it, so no lone high surrogate precedes the ellipsis.
+  let end = TITLE_BUDGET - 1;
+  const kept = line.charCodeAt(end - 1);
+  if (kept >= 0xd800 && kept <= 0xdbff) end -= 1;
+  return `${line.slice(0, end)}…`;
 }
 
 /** The owner input in force at a stage: the most recent one at or before it. */

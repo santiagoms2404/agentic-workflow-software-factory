@@ -95,7 +95,7 @@ function refused(before: ClosureTree, after: ClosureTree, path: string): void {
 }
 
 function askChanged(before: ClosureTree, after: ClosureTree, selection: AskedForSelection, field: string): void {
-  const result = compareAskedFor(before, after, registry, [selection]);
+  const result = compareAskedFor(before, after, registry, [selection], registry);
   assert.equal(result.ok, false, `${JSON.stringify(selection)}: ${field}`);
   if (result.ok || result.refusal.code !== "E_CLOSURE_ASK_CHANGED") throw new Error(JSON.stringify(result));
   assert.ok(result.refusal.differences.some((difference) => difference.field === field), JSON.stringify(result));
@@ -163,7 +163,7 @@ for (const source of sources) {
       for (const value of ["todo", "wip", "done"]) {
         const after = replaceSpan(before, path, fm.stateStart, fm.stateEnd, value);
         checkFlip(after, { ...input, tickets: input.tickets.map((item) => item.id === ticket.id ? { ...item, state: value } : item) }, path);
-        assert.equal(compareAskedFor(before, after, registry, [selection]).ok, true);
+        assert.equal(compareAskedFor(before, after, registry, [selection], registry).ok, true);
       }
       for (const value of ["failed", "unknown"]) refused(before, replaceSpan(before, path, fm.stateStart, fm.stateEnd, value), path);
       for (const field of ["title", "milestone", "depends_on", "serves"]) {
@@ -186,7 +186,7 @@ for (const source of sources) {
       const findings = text(handoffBase, path).indexOf("Corpus findings.");
       const handoff = oneByte(handoffBase, path, findings, findings + "Corpus findings.".length);
       refused(handoffBase, handoff, path);
-      assert.equal(compareAskedFor(handoffBase, handoff, registry, [selection]).ok, true);
+      assert.equal(compareAskedFor(handoffBase, handoff, registry, [selection], registry).ok, true);
       classes.add("Handoff");
       const task = layout.tasks.find((item) => item.number === ticket.number)!;
       assert.ok(task, `${path}: task missing`);
@@ -207,7 +207,7 @@ for (const source of sources) {
       for (const token of [...layout.milestones, ...task.tokens].sort((a, b) => b.valueStart - a.valueStart)) {
         statusOnly = replaceSpan(statusOnly, source.planPath, token.valueStart, token.valueEnd, token.value === "x" ? "wip" : "x");
       }
-      assert.equal(compareAskedFor(before, statusOnly, registry, [selection]).ok, true);
+      assert.equal(compareAskedFor(before, statusOnly, registry, [selection], registry).ok, true);
     }
     if (input.tickets.length > 0) {
       const section = text(before, source.promptsPath);

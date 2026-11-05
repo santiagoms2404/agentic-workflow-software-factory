@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { capture, propose, apply, replay, hash, proposalHash, reference, groupDirectory, type Location } from "../../src/planning/store.ts";
 import { currentUnit, affectedSuccessors, type Change, type Group, type Narrative, type Proposal, type Unit } from "../../src/planning/model.ts";
 import { checklist } from "../../src/planning/evidence.ts";
-import { bounded, packet, previewGroup } from "../../src/planning/views.ts";
+import { bounded, decisionTree, packet, previewGroup } from "../../src/planning/views.ts";
 import { writePlacement } from "../../src/registry/placement.ts";
 import { main } from "../../src/cli/main.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
@@ -405,6 +405,66 @@ test("registered plan source and Section B/ticket authority remain part of the r
   await writeFile(join(tickets, "T01.md"), ticket);
   await writeFile(catalog, catalogText.replace("awsf-plan-html/v1", "unsupported-format/v1"));
   assert.notEqual((await checklist(group, location.stateRoot, at)).rows[0]?.delivery, "done");
+});
+
+const registeredCatalog = "version: awsf.project/v1\nproject:\n  slug: sample\nrepositories:\n  plans:\n    role: plan\n    default_branch: main\nplans:\n  root: specs\n  format: awsf-plan-html/v1\n  default: sample-plan\n";
+const registeredHtml = '<section><h3><code class="status">[]</code> Milestone M1: Sample</h3><h4>1. Sample task</h4><ul><li><code class="status">[]</code> Complete</li></ul></section>';
+const registeredPrompt = "Build the sample task";
+const registeredTicket = `---\nid: T01\ntitle: Sample task\nmilestone: M1\nstate: todo\ndepends_on: []\n---\n\n## Build prompt\n\n${registeredPrompt}\n`;
+/** A registered plan repository with the given plan HTML, Section B prompts file and ticket. Returns the catalog path. */
+async function registeredRepository(location: Location, html: string, sectionB: string, ticket: string): Promise<string> {
+  const repository = join(location.stateRoot, "foreign-plan-repository");
+  const catalog = join(repository, "awsf.project.yaml");
+  await mkdir(join(repository, "specs", "tickets", "sample-plan"), { recursive: true });
+  await writeFile(catalog, registeredCatalog);
+  await writePlacement(location.stateRoot, location.project, { version: "awsf.placement/v1", project: location.project, repositories: { plans: { path: repository } } });
+  await writeFile(join(repository, "specs", "sample-plan.html"), html);
+  await writeFile(join(repository, "specs", "sample-plan-build-prompts.md"), sectionB);
+  await writeFile(join(repository, "specs", "tickets", "sample-plan", "T01.md"), ticket);
+  return catalog;
+}
+/** A unit bound to a landed attempt, so its delivery reads the registered plan authority. */
+async function landedRegisteredUnit(location: Location, catalog: string, html: string, stem = "sample-plan"): Promise<Group> {
+  let group = await defined(location, [{ ...unit(), plan: { catalog, stem, task: "T01", sourceSha256: hash(html) } }]);
+  const created = await attempt(location);
+  group = await bind(location, group);
+  await persistAttempt(created.attemptDir, 1, { kind: "attempt.transitioned", next: nextRevision(created.status, { lifecycleState: "LANDED", candidateSha: "a".repeat(40) }) });
+  return group;
+}
+
+test("B12-19: a duplicated plan task number refuses the registered join instead of reading its first copy", async (t) => {
+  const location = await fixture(t);
+  const html = '<section><h3><code class="status">[x]</code> Milestone M1: Sample</h3><h4>1. Sample task</h4><ul><li><code class="status">[x]</code> Complete</li></ul><h4>1. Sample task again</h4><ul><li><code class="status">[]</code> Open</li></ul></section>';
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task\n\n${registeredPrompt}\n`;
+  const catalog = await registeredRepository(location, html, sectionB, registeredTicket.replace("state: todo", "state: done"));
+  const group = await landedRegisteredUnit(location, catalog, html);
+  const row = (await checklist(group, location.stateRoot, at)).rows[0]!;
+  assert.equal(row.delivery, "unknown");
+  assert.ok(row.conditions.includes("registered plan refused: registered plan task T01 is not unique"), JSON.stringify(row.conditions));
+});
+
+test("B12-20: a Section B heading with trailing spaces agrees with its ticket title", async (t) => {
+  const location = await fixture(t);
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task   \n\n${registeredPrompt}\n`;
+  const catalog = await registeredRepository(location, registeredHtml, sectionB, registeredTicket);
+  const group = await landedRegisteredUnit(location, catalog, registeredHtml);
+  assert.equal((await checklist(group, location.stateRoot, at)).rows[0]?.delivery, "awaiting-owner");
+});
+
+test("B12-22: an unresolvable registered plan is named on its row, not reported as a generic lookup gap", async (t) => {
+  const location = await fixture(t);
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task\n\n${registeredPrompt}\n`;
+  const catalog = await registeredRepository(location, registeredHtml, sectionB, registeredTicket);
+  const group = await defined(location, [{ ...unit(), plan: { catalog, stem: "missing-plan", task: "T01", sourceSha256: hash(registeredHtml) } }]);
+  const row = (await checklist(group, location.stateRoot, at)).rows[0]!;
+  assert.equal(row.delivery, "unknown");
+  assert.ok(row.conditions.includes("registered plan refused: registered plan source unresolved"), JSON.stringify(row.conditions));
+});
+
+test("B12-21: a long first input line is cut on a whole code point, never leaving a lone surrogate", async (t) => {
+  const location = await fixture(t);
+  const group = await initial(location, `${"a".repeat(178)}\u{1F600}b`);
+  assert.equal(decisionTree(group).title?.text, `${"a".repeat(178)}…`);
 });
 
 test("current source refresh supersedes historical hashes without erasing amendment history", async (t) => {
