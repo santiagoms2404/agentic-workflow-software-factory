@@ -20,7 +20,7 @@ export function credentialKey(key: string): boolean {
  * Credential-named fields are redacted even when their current value is not
  * recognizable; shape-based matching is defense against new token formats.
  */
-export function scrubCredentials<T>(value: T): T {
+export function scrubCredentials<T>(value: T, omitKey?: (key: string) => boolean): T {
   const seen = new WeakMap<object, unknown>();
   const visit = (node: unknown): unknown => {
     if (typeof node === "string") return scrubCredentialString(node);
@@ -36,6 +36,7 @@ export function scrubCredentials<T>(value: T): T {
     const output: Record<string, unknown> = {};
     seen.set(node, output);
     for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
+      if (omitKey?.(key)) continue;
       output[key] = credentialKey(key) ? REDACTED_VALUE : visit(child);
     }
     return output;

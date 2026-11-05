@@ -25,9 +25,14 @@ export function globalCredentialPattern(pattern: RegExp): RegExp {
   return new RegExp(pattern.source, flags);
 }
 
+/** Global variants are constructed once and reused by every scrub operation. */
+export const GLOBAL_CREDENTIAL_PATTERNS: readonly RegExp[] = Object.freeze(
+  CREDENTIAL_PATTERNS.map(globalCredentialPattern),
+);
+
 export function scrubCredentialString(value: string): string {
-  return CREDENTIAL_PATTERNS.reduce(
-    (scrubbed, pattern) => scrubbed.replace(globalCredentialPattern(pattern), REDACTED_VALUE),
+  return GLOBAL_CREDENTIAL_PATTERNS.reduce(
+    (scrubbed, pattern) => scrubbed.replace(pattern, REDACTED_VALUE),
     value,
   );
 }

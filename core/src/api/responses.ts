@@ -37,27 +37,23 @@ function privateResponseKey(key: string): boolean {
 
 /** Removes reference-shaped fields, then applies the repository credential scrubber. */
 export function publicApiValue<T>(value: T): T {
-  const visit = (node: unknown): unknown => {
-    if (Array.isArray(node)) return node.map(visit);
-    if (node === null || typeof node !== "object") return node;
-    const output: Record<string, unknown> = {};
-    for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
-      if (!privateResponseKey(key)) output[key] = visit(child);
-    }
-    return output;
-  };
-  return scrubCredentials(visit(value)) as T;
+  return scrubCredentials(value, privateResponseKey);
+}
+
+function responseHeaders(): Readonly<Record<string, string>> {
+  return Object.freeze({
+    ...SECURITY_HEADERS,
+    "content-type": "application/json; charset=utf-8",
+  });
 }
 
 export function jsonResponse(body: unknown, status = 200): ApiResponse {
-  return {
-    status,
-    headers: Object.freeze({
-      ...SECURITY_HEADERS,
-      "content-type": "application/json; charset=utf-8",
-    }),
-    body: publicApiValue(body),
-  };
+  return { status, headers: responseHeaders(), body: publicApiValue(body) };
+}
+
+/** A response whose repository source text must remain byte-for-byte intact. */
+export function verbatimJsonResponse(body: unknown, status = 200): ApiResponse {
+  return { status, headers: responseHeaders(), body };
 }
 
 export function errorResponse(status: number, code: string, message: string): ApiResponse {

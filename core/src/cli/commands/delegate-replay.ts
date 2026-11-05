@@ -15,20 +15,19 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import type { AttemptEvent, AttemptStatus } from "./attempt.ts";
 import type { OwnerTerminal } from "../tty.ts";
-import { decide } from "../../decision/decide.ts";
 import { JevTransport } from "../../decision/jev-transport.ts";
-import { STOP_JUDGMENT } from "../../decision/question-sets/stop-judgment.ts";
+import { readJevProjectSwitch } from "../../decision/jev-project.ts";
 import { discoverAttempts } from "../../observability/rebuild.ts";
 import type { JournalRecord } from "../../persistence/journal.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
 import { scanJournal } from "../../persistence/replay.ts";
 import { readTaskDelegateProposals } from "../../persistence/task-delegate.ts";
 import { appendDelegateReplays, delegateStateDir, readDelegateReplays } from "../../persistence/delegate-replays.ts";
-import { loadCatalog } from "../../registry/catalog.ts";
-import { jevSwitchOf, type JevSwitch } from "../../registry/catalog-schema.ts";
+import type { JevSwitch } from "../../registry/catalog-schema.ts";
 import { readPlacement } from "../../registry/placement.ts";
 import { pairAttempt, type Pair } from "../../delegate/agreement.ts";
 import type { PhaseRoles } from "../../delegate/policy.ts";
+import { judgeStop } from "../../delegate/stop-judge.ts";
 import {
   effectiveReplays,
   historicalStopIndices,
@@ -111,12 +110,9 @@ export async function projectSwitch(
       // placement not found
     }
   }
-  if (resolvedPath === undefined) return "on";
-  try {
-    return jevSwitchOf(loadCatalog(await readFile(resolvedPath, "utf8")));
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT" ? "on" : "off";
-  }
+  // No identified project catalog is not permission to use the schema's on default.
+  if (resolvedPath === undefined) return "off";
+  return (await readJevProjectSwitch(resolvedPath)).value;
 }
 
 async function attemptsInScope(stateRoot: string, project: string | undefined): Promise<AttemptSource[]> {
@@ -188,16 +184,17 @@ export async function delegateReplayCommand(options: DelegateReplayOptions): Pro
         options.stateRoot,
         options.project ?? firstStatus?.project,
       ),
-      ...(options.env === undefined ? {} : { env: options.env }),
+      env: options.env ?? {},
     });
     const decisionsDir = delegateStateDir(options.stateRoot);
-    judge = async (facts, allowedActs) => {
-      const decided = await decide(STOP_JUDGMENT, { stop: facts }, {
-        transport, taskRoot: decisionsDir, project: facts.project, taskId: facts.task, attempt: facts.attempt,
-        caller: { kind: "replay", name: facts.stopKind }, params: { allowedActs }, now, newId,
-      });
-      return { judgment: { outcome: decided.outcome, result: decided.policyResult }, decision: { recordId: decided.recordId, outcome: decided.outcome } };
-    };
+    judge = (facts, allowedActs) => judgeStop(facts, {
+      transport,
+      taskRoot: decisionsDir,
+      caller: "replay",
+      allowedActs,
+      now,
+      newId,
+    });
   }
 
   const replayId = newId();

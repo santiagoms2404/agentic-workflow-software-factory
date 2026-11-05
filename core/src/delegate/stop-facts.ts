@@ -45,6 +45,14 @@ export const STOP_KINDS = [
 ] as const;
 export type StopKind = (typeof STOP_KINDS)[number];
 
+/** The journal evidence that starts one of the stops described by stopOf(). */
+export function isStopOpeningEvidence(evidence: AttemptEvidence | undefined): boolean {
+  return evidence !== undefined && (
+    evidence.type === "ceiling-pause" || evidence.type === "quota-pause" || evidence.type === "ticket-block" ||
+    (evidence.type === "transition" && (evidence.to === "AWAITING_OWNER" || evidence.to === "BLOCKED"))
+  );
+}
+
 const PARKED_KINDS = ["ceiling-pause", "quota-pause", "ticket-block"] as const;
 type ParkedKind = (typeof PARKED_KINDS)[number];
 

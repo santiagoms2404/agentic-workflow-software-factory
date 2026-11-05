@@ -6,6 +6,23 @@ import type { DatabaseSync } from "./sqlite.ts";
 import { TERMINAL_STATES } from "../state/task-machine.ts";
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
 
+type ReadStatement = ReturnType<DatabaseSync["prepare"]>;
+const READ_STATEMENTS = new WeakMap<DatabaseSync, Map<string, ReadStatement>>();
+
+function readStatement(db: DatabaseSync, sql: string): ReadStatement {
+  let statements = READ_STATEMENTS.get(db);
+  if (statements === undefined) {
+    statements = new Map();
+    READ_STATEMENTS.set(db, statements);
+  }
+  let statement = statements.get(sql);
+  if (statement === undefined) {
+    statement = db.prepare(sql);
+    statements.set(sql, statement);
+  }
+  return statement;
+}
+
 export interface SessionRow {
   session_id: string;
   project_slug: string;
@@ -138,7 +155,8 @@ export interface PhaseRow {
 }
 
 export function phasesForSession(db: DatabaseSync, sessionId: string): PhaseRow[] {
-  return db.prepare("SELECT * FROM phases WHERE session_id = ? ORDER BY ordinal LIMIT 100").all(sessionId) as unknown as PhaseRow[];
+  return readStatement(db, "SELECT * FROM phases WHERE session_id = ? ORDER BY ordinal LIMIT 100")
+    .all(sessionId) as unknown as PhaseRow[];
 }
 
 export function phaseForSession(db: DatabaseSync, sessionId: string, phaseReference: string): PhaseRow | null {
@@ -227,7 +245,7 @@ export interface AgentRow {
 }
 
 export function agentsForSession(db: DatabaseSync, sessionId: string): AgentRow[] {
-  return db.prepare(`SELECT session_id, agent, adapter_id, provider, color, requested_model,
+  return readStatement(db, `SELECT session_id, agent, adapter_id, provider, color, requested_model,
       resolved_model, model_provenance, context_tokens, context_window, call_count,
       input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
       total_tokens, estimated_cost_usd, cost_authority, sandbox_badge, sandbox_mechanism,
@@ -309,10 +327,17 @@ export interface ActivityRow {
 /** Latest canonical event evidence for compact cards and waterfall ticks, returned chronologically. */
 export function compactActivityForSession(db: DatabaseSync, sessionId: string, limit = 80): ActivityRow[] {
   const bounded = Math.max(1, Math.min(80, Math.trunc(limit)));
-  return db.prepare(`SELECT event_row, phase_id, type, status, started_at, ended_at FROM (
+  return readStatement(db, `SELECT event_row, phase_id, type, status, started_at, ended_at FROM (
       SELECT event_row, phase_id, type, status, started_at, ended_at
       FROM events WHERE session_id = ? ORDER BY event_row DESC LIMIT ?
     ) ORDER BY event_row`).all(sessionId, bounded) as unknown as ActivityRow[];
+}
+
+/** Latest replay payloads for a session, newest first. */
+export function replayPayloadsForSession(db: DatabaseSync, sessionId: string): { payload_json: string }[] {
+  return readStatement(db, `SELECT payload_json FROM events
+    WHERE session_id = ? AND type = 'replay' ORDER BY event_row DESC`)
+    .all(sessionId) as unknown as { payload_json: string }[];
 }
 
 export function pollEvents(db: DatabaseSync, sessionId: string, afterEventRow: number, limit = 200): EventRow[] {

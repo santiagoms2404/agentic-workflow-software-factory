@@ -134,6 +134,43 @@ test("B4-25: a valid non-ASCII ticket at the recorded base still classifies its 
   assert.deepEqual([...shiftTaskClasses({ repository: root, baseSha, shift })], [["t01-build", TICKET_TASK_CLASSES[0]]]);
 });
 
+test("sealed ticket classification is memoized by immutable inputs without exposing the cached map", () => {
+  const f = fixture();
+  const baseSha = "c".repeat(40);
+  writeFileSync(join(f.root, "attempt/status.json"), JSON.stringify({ repository: f.root, baseSha, shift: f.shift }));
+  let reads = 0;
+  const runner = (argv: readonly string[]) => {
+    reads += 1;
+    assert.equal(argv[0], "cat-file");
+    assert.equal(argv[1], "blob");
+    assert.ok(argv[2]!.startsWith(`${baseSha}:`));
+    const ticketPath = argv[2]!.slice(baseSha.length + 1);
+    return { status: 0, stdout: Buffer.from(f.bodies.get(ticketPath)!), stderr: "", error: null };
+  };
+  try {
+    const journalPath = join(f.root, "attempt/journal.jsonl");
+    const first = readShiftTaskClasses(journalPath, runner) as Map<string, (typeof TICKET_TASK_CLASSES)[number]>;
+    first.clear();
+    const second = readShiftTaskClasses(journalPath, runner);
+    assert.equal(reads, 2, "the second read uses the sealed-input classification");
+    assert.deepEqual([...second], [["t01-build", TICKET_TASK_CLASSES[0]], ["t02-build", TICKET_TASK_CLASSES[1]]]);
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
+test("working-tree ticket classifications are not memoized across reads", () => {
+  const f = fixture();
+  try {
+    const journalPath = join(f.root, "attempt/journal.jsonl");
+    assert.equal(readShiftTaskClasses(journalPath).size, 2);
+    writeFileSync(join(f.root, "T01.md"), ticket("T01", TICKET_TASK_CLASSES[2]));
+    assert.equal(readShiftTaskClasses(journalPath).size, 0, "a changed working-tree ticket must not reuse the prior class");
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
 test("the projected payload separates a shift's builder classes; tokens, calls, gates and blocks never cross classes", () => {
   const f = fixture();
   const db = openDatabase(":memory:");

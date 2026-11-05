@@ -48,14 +48,19 @@ test("B2-19: listGroupSummaries() catches journal parsing/replay/corruption erro
     rawRecord.event.digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     writeFileSync(digestJournal, `${JSON.stringify(rawRecord)}\n`);
 
-    // 4. Good group
+    // 4. A directory left behind before the first journal record is not a
+    // group the list should advertise; the detail route treats revision zero
+    // as absent too.
+    mkdirSync(join(stateRoot, "projects", PROJECT, "groups", "grp-empty"), { recursive: true });
+
+    // 5. Good group
     await seedGroup(stateRoot, PROJECT, "grp-good", "valid group ask");
 
     const res = await listGroupSummaries({ stateRoot, project: PROJECT });
     assert.deepEqual(res.groups.map((g) => g.group), ["grp-good"]);
     assert.deepEqual([...res.unreadable].sort(), ["grp-corrupt", "grp-digest", "grp-torn"]);
 
-    // 5. Programming defect: TypeError is rethrown
+    // 6. Programming defect: TypeError is rethrown
     const typeDefectRoot = realpathSync(mkdtempSync(join(tmpdir(), "awsf-b2-19-type-")));
     try {
       await seedGroup(typeDefectRoot, PROJECT, "grp-good", "valid ask");
@@ -74,7 +79,7 @@ test("B2-19: listGroupSummaries() catches journal parsing/replay/corruption erro
       rmSync(typeDefectRoot, { recursive: true, force: true });
     }
 
-    // 6. Programming defect: ReferenceError is rethrown
+    // 7. Programming defect: ReferenceError is rethrown
     const refDefectRoot = realpathSync(mkdtempSync(join(tmpdir(), "awsf-b2-19-ref-")));
     try {
       await seedGroup(refDefectRoot, PROJECT, "grp-good", "valid ask");
@@ -214,6 +219,13 @@ test("B2-21: When awsf.project.yaml is missing (ENOENT) or malformed mid-edit du
     assert.equal(bodyRestored.stale, undefined);
     assert.equal(bodyRestored.planError, undefined);
     assert.deepEqual(bodyRestored.tickets.map((t) => t.uid), ["fixture/T01"]);
+
+    // Stable plan inputs are cached, but a new plan-root entry must still be
+    // discovered on the next request without restarting the router.
+    writeFileSync(join(root, "specs", "new-plan.html"), "<h3>Milestone M1</h3>");
+    const afterPlanAddition = await router.dispatch({ method: "GET", url: "/api/v1/sessions", headers: { host: "127.0.0.1:4600" } });
+    assert.equal(afterPlanAddition.status, 200);
+    assert.ok((afterPlanAddition.body as SessionsResponse).plans.some((plan) => plan.id === "new-plan"));
   } finally {
     router.close();
     fixture.close();

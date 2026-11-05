@@ -3,6 +3,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AwsfConfig } from "../../config/schema.ts";
 import { createApiRouter, type ApiRouter } from "../../api/routes.ts";
+import { forwardApiRequest } from "../../api/server.ts";
 import { sendResponse } from "../../api/responses.ts";
 import { SECURITY_HEADERS, validateAuthority } from "../../api/security.ts";
 import { ceilingFor } from "../../state/tiers.ts";
@@ -162,7 +163,11 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
       return;
     }
     if (router !== null && request.url?.startsWith("/api/")) {
-      sendResponse(response, await router.dispatch({ method: request.method ?? "GET", url: request.url, headers: request.headers }));
+      sendResponse(response, await forwardApiRequest(router, {
+        method: request.method ?? "GET",
+        url: request.url,
+        headers: request.headers,
+      }));
       return;
     }
     // A target such as `//[` reads as a scheme-relative URL with an invalid

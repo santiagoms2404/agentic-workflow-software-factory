@@ -114,7 +114,7 @@ test("B2-25: projectSwitch derives catalog path from placement when catalogPath 
     assert.equal(sw, "off");
 
     const swMissing = await projectSwitch(undefined, undefined, stateRoot, "nonexistent");
-    assert.equal(swMissing, "on");
+    assert.equal(swMissing, "off");
   } finally {
     box.close();
   }
@@ -131,8 +131,8 @@ test("B2-25: projectSwitch uses explicit catalogPath over repository status", as
     const sw = await projectSwitch(customCatalog, status);
     assert.equal(sw, "on");
 
-    // When everything is omitted, returns "on"
-    assert.equal(await projectSwitch(), "on");
+    // When no project catalog can be identified, the resolver fails closed.
+    assert.equal(await projectSwitch(), "off");
   } finally {
     box.close();
   }

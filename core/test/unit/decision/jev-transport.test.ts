@@ -2,6 +2,9 @@
 // stubbed in every test; no test reaches the network or reads a real key.
 
 import { test, type TestContext } from "node:test";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import {
   ContractError,
@@ -17,6 +20,7 @@ import {
 } from "../../../src/decision/jev-transport.ts";
 import { REDACTED_VALUE } from "../../../src/policy/redaction.ts";
 import { loadCatalog, CatalogSchemaError } from "../../../src/registry/catalog.ts";
+import { readJevProjectSwitch } from "../../../src/decision/jev-project.ts";
 import { jevSwitchOf } from "../../../src/registry/catalog-schema.ts";
 
 // Not a credential: a placeholder that only has to be present and nonblank.
@@ -237,6 +241,23 @@ test("a missing key is a typed unavailable result naming the variable, and nothi
   assert.match(result.detail, new RegExp(JEV_KEY_ENV));
   assert.equal(calls.length, 0);
   assert.equal(transport({ env: { [JEV_KEY_ENV]: "   " } }).available, false);
+});
+
+test("a missing project catalog keeps its schema default but credentials come only from the explicit environment", async (t) => {
+  const calls = stubFetch(t, [() => json(validBody())]);
+  const previous = process.env[JEV_KEY_ENV];
+  process.env[JEV_KEY_ENV] = KEY;
+  try {
+    const catalog = await readJevProjectSwitch(join(tmpdir(), `awsf-missing-${randomUUID()}`, "awsf.project.yaml"));
+    assert.equal(catalog.value, "on");
+    assert.equal(catalog.source, "default, no catalog");
+    const result = expectOutcome(await transport({ projectSwitch: catalog.value, env: {} }).ask("state", QUESTIONS), "unavailable");
+    assert.equal(result.reason, "missing-key");
+    assert.equal(calls.length, 0, "ambient process credentials must not authorize a request");
+  } finally {
+    if (previous === undefined) delete process.env[JEV_KEY_ENV];
+    else process.env[JEV_KEY_ENV] = previous;
+  }
 });
 
 test("the key is read once, at construction", async (t) => {

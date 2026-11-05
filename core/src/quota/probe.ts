@@ -229,8 +229,12 @@ function timeoutFor(purpose: QuotaProbePurpose, configured: QuotaProbeTimeouts):
     : configured.phaseBoundaryMs;
 }
 
+function isTimeoutMessage(message: string): boolean {
+  return /ETIMEDOUT|timed?\s*out/iu.test(message);
+}
+
 function timedOut(result: CommandResult): boolean {
-  return result.error !== null && /(?:ETIMEDOUT|timed?\s*out|timeout)/iu.test(result.error);
+  return result.error !== null && isTimeoutMessage(result.error);
 }
 
 function rawResultBytes(result: CommandResult): string {
@@ -330,7 +334,7 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
     versionResult = input.runCommand(executable, ["--version"], commandOptions);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/(?:ETIMEDOUT|timed?\s*out|timeout)/iu.test(message)) {
+    if (isTimeoutMessage(message)) {
       return unavailable({ reasonCode: "timeout", command: "version", timeoutMs });
     }
     return retainedFailure(
@@ -373,7 +377,7 @@ export async function probeQuota(input: QuotaProbeInput): Promise<QuotaProbeResu
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/(?:ETIMEDOUT|timed?\s*out|timeout)/iu.test(message)) {
+    if (isTimeoutMessage(message)) {
       return unavailable({ reasonCode: "timeout", command: "probe", timeoutMs }, parsedEmpty, found.text);
     }
     return retainedFailure(

@@ -73,7 +73,10 @@ export async function listGroupSummaries(options: PlanningReadOptions): Promise<
       }
       throw error;
     }
-    groups.push(groupSummary(tree));
+    // A directory can survive a failed first capture without any journal. The
+    // detail route and CLI both treat revision zero as absent, so the list must
+    // not advertise it as a group that can be opened.
+    if (tree.revision !== 0) groups.push(groupSummary(tree));
   }
   // Newest first: the group a reader is most likely looking for is the one they
   // were just driving. A group with no input has no time and sorts last.

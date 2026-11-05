@@ -132,12 +132,28 @@ test("shadow: an unavailable decision still records a proposal: wait-for-owner, 
   }
 });
 
+test("shadow: a decision append failure propagates instead of being audited as unavailable", async () => {
+  const { root, attemptDir, taskRoot } = await attempt(status({ recovery: ceilingPause() }));
+  const asked: unknown[] = [];
+  try {
+    mkdirSync(join(taskRoot, "decisions.jsonl"));
+    await assert.rejects(
+      () => recordShadowProposal({ attemptDir, phases: PHASES, transport: transport(ANSWERED_RAISE, asked), newId: ids }),
+    );
+    assert.equal(asked.length, 1, "the provider answer was obtained before persistence failed");
+    assert.deepEqual(await readTaskDelegateProposals(taskRoot), [], "no unavailable proposal may misstate the answered call");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("shadow: a transport that throws still records wait-for-owner, and the default transport withholds nothing it lacks", async () => {
   const { root, attemptDir, taskRoot } = await attempt(status({ recovery: ceilingPause() }));
   try {
     await recordShadowProposal({ attemptDir, phases: PHASES, transport: { ask: async () => { throw new Error("socket closed"); } }, newId: ids });
     const [proposal] = await readTaskDelegateProposals(taskRoot);
-    assert.deepEqual([proposal!.proposal.act.act, proposal!.proposal.rationale, proposal!.decision.recordId], ["wait-for-owner", "jev-unavailable", null]);
+    assert.deepEqual([proposal!.proposal.act.act, proposal!.proposal.rationale, proposal!.decision.outcome], ["wait-for-owner", "jev-unavailable", "unavailable"]);
+    assert.ok(proposal!.decision.recordId, "the typed transport failure has a durable decision record");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

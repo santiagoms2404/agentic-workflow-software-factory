@@ -7,7 +7,7 @@ import {
   scrubCredentials,
   scrubJsonText,
 } from "../../../src/policy/redaction.ts";
-import { globalCredentialPattern } from "../../../../dashboard/shared/credential-patterns.ts";
+import { GLOBAL_CREDENTIAL_PATTERNS, globalCredentialPattern } from "../../../../dashboard/shared/credential-patterns.ts";
 
 const shapedAccessId = (): string => `AK${"IA"}${"A".repeat(16)}`;
 const shapedBearer = (): string => `Bear${"er"} ${"opaque".repeat(6)}`;
@@ -85,6 +85,16 @@ test("global pattern derivation preserves flags without duplicating the global f
   assert.equal(globalCredentialPattern(/ordinary/i).flags, "gi");
   assert.doesNotThrow(() => globalCredentialPattern(/ordinary/g));
   assert.equal(globalCredentialPattern(/ordinary/gi).flags, "gi");
+});
+
+test("precompiled global patterns are reused safely across scrub calls", () => {
+  const first = `AK${"IA"}${"A".repeat(16)}`;
+  const second = `AK${"IA"}${"B".repeat(16)}`;
+  assert.ok(GLOBAL_CREDENTIAL_PATTERNS.length > 0);
+  assert.ok(GLOBAL_CREDENTIAL_PATTERNS.every((pattern) => pattern.global));
+  assert.equal(scrubCredentialString(first), REDACTED_VALUE);
+  assert.equal(scrubCredentialString(second), REDACTED_VALUE);
+  assert.equal(scrubCredentialString(first), REDACTED_VALUE);
 });
 
 test("vendor-key matching requires a word boundary without weakening real key detection", () => {

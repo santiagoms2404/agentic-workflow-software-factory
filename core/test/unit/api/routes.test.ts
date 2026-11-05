@@ -9,7 +9,7 @@ import { openDatabase, type OpenDatabaseOptions } from "../../../src/observabili
 import { writeLandingSummary } from "../../../src/persistence/landing-summary.ts";
 import { loadCatalog } from "../../../src/registry/catalog.ts";
 import { resolvePlanSources } from "../../../src/registry/plan-source.ts";
-import type { SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse, TicketsResponse, TicketSourceResponse } from "../../../../dashboard/shared/types.ts";
+import type { AdaptersResponse, SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse, TicketsResponse, TicketSourceResponse } from "../../../../dashboard/shared/types.ts";
 import { repoRoot } from "../meta/_walk.ts";
 import { apiFixture } from "./_fixture.ts";
 
@@ -138,6 +138,16 @@ test("sessions embeds ordered phases and agents in one response", async () => {
     router.close();
     fixture.close();
   }
+});
+
+test("sessions accepts PUBLISHED from the machine lifecycle vocabulary", async () => {
+  const fixture = apiFixture();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, planSources: fixture.planSources });
+  try {
+    const response = await router.dispatch(request("/api/v1/sessions?state=PUBLISHED"));
+    assert.equal(response.status, 200);
+    assert.deepEqual((response.body as SessionsResponse).sessions, []);
+  } finally { router.close(); fixture.close(); }
 });
 
 test("sessions expose declared continuations, group membership, and honest nulls", async () => {
@@ -397,7 +407,7 @@ test("archive changes only review-list visibility, never lifecycle, Git, or conf
   } finally { router.close(); fixture.close(); }
 });
 
-test("settings are redacted and adapter health is a read-only configured view", async () => {
+test("settings are redacted and adapter health reflects executable availability", async () => {
   const fixture = apiFixture();
   const claude = fixture.config.adapters.claude;
   assert.ok(claude, "the fixture configures a claude adapter");
@@ -410,6 +420,10 @@ test("settings are redacted and adapter health is a read-only configured view", 
     const adapters = await router.dispatch(request("/api/v1/adapters"));
     assert.equal(adapters.status, 200);
     assert.match(JSON.stringify(adapters.body), /claude-code/);
+    const claudeHealth = (adapters.body as AdaptersResponse).adapters.find((entry) => entry.id === "claude");
+    assert.deepEqual({ status: claudeHealth?.status, code: claudeHealth?.code }, {
+      status: "blocked", code: "ExecutableNotFound",
+    });
   } finally {
     router.close();
     fixture.close();

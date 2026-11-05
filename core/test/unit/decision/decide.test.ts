@@ -201,6 +201,7 @@ test("refused-by-switch preserves the transport's configured model (B2-26)", asy
 
     const jevTransport = new JevTransport({
       projectSwitch: "off",
+      env: {},
       model: "jev-model-configured-in-transport",
     });
     const decision2 = await decide(STOP_JUDGMENT, { stop: "ceiling" }, context(box, jevTransport, { taskId: "task-jev" }));

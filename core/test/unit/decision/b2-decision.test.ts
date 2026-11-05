@@ -81,9 +81,9 @@ test("B2-25: projectSwitch derives catalog path from placement when catalogPath 
     const sw = await projectSwitch(undefined, undefined, stateRoot, "test-proj");
     assert.equal(sw, "off");
 
-    // If placement does not exist, defaults to "on"
+    // No project source is not permission to assume the catalog's on default.
     const swMissing = await projectSwitch(undefined, undefined, stateRoot, "nonexistent");
-    assert.equal(swMissing, "on");
+    assert.equal(swMissing, "off");
   } finally {
     box.close();
   }
@@ -96,9 +96,9 @@ test("B2-25: projectSwitch uses explicit catalogPath when provided", async () =>
     const sw = await projectSwitch(catPath);
     assert.equal(sw, "off");
 
-    // Unconditionally defaults to "on" when no catalogPath, repository, or placement is provided
+    // Without an identified project catalog, the resolver fails closed.
     const swDefault = await projectSwitch();
-    assert.equal(swDefault, "on");
+    assert.equal(swDefault, "off");
   } finally {
     box.close();
   }
@@ -141,6 +141,7 @@ test("B2-26: decide() records transport's configured model on refused-by-switch"
     // JevTransport instance with configured model and switch off
     const jevTransport = new JevTransport({
       projectSwitch: "off",
+      env: {},
       model: "jev-model-configured-in-transport",
     });
 
@@ -314,6 +315,7 @@ test("B2-36: score validation rejects fractional scores like 1.5 with ContractEr
 test("B2-37: ask() validates request questions before checking projectSwitch === 'off'", async () => {
   const transport = new JevTransport({
     projectSwitch: "off",
+    env: {},
   });
 
   // Invalid questions (empty object) must throw QuestionValidationError, not return refused-by-switch

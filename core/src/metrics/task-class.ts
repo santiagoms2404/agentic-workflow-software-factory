@@ -3,7 +3,7 @@
 // ticket blobs at that base, not today's checkout (owner bookkeeping changes
 // whole-file digests). Nothing here selects or changes a runner route.
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { ShiftManifestSchema, shiftManifestDigest, type ShiftManifest } from "../contracts/shift-selection-record.ts";
 import type { TicketTaskClass } from "../contracts/ticket.ts";
@@ -16,6 +16,47 @@ export interface ShiftClassSource {
   readonly repository: string;
   readonly baseSha: string | null;
   readonly shift: ShiftManifest;
+}
+
+const SHIFT_CLASS_CACHE_LIMIT = 128;
+const shiftClassCache = new Map<string, ReadonlyMap<string, TicketTaskClass>>();
+const runnerIds = new WeakMap<GitByteRunner, number>();
+let nextRunnerId = 1;
+
+function runnerCacheId(runner: GitByteRunner | undefined): string {
+  if (runner === undefined) return "system";
+  let id = runnerIds.get(runner);
+  if (id === undefined) {
+    id = nextRunnerId++;
+    runnerIds.set(runner, id);
+  }
+  return String(id);
+}
+
+function immutableInputKey(source: ShiftClassSource, runner: GitByteRunner | undefined): string | null {
+  if (source.baseSha === null || !/^[a-f0-9]{40}$/u.test(source.baseSha) ||
+      !Value.Check(ShiftManifestSchema, source.shift) || shiftManifestDigest(source.shift) !== source.shift.manifestDigest) {
+    return null;
+  }
+  return `${resolve(source.repository)}\0${source.baseSha}\0${source.shift.manifestDigest}\0${runnerCacheId(runner)}`;
+}
+
+function memoizedShiftTaskClasses(source: ShiftClassSource, runner?: GitByteRunner): ReadonlyMap<string, TicketTaskClass> {
+  const key = immutableInputKey(source, runner);
+  if (key === null) return shiftTaskClasses(source, runner);
+  const cached = shiftClassCache.get(key);
+  if (cached !== undefined) {
+    shiftClassCache.delete(key);
+    shiftClassCache.set(key, cached);
+    return new Map(cached);
+  }
+  const classes = new Map(shiftTaskClasses(source, runner));
+  shiftClassCache.set(key, classes);
+  if (shiftClassCache.size > SHIFT_CLASS_CACHE_LIMIT) {
+    const oldest = shiftClassCache.keys().next().value as string | undefined;
+    if (oldest !== undefined) shiftClassCache.delete(oldest);
+  }
+  return new Map(classes);
 }
 
 /** Keys are compiled phase keys, never guessed from a build phase's name. */
@@ -55,11 +96,11 @@ export function shiftTaskClasses(source: ShiftClassSource, runner?: GitByteRunne
 }
 
 /** Missing legacy metadata or unavailable sealed bytes never invent a class. */
-export function readShiftTaskClasses(journalPath: string): ReadonlyMap<string, TicketTaskClass> {
+export function readShiftTaskClasses(journalPath: string, runner?: GitByteRunner): ReadonlyMap<string, TicketTaskClass> {
   try {
     const source = JSON.parse(readFileSync(join(dirname(journalPath), "status.json"), "utf8")) as ShiftClassSource;
     if (typeof source.repository !== "string" || source.shift == null) return new Map();
-    return shiftTaskClasses(source);
+    return memoizedShiftTaskClasses(source, runner);
   } catch {
     return new Map();
   }

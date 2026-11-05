@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { AwsfConfig } from "../config/schema.ts";
 import type { ResolvedPlanSource } from "../registry/plan-source.ts";
 import { createApiRouter, type ApiRouter } from "./routes.ts";
-import { errorResponse, sendResponse } from "./responses.ts";
+import { errorResponse, sendResponse, type ApiResponse, type HandlerRequest } from "./responses.ts";
 import { assertLoopbackBind, type LoopbackHost } from "./security.ts";
 
 export interface ApiServerOptions {
@@ -28,6 +28,18 @@ export interface ApiServer {
   start(): Promise<RunningApiServer>;
 }
 
+/** One production/test mapping for request dispatch failures at the HTTP boundary. */
+export async function forwardApiRequest(
+  router: Pick<ApiRouter, "dispatch">,
+  request: HandlerRequest,
+): Promise<ApiResponse> {
+  try {
+    return await router.dispatch(request);
+  } catch {
+    return errorResponse(500, "internal-error", "request failed");
+  }
+}
+
 export function createApiServer(options: ApiServerOptions): ApiServer {
   const host = options.host ?? "127.0.0.1";
   assertLoopbackBind(host);
@@ -44,14 +56,11 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
     ...(options.planSources !== undefined ? { planSources: options.planSources } : {}),
   });
   const nodeServer = createServer((request, response) => {
-    void router.dispatch({
+    void forwardApiRequest(router, {
       method: request.method ?? "GET",
       url: request.url ?? "/",
       headers: request.headers,
-    }).then(
-      (result) => sendResponse(response, result),
-      () => sendResponse(response, errorResponse(500, "internal-error", "request failed")),
-    );
+    }).then((result) => sendResponse(response, result));
   });
 
   return {

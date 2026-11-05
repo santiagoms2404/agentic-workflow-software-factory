@@ -1,6 +1,7 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { queryPlanBacklog } from "../backlog.ts";
+import { adapterFor } from "../adapters/registry.ts";
 import { PlanTicketReader } from "../persistence/plan-tickets.ts";
 import { loadCatalog } from "../registry/catalog.ts";
 import type { ProjectCatalog } from "../registry/catalog-schema.ts";
@@ -28,6 +29,7 @@ import {
   pollEvents,
   processesForSession,
   projectionHealth,
+  replayPayloadsForSession,
   transitionsForSession,
   type AgentRow,
   type EventRow,
@@ -71,7 +73,7 @@ import type {
   TicketSourceResponse,
 } from "../../../dashboard/shared/types.ts";
 import { listGroupSummaries, readGroupDecisionTree } from "./planning-route.ts";
-import { ApiRequestError, jsonResponse, safely, type ApiHandler, type ApiResponse, type HandlerRequest } from "./responses.ts";
+import { ApiRequestError, jsonResponse, safely, verbatimJsonResponse, type ApiHandler, type ApiResponse, type HandlerRequest } from "./responses.ts";
 import { decodePathSegments, validateAuthority } from "./security.ts";
 
 export const API_ROUTE_TABLE = Object.freeze([
@@ -229,8 +231,7 @@ function activity(db: DatabaseSync, sessionId: string, phases: readonly PhaseSum
 }
 
 function replay(db: DatabaseSync, sessionId: string): SessionCard["replay"] {
-  const rows = db.prepare(`SELECT payload_json FROM events
-    WHERE session_id = ? AND type = 'replay' ORDER BY event_row DESC`).all(sessionId) as unknown as Array<{ payload_json: string }>;
+  const rows = replayPayloadsForSession(db, sessionId);
   for (const row of rows) {
     const payload = parseJson(row.payload_json);
     try { assertReplayRecord(payload); } catch { continue; }
@@ -427,7 +428,12 @@ export function resolveTicketPlanSources(repository = process.cwd()): readonly R
  * an empty plan set: the board reads catalog plans only, so a light-tier
  * checkout would otherwise show an empty board with nothing said (B2-02).
  */
-function resolveBoardPlanSources(repository: string): readonly ResolvedPlanSource[] {
+interface BoardPlanResolution {
+  readonly sources: readonly ResolvedPlanSource[];
+  readonly watchPaths: readonly string[];
+}
+
+function resolveBoardPlanSources(repository: string): BoardPlanResolution {
   const catalogPath = resolve(repository, CATALOG_FILE);
   const text = readCatalogText(catalogPath);
   if (text === null) {
@@ -448,7 +454,26 @@ function resolveBoardPlanSources(repository: string): readonly ResolvedPlanSourc
     throw new Error(`default plan ${JSON.stringify(catalog.plans.default)} has no ticket directory at `
       + `${JSON.stringify(defaultSource.ticketsPath)}; the board does not show it as a plan with no tickets`);
   }
-  return sources;
+  return {
+    sources,
+    // Plan discovery reads the catalog and plan-root entries. The tickets
+    // parents are watched too, so creating or removing a plan's ticket
+    // directory invalidates the cache without rereading stable catalog data.
+    watchPaths: [...new Set([catalogPath, plansRoot, ...sources.map((source) => dirname(source.ticketsPath))])],
+  };
+}
+
+function pathFingerprint(path: string): string {
+  try {
+    const metadata = statSync(path, { bigint: true });
+    return [metadata.dev, metadata.ino, metadata.size, metadata.mtimeNs, metadata.ctimeNs].join(":");
+  } catch (error) {
+    return `!${(error as NodeJS.ErrnoException).code ?? "unreadable"}`;
+  }
+}
+
+function planSourcesFingerprint(paths: readonly string[]): string {
+  return paths.map((path) => `${path}\0${pathFingerprint(path)}`).join("\n");
 }
 
 const PLAN_UNRESOLVED = "PlanUnresolved" satisfies PlanResolutionError["code"];
@@ -528,10 +553,11 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
   const readDb = opener(options.dbPath, { readonly: true });
   try {
     const planningStateRoot = options.stateRoot ?? dirname(options.dbPath);
-    // The catalog is re-resolved on every read rather than once at startup, so a
-    // plan authored while `awsf dash` is up reaches the backlog without a
-    // restart. The reader is rebuilt only when the resolved plan set changes,
-    // keeping its per-file cache across ordinary polls.
+    // Catalog resolution is checked against the catalog, plan-root, and ticket
+    // directory metadata on each read. A changed input is re-resolved so new
+    // plans reach the backlog without a restart; stable polls avoid synchronous
+    // catalog parsing and directory walks. The reader is rebuilt only when the
+    // resolved plan set changes, keeping its per-file cache across ordinary polls.
     //
     // A catalog that fails to resolve is never a silent skip (inv 12, owner
     // decision O4; B2-02, B2-03, B2-04, B2-17). It used to be one twice over: an
@@ -542,14 +568,30 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
     // only beside `stale: true` and that message. The router starts either way.
     let plans: PlanCatalog | null = options.planSources === undefined ? null : planCatalog(options.planSources);
     let planError: PlanResolutionError | null = null;
+    let resolvedRepository: string | null = null;
+    let resolvedWatchPaths: readonly string[] | null = null;
+    let resolvedFingerprint: string | null = null;
     const currentPlans = (): PlanRead => {
       if (options.planSources !== undefined) return { catalog: plans, error: null };
       const repository = resolve(options.repository ?? process.cwd());
+      if (plans !== null && resolvedRepository === repository && resolvedWatchPaths !== null &&
+          resolvedFingerprint === planSourcesFingerprint(resolvedWatchPaths)) {
+        planError = null;
+        return { catalog: plans, error: null };
+      }
       try {
-        const sources = resolveBoardPlanSources(repository);
-        if (plans === null || planCatalogKey(sources) !== plans.key) plans = planCatalog(sources);
+        const resolution = resolveBoardPlanSources(repository);
+        if (plans === null || planCatalogKey(resolution.sources) !== plans.key) plans = planCatalog(resolution.sources);
+        resolvedRepository = repository;
+        resolvedWatchPaths = resolution.watchPaths;
+        resolvedFingerprint = planSourcesFingerprint(resolvedWatchPaths);
         planError = null;
       } catch (error) {
+        // Keep the last good plan set for a stale response, but retry resolution
+        // on the next read rather than caching a transient or malformed failure.
+        resolvedRepository = null;
+        resolvedWatchPaths = null;
+        resolvedFingerprint = null;
         planError = planResolutionError(error, repository);
       }
       return { catalog: plans, error: planError };
@@ -716,10 +758,9 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         const source = await requireCatalog(currentPlans()).reader.source(plan, ticket);
         if (source === null) throw new ApiRequestError(404, "ticket-not-found", "ticket not found");
         const body = { uid: `${plan}/${ticket}`, plan, ticket, source } satisfies TicketSourceResponse;
-        // Repository ticket text is intentionally verbatim. Running it through
-        // publicApiValue would rewrite credential-shaped examples in the file.
-        const response = jsonResponse(null);
-        return { ...response, body };
+        // Source text is explicitly exempt from response scrubbing so it stays
+        // byte-exact for repository inspection.
+        return verbatimJsonResponse(body);
       }
 
       const planRead = currentPlans();
@@ -760,19 +801,21 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       searchParams(request, []);
       return jsonResponse(buildMetricsPayload(readDb, { extractedAt: new Date().toISOString() }) satisfies MetricsResponse);
     }),
-    adapters: safely(() => {
-      const adapters: AdapterHealth[] = Object.entries(options.config.adapters).map(([id, entry]) => {
+    adapters: safely(async () => {
+      const adapters: AdapterHealth[] = await Promise.all(Object.entries(options.config.adapters).map(async ([id, entry]) => {
         const enabled = entry.enabled !== false;
-        const blocked = entry.kind === "antigravity";
+        const adapter = enabled ? adapterFor(entry, options.config.runtime) : null;
+        const availability = adapter === null ? null : await adapter.isAvailable(undefined, process.env);
+        const blocked = availability?.status === "blocked";
         return {
           id,
           kind: entry.kind,
           provider: entry.provider ?? null,
           enabled,
           status: !enabled ? "disabled" : blocked ? "blocked" : "configured",
-          code: blocked ? "E_ADAPTER_UNVERIFIED" : null,
+          code: blocked ? availability?.code ?? null : null,
         };
-      });
+      }));
       return jsonResponse({ adapters } satisfies AdaptersResponse);
     }),
     archive: safely((_request, params) => {
