@@ -1,4 +1,5 @@
 import type { WorkflowRecipe } from "./compiler.ts";
+import { countAgentPhases } from "./phase.ts";
 import { WORKFLOW_IDS } from "../config/workflow-ids.ts";
 import { ceilingFor, type ResolvedCeiling, type Tier } from "../state/tiers.ts";
 import { COMPILED_WORKFLOW_IDS, type CompiledWorkflowId } from "./compiled-ids.ts";
@@ -138,7 +139,7 @@ export class CompiledWorkflowUnbound extends Error {
 }
 
 export function minimumCallsFor(recipe: WorkflowRecipe): number {
-  return recipe.phases.filter((phase) => phase.kind === "agent").length;
+  return countAgentPhases(recipe.phases);
 }
 
 /**

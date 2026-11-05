@@ -80,7 +80,9 @@ export async function deliverReviewDiff(location: ReviewDeliveryLocation, whole:
   const files = ordered.map((section, index) => ({ path: section.path,
     file: `${String(index + 1).padStart(6, "0")}.diff`, bytes: Buffer.byteLength(section.text, "utf8"),
     inlineOmitted: omitted.includes(section.path), inlineTruncated: partial.includes(section.path) && !omitted.includes(section.path) }));
-  for (const [index, section] of ordered.entries()) await immutableFile(join(directory, files[index]!.file), section.text);
+  const writes = await Promise.allSettled(ordered.map((section, index) => immutableFile(join(directory, files[index]!.file), section.text)));
+  const failedWrite = writes.find((result) => result.status === "rejected");
+  if (failedWrite?.status === "rejected") throw failedWrite.reason;
   const indexFile = "index.json";
   let token = randomBytes(32).toString("hex");
   try {

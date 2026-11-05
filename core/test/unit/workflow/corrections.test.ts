@@ -6,6 +6,9 @@ import { UNREPORTED_TOKEN_USAGE } from "../../../src/contracts/normalized-events
 import type { StoredEnvelope } from "../../../src/contracts/stored-envelope.ts";
 import { GateReport } from "../../../src/gates/interface.ts";
 import {
+  assertCorrectionIdentity,
+  assertCorrectionRouteIdentity,
+  CorrectionIdentityMismatch,
   type AgentTurn,
   createCorrectionRequest,
   MAX_GATE_OUTPUT_TAIL_CHARS,
@@ -75,6 +78,22 @@ test("B6-18: a failed command's evidence appears once in a candidate correction 
   assert.equal(prompt.split(marker).length - 1, 1, "the evidence is rendered exactly once");
   assert.match(prompt, /Command `unit`/, "the prose still names the failed command");
   assert.match(prompt, /"exitCode": 1/, "the JSON still carries the command's exit code");
+});
+
+test("correction identity checks share mismatch formatting while cold routes may change sessions", () => {
+  const expected = { adapter: "adapter-a", provider: "provider-a", model: "model-a", sessionId: "session-a" };
+  const newSession = { ...expected, sessionId: "session-b" };
+  assert.doesNotThrow(() => assertCorrectionRouteIdentity(expected, newSession));
+  assert.throws(() => assertCorrectionIdentity(expected, newSession), (error: unknown) => {
+    assert.ok(error instanceof CorrectionIdentityMismatch);
+    assert.deepEqual(error.differences, ['sessionId "session-a" became "session-b"']);
+    return true;
+  });
+  assert.throws(() => assertCorrectionRouteIdentity(expected, { ...newSession, model: "model-b" }), (error: unknown) => {
+    assert.ok(error instanceof CorrectionIdentityMismatch);
+    assert.deepEqual(error.differences, ['model "model-a" became "model-b"']);
+    return true;
+  });
 });
 
 function turn(costUsd: number | null): Pick<AgentTurn, "usage" | "costUsd"> {

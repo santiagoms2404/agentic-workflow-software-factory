@@ -33,6 +33,7 @@ import {
   VisualReferenceBindingSchema,
   VisualReferenceDigestsSchema,
   VisualReferenceIndexSchema,
+  VisualReferencesBoundSchema,
   type BoundVisualFrame,
   type VisualObservation,
   type VisualReferenceBinding,
@@ -42,6 +43,7 @@ import { systemGitRunner, type GitRunner } from "../git/changes.ts";
 import { journalFilePath } from "../persistence/platform-paths.ts";
 import { normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { ImageDecodeFailure, inspectImage } from "./visual-image.ts";
+import { protectedBlobId } from "./protected-files.ts";
 
 const { mkdir, open, readdir, readFile, realpath, stat, writeFile } = fs;
 
@@ -183,7 +185,7 @@ function parseJson(bytes: Buffer, code: VisualRefusalCode, label: string): unkno
 function committedIndex(root: string, indexPath: string, bytes: Buffer, git: GitRunner): string {
   const blob = git(["rev-parse", "--verify", "--quiet", `HEAD:./${indexPath}`]);
   if (blob.status !== 0) refuse("index-uncommitted", `${indexPath} is not committed at HEAD of the reference root's Git repository`);
-  const expected = createHash("sha1").update(`blob ${String(bytes.length)}\0`).update(bytes).digest("hex");
+  const expected = protectedBlobId(bytes);
   if (blob.stdout.trim() !== expected) refuse("index-uncommitted", `${indexPath} differs from its committed blob at HEAD; commit or restore it before binding`);
   const head = git(["rev-parse", "--verify", "HEAD"]);
   if (head.status !== 0 || !/^[a-f0-9]{40}$/.test(head.stdout.trim())) refuse("index-uncommitted", `the reference root ${JSON.stringify(root)} has no readable HEAD`);
@@ -201,14 +203,17 @@ export interface VerifyVisualReferencesOptions {
   readonly planRef: string | null;
   /** The agent phases the workflow will run; a binding may name only these. */
   readonly agentPhases: readonly string[];
+  /** Previously host-verified facts may be reused only when the exact image bytes still match. */
+  readonly previousBound?: VisualReferencesBound;
   readonly git?: (root: string) => GitRunner;
 }
 
 /**
  * Verifies a binding end to end: root, committed index, digests bound to that
- * index, exact frame selection, and each image's containment, size, type,
- * structure, dimensions and digest. Returns the verified bytes; throws
- * `VisualReferenceRefused` naming the first failure.
+ * index, exact frame selection, and each image's containment, size, dimensions
+ * and digest. A previous host-bound frame's structure facts are reused only
+ * after the current bytes hash to that same frame. Returns the verified bytes;
+ * throws `VisualReferenceRefused` naming the first failure.
  */
 export async function verifyVisualReferences(binding: VisualReferenceBinding,
   options: VerifyVisualReferencesOptions): Promise<VerifiedVisualReferences> {
@@ -260,21 +265,29 @@ export async function verifyVisualReferences(binding: VisualReferenceBinding,
 
   const frames: BoundVisualFrame[] = [];
   const images = new Map<string, Buffer>();
+  const previousBound = options.previousBound;
+  const reusableFrames = previousBound !== undefined && Value.Check(VisualReferencesBoundSchema, previousBound) &&
+    previousBound.bindingDigest === visualBindingDigest(binding) ? previousBound.frames : [];
   for (const id of selected) {
     const entry = index.frames.find((frame) => frame.id === id);
     if (entry === undefined) refuse("frame-unknown", `frame ${JSON.stringify(id)} is not in the index`);
     const bytes = await readContained(root, relativePath(entry.image, "path-escape", `frame ${id} image`), VISUAL_REFERENCE_LIMITS.maxImageBytes, `frame ${id} image`);
-    let facts;
-    try {
-      facts = inspectImage(bytes);
-    } catch (error) {
-      if (error instanceof ImageDecodeFailure) refuse(error.unsupported ? "image-type" : "image-corrupt", `frame ${id}: ${error.message}`);
-      throw error;
+    const digest = sha256(bytes);
+    const previous = reusableFrames.find((frame) => frame.id === id && frame.sha256 === digest && frame.bytes === bytes.length);
+    let facts: Pick<BoundVisualFrame, "mediaType" | "width" | "height">;
+    if (previous !== undefined) {
+      facts = previous;
+    } else {
+      try {
+        facts = inspectImage(bytes);
+      } catch (error) {
+        if (error instanceof ImageDecodeFailure) refuse(error.unsupported ? "image-type" : "image-corrupt", `frame ${id}: ${error.message}`);
+        throw error;
+      }
     }
     if (facts.width > VISUAL_REFERENCE_LIMITS.maxImageEdge || facts.height > VISUAL_REFERENCE_LIMITS.maxImageEdge) {
       refuse("image-too-large", `frame ${id} is ${String(facts.width)}x${String(facts.height)}; neither edge may exceed ${String(VISUAL_REFERENCE_LIMITS.maxImageEdge)} or a provider may resize it`);
     }
-    const digest = sha256(bytes);
     const expected = digests.images[id];
     if (expected === undefined) refuse("digests-invalid", `the digests file has no entry for frame ${id}`);
     if (digest !== expected) refuse("image-digest-mismatch", `frame ${id} does not match its recorded digest; the image changed after capture`);

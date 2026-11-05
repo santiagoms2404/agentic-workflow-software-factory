@@ -176,10 +176,12 @@ test("V2 a source replaced after binding is refused even when its digests were r
   const library = referenceLibrary();
   try {
     const original = await verify(library);
+    const same = await verifyVisualReferences(binding(library), { planRef: null, agentPhases: PHASES, previousBound: original.bound });
+    assert.deepEqual(same.bound.frames, original.bound.frames, "exact bytes retain their host-verified frame facts");
     const replaced = discPng(42);
     writeFileSync(library.paths.f2!, replaced);
     library.writeDigests({ f2: sha256(replaced) });
-    const fresh = await verify(library);
+    const fresh = await verifyVisualReferences(binding(library), { planRef: null, agentPhases: PHASES, previousBound: original.bound });
     await refusedWith("source-changed", () => assertSameFrames(original.bound, fresh.bound));
     const other = await verifyVisualReferences(binding(library, { frames: ["f1"] }), { planRef: null, agentPhases: PHASES });
     await refusedWith("binding-changed", () => assertSameFrames(original.bound, other.bound));
@@ -286,6 +288,7 @@ test("V2 pi's own image-blocking setting is refused from either file pi reads; o
     writeFileSync(join(agent, "settings.json"), JSON.stringify({ defaultModel: "gpt-6-sol", images: { autoResize: true } }));
     await assertRouteDeliversImages("pi-codex", { home, cwd });
     writeFileSync(join(agent, "settings.json"), JSON.stringify({ images: { blockImages: true } }));
+    await assertRouteDeliversImages("pi-codex", { home: undefined, cwd });
     await refusedWith("route-images-blocked", () => assertRouteDeliversImages("pi-codex", { home, cwd }));
     await assertRouteDeliversImages("claude-code", { home, cwd });
     writeFileSync(join(agent, "settings.json"), "{ not json");

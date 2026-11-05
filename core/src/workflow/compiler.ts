@@ -10,12 +10,7 @@ import { schemaForId } from "../contracts/registry.ts";
 import { admitWorkflow } from "../execution/call-budget.ts";
 import type { ResolvedCeiling, Tier } from "../state/tiers.ts";
 import type { CompiledWorkflowId } from "./compiled-ids.ts";
-import type {
-  AgentPhaseDefinition,
-  CompiledAgentPhase,
-  CompiledPhase,
-  PhaseDefinition,
-} from "./phase.ts";
+import { countAgentPhases, type AgentPhaseDefinition, type CompiledAgentPhase, type CompiledPhase, type PhaseDefinition } from "./phase.ts";
 import { InvalidReviewInversion } from "./review-routing.ts";
 
 export class InvalidPhaseDescription extends Error {
@@ -276,7 +271,7 @@ export function compileWorkflowStructure(workflow: WorkflowDefinition): Compiled
     if (ids.has(phase.id)) throw new InvalidPhaseDefinition(phase.id, "phase ids must be unique");
     ids.add(phase.id);
   }
-  const minimumCalls = workflow.phases.filter((phase) => phase.kind === "agent").length;
+  const minimumCalls = countAgentPhases(workflow.phases);
   const buildPhaseIds = reviewBuildPhaseIds(workflow.id, workflow.phases);
   return Object.freeze({
     id: workflow.id,

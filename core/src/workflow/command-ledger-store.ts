@@ -29,12 +29,12 @@ export function dispatchPointFor(
   if (!phaseId.startsWith(prefix)) return null;
   const local = phaseId.slice(prefix.length);
   if (local === "adoption-tests") {
-    return { dispatcherId: "adopt/adoption-tests", occurrenceKey: `${phaseId}:${candidateSha}` };
+    return { dispatcherId: "adopt/adoption-tests", occurrenceKey: occurrenceKeyForAdoption(phaseId, candidateSha) };
   }
   if (local.startsWith("owner-rework-")) {
-    return { dispatcherId: "rework/owner-gates", occurrenceKey: `${local}:${candidateSha}` };
+    return { dispatcherId: "rework/owner-gates", occurrenceKey: occurrenceKeyForRework(local, candidateSha) };
   }
-  return { dispatcherId: "production-run/measure-candidate", occurrenceKey: `${local}:${candidateSha}:${String(round)}` };
+  return { dispatcherId: "production-run/measure-candidate", occurrenceKey: occurrenceKeyForMeasurement(local, candidateSha, round) };
 }
 
 export const occurrenceKeyForMeasurement = (phaseId: string, candidateSha: string, round: number): string =>

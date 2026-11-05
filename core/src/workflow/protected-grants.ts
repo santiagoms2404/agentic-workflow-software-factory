@@ -9,7 +9,7 @@ import { assertProtectedGrant, assertProtectedConsumption, assertProtectedCandid
   type ProtectedGrant, type ProtectedGrantConsumption, type ProtectedGrantSubject, type ProtectedCandidateBinding, type ProtectedBlobDelta } from "../contracts/protected-grant.ts";
 import { protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
 import { assertProtectedLockWitness, type ProtectedLockWitness } from "../git/protected-lock.ts";
-import { runGit, systemGitRunner, assertClean } from "../git/changes.ts";
+import { runGit, assertClean } from "../git/changes.ts";
 import { protectedTreeDelta, protectedContentDeltas } from "../git/protected-delta.ts";
 import { matchesPathGlob } from "../policy/path-policy.ts";
 import { captureProtectedBaselines, verifyProtectedFilesystem, treeFile, protectedReadOnlyGit, protectedBlobId, readProtectedContent } from "./protected-files.ts";
@@ -141,9 +141,10 @@ export function assertProtectedOutput(capability: ProtectedFilesCapability, work
   const context = protectedWriteContext(capability);
   if (context === null || context.grant.subject.worktree !== worktree) throw new Error("protected permission capability belongs to another worktree");
   verifyProtectedFilesystem(context.grant, true);
-  if (runGit(systemGitRunner(worktree), ["rev-parse", "--absolute-git-dir"]).trim() !== context.grant.subject.worktreeGitDir) throw new Error("protected worktree Git directory changed");
-  if (runGit(systemGitRunner(worktree), ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() !== context.grant.subject.commonGitDir) throw new Error("protected common Git directory changed");
-  if (runGit(systemGitRunner(worktree), ["rev-parse", "HEAD"]).trim() !== context.grant.subject.preWriteHeadSha) throw new Error("protected phase changed HEAD before host publication");
+  const git = protectedReadOnlyGit(worktree);
+  if (runGit(git, ["rev-parse", "--absolute-git-dir"]).trim() !== context.grant.subject.worktreeGitDir) throw new Error("protected worktree Git directory changed");
+  if (runGit(git, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() !== context.grant.subject.commonGitDir) throw new Error("protected common Git directory changed");
+  if (runGit(git, ["rev-parse", "HEAD"]).trim() !== context.grant.subject.preWriteHeadSha) throw new Error("protected phase changed HEAD before host publication");
 }
 function matchesHostBwrap(executable: string | undefined): boolean {
   // This is a consistency guard, not a reconstruction of the launch-time PATH.
@@ -173,7 +174,7 @@ export function inspectProtectedCandidate(attemptDir: string, candidateSha: stri
   const state = readProtectedState(attemptDir);
   if (state.consumptions.some(consumption => consumption.id !== pendingConsumptionId && !state.bindings.some(binding => binding.consumptionId === consumption.id))) throw new Error("protected generation has an unfinished candidate binding");
   if (state.status.baseSha === null || state.status.worktree === null) throw new Error("protected candidate has no pinned base or worktree");
-  const git = systemGitRunner(state.status.worktree);
+  const git = protectedReadOnlyGit(state.status.worktree);
   const config = JSON.parse(state.status.configSnapshotJson) as AwsfConfig;
   const expected = new Map<string, ProtectedBlobDelta>();
   for (const binding of state.bindings) {

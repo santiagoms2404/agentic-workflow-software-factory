@@ -57,15 +57,24 @@ export class CorrectionTransportFailure extends Error {
 }
 
 const IDENTITY_FIELDS = ["adapter", "provider", "model", "sessionId"] as const;
+type IdentityField = (typeof IDENTITY_FIELDS)[number];
+
+function identityDifferences(expected: AgentSessionIdentity, actual: AgentSessionIdentity,
+  fields: readonly IdentityField[]): string[] {
+  return fields
+    .filter((field) => expected[field] !== actual[field])
+    .map((field) => `${field} ${JSON.stringify(expected[field])} became ${JSON.stringify(actual[field])}`);
+}
+
+function assertNoIdentityDifferences(differences: readonly string[]): void {
+  if (differences.length > 0) throw new CorrectionIdentityMismatch(differences);
+}
 
 export function assertCorrectionIdentity(
   expected: AgentSessionIdentity,
   actual: AgentSessionIdentity,
 ): void {
-  const differences = IDENTITY_FIELDS
-    .filter((field) => expected[field] !== actual[field])
-    .map((field) => `${field} ${JSON.stringify(expected[field])} became ${JSON.stringify(actual[field])}`);
-  if (differences.length > 0) throw new CorrectionIdentityMismatch(differences);
+  assertNoIdentityDifferences(identityDifferences(expected, actual, IDENTITY_FIELDS));
 }
 
 /** A paid cold correction may open a new session, but never change its configured route. */
@@ -73,10 +82,7 @@ export function assertCorrectionRouteIdentity(
   expected: AgentSessionIdentity,
   actual: AgentSessionIdentity,
 ): void {
-  const differences = IDENTITY_FIELDS
-    .filter((field) => field !== "sessionId" && expected[field] !== actual[field])
-    .map((field) => `${field} ${JSON.stringify(expected[field])} became ${JSON.stringify(actual[field])}`);
-  if (differences.length > 0) throw new CorrectionIdentityMismatch(differences);
+  assertNoIdentityDifferences(identityDifferences(expected, actual, IDENTITY_FIELDS.filter((field) => field !== "sessionId")));
 }
 
 function tail(value: string): string {

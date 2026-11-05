@@ -98,7 +98,9 @@ test("source revision or bytes changed during confirmation refuse before target 
   const world = await seedFixture();
   await assert.rejects(seedCommand({ ...world.seedOptions, terminal: { ...world.seedOptions.terminal, confirm: async () => {
     const path = join(world.sourceDir, "journal.jsonl");
-    writeFileSync(path, readFileSync(path, "utf8") + "\n");
+    const rows = readFileSync(path, "utf8").trimEnd().split("\n").map(line => JSON.parse(line));
+    rows[0].recorded_at = "2026-09-20T00:00:01.000Z";
+    writeFileSync(path, `${rows.map(row => JSON.stringify(row)).join("\n")}\n`);
     return true;
   } } }), /source journal changed/);
   absentTarget(world);
@@ -124,6 +126,22 @@ test("stale source projection and a torn journal refuse read-only", async () => 
   writeFileSync(journalPath, readFileSync(journalPath, "utf8").trimEnd());
   await assert.rejects(seedCommand(world.seedOptions), /torn tail/);
   absentTarget(world);
+});
+
+test("seed verification uses canonical journal validation without trimming malformed records", async () => {
+  for (const mutation of ["blank-line", "missing-recorded-at", "invalid-json"] as const) {
+    const world = await seedFixture();
+    const path = join(world.sourceDir, "journal.jsonl");
+    const text = readFileSync(path, "utf8");
+    if (mutation === "blank-line") writeFileSync(path, `${text}\n`);
+    else if (mutation === "invalid-json") writeFileSync(path, `not-json\n${text.slice(text.indexOf("\n") + 1)}`);
+    else {
+      const rows = text.trimEnd().split("\n").map(line => JSON.parse(line));
+      delete rows[0].recorded_at;
+      writeFileSync(path, `${rows.map(row => JSON.stringify(row)).join("\n")}\n`);
+    }
+    await assert.rejects(readVerifiedAttempt(world.sourceDir), (error: unknown) => error instanceof CandidateSeedRejected);
+  }
 });
 
 test("an unresolved source writer lock is not reclaimed", async () => {
@@ -234,7 +252,9 @@ test("startup refuses changed source provenance and never creates a target workt
   const created = await seedCommand(world.seedOptions);
   await prepareK1({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "baseline") });
   const path = join(world.sourceDir, "journal.jsonl");
-  writeFileSync(path, readFileSync(path, "utf8") + "\n");
+  const rows = readFileSync(path, "utf8").trimEnd().split("\n").map(line => JSON.parse(line));
+  rows[0].recorded_at = "2026-09-20T00:00:01.000Z";
+  writeFileSync(path, `${rows.map(row => JSON.stringify(row)).join("\n")}\n`);
   await assert.rejects(startCommand({ attemptDir: created.attemptDir!, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) }), /provenance changed/);
   assert.equal(existsSync(join(world.root, "targets")), false);

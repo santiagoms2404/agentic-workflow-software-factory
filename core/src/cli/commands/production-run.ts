@@ -1585,6 +1585,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   // of the host, so the corpus, the plan and every other checkout are absent.
   // Every other workflow keeps the host-wide read-only root, byte for byte.
   const confinement: SandboxConfinement = status.workflow === PROVE_WORKFLOW_ID ? "worktree" : "host";
+  // Under worktree confinement the child gets a fresh tmpfs HOME with only
+  // auth.json bound, so host agent settings do not describe its image policy.
+  const imageSettingsHome = confinement === "worktree" ? undefined : HOST.process.env.HOME;
   // K1's protected-path plan, from the attempt's latest driver-preflight record
   // (none for a K1-exempt workflow), checked against the grants recorded when
   // this run began. Each writing phase owes its planned grant before it
@@ -1664,7 +1667,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       // per-phase override, and before any call is reserved.
       if (visualBinding?.phases.includes(phase.id) === true) {
         assertVisualRoute({ phaseId: phase.id, adapterId: adapter.id, model, profile: agent.tools.profile, tools: agent.tools.allow });
-        await assertRouteDeliversImages(adapter.id, { home: HOST.process.env.HOME, cwd: status.worktree });
+        await assertRouteDeliversImages(adapter.id, { home: imageSettingsHome, cwd: status.worktree });
       }
       const effective = effectivePhaseRoute(selection.requested, adapter.id, model);
       const provenance = routeSelectionProvenance({
@@ -2562,9 +2565,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     let visualDelivery: VisualDelivery | null = null;
     if (visualPhase && restored === null) {
       const fresh = await verifyVisualReferences(visualBinding!, { planRef: status.planRef,
-        agentPhases: compiled.phases.filter((candidate) => candidate.kind === "agent").map((candidate) => candidate.id) });
+        agentPhases: compiled.phases.filter((candidate) => candidate.kind === "agent").map((candidate) => candidate.id),
+        previousBound: visualBound! });
       assertSameFrames(visualBound!, fresh.bound);
-      await assertRouteDeliversImages(route.adapter.id, { home: HOST.process.env.HOME, cwd: status.worktree! });
+      await assertRouteDeliversImages(route.adapter.id, { home: imageSettingsHome, cwd: status.worktree! });
       visualDelivery = await deliverVisualReferences(fresh, deliveryDirectory(options.attemptDir, runId));
     }
     const readOnlyRoots = [...(visualDelivery === null ? [] : [visualDelivery.directory]),

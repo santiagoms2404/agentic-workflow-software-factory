@@ -1,7 +1,7 @@
 import type { TSchema } from "@sinclair/typebox";
 import type { EnvelopeBase } from "../contracts/envelope-base.ts";
 import type { GateReport } from "../gates/interface.ts";
-import type { PhaseSession, PhaseState } from "../state/phase-machine.ts";
+import { settleAbnormalExit, type PhaseSession, type PhaseState } from "../state/phase-machine.ts";
 
 export type PhaseKind = "agent" | "code" | "engineer";
 
@@ -47,6 +47,10 @@ export interface LocalPhaseDefinition<TOutput extends EnvelopeBase = EnvelopeBas
 export type PhaseDefinition<TOutput extends EnvelopeBase = EnvelopeBase> =
   | AgentPhaseDefinition<TOutput>
   | LocalPhaseDefinition<TOutput>;
+
+export function countAgentPhases(phases: readonly Pick<PhaseDefinition, "kind">[]): number {
+  return phases.filter((phase) => phase.kind === "agent").length;
+}
 
 export interface CompiledAgentPhase<TOutput extends EnvelopeBase = EnvelopeBase>
   extends Omit<AgentPhaseDefinition<TOutput>, "prompt"> {
@@ -102,9 +106,8 @@ export class PhaseExecution {
   }
 
   fail(): void {
-    if (this.#state !== "SUCCEEDED" && this.#state !== "SKIPPED" && this.#state !== "CANCELLED") {
-      this.#set("FAILED");
-    }
+    const next = settleAbnormalExit(this.#state);
+    if (next !== this.#state) this.#set(next);
   }
 }
 

@@ -41,10 +41,13 @@ test("phase success must be earned through validation and abnormal exits fail", 
   successful.succeed();
   assert.equal(successful.state, "SUCCEEDED");
 
-  const abnormal = new PhaseExecution("reviewer");
+  const observed: string[] = [];
+  const abnormal = new PhaseExecution("reviewer", (state) => observed.push(state));
   abnormal.running();
   abnormal.fail();
+  abnormal.fail();
   assert.equal(abnormal.state, "FAILED");
+  assert.deepEqual(observed, ["QUEUED", "RUNNING", "FAILED"], "a repeated failure does not persist the same terminal state again");
 });
 
 test("agent compilation injects TypeBox JSON Schema and host-renders previous envelope", () => {

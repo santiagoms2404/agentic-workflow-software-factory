@@ -79,8 +79,9 @@ export async function inspectPhaseRecovery(attemptDir: string) {
       // A durable stage is only ever installed by the event that announces the
       // stage advance. A checkpoint that appeared in any other event is not a
       // record of what the host actually reached.
+      const checkpointDigest = recoveryDigest(checkpoint);
       const installed = scan.records.find(record => record.event.next.recovery != null &&
-        recoveryDigest(record.event.next.recovery) === recoveryDigest(checkpoint));
+        record.event.next.recovery.id === checkpoint.id && recoveryDigest(record.event.next.recovery) === checkpointDigest);
       if (installed?.event.evidence?.type !== "phase-validation-started" ||
           installed.event.evidence.phaseId !== `${status.sessionId}:${pending.phaseKey}` ||
           !scan.records.some(record => record.event.evidence?.type === "phase-validation-started" &&
