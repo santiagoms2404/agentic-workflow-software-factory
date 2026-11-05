@@ -59,7 +59,8 @@ async function drive(argv: readonly string[], cwd = process.cwd(), env: NodeJS.P
 test("B7-18: shadowStop callers in main.ts pass projection.projectDecision", () => {
   const source = readFileSync(resolve("core/src/cli/main.ts"), "utf8");
   const matches = [...source.matchAll(/await shadowStop\([^)]+\)/g)].map((m) => m[0]);
-  assert.equal(matches.length, 4, "expected 4 shadowStop call sites in main.ts");
+  // Intake, run and resume each stop on success and on the throw path (B7-36, B7-37).
+  assert.equal(matches.length, 6, "expected 6 shadowStop call sites in main.ts");
   for (const call of matches) {
     assert.ok(call.includes("projection.projectDecision"), `Call site ${call} must pass projection.projectDecision`);
   }
@@ -72,6 +73,14 @@ test("B7-18: shadowStop accepts projectDecision parameter and executes gracefull
     await shadowStop("/nonexistent/dir", { workflows: { enabled: [] }, agents: [] } as any, "/unused", {}, projectDecision);
   });
   assert.equal(projectDecisionCalled, false);
+});
+
+test("B7-36 & B7-37: intake, run and resume each stop the shadow owner when the run throws after sealing", () => {
+  const source = readFileSync(resolve("core/src/cli/main.ts"), "utf8");
+  // A catch that stops the shadow owner and then rethrows. The run arm already had one; intake and resume did not.
+  const catches = [...source.matchAll(/\} catch \(error\) \{([\s\S]*?)\n\s*\}/g)].map((m) => m[1] ?? "");
+  const throwPaths = catches.filter((body) => body.includes("await shadowStop(") && body.includes("throw error;"));
+  assert.equal(throwPaths.length, 3, "expected a shadow stop on the throw path of intake, run and resume");
 });
 
 test("B7-19: --state-root empty string is rejected", async () => {

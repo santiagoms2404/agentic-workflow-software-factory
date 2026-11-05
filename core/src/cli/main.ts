@@ -488,13 +488,20 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           ...(options.intakeExecution === undefined ? {} : { preflight: options.intakeExecution.preflight }),
           projectRecord: projection.project,
         });
-        const status = await runProductionCommand({
-          attemptDir: created.attemptDir, stateRoot, config, configPath,
-          ...(options.intakeExecution === undefined ? {} : { infrastructure: options.intakeExecution.infrastructure }),
-          projectRecord: projection.project,
-          assertAdvancement: projection.assertAdvancement,
-          assertLaunchProjection: projection.assertLaunchPermitted,
-        });
+        let status;
+        try {
+          status = await runProductionCommand({
+            attemptDir: created.attemptDir, stateRoot, config, configPath,
+            ...(options.intakeExecution === undefined ? {} : { infrastructure: options.intakeExecution.infrastructure }),
+            projectRecord: projection.project,
+            assertAdvancement: projection.assertAdvancement,
+            assertLaunchProjection: projection.assertLaunchPermitted,
+          });
+        } catch (error) {
+          // A run that seals the attempt and then reports it by throwing still stopped (B7-36).
+          await shadowStop(created.attemptDir, config, configPath, env, projection.projectDecision);
+          throw error;
+        }
         await shadowStop(created.attemptDir, config, configPath, env, projection.projectDecision);
         out(`${status.lifecycleState}: ${status.nextAction}`);
         if (status.lifecycleState === "AWAITING_OWNER") out(`Validated intake result for ${id}; ${status.nextAction}`);
@@ -934,11 +941,18 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       case "resume": {
         if (parsed.routes.length !== 0) throw new Error("--route is not supported by awsf resume");
         if (parsed.flags.stub !== undefined) throw new Error("resume does not support stub execution");
-        const result = await resumeProductionCommand({ attemptDir: located.attemptDir, stateRoot, config, configPath,
-          reason: parsed.flags.reason ?? "", ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
-          terminal: options.terminal ?? processOwnerTerminal(),
-          projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
-          assertLaunchProjection: projection.assertLaunchPermitted });
+        let result;
+        try {
+          result = await resumeProductionCommand({ attemptDir: located.attemptDir, stateRoot, config, configPath,
+            reason: parsed.flags.reason ?? "", ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
+            terminal: options.terminal ?? processOwnerTerminal(),
+            projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
+            assertLaunchProjection: projection.assertLaunchPermitted });
+        } catch (error) {
+          // A resume that seals the attempt and then reports it by throwing still stopped (B7-37).
+          await shadowStop(located.attemptDir, config, configPath, env, projection.projectDecision);
+          throw error;
+        }
         if (result.confirmed) await shadowStop(located.attemptDir, config, configPath, env, projection.projectDecision);
         out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
         return result.confirmed && result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;

@@ -7,12 +7,17 @@ import { newCommand } from "../../../src/cli/commands/new.ts";
 import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import {
   isReviewTransportFailure,
+  type ProductionInfrastructure,
   prepareResumeInstruction,
+  protectedSandboxAvailable,
   ProductionRouteUnavailable,
   type RecoveryInspection,
+  resumeProductionCommand,
   runProductionCommand,
   slugifyPlanStem,
 } from "../../../src/cli/commands/production-run.ts";
+import { ContinuityStore } from "../../../src/execution/continuity-store.ts";
+import { continuityFilePath } from "../../../src/persistence/platform-paths.ts";
 import { proveCommand } from "../../../src/cli/commands/prove.ts";
 import type { BuildOutput } from "../../../src/contracts/build-output.ts";
 import type { ReviewOutput } from "../../../src/contracts/review-output.ts";
@@ -392,5 +397,112 @@ test("B7-25: persistEnvelope allows overwriting when envelope exists from interr
     assert.equal(written.stale, undefined);
   } finally {
     b.close();
+  }
+});
+
+test("B7-29: the protected-grant sandbox check asks the injected runCommand, not the host", { skip: process.platform !== "linux" }, () => {
+  const asked: string[] = [];
+  const seam = (status: number) => ({
+    runCommand: (executable: string, argv: readonly string[]) => {
+      asked.push(`${executable} ${argv.join(" ")}`);
+      return { status } as unknown as ReturnType<ProductionInfrastructure["runCommand"]>;
+    },
+  }) as unknown as Pick<ProductionInfrastructure, "runCommand" | "sandboxProbe">;
+
+  assert.equal(protectedSandboxAvailable(seam(1)), false, "an injected seam that reports bwrap absent is believed");
+  assert.deepEqual(asked, ["bwrap --version"]);
+  assert.equal(protectedSandboxAvailable(seam(0)), true, "an injected seam that reports bwrap present is believed");
+  assert.deepEqual(asked, ["bwrap --version", "bwrap --version"]);
+  const probed = { ...seam(1), sandboxProbe: (executable: string) => executable === "bwrap" } as Pick<ProductionInfrastructure, "runCommand" | "sandboxProbe">;
+  assert.equal(protectedSandboxAvailable(probed), true, "an explicit sandbox probe answers without a command");
+  assert.equal(asked.length, 2, "the probe answered, so no command ran");
+});
+
+test("B7-30 & B7-35: persistEnvelope refuses before writing raw bytes, and makes bytes durable before journaling", () => {
+  const source = readFileSync(resolve("core/src/cli/commands/production-run.ts"), "utf8");
+  const start = source.indexOf("const persistEnvelope = async");
+  const end = source.indexOf("const persistGate = async");
+  assert.ok(start >= 0 && end > start, "persistEnvelope is present in its closure");
+  const body = source.slice(start, end);
+
+  const refusal = body.indexOf("immutable envelope already exists");
+  const rawWrite = body.indexOf("writeFile(rawAbsolute");
+  assert.ok(refusal >= 0 && rawWrite >= 0 && refusal < rawWrite, "B7-30: the refusal precedes the raw write that would replace an earlier reply's bytes");
+
+  const journal = body.indexOf('persist("attempt.updated"');
+  for (const target of ["fsyncPath(rawAbsolute)", "fsyncPath(dirname(rawAbsolute))", "fsyncPath(envelopePath)", "fsyncPath(dirname(envelopePath))"]) {
+    const at = body.indexOf(target);
+    assert.ok(at >= 0 && at < journal, `B7-35: ${target} runs before the envelope journal record cites its digest`);
+  }
+});
+
+/** Drives a tier-1 build with the success stub to its owner stop. */
+async function runToOwner(b: ReturnType<typeof box>) {
+  const created = await draft(b);
+  await prepare(b, created.attemptDir);
+  await start(b, created.attemptDir);
+  const status = await runProductionCommand({
+    attemptDir: created.attemptDir,
+    stateRoot: b.stateRoot,
+    config: b.config,
+    configPath: b.configPath,
+    projectRecord: b.projection.project,
+    infrastructure: {
+      ...b.infrastructure,
+      adapterFor: (_entry: unknown, id: string) => new SuccessStub(id),
+    },
+  });
+  return { created, status };
+}
+
+test("B7-31: agent envelopes take the injected clock, as host envelopes and the journal do", async () => {
+  const b = box();
+  try {
+    const { created, status } = await runToOwner(b);
+    assert.equal(status.lifecycleState, "AWAITING_OWNER");
+    const envelope = JSON.parse(readFileSync(join(created.attemptDir, "envelopes", "builder-0.json"), "utf8"));
+    assert.equal(envelope.createdAt, AT, "the agent envelope must carry the pinned clock, not the wall clock");
+  } finally {
+    b.close();
+  }
+});
+
+test("B7-32: a landing below T2 records its journey as not approved, since no journey happened", async () => {
+  const b = box();
+  try {
+    const { created, status } = await runToOwner(b);
+    assert.equal(status.lifecycleState, "AWAITING_OWNER");
+    assert.equal(status.tier, 1);
+    assert.equal(status.journeyApproved, false, "the journey flag is never assumed true without a journey");
+    assert.equal((await readAttempt(created.attemptDir)).journeyApproved, false);
+  } finally {
+    b.close();
+  }
+});
+
+test("B7-33: resume under a config that no longer defines a retained phase's agent refuses by name, not with a TypeError", async () => {
+  const world = box();
+  try {
+    const created = await draft(world);
+    const storeDir = join(world.root, "synthetic-session-store");
+    mkdirSync(storeDir);
+    const store = new ContinuityStore({ path: continuityFilePath(created.attemptDir), newSessionId: () => "synthetic-session" });
+    await store.open({ phaseId: "builder", adapter: "pi-codex", provider: "openai-codex",
+      model: world.config.agents.find(agent => agent.name === "builder")!.model, storeDir });
+    const renamed = { ...world.config, agents: world.config.agents.map(agent => agent.name === "builder" ? { ...agent, name: "builder-renamed" } : agent) };
+
+    let failure: unknown;
+    try {
+      await resumeProductionCommand({ attemptDir: created.attemptDir, stateRoot: world.stateRoot, config: renamed,
+        configPath: world.configPath, reason: "inspect retained continuity", terminal: OWNER,
+        projectRecord: world.projection.project, infrastructure: world.infrastructure });
+    } catch (error) {
+      failure = error;
+    }
+    assert.ok(failure instanceof Error, "resume must refuse");
+    assert.equal(failure instanceof TypeError, false, `refused with a TypeError: ${String(failure)}`);
+    assert.match(failure.message, /configuration, request, recipe or prompts changed/);
+  } finally {
+    world.close();
   }
 });

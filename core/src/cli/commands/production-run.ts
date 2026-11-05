@@ -549,6 +549,17 @@ export const DEFAULT_INFRASTRUCTURE: ProductionInfrastructure = {
   now: () => new Date().toISOString(),
 };
 
+/**
+ * Whether protected grants may run: Linux, and an OS sandbox that answers
+ * `bwrap --version`. The probe goes through the injected seam, so a host
+ * without bwrap and a test seam that reports it present agree with the seam
+ * (B7-29), and the host command runs only when no probe is injected.
+ */
+export function protectedSandboxAvailable(infra: Pick<ProductionInfrastructure, "runCommand" | "sandboxProbe">): boolean {
+  if (process.platform !== "linux") return false;
+  return infra.sandboxProbe?.("bwrap") ?? infra.runCommand("bwrap", ["--version"], { timeoutMs: 5000 }).status === 0;
+}
+
 export interface ProductionRunOptions {
   readonly attemptDir: string;
   /**
@@ -1821,7 +1832,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
 
   for (const grant of protectedState.grants) {
     if (protectedState.consumptions.some(value => value.grantId === grant.id)) continue;
-    if (process.platform !== "linux" || !(infra.sandboxProbe?.("bwrap") ?? (runSystemCommand("bwrap", ["--version"], 5000).status === 0))) throw new Error("protected grants require an OS-enforced sandbox");
+    if (!protectedSandboxAvailable(infra)) throw new Error("protected grants require an OS-enforced sandbox");
     prepareProtectedConsumption(options.attemptDir, await protectedGrantSubject(options, status, grant.subject.phaseKey), "preflight", "preflight");
   }
   if (preflightOnly) return status;
@@ -2111,14 +2122,22 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   const persistEnvelope = async (phaseId: string, runId: string, envelope: StoredEnvelope<EnvelopeBase>, rawOutput: string): Promise<void> => {
     const rawRelative = join("raw", `${runId}.txt`);
     const rawAbsolute = join(options.attemptDir, rawRelative);
-    await mkdir(dirname(rawAbsolute), { recursive: true });
-    await writeFile(rawAbsolute, rawOutput, { mode: 0o600 });
-    await chmod(rawAbsolute, 0o600);
     const stored = { ...envelope, rawOutputPath: rawRelative };
     const envelopePath = join(options.attemptDir, "envelopes", `${phaseId}-${envelope.correctionRound}.json`);
+    await mkdir(dirname(rawAbsolute), { recursive: true });
     await mkdir(dirname(envelopePath), { recursive: true });
+    // Refuse before any byte is written. The raw file is the one an earlier
+    // envelope names, so a refused write must not replace it (B7-30).
     if (existsSync(envelopePath) && storedEnvelopes.get(phaseId)?.correctionRound === envelope.correctionRound) throw new Error(`immutable envelope already exists: ${envelopePath}`);
+    await writeFile(rawAbsolute, rawOutput, { mode: 0o600 });
+    await chmod(rawAbsolute, 0o600);
     await writeFile(envelopePath, JSON.stringify(stored), { mode: 0o600 });
+    // The bytes are durable before the journal record cites them (B7-35), as
+    // the command-output path already does.
+    await fsyncPath(rawAbsolute);
+    await fsyncPath(dirname(rawAbsolute));
+    await fsyncPath(envelopePath);
+    await fsyncPath(dirname(envelopePath));
     await persist("attempt.updated", {}, { type: "envelope", phaseId: dbPhaseId(status.sessionId, phaseId), envelope: stored });
     storedEnvelopes.set(phaseId, stored);
   };
@@ -2597,6 +2616,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         if (observed === null || paths !== observed) throw new Error("protected commit requires its host-captured diff object");
         return commitProtectedAsHost({ attemptDir: options.attemptDir, capability: protectedCapability, message: message(envelope), paths,
           writes: route.agent.writes, protectedPaths: options.config.policy.protected_paths,
+          now: () => infra.now(),
           ...(infra.afterProtectedHeadPublished === undefined ? {} : { afterHeadPublished: infra.afterProtectedHeadPublished }),
           persistIntent: async intent => persist("attempt.updated", {}, { type: "protected-commit-intent", intent }),
           persistWitness: async witness => persist("attempt.updated", {}, { type: "protected-lock-witness", witness }),
@@ -3117,6 +3137,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       const result = await runAgentPhase({
         workflowId: compiled.id,
         phase: gatedPhase,
+        // The injected clock, as the host envelopes and the journal use. Without
+        // it the engine stamps agent envelopes with the wall clock (B7-31).
+        now: () => infra.now(),
         worktree: status.worktree!,
         previousEnvelope: previous,
         session,
@@ -4015,7 +4038,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       });
       await persistTransition("GATING", "AWAITING_OWNER", l12.edge, "gate", null, `all required T${status.tier} gates passed`, false, {
         candidateSha, budget: budget.snapshot(), gatesPass: true,
-        requiredReviewPresent: false, journeyApproved: true, protectedApprovalsValid: true, blocker: null,
+        // No journey happened below T2, so none is recorded as approved: the
+        // T2 path beside this one never assumes it either (B7-32).
+        requiredReviewPresent: false, journeyApproved: false, protectedApprovalsValid: true, blocker: null,
         lastActivity: readOnlyResult === null
           ? `all T${status.tier} production phases and gates passed; awaiting owner`
           : `read-only ${readOnlyResult.schema} result passed every gate; awaiting owner inspection`,
@@ -4455,7 +4480,11 @@ export async function resumeProductionCommand(options: ProductionRunOptions & { 
     if (phase.kind !== "agent" || current.recovery?.prefix.some(entry => entry.phaseKey === phase.id)) continue;
     const record = retained.get(continuityHandle(phase.id));
     if (record === undefined) continue;
-    const role = options.config.agents.find(agent => agent.name === phase.owner)!;
+    const role = options.config.agents.find(agent => agent.name === phase.owner);
+    // A config that no longer defines the retained phase's agent is the change
+    // the snapshot check refuses by name. Reading a route from it threw a
+    // TypeError instead (B7-33).
+    if (role === undefined) throw new Error("resume refused: configuration, request, recipe or prompts changed");
     const agent = requestedPhaseRoute(options.config, phase.id, role, current.routeOverrides).agent;
     const entry = options.config.adapters[agent.harness.adapter];
     const adapter = entry === undefined ? null : infra.adapterFor(entry, agent.harness.adapter, options.config);

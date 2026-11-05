@@ -84,9 +84,24 @@ function firstFailureLine(lines: readonly string[]): number | null {
   return null;
 }
 
+/**
+ * A cut between the two halves of a surrogate pair leaves a lone half at the
+ * edge, which every UTF-8 consumer renders as a replacement character (B7-27).
+ * The orphaned half is dropped, so a window stays well formed and within budget.
+ */
+function wellFormedEnd(text: string): string {
+  const last = text.charCodeAt(text.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? text.slice(0, -1) : text;
+}
+
+function wellFormedStart(text: string): string {
+  const first = text.charCodeAt(0);
+  return first >= 0xdc00 && first <= 0xdfff ? text.slice(1) : text;
+}
+
 function clip(value: string, maximum: number, from: "start" | "end"): string {
   if (value.length <= maximum) return value;
-  return from === "start" ? value.slice(0, maximum) : value.slice(value.length - maximum);
+  return from === "start" ? wellFormedEnd(value.slice(0, maximum)) : wellFormedStart(value.slice(value.length - maximum));
 }
 
 /**
@@ -290,7 +305,7 @@ export function renderCommandEvidence(evidence: BoundedCommandEvidence): string 
 export function renderBoundedEvidence(output: string, ceiling = DEFAULT_EVIDENCE_BUDGET): string {
   const rendered = renderCommandEvidence(boundCommandOutput(output, { budget: ceiling }));
   if (rendered.length <= ceiling) return rendered;
-  return renderCommandEvidence(
-    boundCommandOutput(output, { budget: Math.max(0, ceiling - (rendered.length - ceiling) - 128) }),
-  ).slice(0, ceiling);
+  return wellFormedEnd(
+    renderCommandEvidence(boundCommandOutput(output, { budget: Math.max(0, ceiling - (rendered.length - ceiling) - 128) })).slice(0, ceiling),
+  );
 }
