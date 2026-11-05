@@ -28,7 +28,7 @@ onUnmounted(() => document.removeEventListener("keydown", onKeydown));
     </header>
     <div class="phase-detail-columns">
       <PhaseInspector :detail="props.detail" />
-      <EventLog :session-id="sessionId" :phase-id="detail.phase.phaseId" />
+      <EventLog :session-id="sessionId" :phase-id="detail.phase.phaseId" :phase-status="detail.phase.status" />
     </div>
   </section>
 </template>

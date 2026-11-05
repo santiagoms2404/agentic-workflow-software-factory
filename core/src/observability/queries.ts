@@ -5,6 +5,7 @@
 import type { DatabaseSync } from "./sqlite.ts";
 import { TERMINAL_STATES } from "../state/task-machine.ts";
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
+import { REVIEW_CONTEXT_SCHEMA_ID } from "../contracts/review-context.ts";
 
 type ReadStatement = ReturnType<DatabaseSync["prepare"]>;
 const READ_STATEMENTS = new WeakMap<DatabaseSync, Map<string, ReadStatement>>();
@@ -447,6 +448,69 @@ export function envelopesForPhase(db: DatabaseSync, sessionId: string, phaseId: 
       producer_status, payload_json, violations_json, created_at
     FROM envelopes WHERE session_id = ? AND phase_id = ? ORDER BY correction_round, created_at`)
     .all(sessionId, phaseId) as unknown as EnvelopeRow[];
+}
+
+export interface CandidateDiffStat {
+  readonly baseSha: string;
+  readonly candidateSha: string;
+  readonly files: number;
+  readonly insertions: number;
+  readonly deletions: number;
+}
+
+/** Structured host-composed review evidence for the session's exact current candidate. */
+export function candidateDiffStatForSession(
+  db: DatabaseSync,
+  sessionId: string,
+  baseSha: string | null,
+  candidateSha: string | null,
+): CandidateDiffStat | null {
+  if (baseSha === null || candidateSha === null) return null;
+  const rows = db.prepare(`SELECT e.payload_json FROM phases p
+    JOIN envelopes e ON e.phase_id = p.phase_id
+    WHERE p.session_id = ? AND e.session_id = ? AND e.schema_id = ? AND e.valid = 1
+      AND json_extract(e.payload_json, '$.payload.baseSha') = ?
+      AND json_extract(e.payload_json, '$.payload.candidateSha') = ?
+    ORDER BY e.created_at DESC, e.envelope_id DESC`).all(
+    sessionId, sessionId, REVIEW_CONTEXT_SCHEMA_ID, baseSha, candidateSha,
+  ) as unknown as { payload_json: string }[];
+
+  let result: CandidateDiffStat | null = null;
+  for (const row of rows) {
+    let stored: unknown;
+    try { stored = JSON.parse(row.payload_json) as unknown; } catch { continue; }
+    if (stored === null || typeof stored !== "object" || Array.isArray(stored)) continue;
+    const envelope = stored as { schemaId?: unknown; valid?: unknown; payload?: unknown };
+    if (envelope.schemaId !== REVIEW_CONTEXT_SCHEMA_ID || envelope.valid !== true) continue;
+    const payload = envelope.payload;
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) continue;
+    const evidence = payload as {
+      schema?: unknown;
+      producerStatus?: unknown;
+      baseSha?: unknown;
+      candidateSha?: unknown;
+      changedFiles?: unknown;
+      insertions?: unknown;
+      deletions?: unknown;
+    };
+    if (evidence.schema !== REVIEW_CONTEXT_SCHEMA_ID || evidence.producerStatus !== "success" ||
+        evidence.baseSha !== baseSha || evidence.candidateSha !== candidateSha || !Array.isArray(evidence.changedFiles) ||
+        !evidence.changedFiles.every((path: unknown) => typeof path === "string") ||
+        !Number.isSafeInteger(evidence.insertions) || (evidence.insertions as number) < 0 ||
+        !Number.isSafeInteger(evidence.deletions) || (evidence.deletions as number) < 0) continue;
+
+    const candidate: CandidateDiffStat = {
+      baseSha,
+      candidateSha,
+      files: evidence.changedFiles.length,
+      insertions: evidence.insertions as number,
+      deletions: evidence.deletions as number,
+    };
+    if (result !== null && (result.files !== candidate.files || result.insertions !== candidate.insertions ||
+        result.deletions !== candidate.deletions)) return null;
+    result = candidate;
+  }
+  return result;
 }
 
 export function configSnapshotForSession(db: DatabaseSync, sessionId: string): string | null {

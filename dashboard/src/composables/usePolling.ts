@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 export type PollMode = "live" | "grid" | "idle";
 const cadence: Record<PollMode, number> = { live: 500, grid: 2_000, idle: 5_000 };
@@ -34,7 +34,7 @@ function focusTarget(): FocusTarget {
 }
 
 /** Owns polling cadence, bounded exponential retry, and focus catch-up. */
-export function usePolling(poll: () => Promise<void>, mode: () => PollMode) {
+export function usePolling(poll: () => Promise<void>, mode: () => PollMode, shouldRepeat: () => boolean = () => true) {
   const lastPollAt = ref<number | null>(null);
   const polling = ref(false);
   const failedAttempts = ref(0);
@@ -43,7 +43,7 @@ export function usePolling(poll: () => Promise<void>, mode: () => PollMode) {
 
   const pollMs = () => cadence[mode()];
   const schedule = () => {
-    if (stopped) return;
+    if (stopped || !shouldRepeat()) return;
     const backoff = Math.min(pollMs() * 2 ** failedAttempts.value, 30_000);
     timer = setTimeout(voidPoll, backoff);
   };
@@ -61,7 +61,13 @@ export function usePolling(poll: () => Promise<void>, mode: () => PollMode) {
       schedule();
     }
   };
+  const refresh = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+    return voidPoll();
+  };
   const onFocus = () => {
+    if (!shouldRepeat()) return;
     if (timer) {
       clearTimeout(timer);
       timer = undefined;
@@ -69,6 +75,14 @@ export function usePolling(poll: () => Promise<void>, mode: () => PollMode) {
     void voidPoll();
   };
 
+  watch(shouldRepeat, (repeat) => {
+    if (!repeat) {
+      if (timer) clearTimeout(timer);
+      timer = undefined;
+    } else {
+      void voidPoll();
+    }
+  });
   onMounted(() => {
     focusTarget().addEventListener("focus", onFocus);
     void voidPoll();
@@ -78,5 +92,5 @@ export function usePolling(poll: () => Promise<void>, mode: () => PollMode) {
     if (timer) clearTimeout(timer);
     focusTarget().removeEventListener("focus", onFocus);
   });
-  return { lastPollAt, polling, failedAttempts, pollMs, refresh: voidPoll };
+  return { lastPollAt, polling, failedAttempts, pollMs, refresh };
 }

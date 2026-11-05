@@ -17,6 +17,7 @@ import { openDatabase, setSessionArchived } from "../observability/sqlite.ts";
 import {
   agentsForSession,
   backlogSessionCosts,
+  candidateDiffStatForSession,
   compactActivityForSession,
   compiledPromptEvents,
   configSnapshotForSession,
@@ -671,6 +672,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         ownerReentries: row.owner_reentries,
         stateRevision: row.state_revision,
         landingSummary: summary,
+        candidateDiffStat: candidateDiffStatForSession(readDb, row.session_id, row.base_sha, row.candidate_sha),
         runReportPath: runReport?.taskRelativePath ?? null,
         transitions: transitionsForSession(readDb, row.session_id).map((item) => ({
           id: item.transition_id,

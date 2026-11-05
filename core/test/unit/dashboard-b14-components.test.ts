@@ -83,11 +83,12 @@ test("B14-29: EventLog keeps its error alert until the next result replaces it",
   assert.doesNotMatch(events, /v-if="!phaseEvents\.length && !loading"/u);
 });
 
-test("B14-30: the ask line cut counts characters, so an astral character is never split", () => {
+test("B14-30: the shared ask line counts characters, so an astral character is never split", () => {
   const tree = source("dashboard/src/components/GroupDecisionTree.vue");
-  assert.doesNotMatch(tree, /line\.slice\(0, 119\)/u);
-  assert.match(tree, /const characters = Array\.from\(line\);/u);
-  assert.match(tree, /characters\.length <= 120 \? line : `\$\{characters\.slice\(0, 119\)\.join\(""\)\}…`/u);
+  const presentation = source("dashboard/src/presentation.ts");
+  assert.match(tree, /askLine as formatAskLine/u);
+  assert.match(presentation, /const characters = Array\.from\(first\);/u);
+  assert.match(presentation, /characters\.length <= budget \? first/u);
 });
 
 test("B14-31: a failure class whose last failed phase goes away closes its panel", () => {

@@ -343,6 +343,14 @@ export interface LandingSummary {
   risks: string;
 }
 
+export interface CandidateDiffStat {
+  baseSha: string;
+  candidateSha: string;
+  files: number;
+  insertions: number;
+  deletions: number;
+}
+
 export interface SessionDetailResponse extends SessionCard {
   baseSha: string | null;
   headSha: string | null;
@@ -358,6 +366,8 @@ export interface SessionDetailResponse extends SessionCard {
   ownerReentries: number;
   stateRevision: number;
   landingSummary: LandingSummary | null;
+  /** Host-composed counts for the exact current candidate; omitted by legacy API responses. */
+  candidateDiffStat?: CandidateDiffStat | null;
   /** Task-relative private-state path; the API never exposes an absolute path or report body. */
   runReportPath: string | null;
   transitions: TransitionSummary[];

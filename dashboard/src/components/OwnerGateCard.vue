@@ -5,9 +5,12 @@ import type { SessionDetailResponse } from "../../shared/types.ts";
 const props = defineProps<{ session: SessionDetailResponse }>();
 const passed = computed(() => props.session.gates.filter((gate) => gate.passed).length);
 const diffStat = computed(() => {
-  const text = JSON.stringify(props.session.gates.map((gate) => gate.checks));
-  const match = text.match(/[+][0-9]+\s*[-−][0-9]+/) ?? text.match(/\d+ files? changed/);
-  return match?.[0] ?? "Unavailable in session projection";
+  const stat = props.session.candidateDiffStat;
+  if (stat == null || stat.baseSha !== props.session.baseSha || stat.candidateSha !== props.session.candidateSha) {
+    return "Unavailable in session projection";
+  }
+  const files = `${stat.files} file${stat.files === 1 ? "" : "s"} changed`;
+  return `${files}, +${stat.insertions}/-${stat.deletions}`;
 });
 const summarySections = computed(() => {
   const summary = props.session.landingSummary;

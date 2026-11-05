@@ -95,7 +95,7 @@ watch(
       <p v-else-if="error" class="absent">{{ error }}</p>
       <template v-else-if="tree">
         <GroupTreeGraph v-show="view === 'graph'" :tree="tree" />
-        <GroupDecisionTree v-show="view === 'reading'" :tree="tree" />
+        <GroupDecisionTree v-if="view === 'reading'" :tree="tree" />
       </template>
     </section>
   </main>

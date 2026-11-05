@@ -14,7 +14,8 @@ import {
   type CanvasRoute,
 } from "../canvas-view.ts";
 import { browserPins, readPins, writePins } from "../canvas-pins.ts";
-import { askLine, decisionSlides, elsewhere } from "../canvas-session.ts";
+import { decisionSlides, elsewhere } from "../canvas-session.ts";
+import { askLine as formatAskLine } from "../presentation.ts";
 import { clampIndex, relationBetween, relationReason } from "../canvas-wheel.ts";
 import { stateTone } from "../display.ts";
 import CanvasMap from "../components/CanvasMap.vue";
@@ -33,6 +34,8 @@ const props = defineProps<{
 }>();
 
 const map = ref<InstanceType<typeof CanvasMap> | null>(null);
+const currentRoute = ref(props.route);
+watch(() => props.route, (route) => { currentRoute.value = route; });
 /**
  * Focus across the open and the return.
  *
@@ -56,7 +59,7 @@ function holdParked(id: string, element: unknown): void {
   else parked.set(id, element as HTMLElement);
 }
 
-watch(() => props.route.opened, async (now, before) => {
+watch(() => currentRoute.value.opened, async (now, before) => {
   // Lazily, so arriving with `opened` already in the address moves nothing:
   // the reader did not navigate, they landed.
   await nextTick();
@@ -65,7 +68,7 @@ watch(() => props.route.opened, async (now, before) => {
   if (map.value?.focusNode(before) !== true) parked.get(before)?.focus();
 });
 const graph = computed(() => buildCanvasGraph(props.sessions, props.groups, props.plans));
-const shown = computed(() => filterGraph(graph.value, props.route.kinds));
+const shown = computed(() => filterGraph(graph.value, currentRoute.value.kinds));
 const counts = computed(() => kindCounts(graph.value));
 
 /**
@@ -94,12 +97,24 @@ function reset(): void {
 }
 
 function go(next: Partial<CanvasRoute>): void {
-  location.hash = canvasRouteHash({ ...props.route, ...next });
+  const updated = { ...currentRoute.value, ...next };
+  currentRoute.value = updated;
+  location.hash = canvasRouteHash(updated);
+}
+
+function updateCamera(camera: Camera): void {
+  const updated = { ...currentRoute.value, camera };
+  currentRoute.value = updated;
+  history.replaceState(history.state, "", canvasRouteHash(updated));
+}
+
+function askLine(text: string | null): string | null {
+  return formatAskLine(text, 120);
 }
 
 function toggleKind(kind: CanvasNodeKind): void {
-  const has = props.route.kinds.includes(kind);
-  const next = has ? props.route.kinds.filter((candidate) => candidate !== kind) : [...props.route.kinds, kind];
+  const has = currentRoute.value.kinds.includes(kind);
+  const next = has ? currentRoute.value.kinds.filter((candidate) => candidate !== kind) : [...currentRoute.value.kinds, kind];
   // Every kind off is every kind on: a map showing nothing reads as broken
   // rather than as filtered, and there would be no control left to undo it.
   //
@@ -118,11 +133,11 @@ function toggleKind(kind: CanvasNodeKind): void {
 /* --- The opened run: its deck, in execution order ------------------------- */
 
 const opened = computed(() => {
-  if (props.route.opened === null) return null;
+  if (currentRoute.value.opened === null) return null;
   // The parked rail opens too: a plan nothing has run against still has its
   // tickets, and a session whose runs are elsewhere still has its journal.
-  return graph.value.nodes.find((node) => node.id === props.route.opened)
-    ?? graph.value.unplaced.find((node) => node.id === props.route.opened)
+  return graph.value.nodes.find((node) => node.id === currentRoute.value.opened)
+    ?? graph.value.unplaced.find((node) => node.id === currentRoute.value.opened)
     ?? null;
 });
 
@@ -133,7 +148,7 @@ const chain = computed<readonly SessionCard[]>(() =>
 
 const at = ref(0);
 let reasonSeq = 0;
-watch(() => props.route.opened, () => {
+watch(() => currentRoute.value.opened, () => {
   at.value = 0;
   reason.value = null;
   reasonSeq++;
@@ -269,8 +284,8 @@ watch(() => openedPlan.value?.id, async (planId) => {
 }, { immediate: true });
 
 const selectedNode = computed(() =>
-  shown.value.nodes.find((node) => node.id === props.route.selected)
-  ?? graph.value.unplaced.find((node) => node.id === props.route.selected)
+  shown.value.nodes.find((node) => node.id === currentRoute.value.selected)
+  ?? graph.value.unplaced.find((node) => node.id === currentRoute.value.selected)
   ?? null);
 
 /**
@@ -284,7 +299,7 @@ const selectedNode = computed(() =>
  * the selection every reader arrived with in their URL.
  */
 watch(shown, (next) => {
-  const selected = props.route.selected;
+  const selected = currentRoute.value.selected;
   if (selected === null) return;
   const recorded = (nodes: readonly { readonly id: string }[]): boolean => nodes.some((node) => node.id === selected);
   // On the map and hidden — nothing else. A node in the parked rail was never
@@ -324,8 +339,8 @@ watch(shown, (next) => {
             :key="kind"
             type="button"
             class="session-filter-option canvas-kind"
-            :class="[`canvas-kind-${kind}`, { selected: route.kinds.includes(kind) }]"
-            :aria-pressed="route.kinds.includes(kind)"
+            :class="[`canvas-kind-${kind}`, { selected: currentRoute.kinds.includes(kind) }]"
+            :aria-pressed="currentRoute.kinds.includes(kind)"
             @click="toggleKind(kind)"
           >
             <span class="canvas-kind-dot" aria-hidden="true" />
@@ -346,7 +361,7 @@ watch(shown, (next) => {
              writes it; until then the place it sits says so rather than being
              filled with a sentence nothing generated. -->
         <p class="canvas-selected-summary absent">no summary written yet</p>
-        <a v-if="openHref(selectedNode, route)" class="session-filter-control canvas-open" :href="openHref(selectedNode, route) ?? '#'">
+        <a v-if="openHref(selectedNode, currentRoute)" class="session-filter-control canvas-open" :href="openHref(selectedNode, currentRoute) ?? '#'">
           open this
         </a>
       </section>
@@ -368,7 +383,7 @@ watch(shown, (next) => {
             :ref="(element) => holdParked(node.id, element)"
             class="canvas-parked-item session-filter-option"
             :class="`canvas-kind-${node.kind}`"
-            :href="openHref(node) ?? '#'"
+            :href="openHref(node, currentRoute) ?? '#'"
           >
             <span class="canvas-kind-dot" aria-hidden="true" />
             <span class="canvas-parked-label">{{ node.label }}</span>
@@ -382,7 +397,7 @@ watch(shown, (next) => {
          to it exactly as it was. -->
     <section v-if="opened && opened.kind === 'run' && chain.length" ref="panel" tabindex="-1" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
-        <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
+        <a class="session-filter-control" :href="canvasRouteHash({ ...currentRoute, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
         <p class="canvas-opened-meta">{{ chain.length }} run(s) in this chain, oldest first</p>
       </header>
@@ -417,7 +432,7 @@ watch(shown, (next) => {
          either of the two readings that already exist. -->
     <section v-else-if="opened && opened.kind === 'session'" ref="panel" tabindex="-1" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
-        <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
+        <a class="session-filter-control" :href="canvasRouteHash({ ...currentRoute, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
         <div class="canvas-view-switch" role="group" aria-label="View">
           <button
@@ -472,7 +487,7 @@ watch(shown, (next) => {
          route serving local files and a second stylesheet in the shell. -->
     <section v-else-if="opened && opened.kind === 'plan'" ref="panel" tabindex="-1" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
-        <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
+        <a class="session-filter-control" :href="canvasRouteHash({ ...currentRoute, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
         <p class="canvas-opened-meta">{{ openedPlan?.kind ?? "plan" }}<template v-if="openedPlan?.parentSpineName"> · under {{ openedPlan.parentSpineName }}</template></p>
       </header>
@@ -486,11 +501,11 @@ watch(shown, (next) => {
       ref="map"
       class="canvas-board"
       :graph="shown"
-      :camera="route.camera"
-      :selected="route.selected"
+      :camera="currentRoute.camera"
+      :selected="currentRoute.selected"
       :pinned="pinned"
-      :route="route"
-      @update:camera="go({ camera: $event })"
+      :route="currentRoute"
+      @update:camera="updateCamera($event)"
       @update:selected="go({ selected: $event })"
       @update:pinned="keepPins($event)"
     />

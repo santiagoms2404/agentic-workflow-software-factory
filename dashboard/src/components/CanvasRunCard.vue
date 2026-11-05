@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { PhaseSummary, SessionCard as Session } from "../../shared/types.ts";
+import type { SessionCard as Session } from "../../shared/types.ts";
 import { costAuthorityLabel, formatCalls, formatCost, formatDate, formatDuration, formatUsage, shortSessionId, stateLabel, stateTone } from "../display.ts";
+import { phaseStatusGlyph, sessionExtent } from "../presentation.ts";
 
 const props = defineProps<{ session: Session; middle: boolean }>();
 
@@ -15,14 +16,7 @@ const props = defineProps<{ session: Session; middle: boolean }>();
  * did this run do".
  */
 const phases = computed(() => props.session.phases);
-const runtimeEnd = computed(() => props.session.endedAt ?? props.session.updatedAt);
-
-function glyph(phase: PhaseSummary): string {
-  if (phase.status === "SUCCEEDED") return "●";
-  if (["FAILED", "CANCELLED"].includes(phase.status)) return "×";
-  if (["RUNNING", "VALIDATING", "CORRECTING"].includes(phase.status)) return "◐";
-  return "○";
-}
+const runtimeEnd = computed(() => sessionExtent(props.session, Date.now()).runtimeEnd);
 </script>
 
 <template>
@@ -50,7 +44,7 @@ function glyph(phase: PhaseSummary): string {
           :class="phase.status.toLowerCase()"
           :title="`${phase.name} — ${phase.status}`"
         >
-          <span class="wheel-phase-glyph" aria-hidden="true">{{ glyph(phase) }}</span>
+          <span class="wheel-phase-glyph" aria-hidden="true">{{ phaseStatusGlyph(phase.status) }}</span>
           <span class="wheel-phase-name">{{ phase.name }}</span>
         </span>
       </div>

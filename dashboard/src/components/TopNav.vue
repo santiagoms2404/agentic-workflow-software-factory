@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { shortSessionId } from "../display.ts";
 import { type PaletteId, type ThemeMode, useLabPalette } from "../theme.ts";
 
 defineProps<{
@@ -81,7 +82,7 @@ onUnmounted(() => {
       <a href="#/sessions" :aria-current="!sessionId && !settings && !backlog && !groups && !canvas && !metrics ? 'page' : false">sessions</a>
       <template v-if="sessionId">
         <span class="sep">›</span>
-        <a :href="`#/sessions/${sessionId}`" :aria-current="!phaseName ? 'page' : false">{{ sessionId.slice(0, 8) }}</a>
+        <a :href="`#/sessions/${encodeURIComponent(sessionId)}`" :aria-current="!phaseName ? 'page' : false">{{ shortSessionId(sessionId) }}</a>
       </template>
       <template v-if="phaseName">
         <span class="sep">›</span><span class="current">{{ phaseName }}</span>
@@ -169,7 +170,7 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <a v-if="!settings && !backlog && !groups" class="settings-link" href="#/settings">Settings</a>
+    <a v-if="!settings" class="settings-link" href="#/settings">Settings</a>
     <a v-if="!metrics" class="settings-link" href="#/metrics">Metrics</a>
     <a v-if="!canvas" class="settings-link" href="#/canvas">Canvas</a>
     <a v-if="!groups" class="settings-link" href="#/groups">Sessions log</a>
