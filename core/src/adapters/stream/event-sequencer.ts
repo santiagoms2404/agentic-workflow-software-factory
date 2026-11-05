@@ -146,6 +146,11 @@ export class EventSequencer {
     return this.#openTools.size;
   }
 
+  /** Whether the provider id currently names a call the host actually opened. */
+  hasOpenTool(providerToolId: string): boolean {
+    return this.#openTools.has(providerToolId);
+  }
+
   get budget(): OutputBudget {
     return this.#budget;
   }

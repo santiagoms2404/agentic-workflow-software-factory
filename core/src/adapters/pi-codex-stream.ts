@@ -45,7 +45,7 @@ import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { ObservedToolImage } from "./interface.ts";
 import type { EventSequencer } from "./stream/event-sequencer.ts";
 import { summarize } from "./stream/snippet.ts";
-import { redactToolImages, toolResultImages } from "./stream/tool-images.ts";
+import { summarizeToolResult, toolResultImages } from "./stream/tool-images.ts";
 
 interface PiUsage {
   input?: unknown;
@@ -141,12 +141,6 @@ export class PiStreamDecoder {
   readonly #requestedModel: string;
   readonly #session: PiSessionRecord;
   readonly #now: () => string;
-  /**
-   * Mirrors the sequencer's own map rather than reaching into it: the decoder
-   * needs to know whether it has already opened a provider tool id, and the
-   * sequencer's bookkeeping is its own.
-   */
-  readonly #openTools = new Set<string>();
   readonly #images: ObservedToolImage[] | undefined;
   #started = false;
   /** The last stop reason any assistant turn reported. Decides the terminal. */
@@ -424,8 +418,7 @@ export class PiStreamDecoder {
   ): readonly NormalizedEvent[] {
     const id = input.providerToolId;
     if (typeof id !== "string" || id.length === 0) return [];
-    if (this.#openTools.has(id)) return [];
-    this.#openTools.add(id);
+    if (sequencer.hasOpenTool(id)) return [];
     return sequencer.toolRequested({
       providerToolId: id,
       name: typeof input.name === "string" ? input.name : "tool",
@@ -445,12 +438,11 @@ export class PiStreamDecoder {
   #toolEnd(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const id = line.toolCallId;
     if (typeof id !== "string" || id.length === 0) return [];
-    this.#openTools.delete(id);
     const outcome = line.isError === true ? "error" : "ok";
     const settled = sequencer.toolCompleted({
       providerToolId: id,
       outcome,
-      resultSnippet: summarizeResult(line.result),
+      resultSnippet: summarizeToolResult(line.result),
       providerAt: null,
     });
     const completed = settled.find((event) => event.kind === "tool.completed");
@@ -606,29 +598,6 @@ function providerAt(message: PiMessage | undefined): string | null {
 }
 
 /**
- * A tool result, which pi shapes as `{ content: [{ type: "text", text }] }`.
- *
- * The text blocks are joined when the shape is that one, and the whole value is
- * summarized when it is not. Reading the shape is worth it because the
- * alternative puts `{"content":[{"type":"text","text":"…` in front of every
- * result in the trace, spending the snippet's budget on the envelope instead of
- * on the answer.
- */
-function summarizeResult(result: unknown): string {
-  if (result === null || typeof result !== "object") return summarize(result);
-  const content = (result as { content?: unknown }).content;
-  if (!Array.isArray(content)) return summarize(redactToolImages(result));
-  const texts = content
-    .filter((block): block is { text: string } => {
-      if (block === null || typeof block !== "object") return false;
-      return typeof (block as { text?: unknown }).text === "string";
-    })
-    .map((block) => block.text);
-  // An image-only result would otherwise put its base64 payload in the journal.
-  return texts.length === 0 ? summarize(redactToolImages(result)) : summarize(texts.join("\n"));
-}
-
-/**
  * The five metrics, and only the five.
  *
  * Mapped explicitly rather than passed through: `normalizeUsage` reports every
@@ -677,13 +646,11 @@ function mapUsage(usage: unknown): unknown {
 /**
  * Quota-shaped error text.
  *
- * The first alternation is carried unchanged from T13's reading of the Claude
- * CLI, because a host rule that recognized one provider's exhaustion and not
- * the other's would be a rule with a hole in it. The rest is this route's own
- * vocabulary, read off `openai-codex-responses.ts:115` — `isTerminalRateLimitError`,
- * the function pi itself uses to decide that a 429 is final rather than
- * retryable — plus the sentence pi builds for the operator at line 1477, "You
- * have hit your ChatGPT usage limit".
+ * The shared host vocabulary is `usage limit`, `quota`, and the provider,
+ * plan, subscription, or account `limit reached` forms. This route adds its
+ * own billing and balance terms, read off `openai-codex-responses.ts:115` —
+ * `isTerminalRateLimitError`, the function this route uses to decide that a
+ * 429 is final rather than retryable — plus its own usage-limit wording.
  *
  * TWO alternations T13's copy carries are deliberately absent here, and both
  * absences are this route's own reading rather than a simplification:

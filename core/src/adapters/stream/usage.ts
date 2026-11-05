@@ -17,13 +17,9 @@ import {
   type TokenUsage,
 } from "../../contracts/normalized-events.ts";
 
-const USAGE_COUNTS = [
-  "inputTokens",
-  "outputTokens",
-  "cacheReadTokens",
-  "cacheWriteTokens",
-  "reasoningTokens",
-] as const;
+const USAGE_COUNTS = Object.keys(UNREPORTED_TOKEN_USAGE).filter(
+  (field): field is Exclude<keyof TokenUsage, "reasoningRelation"> => field !== "reasoningRelation",
+);
 
 export interface NormalizedUsage {
   usage: TokenUsage;

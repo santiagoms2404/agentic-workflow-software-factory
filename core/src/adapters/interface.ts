@@ -152,6 +152,30 @@ export interface ObservedProviderSession {
   images?: ObservedToolImage[];
 }
 
+/** Enforce the same provider-session identity rule across continuity adapters. */
+export function assertSameProviderSession(
+  adapter: string,
+  first: Pick<ObservedProviderSession, "sessionId" | "resolvedModel">,
+  next: Pick<ObservedProviderSession, "sessionId" | "resolvedModel">,
+): void {
+  if (first.resolvedModel !== next.resolvedModel) {
+    throw new AdapterError(
+      adapter,
+      "E_MODEL_MISMATCH",
+      `the correction answered on ${JSON.stringify(next.resolvedModel)} but the phase ` +
+        `began on ${JSON.stringify(first.resolvedModel)}; a phase answers on one model`,
+    );
+  }
+  if (first.sessionId === null || next.sessionId === null || first.sessionId !== next.sessionId) {
+    throw new AdapterError(
+      adapter,
+      "E_BACKEND_FAILURE",
+      `the correction ran in provider session ${JSON.stringify(next.sessionId)} rather than ` +
+        `${JSON.stringify(first.sessionId)}; a correction re-enters the session it corrects`,
+    );
+  }
+}
+
 /** One image a provider's tool returned into the model's context, by digest. */
 export interface ObservedToolImage {
   /** Host-minted `t1, t2, …` — the same id the tool.completed event carries. */

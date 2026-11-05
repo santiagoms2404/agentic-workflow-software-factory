@@ -189,9 +189,13 @@ test("a settlement for a call the host never opened is a notice, not an unpaired
 test("a duplicate request for an already-open call opens nothing", () => {
   const sequencer = sequencerFor();
   opened(sequencer);
+  assert.equal(sequencer.hasOpenTool("p"), false);
   assert.equal(sequencer.toolRequested({ providerToolId: "p", name: "read", inputSummary: "" }).length, 1);
+  assert.equal(sequencer.hasOpenTool("p"), true);
   assert.deepEqual([...sequencer.toolRequested({ providerToolId: "p", name: "read", inputSummary: "" })], []);
   assert.equal(sequencer.openToolCount, 1);
+  sequencer.toolCompleted({ providerToolId: "p", outcome: "ok", resultSnippet: "" });
+  assert.equal(sequencer.hasOpenTool("p"), false);
 });
 
 test("durations come from the host's own clock, and an unnamed tool is labelled, not dropped", () => {

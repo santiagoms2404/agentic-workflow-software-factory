@@ -10,7 +10,11 @@ import assert from "node:assert/strict";
 import {
   drainStderr,
   awaitStderr,
+  cancellationReason,
   DEFAULT_EXIT_WAIT_MS,
+  describeError,
+  describeExit,
+  isCancellation,
 } from "../../../src/adapters/stream/transport-loop.ts";
 import type { ProcessExit, ProcessTransport } from "../../../src/adapters/interface.ts";
 
@@ -103,4 +107,18 @@ test("B11-09: awaitStderr bounds consumption when a descendant holds stderr open
 
 test("B11-09: DEFAULT_EXIT_WAIT_MS is exported and set to 5000ms", () => {
   assert.equal(DEFAULT_EXIT_WAIT_MS, 5_000);
+});
+
+test("shared stream helpers retain cancellation and exit classifications", () => {
+  const abortError = new Error("stop");
+  abortError.name = "AbortError";
+  assert.equal(isCancellation(abortError), true);
+  assert.equal(isCancellation(Object.assign(new Error("closed"), { code: "ERR_STREAM_PREMATURE_CLOSE" })), true);
+  assert.equal(isCancellation(new Error("other")), false);
+  const controller = new AbortController();
+  controller.abort(new Error("owner stop"));
+  assert.equal(cancellationReason(controller.signal, new Error("ignored")), "the provider's output stream was cancelled: owner stop");
+  assert.equal(describeError("non-error"), "non-error");
+  assert.equal(describeExit({ code: 4, signal: null }, 25), "the process exited with code 4");
+  assert.equal(describeExit(null, 25), "neither an exit code nor a signal was observed within 25 ms");
 });

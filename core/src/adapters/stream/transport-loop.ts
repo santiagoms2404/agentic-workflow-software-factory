@@ -147,3 +147,31 @@ async function withinWait<T>(pending: Promise<T>, waitMs: number): Promise<T | n
     if (timer !== undefined) clearTimeout(timer);
   }
 }
+
+/** Describe an observed exit without substituting an unobserved success. */
+export function describeExit(exit: ProcessExit | null, waitMs: number): string {
+  if (exit === null) {
+    return `neither an exit code nor a signal was observed within ${String(waitMs)} ms`;
+  }
+  if (exit.code !== null) return `the process exited with code ${String(exit.code)}`;
+  if (exit.signal !== null) return `the process was ended by signal ${exit.signal}`;
+  return "the process exited, but reported neither an exit code nor a signal";
+}
+
+/** What the run was cancelled for: the caller's own reason wherever there is one. */
+export function cancellationReason(signal: AbortSignal | undefined, error: unknown): string {
+  const reason = signal?.aborted === true ? describeError(signal.reason) : describeError(error);
+  return `the provider's output stream was cancelled: ${reason}`;
+}
+
+/** Unknown stream errors remain faults rather than being mislabeled as cancellation. */
+export function isCancellation(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return error.name === "AbortError" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE";
+}
+
+/** Render an error value without assuming it is an Error instance. */
+export function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

@@ -34,7 +34,13 @@ import type { UnionOf } from "../contracts/typebox.ts";
 import { LineFramer } from "./stream/line-framer.ts";
 import { EventSequencer } from "./stream/event-sequencer.ts";
 import { OutputBudget, type OutputBudgetOptions } from "./stream/output-budget.ts";
-import { awaitExit, drainStderr } from "./stream/transport-loop.ts";
+import {
+  awaitExit,
+  cancellationReason,
+  describeError,
+  drainStderr,
+  isCancellation,
+} from "./stream/transport-loop.ts";
 
 /**
  * The eight behaviours. Each is a real failure mode of a real provider:
@@ -263,7 +269,7 @@ export class StubAdapter implements HarnessAdapter {
       }
       yield* isCancellation(error) || signal?.aborted === true
         ? sequencer.cancel(cancellationReason(signal, error))
-        : sequencer.fail("E_BACKEND_FAILURE", `the provider's output stream failed: ${describe(error)}`);
+        : sequencer.fail("E_BACKEND_FAILURE", `the provider's output stream failed: ${describeError(error)}`);
       return;
     }
 
@@ -367,31 +373,4 @@ export class StubAdapter implements HarnessAdapter {
       requestedModel: `${STUB_MODEL_PREFIX}${scriptFor(request.model)}`,
     });
   }
-}
-
-/** What the run was cancelled for: the caller's own reason wherever there is one. */
-function cancellationReason(signal: AbortSignal | undefined, error: unknown): string {
-  const reason = signal?.aborted === true ? describe(signal.reason) : describe(error);
-  return `the provider's output stream was cancelled: ${reason}`;
-}
-
-/**
- * Whether a stream failure was a cancellation rather than a fault.
- *
- * A cancelled run and a broken one produce different terminals and mean
- * different things to the lifecycle, so the distinction is made on the error's
- * own code rather than on the fact that reading stopped. Anything unrecognized
- * is a failure: calling an unknown fault a cancellation would let a real defect
- * arrive as an intentional stop.
- */
-function isCancellation(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const code = (error as { code?: unknown }).code;
-  return (
-    error.name === "AbortError" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE"
-  );
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

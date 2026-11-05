@@ -71,12 +71,8 @@ import type {
 import type { Reservation } from "./call-budget.ts";
 import { isVerifiedReconnectAuthorization, type TurnReconnectLaunchVerifier, type VerifiedReconnectAuthorization } from "../workflow/turn-reconnect-authorization.ts";
 import { continuityDigest } from "../contracts/interrupted-turn.ts";
-
-function reservationIdOf(registration: BrokerProcessRegistration): string {
-  return registration.kind === "phase-correction" || registration.kind === "turn-reconnect"
-    ? registration.originReservationId
-    : registration.reservationId;
-}
+import { filterEnv } from "../adapters/env.ts";
+import { reservationIdOf } from "../adapters/interface.ts";
 
 type PhaseLaunchIdentity = Pick<AgentPhaseProcessRegistration,
   "runId" | "taskSessionId" | "workflowId" | "phaseId" | "phaseOrdinal" | "adapterId" | "role">;
@@ -540,6 +536,9 @@ export class ProcessTransportBroker implements TransportBroker {
     // before launch, never after" check meaningful on all three classes.
     const reservationId = reservationIdOf(registration);
     assertSpecSafe(registration, spec, reservationId);
+    // Apply the allowlist at the process boundary, regardless of which adapter
+    // assembled the descriptor.
+    spec = { ...spec, env: filterEnv(registration.adapterId, spec.env) };
     const executable = resolveExecutable(spec.executable, spec.env);
     if (edge !== null) {
       this.#assertTaskEdgeLaunch(registration as ProcessRegistration);

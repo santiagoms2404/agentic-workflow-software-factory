@@ -25,7 +25,7 @@ import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { ObservedToolImage } from "./interface.ts";
 import type { EventSequencer } from "./stream/event-sequencer.ts";
 import { summarize } from "./stream/snippet.ts";
-import { redactToolImages, toolResultImages } from "./stream/tool-images.ts";
+import { summarizeToolResult, toolResultImages } from "./stream/tool-images.ts";
 
 interface ClaudeContentBlock {
   type?: string;
@@ -91,12 +91,6 @@ export class ClaudeStreamDecoder {
   readonly #provider: string;
   readonly #requestedModel: string;
   readonly #session: ClaudeSessionRecord;
-  /**
-   * Mirrors the sequencer's own map rather than reaching into it: the decoder
-   * needs to know whether it has already opened a provider tool id, and the
-   * sequencer's bookkeeping is its own.
-   */
-  readonly #openTools = new Set<string>();
   /** Tool names by provider id; a `tool_result` names only the id it settles. */
   readonly #toolNames = new Map<string, string>();
   readonly #images: ObservedToolImage[] | undefined;
@@ -353,8 +347,7 @@ export class ClaudeStreamDecoder {
     }
     for (const block of line.message?.content ?? []) {
       if (block === null || block.type !== "tool_use" || typeof block.id !== "string" || block.id.length === 0) continue;
-      if (this.#openTools.has(block.id)) continue;
-      this.#openTools.add(block.id);
+      if (sequencer.hasOpenTool(block.id)) continue;
       this.#toolNames.set(block.id, typeof block.name === "string" ? block.name : "tool");
       out.push(
         ...sequencer.toolRequested({
@@ -375,13 +368,12 @@ export class ClaudeStreamDecoder {
       if (block === null || block.type !== "tool_result") continue;
       const id = block.tool_use_id;
       if (typeof id !== "string" || id.length === 0) continue;
-      this.#openTools.delete(id);
       const outcome = block.is_error === true ? "error" : "ok";
       const settled = sequencer.toolCompleted({
         providerToolId: id,
         outcome,
         // An image result would otherwise put its base64 payload in the journal.
-        resultSnippet: summarize(redactToolImages(block.content)),
+        resultSnippet: summarizeToolResult(block.content),
         providerAt: providerAt(line),
       });
       out.push(...settled);
@@ -448,6 +440,7 @@ export class ClaudeStreamDecoder {
     }
     return [
       ...out,
+      ...this.flushUsage(sequencer),
       ...sequencer.fail(
         "E_QUOTA_EXHAUSTED",
         `the ${scope} subscription window reports ${JSON.stringify(status)}` +
@@ -459,10 +452,9 @@ export class ClaudeStreamDecoder {
   /**
    * The terminal line.
    *
-   * Usage is emitted from HERE and nowhere else. Every `message_delta` in the
-   * stream carries a usage block too, and summing them would double-count a run
-   * that made two API calls to answer one prompt — which the probe's own
-   * two-turn tool run did.
+   * A terminal's own usage is authoritative when present. The accumulated
+   * deltas are emitted only when the terminal has no usage block, so they are
+   * not double-counted.
    */
   #result(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const at = providerAt(line);
@@ -478,7 +470,7 @@ export class ClaudeStreamDecoder {
     if (reported) this.#usageReported = true;
     const out = reported
       ? [...sequencer.usage(mapUsage(line.usage, this.#deltaUsage?.reasoning ?? null), at)]
-      : [];
+      : [...this.flushUsage(sequencer)];
     // `null`, not `0`. The process's real exit code lives on `transport.exit`
     // and this decoder never sees it, so a `0` here would be a measurement it
     // did not take — and a CLI that emits a success result and then exits
@@ -641,9 +633,11 @@ function resetFromMessage(message: string): string | null {
   const raw = RESET_IN_MESSAGE.exec(message)?.[1]?.trim();
   if (raw === undefined || raw.length === 0) return null;
   const epoch = Number(raw);
-  // Passed through as the provider wrote it rather than reformatted into a
-  // timestamp nobody verified.
-  return Number.isInteger(epoch) && epoch > 0 ? epochSecondsToIso(epoch) : raw;
+  if (Number.isInteger(epoch) && epoch > 0) return epochSecondsToIso(epoch);
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(raw) &&
+      Number.isFinite(Date.parse(raw))
+    ? raw
+    : null;
 }
 
 /**

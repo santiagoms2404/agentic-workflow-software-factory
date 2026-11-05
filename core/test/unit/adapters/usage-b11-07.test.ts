@@ -7,6 +7,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeUsage } from "../../../src/adapters/stream/usage.ts";
+import { UNREPORTED_TOKEN_USAGE } from "../../../src/contracts/normalized-events.ts";
+
+test("usage normalization follows every field in the unreported usage contract", () => {
+  const report: Record<string, unknown> = {};
+  for (const field of Object.keys(UNREPORTED_TOKEN_USAGE)) {
+    report[field] = field === "reasoningRelation" ? "unknown" : 3;
+  }
+  const normalized = normalizeUsage(report);
+  assert.deepEqual(normalized.faults, []);
+  for (const field of Object.keys(UNREPORTED_TOKEN_USAGE)) {
+    const actual = normalized.usage[field as keyof typeof UNREPORTED_TOKEN_USAGE];
+    assert.equal(actual, field === "reasoningRelation" ? "unknown" : 3);
+  }
+});
 
 test("B11-07: normalizeUsage bounds oversized numeric usage field value in fault text", () => {
   const hugeString = "a".repeat(10_000);

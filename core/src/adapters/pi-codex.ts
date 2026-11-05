@@ -46,6 +46,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   AdapterError,
+  assertSameProviderSession,
   type Availability,
   type ContinuityCapableAdapter,
   type ContinuityEvidence,
@@ -74,7 +75,11 @@ import {
   DEFAULT_EXIT_WAIT_MS,
   awaitExit,
   awaitStderr,
+  cancellationReason,
+  describeError,
+  describeExit,
   drainStderr,
+  isCancellation,
   stderrSuffix,
 } from "./stream/transport-loop.ts";
 
@@ -384,22 +389,7 @@ function readPiSessionFile(path: string, expectedId: string): PiSessionFileFacts
  * promised, which is `E_BACKEND_FAILURE`.
  */
 export function assertSameSession(first: PiSessionRecord, next: PiSessionRecord): void {
-  if (first.resolvedModel !== next.resolvedModel) {
-    throw new AdapterError(
-      PI_ADAPTER_ID,
-      "E_MODEL_MISMATCH",
-      `the correction answered on ${JSON.stringify(next.resolvedModel)} but the phase ` +
-        `began on ${JSON.stringify(first.resolvedModel)}; a phase answers on one model`,
-    );
-  }
-  if (first.sessionId === null || next.sessionId === null || first.sessionId !== next.sessionId) {
-    throw new AdapterError(
-      PI_ADAPTER_ID,
-      "E_BACKEND_FAILURE",
-      `the correction ran in provider session ${JSON.stringify(next.sessionId)} rather than ` +
-        `${JSON.stringify(first.sessionId)}; a correction re-enters the session it corrects`,
-    );
-  }
+  assertSameProviderSession(PI_ADAPTER_ID, first, next);
 }
 
 export interface PiParseOptions {
@@ -817,7 +807,7 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
         ? sequencer.cancel(cancellationReason(signal, error))
         : sequencer.fail(
             "E_BACKEND_FAILURE",
-            `the provider's output stream failed: ${describe(error)}${stderrSuffix(stderr)}`,
+            `the provider's output stream failed: ${describeError(error)}${stderrSuffix(stderr)}`,
           );
       return;
     }
@@ -843,33 +833,11 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
       yield* sequencer.cancel(cancellationReason(signal, null));
       return;
     }
+    const exit = await awaitExit(transport, this.#exitWaitMs);
     yield* sequencer.fail(
       "E_TERMINAL_MISSING",
-      `the provider's stream ended without a terminal event${stderrSuffix(stderr)}`,
+      `the provider's stream ended without a terminal event; ${describeExit(exit, this.#exitWaitMs)}` +
+        stderrSuffix(stderr),
     );
   }
-}
-
-/** What the run was cancelled for: the caller's own reason wherever there is one. */
-function cancellationReason(signal: AbortSignal | undefined, error: unknown): string {
-  const reason = signal?.aborted === true ? describe(signal.reason) : describe(error);
-  return `the provider's output stream was cancelled: ${reason}`;
-}
-
-/**
- * Whether a stream failure was a cancellation rather than a fault.
- *
- * Anything unrecognized is a failure: calling an unknown fault a cancellation
- * would let a real defect arrive as an intentional stop.
- */
-function isCancellation(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const code = (error as { code?: unknown }).code;
-  return (
-    error.name === "AbortError" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE"
-  );
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

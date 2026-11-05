@@ -31,6 +31,7 @@
 import { join } from "node:path";
 import {
   AdapterError,
+  assertSameProviderSession,
   type Availability,
   type ContinuityCapableAdapter,
   type ContinuityEvidence,
@@ -40,7 +41,6 @@ import {
   type ObservedProviderSession,
   type ObservedToolImage,
   type BrokerProcessRegistration,
-  type ProcessExit,
   type ProcessSpec,
   type ProcessTransport,
   type TransportBroker,
@@ -59,7 +59,11 @@ import {
   DEFAULT_EXIT_WAIT_MS,
   awaitExit,
   awaitStderr,
+  cancellationReason,
+  describeError,
+  describeExit,
   drainStderr,
+  isCancellation,
   stderrSuffix,
 } from "./stream/transport-loop.ts";
 
@@ -280,22 +284,7 @@ export function effortFor(effort: string): ClaudeEffort {
  * continuity the adapter promised, which is `E_BACKEND_FAILURE`.
  */
 export function assertSameSession(first: ClaudeSessionRecord, next: ClaudeSessionRecord): void {
-  if (first.resolvedModel !== next.resolvedModel) {
-    throw new AdapterError(
-      CLAUDE_ADAPTER_ID,
-      "E_MODEL_MISMATCH",
-      `the correction answered on ${JSON.stringify(next.resolvedModel)} but the phase ` +
-        `began on ${JSON.stringify(first.resolvedModel)}; a phase answers on one model`,
-    );
-  }
-  if (first.sessionId === null || next.sessionId === null || first.sessionId !== next.sessionId) {
-    throw new AdapterError(
-      CLAUDE_ADAPTER_ID,
-      "E_BACKEND_FAILURE",
-      `the correction ran in provider session ${JSON.stringify(next.sessionId)} rather than ` +
-        `${JSON.stringify(first.sessionId)}; a correction re-enters the session it corrects`,
-    );
-  }
+  assertSameProviderSession(CLAUDE_ADAPTER_ID, first, next);
 }
 
 export interface ClaudeParseOptions {
@@ -631,7 +620,7 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
         ? sequencer.cancel(cancellationReason(signal, error))
         : sequencer.fail(
             "E_BACKEND_FAILURE",
-            `the provider's output stream failed: ${describe(error)}${stderrSuffix(stderr)}`,
+            `the provider's output stream failed: ${describeError(error)}${stderrSuffix(stderr)}`,
           );
       return;
     }
@@ -667,38 +656,4 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
         stderrSuffix(stderr),
     );
   }
-}
-
-/** How the process ended, as observed — never a guessed code. */
-function describeExit(exit: ProcessExit | null, waitMs: number): string {
-  if (exit === null) {
-    return `neither an exit code nor a signal was observed within ${String(waitMs)} ms`;
-  }
-  if (exit.code !== null) return `the process exited with code ${String(exit.code)}`;
-  if (exit.signal !== null) return `the process was ended by signal ${exit.signal}`;
-  return "the process exited, but reported neither an exit code nor a signal";
-}
-
-/** What the run was cancelled for: the caller's own reason wherever there is one. */
-function cancellationReason(signal: AbortSignal | undefined, error: unknown): string {
-  const reason = signal?.aborted === true ? describe(signal.reason) : describe(error);
-  return `the provider's output stream was cancelled: ${reason}`;
-}
-
-/**
- * Whether a stream failure was a cancellation rather than a fault.
- *
- * Anything unrecognized is a failure: calling an unknown fault a cancellation
- * would let a real defect arrive as an intentional stop.
- */
-function isCancellation(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const code = (error as { code?: unknown }).code;
-  return (
-    error.name === "AbortError" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE"
-  );
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -11,6 +11,7 @@
 // event, a snippet, the journal or a projection.
 
 import { createHash } from "node:crypto";
+import { summarize } from "./snippet.ts";
 
 export interface ToolResultImage {
   readonly mediaType: string;
@@ -21,6 +22,7 @@ export interface ToolResultImage {
 interface ImageBlock {
   readonly mediaType: string;
   readonly data: string;
+  readonly decodedBytes: number;
 }
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -53,7 +55,12 @@ function imageBlock(block: unknown): ImageBlock | null {
       : typeof candidate.mimeType === "string"
         ? candidate.mimeType
         : null;
-  return { mediaType: declared ?? "unknown", data };
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  return {
+    mediaType: declared ?? "unknown",
+    data,
+    decodedBytes: Math.max(0, Math.floor((data.length * 3) / 4) - padding),
+  };
 }
 
 function blocksOf(content: unknown): readonly unknown[] {
@@ -78,7 +85,7 @@ export function toolResultImages(content: unknown): readonly ToolResultImage[] {
     const bytes = Buffer.from(image.data, "base64");
     images.push(Object.freeze({
       mediaType: image.mediaType,
-      bytes: bytes.length,
+      bytes: image.decodedBytes,
       sha256: createHash("sha256").update(bytes).digest("hex"),
     }));
   }
@@ -90,11 +97,27 @@ export function redactToolImages(content: unknown): unknown {
   const redact = (block: unknown): unknown => {
     const image = imageBlock(block);
     if (image === null) return block;
-    return { type: "image", mediaType: image.mediaType, bytes: Math.floor((image.data.length * 3) / 4) };
+    return { type: "image", mediaType: image.mediaType, bytes: image.decodedBytes };
   };
   if (Array.isArray(content)) return content.map(redact);
   if (content !== null && typeof content === "object" && Array.isArray((content as { content?: unknown }).content)) {
     return { ...(content as Record<string, unknown>), content: ((content as { content: unknown[] }).content).map(redact) };
   }
   return redact(content);
+}
+
+/**
+ * Summarize text blocks without spending the snippet on their content envelope.
+ * Image-only and unstructured results keep the redacted JSON fallback.
+ */
+export function summarizeToolResult(result: unknown): string {
+  const blocks = blocksOf(result);
+  const texts = blocks
+    .filter((block): block is { text: string } => {
+      return block !== null && typeof block === "object" && typeof (block as { text?: unknown }).text === "string";
+    })
+    .map((block) => block.text);
+  return texts.length === 0
+    ? summarize(redactToolImages(result))
+    : summarize(texts.join("\n"));
 }
