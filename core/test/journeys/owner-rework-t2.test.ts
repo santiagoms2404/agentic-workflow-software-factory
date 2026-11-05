@@ -14,7 +14,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type {
@@ -420,11 +420,19 @@ class ScriptedReviewer implements HarnessAdapter {
   readonly prompts: string[];
   readonly #behaviour: ReviewBehaviour;
   readonly #superseded: string;
-  constructor(behaviour: ReviewBehaviour, superseded: string, launches: string[], prompts: string[]) {
+  readonly #beforeReview: (() => void) | undefined;
+  constructor(
+    behaviour: ReviewBehaviour,
+    superseded: string,
+    launches: string[],
+    prompts: string[],
+    beforeReview?: () => void,
+  ) {
     this.#behaviour = behaviour;
     this.#superseded = superseded;
     this.launches = launches;
     this.prompts = prompts;
+    this.#beforeReview = beforeReview;
   }
   async isAvailable(): Promise<Availability> { return { status: "available" }; }
   async getModelInfo(model: string): Promise<ModelInfo> {
@@ -451,6 +459,7 @@ class ScriptedReviewer implements HarnessAdapter {
     this.launches.push(this.id);
     this.prompts.push(request.prompt);
     assertReviewDelivery(request);
+    this.#beforeReview?.();
     if (this.#behaviour === "transport-failure") throw new AdapterError(this.id, "E_BACKEND_FAILURE", "scripted transport failure");
     // Whatever the host actually committed, read from the tree the reviewer was
     // pointed at rather than from anything the test remembered.
@@ -509,7 +518,7 @@ interface Scripted {
   readonly infrastructure: Partial<ReworkInfrastructure>;
 }
 
-function scripted(fixture: World, behaviour: ReviewBehaviour = "accept"): Scripted {
+function scripted(fixture: World, behaviour: ReviewBehaviour = "accept", beforeReview?: () => void): Scripted {
   const launches: string[] = [];
   const builderPrompts: string[] = [];
   const reviewerPrompts: string[] = [];
@@ -517,7 +526,7 @@ function scripted(fixture: World, behaviour: ReviewBehaviour = "accept"): Script
     launches, builderPrompts, reviewerPrompts,
     infrastructure: {
       adapterFor: (_entry, id) => id === "claude"
-        ? new ScriptedReviewer(behaviour, fixture.candidateA, launches, reviewerPrompts)
+        ? new ScriptedReviewer(behaviour, fixture.candidateA, launches, reviewerPrompts, beforeReview)
         : new ScriptedBuilder(launches, builderPrompts, reviewerPrompts, behaviour, fixture.candidateA),
       createBroker: fakeBroker,
       sandboxProbe: () => false,
@@ -531,6 +540,7 @@ async function rework(fixture: World, script: Scripted, options: {
   defect?: string;
   instruction?: string;
   assertAdvancement?: (sessionId: string, to: string) => void;
+  projectRecord?: World["projection"]["project"];
 } = {}) {
   return reworkCommand({
     attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot,
@@ -538,7 +548,7 @@ async function rework(fixture: World, script: Scripted, options: {
     ...(options.instruction === undefined ? {} : { instruction: options.instruction }),
     terminal: terminal(options.answer ?? true, true, options.lines ?? []),
     config: fixture.config, configPath: fixture.configPath,
-    projectRecord: fixture.projection.project,
+    projectRecord: options.projectRecord ?? fixture.projection.project,
     assertAdvancement: options.assertAdvancement ?? fixture.projection.assertAdvancement,
     assertLaunchProjection: fixture.projection.assertLaunchPermitted,
     infrastructure: script.infrastructure,
@@ -990,6 +1000,73 @@ test("a concern verdict on the reworked candidate still returns to the owner, wh
     try {
       assert.equal(getSession(db, result.status.sessionId)?.review_verdict, "concern");
     } finally { db.close(); }
+  } finally { await cleanup(fixture); }
+});
+
+test("B8-32: a canonical checkout dirtied while the rework review runs is refused at the post-answer read, before the owner sees it", async () => {
+  const fixture = await world();
+  const script = scripted(fixture, "accept", () => {
+    writeFileSync(join(fixture.canonical, "owner-scratch.txt"), "uncommitted owner edit\n");
+  });
+  try {
+    const result = await rework(fixture, script);
+    assert.equal(result.status.lifecycleState, "BLOCKED", result.status.blocker?.detail);
+    assert.equal(result.status.blocker?.code, "review-evidence-invalid");
+    assert.match(result.status.blocker?.detail ?? "", /the canonical checkout is not clean/u);
+  } finally { await cleanup(fixture); }
+});
+
+test("B8-38: a failure at the final advance still leaves the readable report naming the reworked candidate", async () => {
+  const fixture = await world();
+  const script = scripted(fixture);
+  const project = fixture.projection.project;
+  try {
+    // The projection fault lands after the AWAITING_OWNER record is durable,
+    // which is the window the final advance can fail in.
+    await assert.rejects(
+      rework(fixture, script, {
+        projectRecord: (record, status) => {
+          if (record.event.kind === "attempt.transitioned" && status.lifecycleState === "AWAITING_OWNER") {
+            throw new Error("scripted projection fault at the final advance");
+          }
+          return project(record, status);
+        },
+      }),
+      /scripted projection fault at the final advance/u,
+    );
+    const durable = await readAttempt(fixture.attemptDir);
+    assert.equal(durable.lifecycleState, "AWAITING_OWNER");
+    assert.notEqual(durable.candidateSha, fixture.candidateA);
+    const report = await locateRunReport(fixture.attemptDir);
+    assert.notEqual(report, null, "the failed act still leaves a readable report");
+    assert.equal(await runReportRevision(report!.absolutePath), durable.revision);
+    assert.match(readFileSync(report!.absolutePath, "utf8"), new RegExp(`Candidate: ${durable.candidateSha}`, "u"));
+  } finally { await cleanup(fixture); }
+});
+
+test("B8-37: the reworked builder's evidence names the build purpose, so the review inversion is taken against it", async () => {
+  const fixture = await world();
+  const script = scripted(fixture);
+  try {
+    const result = await rework(fixture, script);
+    assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
+    const evidence = await readAttemptEvidence(fixture.attemptDir);
+    const reworkBuilder = evidence.find((value) => value.type === "agent" && value.phaseId.endsWith(":owner-rework-1"));
+    assert.equal(
+      reworkBuilder?.type === "agent" ? reworkBuilder.purpose : null,
+      "build",
+      "the review inversion is taken against this builder, so its record must say it is the builder",
+    );
+  } finally { await cleanup(fixture); }
+});
+
+test("B8-36: the reworked builder's runtime directory is created owner-private", async () => {
+  const fixture = await world();
+  const script = scripted(fixture);
+  try {
+    const result = await rework(fixture, script);
+    assert.equal(result.status.lifecycleState, "AWAITING_OWNER", result.status.blocker?.detail);
+    assert.equal(statSync(join(fixture.attemptDir, "private", "owner-rework-1")).mode & 0o777, 0o700);
   } finally { await cleanup(fixture); }
 });
 

@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { stringify } from "yaml";
 
 import {
+  AdapterError,
   reservationIdOf,
   type BrokerProcessRegistration,
   type HarnessAdapter,
@@ -713,6 +714,70 @@ test("a gates-pass adoption buys a fresh opposite-provider review, then requires
     assert.equal(git(fixture.repository, "rev-parse", "HEAD"), fixture.candidate);
     assert.deepEqual(readFileSync(journalFilePath(fixture.sourceDir)), sourceBefore.journal);
     assert.deepEqual(readFileSync(statusFilePath(fixture.sourceDir)), sourceBefore.status);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+class FailingReviewAdapter extends MetadataOnlyAdapter {
+  async *execute(
+    request: ModelRequest,
+    broker: TransportBroker,
+    registration: BrokerProcessRegistration,
+    signal: AbortSignal,
+  ): AsyncIterable<NormalizedEvent> {
+    await broker.startProcess(registration, this.buildSpec(request), signal);
+    this.launches += 1;
+    if (signal.aborted) yield {} as NormalizedEvent;
+    throw new AdapterError(this.id, "E_BACKEND_FAILURE", "scripted adoption reviewer failure");
+  }
+}
+
+test("B8-26: a settlement write that faults after commit still lets a failed adoption review reach BLOCKED", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-b8-26-"));
+  try {
+    const fixture = await sourceFixture(root);
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = {
+      ...loaded,
+      runtime: { ...loaded.runtime, seed_paths: [] },
+      gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } },
+    };
+    config.agents = config.agents.map(agent => ({ ...agent, harness: { ...agent.harness, interrupted_turn: false } }));
+    const adapters = new Map<string, FailingReviewAdapter>();
+    const adopted = await adoptCommand({
+      sourceAttemptDir: fixture.sourceDir,
+      stateRoot: fixture.stateRoot,
+      targetTaskId: "settlement-fault",
+      request: k1Request("review a candidate whose settlement write faults", "core/src/**"),
+      worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]),
+      config,
+      configPath: resolve("awsf.config.yaml"),
+      // The settlement commits, then its projection faults.
+      projectRecord: (record) => {
+        const event = record.event;
+        if (event.kind === "attempt.updated" && event.evidence?.type === "process" && event.evidence.status !== "REGISTERED") {
+          throw new Error("scripted projection fault at the process settlement");
+        }
+      },
+      infrastructure: {
+        adapterFor: (_entry, id) => {
+          const existing = adapters.get(id);
+          if (existing !== undefined) return existing;
+          const created = new FailingReviewAdapter(id, id === "claude" ? "anthropic" : "openai-codex");
+          adapters.set(id, created);
+          return created;
+        },
+        createBroker: fakeBroker,
+        sandboxProbe: () => false,
+        now: () => AT,
+        sessionId: () => "settlement-fault-session",
+        pidIsLive: () => false,
+        runCommand: () => ({ status: 0, stdout: "fresh gate passed\n", stderr: "", error: null }),
+      },
+    });
+    assert.equal(adopted.status?.lifecycleState, "BLOCKED", adopted.status?.blocker?.detail);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -864,7 +864,8 @@ test("a candidate moved between preflight and GO is refused with the call releas
     assert.equal(result.status.budget.callsSpent, 2, "the reservation never reached GO");
     assert.equal(result.status.budget.callsReserved, 0);
     assert.equal(result.status.budget.ownerReentries, 0, "an authorization that bought nothing gives the allowance back");
-    assert.equal(result.status.blocker?.code, "review-evidence-invalid");
+    // A pre-GO move is a phase abort, not evidence about a review that answered (B8-14).
+    assert.equal(result.status.blocker?.code, "phase-abort");
     assert.match(result.status.blocker?.detail ?? "", /moved between preflight and GO/);
     assert.deepEqual(launches, [], "the child was never started");
   } finally { await cleanup(fixture); }

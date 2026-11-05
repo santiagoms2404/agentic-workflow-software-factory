@@ -766,7 +766,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   // would collide the moment a second rework ran in the same attempt, because
   // the phase in between had already zeroed that counter.
   const runtimeDir = join(options.attemptDir, "private", `owner-rework-${status.budget.ownerReentries + 1}`);
-  await mkdir(runtimeDir, { recursive: true });
+  // Private to the owner, as the review and production runtime directories are.
+  await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
   const systemPromptPath = await infra.writeSystemPrompt(route.systemPrompt, runtimeDir);
   await validateMaterializedSystemPrompt(route.adapter.id, runtimeDir, systemPromptPath, route.systemPrompt);
   const permission = openPermissionSession({
@@ -1065,7 +1066,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     if (resolved === null) throw new AdapterError(route.adapter.id, "E_MODEL_UNRESOLVED", "adapter emitted no resolved model evidence");
     const usage = events.some((event) => event.kind === "usage") ? sumUsage(events) : UNREPORTED_TOKEN_USAGE;
     await persist("attempt.updated", { model: { resolved: resolved.model, provenance: resolved.provenance } }, {
-      type: "agent", phaseId, agent: route.agent.name, adapterId: route.adapterId,
+      // Purpose is written as production writes it for a builder, so the review
+      // inversion is taken against this builder and never the superseded one.
+      type: "agent", phaseId, agent: route.agent.name, adapterId: route.adapterId, purpose: "build",
       provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
       resolvedModel: resolved.model, modelProvenance: resolved.provenance,
       contextWindow: route.model.contextWindow, usageAuthority: route.model.usageAuthority,
@@ -1419,6 +1422,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       if (canonicalHead !== baseSha) problems.push(`canonical HEAD is ${canonicalHead}, not the recorded base ${baseSha}`);
       const dirty = runGit(observed, ["status", "--porcelain"]).trim();
       if (dirty.length > 0) problems.push(`the managed worktree is not clean: ${bounded(dirty, 400)}`);
+      // The same canonical read review and adoption make: a dirty checkout would
+      // otherwise reach AWAITING_OWNER and be refused only at landing.
+      const canonicalDirty = runGit(canonicalRunner, ["status", "--porcelain"]).trim();
+      if (canonicalDirty.length > 0) problems.push(`the canonical checkout is not clean: ${bounded(canonicalDirty, 400)}`);
       if (problems.length === 0) return;
       const detail = `the candidate under review moved ${when}: ${problems.join("; ")}`;
       // After the answer this is host-deterministic evidence that the tree the
@@ -1520,7 +1527,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         if (observed.revision !== current.revision) {
           throw new Error("owner rework recovery found an unexpected durable revision");
         }
-        status = await persistAttempt(options.attemptDir, current.revision, event);
+        // Nothing committed, so the same write is retried whole. Projection
+        // stays on: a skipped projection is invisible to the projector's gap
+        // check whenever it was the session's last write.
+        status = await persistAttempt(options.attemptDir, current.revision, event, options.projectRecord);
       }
     };
 
@@ -1698,12 +1708,28 @@ async function refreshRunReport(attemptDir: string, status: AttemptStatus): Prom
   await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
 }
 
+/**
+ * The final advance commits before its lock is released, so a failure there can
+ * leave a candidate awaiting the owner while the command still reports failure.
+ * The readable report must name that candidate anyway, or it describes the
+ * superseded one. Best effort: the failure the owner must see is the one thrown.
+ */
+async function refreshReportIfAwaitingOwner(attemptDir: string): Promise<void> {
+  try {
+    const durable = await readAttempt(attemptDir);
+    if (durable.lifecycleState === "AWAITING_OWNER") await refreshRunReport(attemptDir, durable);
+  } catch {
+    /* the thrown failure below is the one the owner must see. */
+  }
+}
+
 export async function reworkCommand(options: ReworkCommandOptions): Promise<ReworkCommandResult> {
   try {
     const result = await runReworkCommand(options);
     if (result.confirmed) await refreshRunReport(options.attemptDir, result.status);
     return result;
   } catch (error) {
+    await refreshReportIfAwaitingOwner(options.attemptDir);
     throw safeFailure(error);
   }
 }

@@ -836,7 +836,13 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   const measure = async (): Promise<Measurement> => {
     assertCandidatePinned(candidate, pair, status.worktree!, "before fresh gates");
     const git = systemGitRunner(status.worktree!);
+    // HEAD and cleanliness are read on both sides of the check, the same
+    // bracket production runs and owner rework keep around it.
+    const headBeforeHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
+    const cleanBeforeHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
     const hygieneResult = git(["diff", "--check", `${pair.baseSha}..${pair.candidateSha}`, "--"]);
+    const headAfterHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
+    const cleanAfterHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
     // Read before this run's own hygiene record exists, so a dispatch point in
     // the snapshot belongs to an earlier run.
     const ledger = await ledgerStep("ledger read", () => readCommandLedger(attemptDir));
@@ -844,10 +850,10 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       expectedBaseSha: pair.baseSha,
       observedBaseSha: runGit(git, ["rev-parse", `${pair.baseSha}^{commit}`]).trim(),
       expectedCandidateSha: pair.candidateSha,
-      headBefore: runGit(git, ["rev-parse", "HEAD"]).trim(),
-      headAfter: runGit(git, ["rev-parse", "HEAD"]).trim(),
-      cleanBefore: runGit(git, ["status", "--porcelain"]).trim().length === 0,
-      cleanAfter: runGit(git, ["status", "--porcelain"]).trim().length === 0,
+      headBefore: headBeforeHygiene,
+      headAfter: headAfterHygiene,
+      cleanBefore: cleanBeforeHygiene,
+      cleanAfter: cleanAfterHygiene,
       exitCode: hygieneResult.status ?? -1,
       output: `${hygieneResult.stdout}${hygieneResult.stderr}${hygieneResult.error ?? ""}`,
     });
@@ -1247,19 +1253,26 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     const registered = reviewState.processRecord as BarrierRecord | null;
     if (registered !== null && (!reviewState.processSettled || (reviewState.observed as ObservedProcessOutcome | null)?.settled === false)) {
       const at = infra.now();
-      await persist("attempt.updated", { process: null, budget: budget.snapshot(), lastActivityAt: at }, {
-        type: "process",
-        phaseId: reviewPhaseId,
-        adapterId: route.adapterId,
-        role: route.agent.name,
-        record: registered,
-        status: termination?.terminated === true ? "CANCELLED" : "FAILED",
-        registeredAt: reviewState.releasedAt ?? at,
-        releasedAt: reviewState.releasedAt,
-        endedAt: at,
-        exitCode: reviewState.observed?.exitCode ?? null,
-        exitSignal: null,
-      });
+      try {
+        await persist("attempt.updated", { process: null, budget: budget.snapshot(), lastActivityAt: at }, {
+          type: "process",
+          phaseId: reviewPhaseId,
+          adapterId: route.adapterId,
+          role: route.agent.name,
+          record: registered,
+          status: termination?.terminated === true ? "CANCELLED" : "FAILED",
+          registeredAt: reviewState.releasedAt ?? at,
+          releasedAt: reviewState.releasedAt,
+          endedAt: at,
+          exitCode: reviewState.observed?.exitCode ?? null,
+          exitSignal: null,
+        });
+      } catch {
+        // A projection fault after commit leaves the journal one revision ahead
+        // of this view, so re-read before the halt below writes against it. The
+        // halt is the mandatory durable settlement, so this write is not.
+        status = await readAttempt(attemptDir);
+      }
     }
     if (reviewState.answered) {
       await persist("attempt.updated", {

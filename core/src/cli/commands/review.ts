@@ -196,9 +196,10 @@ export class ReviewCandidateMoved extends Error {
    *
    * That one is host-deterministic evidence that the tree the reviewer read is
    * not the tree the guard approved, and §5.5 names it as `review-evidence-invalid`.
-   * The earlier two reads happen before anything was bought, so they are
-   * ordinary pre-GO refusals: the reservation goes back, the tranche charge is
-   * rewound, and no blocker vocabulary is invoked for a review that never ran.
+   * The earlier two reads happen before anything was bought: the reservation
+   * goes back and the tranche charge is rewound, but the attempt still leaves
+   * REVIEWING through L17 as `phase-abort` (see `classify`), because L25 cannot
+   * be entered again and a dead review sojourn must not survive.
    */
   readonly afterReview: boolean;
   constructor(when: string, detail: string, afterReview = false) {
@@ -289,7 +290,9 @@ function safeFailure(error: unknown): Error {
 export function assertReviewReason(reason: string): string {
   const normalized = reason.trim().replace(/\s+/g, " ");
   if (normalized.length === 0) throw new ReviewReasonRequired();
-  return credentialSafeText(bounded(normalized), "owner review reason");
+  // Scrubbed whole, then bounded: a token that straddles the cap must be seen
+  // in full, or its leading fragment would be stored where no rule matches it.
+  return bounded(credentialSafeText(normalized, "owner review reason"));
 }
 
 // ---------------------------------------------------------------------------
@@ -675,7 +678,10 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
           return;
         }
         if (observed.revision !== current.revision) throw new Error("replacement review recovery found an unexpected durable revision");
-        status = await persistAttempt(options.attemptDir, current.revision, event);
+        // Nothing committed, so the same write is retried whole. Projection
+        // stays on: a skipped projection is invisible to the projector's gap
+        // check whenever it was the session's last write.
+        status = await persistAttempt(options.attemptDir, current.revision, event, options.projectRecord);
       }
     };
 
@@ -850,12 +856,28 @@ async function refreshRunReport(attemptDir: string, status: AttemptStatus): Prom
   await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
 }
 
+/**
+ * The final advance commits before its lock is released, so a failure there can
+ * leave a candidate awaiting the owner while the command still reports failure.
+ * The readable report must name that candidate anyway, or it describes the
+ * superseded one. Best effort: the failure the owner must see is the one thrown.
+ */
+async function refreshReportIfAwaitingOwner(attemptDir: string): Promise<void> {
+  try {
+    const durable = await readAttempt(attemptDir);
+    if (durable.lifecycleState === "AWAITING_OWNER") await refreshRunReport(attemptDir, durable);
+  } catch {
+    /* the thrown failure below is the one the owner must see. */
+  }
+}
+
 export async function reviewCommand(options: ReviewCommandOptions): Promise<ReviewCommandResult> {
   try {
     const result = await runReviewCommand(options);
     if (result.confirmed) await refreshRunReport(options.attemptDir, result.status);
     return result;
   } catch (error) {
+    await refreshReportIfAwaitingOwner(options.attemptDir);
     throw safeFailure(error);
   }
 }

@@ -5,13 +5,18 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  assertReviewReason,
   classifyReviewFailure,
   inspectCandidate,
   reconcileStaleReservation,
   ReviewCandidateMoved,
 } from "../../../src/cli/commands/review.ts";
 import { safeTail } from "../../../src/cli/commands/rework.ts";
-import { type ReviewRunState, createReviewRunState } from "../../../src/cli/commands/review-phase.ts";
+import {
+  type ReviewRunState,
+  ReviewCredentialRejected,
+  createReviewRunState,
+} from "../../../src/cli/commands/review-phase.ts";
 import { headAdvanced } from "../../../src/gates/git-diff.ts";
 import { HOST_AUTHOR } from "../../../src/git/commit.ts";
 import { nextRevision, persistAttempt, type AttemptStatus } from "../../../src/cli/commands/attempt.ts";
@@ -588,4 +593,14 @@ test("B8-24: head_advanced checks real commit and non-owner commit is rejected",
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }
+});
+
+test("B8-28: an owner review reason is scrubbed whole before it is bounded, so a token straddling the cap is refused", () => {
+  // Built at run time, so no credential-shaped literal is committed.
+  const token = "gh" + "p_" + "a".repeat(36);
+  const straddling = `${"a".repeat(1981)} ${token}`;
+  assert.equal(straddling.length > 2000, true, "the token must cross the 2000-character cap");
+  assert.throws(() => assertReviewReason(straddling), ReviewCredentialRejected);
+  // A clean reason over the cap is still stored, bounded to the cap.
+  assert.equal(assertReviewReason("b".repeat(2500)).length, 2000);
 });
