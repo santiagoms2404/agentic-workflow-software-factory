@@ -255,7 +255,7 @@ test("B10-16: Linux without bwrap falls back to tool-policy or refuses per sandb
 
 test("B10-17: enforce accounts for committed changes and deletions", () => {
   const git = mockGitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": [
       "",
       "",
@@ -294,7 +294,7 @@ test("B10-17: enforce accounts for committed changes and deletions", () => {
 
 test("B10-17: enforce reports committed deletions when writes are allowed", () => {
   const git = mockGitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": [
       "",
       "",

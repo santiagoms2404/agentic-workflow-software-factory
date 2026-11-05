@@ -78,6 +78,32 @@ function reservationIdOf(registration: BrokerProcessRegistration): string {
     : registration.reservationId;
 }
 
+type PhaseLaunchIdentity = Pick<AgentPhaseProcessRegistration,
+  "runId" | "taskSessionId" | "workflowId" | "phaseId" | "phaseOrdinal" | "adapterId" | "role">;
+type CommonPhaseLaunchEvidence = Pick<AgentPhaseLaunchEvidence,
+  "taskSessionId" | "taskState" | "workflowId" | "phaseId" | "phaseOrdinal" | "phaseKind" | "adapterId" | "role">;
+
+function assertPhaseLaunchIdentity(registration: PhaseLaunchIdentity, refuse: (detail: string) => never): void {
+  if (typeof registration.runId !== "string" || registration.runId.length === 0) refuse("runId is missing");
+  if (typeof registration.taskSessionId !== "string" || registration.taskSessionId.length === 0) refuse("taskSessionId is missing");
+  if (typeof registration.workflowId !== "string" || registration.workflowId.length === 0) refuse("workflowId is missing");
+  if (typeof registration.phaseId !== "string" || registration.phaseId.length === 0) refuse("phaseId is missing");
+  if (!Number.isInteger(registration.phaseOrdinal) || registration.phaseOrdinal < 1) refuse("phaseOrdinal must be a positive integer");
+  if (typeof registration.adapterId !== "string" || registration.adapterId.length === 0) refuse("adapterId is missing");
+  if (typeof registration.role !== "string" || registration.role.length === 0) refuse("role is missing");
+}
+
+function phaseLaunchEvidenceMatches(evidence: CommonPhaseLaunchEvidence, registration: PhaseLaunchIdentity): boolean {
+  return evidence.taskSessionId === registration.taskSessionId &&
+    evidence.taskState === "RUNNING" &&
+    evidence.workflowId === registration.workflowId &&
+    evidence.phaseId === registration.phaseId &&
+    evidence.phaseOrdinal === registration.phaseOrdinal &&
+    evidence.phaseKind === "agent" &&
+    evidence.adapterId === registration.adapterId &&
+    evidence.role === registration.role;
+}
+
 // ---------------------------------------------------------------------------
 // The six task-edge spawn sites.
 // ---------------------------------------------------------------------------
@@ -627,28 +653,13 @@ export class ProcessTransportBroker implements TransportBroker {
     const refuse = (detail: string): never => {
       throw new SpawnRegistrationInvalid(registration.runId, `invalid agent-phase authorization: ${detail}`);
     };
-    if (typeof registration.runId !== "string" || registration.runId.length === 0) refuse("runId is missing");
-    if (typeof registration.taskSessionId !== "string" || registration.taskSessionId.length === 0) refuse("taskSessionId is missing");
-    if (typeof registration.workflowId !== "string" || registration.workflowId.length === 0) refuse("workflowId is missing");
-    if (typeof registration.phaseId !== "string" || registration.phaseId.length === 0) refuse("phaseId is missing");
-    if (!Number.isInteger(registration.phaseOrdinal) || registration.phaseOrdinal < 1) refuse("phaseOrdinal must be a positive integer");
-    if (typeof registration.adapterId !== "string" || registration.adapterId.length === 0) refuse("adapterId is missing");
-    if (typeof registration.role !== "string" || registration.role.length === 0) refuse("role is missing");
+    assertPhaseLaunchIdentity(registration, refuse);
     if (typeof registration.reservationId !== "string" || registration.reservationId.length === 0) refuse("one held reservation is required");
 
     const verifier = this.#options.phaseLaunchVerifier;
     if (verifier === undefined) return refuse("the trusted host verifier is not installed");
     const evidence = verifier.verify(registration);
-    const exact =
-      evidence.taskSessionId === registration.taskSessionId &&
-      evidence.taskState === "RUNNING" &&
-      evidence.workflowId === registration.workflowId &&
-      evidence.phaseId === registration.phaseId &&
-      evidence.phaseOrdinal === registration.phaseOrdinal &&
-      evidence.phaseKind === "agent" &&
-      evidence.adapterId === registration.adapterId &&
-      evidence.role === registration.role &&
-      evidence.launchAuthorization === "agent-phase";
+    const exact = phaseLaunchEvidenceMatches(evidence, registration) && evidence.launchAuthorization === "agent-phase";
     if (!exact) refuse("the trusted verifier returned evidence for a different launch");
 
     const reservation = this.#options.ledger.reservation(registration.reservationId);
@@ -683,17 +694,11 @@ export class ProcessTransportBroker implements TransportBroker {
     const refuse = (detail: string): never => {
       throw new SpawnRegistrationInvalid(registration.runId, `invalid correction authorization: ${detail}`);
     };
-    if (typeof registration.runId !== "string" || registration.runId.length === 0) refuse("runId is missing");
-    if (typeof registration.taskSessionId !== "string" || registration.taskSessionId.length === 0) refuse("taskSessionId is missing");
-    if (typeof registration.workflowId !== "string" || registration.workflowId.length === 0) refuse("workflowId is missing");
-    if (typeof registration.phaseId !== "string" || registration.phaseId.length === 0) refuse("phaseId is missing");
-    if (!Number.isInteger(registration.phaseOrdinal) || registration.phaseOrdinal < 1) refuse("phaseOrdinal must be a positive integer");
+    assertPhaseLaunchIdentity(registration, refuse);
     if (!Number.isInteger(registration.correctionRound) || registration.correctionRound < 1) {
       refuse("correctionRound must be a positive integer; round 0 is the phase's first turn and reserves a call");
     }
     if (registration.tranche !== "auto" && registration.tranche !== "owner") refuse("tranche must be auto or owner");
-    if (typeof registration.adapterId !== "string" || registration.adapterId.length === 0) refuse("adapterId is missing");
-    if (typeof registration.role !== "string" || registration.role.length === 0) refuse("role is missing");
     if (typeof registration.continuityHandle !== "string" || registration.continuityHandle.length === 0) {
       refuse("continuityHandle is missing");
     }
@@ -707,14 +712,7 @@ export class ProcessTransportBroker implements TransportBroker {
     }
     const evidence = verifier.verify(registration);
     const exact =
-      evidence.taskSessionId === registration.taskSessionId &&
-      evidence.taskState === "RUNNING" &&
-      evidence.workflowId === registration.workflowId &&
-      evidence.phaseId === registration.phaseId &&
-      evidence.phaseOrdinal === registration.phaseOrdinal &&
-      evidence.phaseKind === "agent" &&
-      evidence.adapterId === registration.adapterId &&
-      evidence.role === registration.role &&
+      phaseLaunchEvidenceMatches(evidence, registration) &&
       evidence.correctionRound === registration.correctionRound &&
       evidence.tranche === registration.tranche &&
       evidence.continuityHandle === registration.continuityHandle &&

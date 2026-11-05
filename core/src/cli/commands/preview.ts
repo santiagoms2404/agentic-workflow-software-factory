@@ -26,7 +26,7 @@ import {
 import { createHostPort } from "../../execution/process-controller.ts";
 import { runSystemCommand, type SystemCommandOptions } from "../../execution/transport-broker.ts";
 import type { CommandResult } from "../../execution/process-controller.ts";
-import { runGit, systemGitRunner } from "../../git/changes.ts";
+import { isWorktreeClean, runGit, systemGitRunner } from "../../git/changes.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
 import { AttemptLock } from "../../persistence/attempt-lock.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
@@ -305,7 +305,7 @@ async function build(
   if (head !== status.candidateSha) {
     throw new PreviewRefused(`the managed worktree is at ${head}, not the candidate ${status.candidateSha}; the preview would show another tree`);
   }
-  if (runGit(git, ["status", "--porcelain"]).trim().length > 0) {
+  if (!isWorktreeClean(git)) {
     throw new PreviewRefused("the managed worktree has uncommitted changes, so a build of it is not a build of the candidate");
   }
   const root = join(status.worktree, declared.bundle);

@@ -1,6 +1,6 @@
 // Only the host creates candidate commits; agent-facing code receives no commit capability.
 import { runSystemCommand } from "../execution/transport-broker.ts";
-import { assertClean, runGit, type GitRunner } from "./changes.ts";
+import { assertClean, runGit, worktreeStatus, type GitRunner } from "./changes.ts";
 
 /**
  * The one identity every AWSF-made commit carries as author and committer
@@ -82,6 +82,6 @@ export function commitAsHost(commit: HostCommit, runner = hostCommitGitRunner(co
 }
 
 function assertCleanBeforeCommit(runner: GitRunner): void {
-  const status = runGit(runner, ["status", "--porcelain"]);
+  const status = worktreeStatus(runner);
   if (!status.trim()) throw new Error("refusing to create an empty candidate commit");
 }

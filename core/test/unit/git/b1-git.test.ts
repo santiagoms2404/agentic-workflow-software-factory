@@ -269,6 +269,30 @@ test("B1-41: reconcileHostCommit accepts commit with benign whitespace differenc
   assert.deepEqual(result, { outcome: "committed", commitSha });
 });
 
+test("B1-61: an uncommitted intent does not scan worktree status before returning", async (t) => {
+  const { root, git } = createTestRepo(t);
+  writeFileSync(join(root, "file.txt"), "base\n");
+  runGit(git, ["add", "file.txt"]);
+  runGit(git, [...OWNER, "commit", "--quiet", "--no-gpg-sign", "-m", "initial"]);
+  const parentSha = runGit(git, ["rev-parse", "HEAD"]).trim();
+  const contentDigest = await hostCommitContentDigest(root, parentSha, git);
+  const intent: HostCommitIntent = {
+    intentId: randomUUID(), phaseKey: "builder", ordinal: 1, round: 0, runId: "run-1",
+    parentSha, message: "feat: intended", author: HOST_AUTHOR, committer: HOST_AUTHOR,
+    changedPaths: [], committedPaths: [], contentDigest, treeDigest: "a".repeat(64),
+  };
+  const calls: string[] = [];
+  const observed: GitRunner = (argv) => {
+    calls.push(argv.join(" "));
+    if (argv[0] === "status") throw new Error("status scan is not needed for an uncommitted intent");
+    return git(argv);
+  };
+
+  const result = await reconcileHostCommit(intent, { worktree: root, git: observed });
+  assert.deepEqual(result, { outcome: "not-committed" });
+  assert.equal(calls.some((command) => command.startsWith("status ")), false);
+});
+
 test("B1-41: reconcileHostCommit still refuses when messages have semantic differences", async (t) => {
   const { root, git } = createTestRepo(t);
   writeFileSync(join(root, "file.txt"), "hello\n");

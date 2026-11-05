@@ -128,39 +128,33 @@ function resolvedHost(remoteUrl: string): string | null {
   return hostname.startsWith("[") ? hostname.slice(1, -1) : hostname;
 }
 
-function head(runner: GitRunner): string {
-  let result: GitResult;
+function runObserved(runner: GitRunner, argv: readonly string[], code: PublishBlockCode): GitResult {
   try {
-    result = runner(["rev-parse", "HEAD"]);
+    return runner(argv);
   } catch {
-    throw new PublishBlocked("git-failure");
+    throw new PublishBlocked(code);
   }
-  if (result.status !== 0 || result.error !== null) throw new PublishBlocked("git-failure");
-  return result.stdout.trim();
+}
+
+function observe(runner: GitRunner, argv: readonly string[], code: PublishBlockCode): GitResult {
+  const result = runObserved(runner, argv, code);
+  if (result.status !== 0 || result.error !== null) throw new PublishBlocked(code);
+  return result;
+}
+
+function head(runner: GitRunner): string {
+  return observe(runner, ["rev-parse", "HEAD"], "git-failure").stdout.trim();
 }
 
 function clean(runner: GitRunner): boolean {
-  let result: GitResult;
-  try {
-    result = runner(["status", "--porcelain"]);
-  } catch {
-    throw new PublishBlocked("git-failure");
-  }
-  if (result.status !== 0 || result.error !== null) throw new PublishBlocked("git-failure");
-  return result.stdout.trim().length === 0;
+  return observe(runner, ["status", "--porcelain", "--untracked-files=all"], "git-failure").stdout.trim().length === 0;
 }
 
 function host(runner: GitRunner, remoteName: string): string | null {
-  let result: GitResult;
-  try {
-    // B1-09: `--all`, because `git push` writes to every push URL and without
-    // it Git prints only the first. Git applies insteadOf/pushInsteadOf before
-    // printing, so these are the URLs the push will contact.
-    result = runner(["remote", "get-url", "--push", "--all", remoteName]);
-  } catch {
-    throw new PublishBlocked("remote-unknown");
-  }
-  if (result.status !== 0 || result.error !== null) throw new PublishBlocked("remote-unknown");
+  // B1-09: `--all`, because `git push` writes to every push URL and without
+  // it Git prints only the first. Git applies insteadOf/pushInsteadOf before
+  // printing, so these are the URLs the push will contact.
+  const result = observe(runner, ["remote", "get-url", "--push", "--all", remoteName], "remote-unknown");
 
   // This is the remote URLs' only lifetime. Only their parsed hostnames survive.
   const remoteUrls = result.stdout.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
@@ -172,26 +166,14 @@ function host(runner: GitRunner, remoteName: string): string | null {
 }
 
 function remoteTip(runner: GitRunner, remoteName: string, branch: string): string | null {
-  let destination: GitResult;
-  try {
-    destination = runner(["remote", "get-url", "--push", remoteName]);
-  } catch {
-    throw new PublishBlocked("remote-unreadable");
-  }
-  if (destination.status !== 0 || destination.error !== null) throw new PublishBlocked("remote-unreadable");
+  const destination = observe(runner, ["remote", "get-url", "--push", remoteName], "remote-unreadable");
   const pushUrl = destination.stdout.trim();
   if (pushUrl.length === 0 || /[\r\n]/u.test(pushUrl)) throw new PublishBlocked("remote-unreadable");
 
-  let result: GitResult;
-  try {
-    // B1-21: `ls-remote <remoteName>` follows the fetch URL, not the push URL
-    // used by `git push <remoteName>`. The destination URL is used only for this
-    // observation and is never included in a diagnostic or publication record.
-    result = runner(["ls-remote", pushUrl, `refs/heads/${branch}`]);
-  } catch {
-    throw new PublishBlocked("remote-unreadable");
-  }
-  if (result.status !== 0 || result.error !== null) throw new PublishBlocked("remote-unreadable");
+  // B1-21: `ls-remote <remoteName>` follows the fetch URL, not the push URL
+  // used by `git push <remoteName>`. The destination URL is used only for this
+  // observation and is never included in a diagnostic or publication record.
+  const result = observe(runner, ["ls-remote", pushUrl, `refs/heads/${branch}`], "remote-unreadable");
 
   // Measured: an absent branch is empty output at exit 0, so output is the signal.
   const output = result.stdout.trim();
@@ -202,12 +184,7 @@ function remoteTip(runner: GitRunner, remoteName: string, branch: string): strin
 }
 
 function isAncestor(runner: GitRunner, ancestor: string, descendant: string): boolean {
-  let result: GitResult;
-  try {
-    result = runner(["merge-base", "--is-ancestor", ancestor, descendant]);
-  } catch {
-    throw new PublishBlocked("git-failure");
-  }
+  const result = runObserved(runner, ["merge-base", "--is-ancestor", ancestor, descendant], "git-failure");
   if (result.status === 0) return true;
   if (result.status === 1) return false;
   throw new PublishBlocked("git-failure");

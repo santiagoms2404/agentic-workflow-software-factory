@@ -20,7 +20,7 @@ import { gatesConfigDigest } from "../contracts/command-ledger.ts";
 import type { DriverPreflightRecord, PreflightSuite, SuiteGateRow } from "../contracts/driver-preflight.ts";
 import type { AwsfConfig } from "../config/schema.ts";
 import { runSystemCommand } from "../execution/transport-broker.ts";
-import { runGit, systemGitRunner } from "../git/changes.ts";
+import { runGit, systemGitRunner, worktreeStatus } from "../git/changes.ts";
 import type { AttemptEvidence } from "../observability/attempt-evidence.ts";
 import { prepareBaselineWorktree, type BaselineWorktree } from "./baseline-worktree.ts";
 
@@ -166,7 +166,7 @@ export async function runBaselineSuite(request: BaselineSuiteRequest): Promise<S
     await writeFile(outputPath, `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`, { mode: 0o600 });
     await chmod(outputPath, 0o600);
     runs.push({ gateId, exitCode: result.status, durationMs, outputPath });
-    const status = runGit(tree, ["status", "--porcelain"]).trim();
+    const status = worktreeStatus(tree).trim();
     const head = runGit(tree, ["rev-parse", "HEAD"]).trim();
     if (status.length > 0 || head !== baseline.head) {
       const what = status.length > 0 ? "left it dirty" : `moved its HEAD to ${head}`;

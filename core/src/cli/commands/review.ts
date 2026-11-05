@@ -46,7 +46,7 @@ import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { CallBudget } from "../../execution/call-budget.ts";
 import type { BarrierRecord, TerminationReport } from "../../execution/launcher-barrier.ts";
 import { ProcessTransportBroker } from "../../execution/transport-broker.ts";
-import { assertClean, runGit, systemGitRunner } from "../../git/changes.ts";
+import { assertClean, runGit, systemGitRunner, worktreeStatus } from "../../git/changes.ts";
 import { assertNoExecutionController } from "../../execution/operation-lease.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
@@ -365,9 +365,9 @@ function assertCandidateUnmoved(status: AttemptStatus, inspection: CandidateInsp
   const canonicalHead = runGit(canonical, ["rev-parse", "HEAD"]).trim();
   if (worktreeHead !== inspection.candidate) moved(`worktree HEAD is ${worktreeHead}, not the candidate ${inspection.candidate}`);
   if (canonicalHead !== inspection.base) moved(`canonical HEAD is ${canonicalHead}, not the recorded base ${inspection.base}`);
-  const dirty = runGit(worktree, ["status", "--porcelain"]).trim();
+  const dirty = worktreeStatus(worktree).trim();
   if (dirty.length > 0) moved(`the managed worktree is not clean: ${bounded(dirty, 400)}`);
-  const canonicalDirty = runGit(canonical, ["status", "--porcelain"]).trim();
+  const canonicalDirty = worktreeStatus(canonical).trim();
   if (canonicalDirty.length > 0) moved(`the canonical checkout is not clean: ${bounded(canonicalDirty, 400)}`);
 }
 

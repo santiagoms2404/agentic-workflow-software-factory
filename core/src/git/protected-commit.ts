@@ -2,6 +2,7 @@ import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdtempSync, mkd
 import { basename, dirname, join, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { runSystemCommand } from "../execution/transport-broker.ts";
+import { hostIdentityEnv } from "./commit.ts";
 import { ownExecutionLease } from "../execution/operation-lease.ts";
 import { assertOwnedRegular, assertProtectedLockWitness, assertWitnessedLockAtMutationBoundary, captureLockWitness, descriptorDigest, lockIdentityOf, readOwnedRegularFile, type ProtectedLockWitness } from "./protected-lock.ts";
 import { runGit, systemGitRunner, type GitRunner } from "./changes.ts";
@@ -143,8 +144,7 @@ export async function commitProtectedAsHost(options: {
   const stage = mkdtempSync(join(stagingRoot, "candidate-"));
   const privateIndex = join(stage, "index");
   const env = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-    GIT_INDEX_FILE: privateIndex, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0",
-    GIT_AUTHOR_NAME: "Santiago Marin", GIT_AUTHOR_EMAIL: "santiagomarinsuarez@me.com", GIT_COMMITTER_NAME: "Santiago Marin", GIT_COMMITTER_EMAIL: "santiagomarinsuarez@me.com" };
+    GIT_INDEX_FILE: privateIndex, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", ...hostIdentityEnv() };
   const stagedGit: GitRunner = argv => runSystemCommand("git", ["-C", root, "-c", "core.fsync=all", ...argv], { timeoutMs: 30_000, env });
   runGit(stagedGit, ["read-tree", grant.subject.preWriteHeadSha]);
   const snapshots = new Map<string, string>();

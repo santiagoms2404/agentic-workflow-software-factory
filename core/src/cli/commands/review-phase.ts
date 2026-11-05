@@ -906,6 +906,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
 
     const broker = infra.createBroker({
       ledger: budget,
+      terminate: { graceMs: options.config.runtime.process_grace_seconds * 1_000 },
       register: async (record) => {
         state.processRecord = redactPhaseProcess(record, continuity);
         state.processSettled = false;

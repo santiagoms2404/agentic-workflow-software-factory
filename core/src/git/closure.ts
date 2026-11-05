@@ -96,12 +96,16 @@ export function verifyClosureCommit(git: GitRunner, record: ClosureRecord): void
   if (!delta.ok) throw new Error(`closure committed delta refused: ${delta.refusal.message}`);
 }
 
+function assertNoSymlinkParents(repository: string, physical: string, refusal: string): void {
+  for (let parent = dirname(physical); parent !== repository; parent = dirname(parent)) {
+    if (parent === dirname(parent) || lstatSync(parent).isSymbolicLink()) throw new Error(refusal);
+  }
+}
+
 export function assertClosureFiles(repository: string, before: ClosureSnapshot, paths: readonly string[]): void {
   for (const path of paths) {
     const physical = join(repository, path);
-    for (let parent = dirname(physical); parent !== repository; parent = dirname(parent)) {
-      if (parent === dirname(parent) || lstatSync(parent).isSymbolicLink()) throw new Error(`closure refuses symlink parent ${path}`);
-    }
+    assertNoSymlinkParents(repository, physical, `closure refuses symlink parent ${path}`);
     const stat = lstatSync(physical);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || !readFileSync(physical).equals(Buffer.from(before.tree.get(path)!))) throw new Error(`closure refuses changed or non-regular file ${path}`);
   }
@@ -148,9 +152,7 @@ export function finishClosureCheckout(repository: string, record: ClosureRecord,
   if (dirty.some(path => !record.blobs.some(blob => blob.path === path)) || runGit(git, ["ls-files", "--others", "--exclude-standard", "-z"]).length > 0) throw new Error("interrupted closure: checkout changed; no automatic replay");
   for (const blob of record.blobs) {
     const physical = join(repository, blob.path);
-    for (let parent = dirname(physical); parent !== repository; parent = dirname(parent)) {
-      if (parent === dirname(parent) || lstatSync(parent).isSymbolicLink()) throw new Error("interrupted closure: symlink parent; no automatic replay");
-    }
+    assertNoSymlinkParents(repository, physical, "interrupted closure: symlink parent; no automatic replay");
     const bytes = readFileSync(physical);
     if (!bytes.equals(Buffer.from(before.tree.get(blob.path)!)) && !bytes.equals(Buffer.from(after.tree.get(blob.path)!))) throw new Error("interrupted closure: checkout bytes changed; no automatic replay");
     const stat = lstatSync(join(repository, blob.path));

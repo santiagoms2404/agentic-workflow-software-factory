@@ -155,8 +155,18 @@ export class WorktreeNotClean extends Error {
   }
 }
 
+/** Porcelain status with untracked visibility independent of Git configuration. */
+export function worktreeStatus(runner: GitRunner): string {
+  return runGit(runner, ["status", "--porcelain", "--untracked-files=all"]);
+}
+
+/** A safety-cleanliness predicate must not inherit status.showUntrackedFiles. */
+export function isWorktreeClean(runner: GitRunner): boolean {
+  return worktreeStatus(runner).trim().length === 0;
+}
+
 export function assertClean(repository: string, when: "before" | "after", runner = systemGitRunner(repository)): void {
-  const status = runGit(runner, ["status", "--porcelain"]);
+  const status = worktreeStatus(runner);
   if (status.trim()) throw new WorktreeNotClean(when, status);
 }
 

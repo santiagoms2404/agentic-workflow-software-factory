@@ -3,7 +3,7 @@ import { lstat, readFile, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { recoveryDigest } from "../contracts/phase-recovery.ts";
 import type { HostCommitIntent } from "../contracts/host-validation.ts";
-import { changesSinceBase, runGit, type GitRunner } from "./changes.ts";
+import { changesSinceBase, isWorktreeClean, runGit, type GitRunner } from "./changes.ts";
 
 const MAX_CONTENT_BYTES = 64 * 1024 * 1024;
 
@@ -122,7 +122,6 @@ export async function reconcileHostCommit(
     return refuse("the recorded pre-commit revision is not a commit object in this repository");
   }
   const head = runGit(git, ["rev-parse", "HEAD"]).trim();
-  const clean = runGit(git, ["status", "--porcelain"]).trim().length === 0;
 
   if (head === intent.parentSha) {
     if (await hostCommitContentDigest(worktree, intent.parentSha, git, digestOpts) !== intent.contentDigest) {
@@ -149,6 +148,7 @@ export async function reconcileHostCommit(
       runGit(git, ["log", "-1", "--format=%cn <%ce>", commitSha]).trim() !== intent.committer) {
     return refuse("the created commit carries a different author or committer than the recorded intent");
   }
+  const clean = isWorktreeClean(git);
   if (!clean) return refuse("a commit exists after the recorded intent but the worktree is not clean, so the recorded change-set cannot be proved complete");
   const paths = runGit(git, ["diff", "--name-only", "--no-renames", "-z", intent.parentSha, commitSha, "--"]).split("\0").filter(path => path.length > 0).sort();
   if (paths.length !== intent.committedPaths.length || paths.some((path, index) => path !== intent.committedPaths[index])) {

@@ -4,7 +4,7 @@ import { commitAsHost, HOST_AUTHOR } from "../../../src/git/commit.ts";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AttemptWorktreeExists, listWorktrees, createWorktree } from "../../../src/git/worktrees.ts";
+import { AttemptWorktreeExists, listWorktrees, createWorktree, worktreePath } from "../../../src/git/worktrees.ts";
 import type { GitRunner } from "../../../src/git/changes.ts";
 
 function scripted(replies: Record<string, string | string[]>): { runner: GitRunner; calls: string[] } {
@@ -36,17 +36,27 @@ test("listing limits the host view to the configured worktree root", () => {
   assert.deepEqual(listWorktrees("/repo", "/worktrees", git.runner), [{ attemptId: "T16", path: "/worktrees/T16", head: "bbb" }]);
 });
 
+test("safe worktree names beginning with two dots remain inside their configured root", () => {
+  assert.equal(worktreePath("/worktrees", "..cache"), "/worktrees/..cache");
+  const git = scripted({
+    "worktree list --porcelain": "worktree /worktrees/..cache\nHEAD bbb\n\n",
+  });
+  assert.deepEqual(listWorktrees("/repo", "/worktrees", git.runner), [
+    { attemptId: "..cache", path: "/worktrees/..cache", head: "bbb" },
+  ]);
+});
+
 test("host commits set both author and committer identity deterministically", () => {
   const git = scripted({
-    "status --porcelain": [" M src/a.ts\n", ""],
+    "status --porcelain --untracked-files=all": [" M src/a.ts\n", ""],
     "rev-parse HEAD": "candidate\n",
   });
   assert.equal(commitAsHost({ repository: "/repo", message: "feat: candidate" }, git.runner), "candidate");
   assert.deepEqual(git.calls, [
-    "status --porcelain",
+    "status --porcelain --untracked-files=all",
     "add --all",
     "-c user.name=Santiago Marin -c user.email=santiagomarinsuarez@me.com commit --author Santiago Marin <santiagomarinsuarez@me.com> --no-gpg-sign -m feat: candidate",
-    "status --porcelain",
+    "status --porcelain --untracked-files=all",
     "rev-parse HEAD",
   ]);
   assert.equal(HOST_AUTHOR, "Santiago Marin <santiagomarinsuarez@me.com>");

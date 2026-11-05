@@ -114,7 +114,7 @@ import {
   providerPairFrom,
   runMandatoryReview,
 } from "../../workflow/review-routing.ts";
-import { assertClean, captureChangeSet, changedPaths, changesSinceBase, runGit, systemGitRunner, WorktreeNotClean } from "../../git/changes.ts";
+import { assertClean, captureChangeSet, changedPaths, changesSinceBase, isWorktreeClean, runGit, systemGitRunner, WorktreeNotClean } from "../../git/changes.ts";
 import { ContinuityStore, continuityHandle } from "../../execution/continuity-store.ts";
 import { buildPhaseRequest, openRetainedColdTurn, phasePersistenceMode, phasePersistenceEvidence, redactPhaseProcess } from "../../execution/phase-request.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
@@ -227,7 +227,7 @@ async function fsyncPath(path: string): Promise<void> {
 function observePins(worktree: string): { clean: boolean; head: string | null } {
   try {
     const runner = systemGitRunner(worktree);
-    const clean = runGit(runner, ["status", "--porcelain"]).trim().length === 0;
+    const clean = isWorktreeClean(runner);
     const head = runGit(runner, ["rev-parse", "HEAD"]).trim();
     return { clean, head: /^[0-9a-f]{40}$/u.test(head) ? head : null };
   } catch {
@@ -2081,6 +2081,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
 
   const brokerOptions = {
     ledger: budget,
+    terminate: { graceMs: options.config.runtime.process_grace_seconds * 1_000 },
     phaseLaunchVerifier: verifier,
     correctionLaunchVerifier: correctionVerifier,
     onCorrection: async (record, evidence) => {
@@ -2199,10 +2200,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     }
     const observedBase = runGit(gitRunner, ["rev-parse", status.baseSha!]).trim();
     const headBeforeHygiene = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
-    const cleanBeforeHygiene = runGit(gitRunner, ["status", "--porcelain"]).trim().length === 0;
+    const cleanBeforeHygiene = isWorktreeClean(gitRunner);
     const hygieneResult = gitRunner(["diff", "--check", `${status.baseSha!}..${candidateSha}`, "--"]);
     const headAfterHygiene = runGit(gitRunner, ["rev-parse", "HEAD"]).trim();
-    const cleanAfterHygiene = runGit(gitRunner, ["status", "--porcelain"]).trim().length === 0;
+    const cleanAfterHygiene = isWorktreeClean(gitRunner);
     const hygiene = candidateHygiene({
       expectedBaseSha: status.baseSha!, observedBaseSha: observedBase,
       expectedCandidateSha: candidateSha, headBefore: headBeforeHygiene, headAfter: headAfterHygiene,
@@ -3471,7 +3472,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const ticket = shiftTicketOf(recipe.phases, phase.id);
     if (ticket === null || candidateSha === null || status.process !== null || budget.outstanding().length > 0) return false;
     const git = systemGitRunner(status.worktree!);
-    if (runGit(git, ["status", "--porcelain"]).trim().length > 0 || runGit(git, ["rev-parse", "HEAD"]).trim() !== candidateSha) return false;
+    if (!isWorktreeClean(git) || runGit(git, ["rev-parse", "HEAD"]).trim() !== candidateSha) return false;
     const checkpoint = await checkpointAt("ticket-block", null);
     if (checkpoint === null) return false;
     try {

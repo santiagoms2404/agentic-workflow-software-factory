@@ -37,7 +37,7 @@ import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
-import { assertClean, runGit, systemGitRunner, type GitResult } from "../../git/changes.ts";
+import { assertClean, isWorktreeClean, runGit, systemGitRunner, type GitResult } from "../../git/changes.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
 import {
   IntegrationRefused,
@@ -102,7 +102,7 @@ const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
 function observePins(worktree: string, candidateSha: string): { clean: boolean; head: string | null } {
   try {
     const runner = systemGitRunner(worktree);
-    const clean = runGit(runner, ["status", "--porcelain"]).trim().length === 0;
+    const clean = isWorktreeClean(runner);
     const head = runGit(runner, ["rev-parse", "HEAD"]).trim();
     return { clean: clean && head === candidateSha, head: /^[0-9a-f]{40}$/u.test(head) ? head : null };
   } catch {
@@ -839,10 +839,10 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     // HEAD and cleanliness are read on both sides of the check, the same
     // bracket production runs and owner rework keep around it.
     const headBeforeHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
-    const cleanBeforeHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
+    const cleanBeforeHygiene = isWorktreeClean(git);
     const hygieneResult = git(["diff", "--check", `${pair.baseSha}..${pair.candidateSha}`, "--"]);
     const headAfterHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
-    const cleanAfterHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
+    const cleanAfterHygiene = isWorktreeClean(git);
     // Read before this run's own hygiene record exists, so a dispatch point in
     // the snapshot belongs to an earlier run.
     const ledger = await ledgerStep("ledger read", () => readCommandLedger(attemptDir));

@@ -13,7 +13,7 @@
 
 import { runSystemCommand } from "../execution/transport-broker.ts";
 import { GitCommandFailed, runGit, systemGitRunner, type GitRunner } from "./changes.ts";
-import { HOST_AUTHOR } from "./commit.ts";
+import { HOST_IDENTITY } from "./commit.ts";
 
 export class IntegrationRefused extends Error {
   constructor(detail: string) {
@@ -39,12 +39,6 @@ export interface IntegrationRecord {
 }
 
 const OBJECT_ID = /^[0-9a-f]{40}$/u;
-
-function owner(): { readonly name: string; readonly email: string } {
-  const match = /^(.+) <([^<>]+)>$/u.exec(HOST_AUTHOR);
-  if (match === null) throw new Error(`host author ${JSON.stringify(HOST_AUTHOR)} is not "name <email>"`);
-  return { name: match[1]!, email: match[2]! };
-}
 
 function isAncestor(runner: GitRunner, ancestor: string, descendant: string): boolean {
   const argv = ["merge-base", "--is-ancestor", ancestor, descendant];
@@ -114,7 +108,7 @@ export function integrationMessage(plan: IntegrationPlan): string {
 
 /** The exact bytes `git cat-file commit` must return for this plan's merge. */
 function expectedCommit(plan: IntegrationPlan, committedAt: string): string {
-  const { name, email } = owner();
+  const { name, email } = HOST_IDENTITY;
   const stamp = `${name} <${email}> ${gitDate(committedAt)}`;
   return `tree ${plan.treeSha}\nparent ${plan.integrationBaseSha}\nparent ${plan.sourceCandidateSha}\n` +
     `author ${stamp}\ncommitter ${stamp}\n\n${integrationMessage(plan)}\n`;
@@ -147,7 +141,7 @@ export function verifyIntegrationCommit(
 
 /** Write the plan's merge commit object. No ref, index or checkout moves. */
 export function writeIntegrationCommit(repository: string, plan: IntegrationPlan, committedAt: string): IntegrationRecord {
-  const { name, email } = owner();
+  const { name, email } = HOST_IDENTITY;
   const date = gitDate(committedAt);
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {

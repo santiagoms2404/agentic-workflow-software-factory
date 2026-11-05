@@ -25,57 +25,60 @@ const IDENTITY: ProcessIdentity = {
   startIdentitySource: "fixture",
 };
 
-function unresolvedProcess() {
-  const createBroker = (options: BrokerOptions): TransportBroker & { controller: { groupCpu: () => number } } => ({
-    controller: { groupCpu: () => 0 },
-    async startProcess(registration, spec) {
-      const record = {
-        identity: IDENTITY,
-        runId: registration.runId,
-        edge: null,
-        ...(registration.kind === "agent-phase" ? { phase: {
-          taskSessionId: registration.taskSessionId,
-          workflowId: registration.workflowId,
-          phaseId: registration.phaseId,
-          phaseOrdinal: registration.phaseOrdinal,
-          adapterId: registration.adapterId,
-          role: registration.role,
-        } } : {}),
-        reservationId: reservationIdOf(registration),
-        command: [spec.executable, ...spec.argv],
-        cwd: spec.cwd,
-      };
-      if (registration.kind === "agent-phase") options.phaseLaunchVerifier?.verify(registration);
-      await options.register(record);
-      const reservation = options.ledger.spendOnGo(reservationIdOf(registration));
-      await options.onSpent?.(record, reservation);
-      let closed = false;
-      const stdout = (async function* () {
-        while (!closed) {
-          await delay(10);
-          if (!closed) yield new Uint8Array();
-        }
-      })();
-      return {
-        runId: registration.runId,
-        identity: IDENTITY,
-        stdout,
-        stderr: (async function* () {})(),
-        exit: new Promise<{ code: null; signal: null }>(() => {}),
-        cancel: async (reason: string) => {
-          assert.equal(reason, SILENCE);
-          closed = true;
-          return {
-            termSent: true,
-            killSent: true,
-            survivors: [IDENTITY.pid],
-            terminated: false,
-            skipped: null,
-          };
-        },
-      };
-    },
-  });
+function unresolvedProcess(expectedGraceMs: number) {
+  const createBroker = (options: BrokerOptions): TransportBroker & { controller: { groupCpu: () => number } } => {
+    assert.equal(options.terminate?.graceMs, expectedGraceMs);
+    return {
+      controller: { groupCpu: () => 0 },
+      async startProcess(registration, spec) {
+        const record = {
+          identity: IDENTITY,
+          runId: registration.runId,
+          edge: null,
+          ...(registration.kind === "agent-phase" ? { phase: {
+            taskSessionId: registration.taskSessionId,
+            workflowId: registration.workflowId,
+            phaseId: registration.phaseId,
+            phaseOrdinal: registration.phaseOrdinal,
+            adapterId: registration.adapterId,
+            role: registration.role,
+          } } : {}),
+          reservationId: reservationIdOf(registration),
+          command: [spec.executable, ...spec.argv],
+          cwd: spec.cwd,
+        };
+        if (registration.kind === "agent-phase") options.phaseLaunchVerifier?.verify(registration);
+        await options.register(record);
+        const reservation = options.ledger.spendOnGo(reservationIdOf(registration));
+        await options.onSpent?.(record, reservation);
+        let closed = false;
+        const stdout = (async function* () {
+          while (!closed) {
+            await delay(10);
+            if (!closed) yield new Uint8Array();
+          }
+        })();
+        return {
+          runId: registration.runId,
+          identity: IDENTITY,
+          stdout,
+          stderr: (async function* () {})(),
+          exit: new Promise<{ code: null; signal: null }>(() => {}),
+          cancel: async (reason: string) => {
+            assert.equal(reason, SILENCE);
+            closed = true;
+            return {
+              termSent: true,
+              killSent: true,
+              survivors: [IDENTITY.pid],
+              terminated: false,
+              skipped: null,
+            };
+          },
+        };
+      },
+    };
+  };
   return createBroker;
 }
 
@@ -90,14 +93,17 @@ class SilentUntilAborted extends ReplayStub {
 }
 
 test("B1-23: survivors from silence cancellation block the run without journaling the process as FAILED", async () => {
-  const b = box((config) => { config.runtime.silence_timeout_seconds = 1; });
+  const b = box((config) => {
+    config.runtime.silence_timeout_seconds = 1;
+    config.runtime.process_grace_seconds = 17;
+  });
   try {
     const created = await draft(b);
     await prepare(b, created.attemptDir);
     await start(b, created.attemptDir);
     const status = await run(b, created.attemptDir, {
       ...b.infrastructure,
-      createBroker: unresolvedProcess(),
+      createBroker: unresolvedProcess(17_000),
       adapterFor: (_entry: unknown, id: string) => new SilentUntilAborted(id),
     });
     const evidence = await readAttemptEvidence(created.attemptDir);

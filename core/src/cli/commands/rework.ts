@@ -52,7 +52,7 @@ import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, type GateId } from "../../gates/interface.ts";
-import { assertClean, captureChangeSet, changedPaths, runGit, systemGitRunner } from "../../git/changes.ts";
+import { assertClean, captureChangeSet, changedPaths, isWorktreeClean, runGit, systemGitRunner, worktreeStatus } from "../../git/changes.ts";
 import { commitAsHost, HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
@@ -127,7 +127,7 @@ const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
 function observePins(worktree: string): { clean: boolean; head: string | null } {
   try {
     const runner = systemGitRunner(worktree);
-    const clean = runGit(runner, ["status", "--porcelain"]).trim().length === 0;
+    const clean = isWorktreeClean(runner);
     const head = runGit(runner, ["rev-parse", "HEAD"]).trim();
     return { clean, head: /^[0-9a-f]{40}$/u.test(head) ? head : null };
   } catch {
@@ -907,6 +907,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
 
   const broker = infra.createBroker({
     ledger: budget,
+    terminate: { graceMs: options.config.runtime.process_grace_seconds * 1_000 },
     register: async (record) => {
       processRecord = record;
       const registeredAt = infra.now();
@@ -1138,10 +1139,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     await persistGate(advanced, candidate);
     if (!advanced.passed) throw new PhaseGateFailure(phaseKey, [advanced]);
     const headBeforeHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
-    const cleanBeforeHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
+    const cleanBeforeHygiene = isWorktreeClean(git);
     const hygieneResult = git(["diff", "--check", `${status.baseSha!}..${candidate}`, "--"]);
     const headAfterHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
-    const cleanAfterHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
+    const cleanAfterHygiene = isWorktreeClean(git);
     await assertOwnExecutionLease(options.attemptDir);
     // Read before this run's own hygiene record exists, so a dispatch point in
     // the snapshot belongs to an earlier run.
@@ -1177,7 +1178,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const worktreeRealPath = await realpath(status.worktree!);
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
       const started = Date.now();
-      const cleanBefore = runGit(git, ["status", "--porcelain"]).trim().length === 0 && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
+      const cleanBefore = isWorktreeClean(git) && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
       const outputRelative = join("raw", `command-${phaseKey}-${candidate}-${gateId}.txt`);
       const planned = planCommandRecovery(ledger, {
         dispatcherId: REWORK_DISPATCHER, occurrenceKey, gateId, gateIds,
@@ -1252,7 +1253,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       commands.push({ gateId, argv: [...configured.argv], exitCode: exit, durationMs, outputRef: outputRelative });
       if (exit !== 0) failures.push(`${gateId} exited ${exit}`);
       outputTail = safeTail(outputTail.length === 0 ? commandOutput : `${outputTail}\n${commandOutput}`, TEST_OUTPUT_TAIL_MAX_CHARS);
-      const cleanAfter = runGit(git, ["status", "--porcelain"]).trim().length === 0 && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
+      const cleanAfter = isWorktreeClean(git) && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
       if (!cleanAfter) {
         // The remaining gates are withheld on purpose: they must not run against
         // a tree a prior command corrupted. Recording that keeps a later
@@ -1420,11 +1421,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       if (head !== candidate) problems.push(`worktree HEAD is ${head}, not the candidate ${candidate}`);
       const canonicalHead = runGit(canonicalRunner, ["rev-parse", "HEAD"]).trim();
       if (canonicalHead !== baseSha) problems.push(`canonical HEAD is ${canonicalHead}, not the recorded base ${baseSha}`);
-      const dirty = runGit(observed, ["status", "--porcelain"]).trim();
+      const dirty = worktreeStatus(observed).trim();
       if (dirty.length > 0) problems.push(`the managed worktree is not clean: ${bounded(dirty, 400)}`);
       // The same canonical read review and adoption make: a dirty checkout would
       // otherwise reach AWAITING_OWNER and be refused only at landing.
-      const canonicalDirty = runGit(canonicalRunner, ["status", "--porcelain"]).trim();
+      const canonicalDirty = worktreeStatus(canonicalRunner).trim();
       if (canonicalDirty.length > 0) problems.push(`the canonical checkout is not clean: ${bounded(canonicalDirty, 400)}`);
       if (problems.length === 0) return;
       const detail = `the candidate under review moved ${when}: ${problems.join("; ")}`;

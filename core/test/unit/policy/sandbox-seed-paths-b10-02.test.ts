@@ -42,7 +42,7 @@ function seededWorld() {
 /** A clean Git view before and after: every seeded change is invisible to Git, as in the finding. */
 function cleanGit(): GitRunner {
   const outputs: Record<string, string[]> = {
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": ["", ""],
     "ls-files --others --exclude-standard -z": ["", ""],
   };

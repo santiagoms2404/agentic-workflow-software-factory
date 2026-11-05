@@ -113,7 +113,7 @@ function gitRunner(outputs: Record<string, string[]>): GitRunner {
 
 test("the post-run comparison aborts with every path and exposes no correction path", () => {
   const git = gitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": [
       "",
       ["1\t0\tallowed/a.ts", "1\t0\toutside-a.ts", "1\t0\toutside-b.ts", ""].join("\0"),
@@ -140,7 +140,7 @@ test("the post-run comparison aborts with every path and exposes no correction p
 
 test("a reviewer configured writes: [] aborts if it edits a repository file", () => {
   const git = gitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": ["", "1\t0\tquiet-fix.ts\0"],
     "ls-files --others --exclude-standard -z": ["", ""],
   });
@@ -163,7 +163,7 @@ test("a reviewer configured writes: [] aborts if it edits a repository file", ()
 
 test("the widened readonly reviewer may read the worktree and still may not write to it", () => {
   const git = gitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": ["", "1\t0\tquiet-fix.ts\0"],
     "ls-files --others --exclude-standard -z": ["", ""],
   });
@@ -192,7 +192,7 @@ test("the widened readonly reviewer may read the worktree and still may not writ
 
 test("a clean reviewer writes: [] run is green", () => {
   const git = gitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": ["", ""],
     "ls-files --others --exclude-standard -z": ["", ""],
   });
@@ -429,7 +429,7 @@ test("worktree confinement refuses without bwrap, where host confinement falls b
     assert.throws(() => grantSandbox(world.spec, { ...request, confinement: "worktree" }, () => false), WorktreeConfinementUnavailable);
     assert.throws(() => grantSandbox(world.spec, { ...request, platform: "darwin", confinement: "worktree" }, () => true), WorktreeConfinementUnavailable);
     assert.equal(grantSandbox(world.spec, request, () => false).badge, "tool-policy");
-    const git = gitRunner({ "status --porcelain": [""], "diff HEAD --numstat --no-renames -z": [""], "ls-files --others --exclude-standard -z": [""] });
+    const git = gitRunner({ "status --porcelain --untracked-files=all": [""], "diff HEAD --numstat --no-renames -z": [""], "ls-files --others --exclude-standard -z": [""] });
     assert.throws(() => new PermissionSession({ ...request, confinement: "worktree", profile: "readonly",
       tools: ["read"], protectedPaths: [], sandboxProbe: () => false, git }), WorktreeConfinementUnavailable);
   } finally { rmSync(world.root, { recursive: true, force: true }); }
