@@ -10,7 +10,7 @@ import type { JournalRecord } from "../persistence/journal.ts";
 import { assertPlanAdmissionRecord, type PlanAdmissionRecord } from "../contracts/plan-admission.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import { isPersistableKind } from "../contracts/normalized-events.ts";
-import type { DatabaseSync } from "./sqlite.ts";
+import { rollbackAfterFailure, type DatabaseSync } from "./sqlite.ts";
 import type { AttemptEvidence, RecordedAgentPurpose } from "./attempt-evidence.ts";
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
 import { assertAttributionRecord, attributionRecordDigest, type AttributionRecord } from "../contracts/attribution-record.ts";
@@ -232,7 +232,7 @@ export function projectAttemptStatus(
       );
       db.exec("COMMIT");
     } catch (error) {
-      db.exec("ROLLBACK");
+      rollbackAfterFailure(db);
       throw error;
     }
     return { ok: true, applied: true, degraded: false, flagPersisted: false };
@@ -1068,7 +1068,7 @@ export function projectEvent(
       );
       db.exec("COMMIT");
     } catch (err) {
-      db.exec("ROLLBACK");
+      rollbackAfterFailure(db);
       throw err;
     }
     return { ok: true, applied: true, degraded: false, flagPersisted: false };

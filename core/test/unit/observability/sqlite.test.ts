@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { DatabaseNewerThanBinary, openDatabase, probeFeatures } from "../../../src/observability/sqlite.ts";
+import { DatabaseSync } from "node:sqlite";
+import {
+  DatabaseNewerThanBinary,
+  closeDatabase,
+  openDatabase,
+  probeFeatures,
+  runMigrations,
+} from "../../../src/observability/sqlite.ts";
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), "awsf-sqlite-"));
@@ -197,15 +204,144 @@ test("sandbox evidence columns reject values outside the broker vocabulary", () 
   } finally { db.close(); }
 });
 
-test("an empty/unknown migrations directory leaves user_version at 0 rather than throwing", () => {
+// B4-28: a missing migrations directory used to read as an empty schema, so a
+// broken install opened a fresh database at user_version 0 with no tables.
+test("a missing migrations directory is refused with its real errno, not read as an empty schema", () => {
   const dir = tempDir();
   try {
-    const db = openDatabase(":memory:", { migrationsDir: join(dir, "does-not-exist") });
+    assert.throws(() => openDatabase(":memory:", { migrationsDir: join(dir, "does-not-exist") }), { code: "ENOENT" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// B4-27: a misnamed migration was dropped without a word, and two files sharing
+// a version were applied in readdir order.
+test("a .sql migration whose name does not match NNNN-name is refused, not silently skipped", () => {
+  const dir = tempDir();
+  try {
+    const migrations = join(dir, "migrations");
+    mkdirSync(migrations);
+    writeFileSync(join(migrations, "0001-initial.sql"), "CREATE TABLE a (x INTEGER);\nPRAGMA user_version = 1;");
+    writeFileSync(join(migrations, "0002_next.sql"), "CREATE TABLE b (x INTEGER);\nPRAGMA user_version = 2;");
+    assert.throws(() => openDatabase(join(dir, "awsf.db"), { migrationsDir: migrations }), /0002_next\.sql/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("two migrations sharing a version number are refused, not applied in readdir order", () => {
+  const dir = tempDir();
+  try {
+    const migrations = join(dir, "migrations");
+    mkdirSync(migrations);
+    writeFileSync(join(migrations, "0001-initial.sql"), "CREATE TABLE a (x INTEGER);\nPRAGMA user_version = 1;");
+    writeFileSync(join(migrations, "0002-first.sql"), "CREATE TABLE b (x INTEGER);\nPRAGMA user_version = 2;");
+    writeFileSync(join(migrations, "0002-second.sql"), "CREATE TABLE c (x INTEGER);\nPRAGMA user_version = 2;");
+    assert.throws(() => openDatabase(join(dir, "awsf.db"), { migrationsDir: migrations }), /0002/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// B4-29: a PRAGMA behind a leading comment was classed as transactional, so
+// journal_mode ran inside BEGIN IMMEDIATE, where SQLite refuses it.
+test("a journal_mode PRAGMA behind a leading comment still runs before the migration transaction", () => {
+  const dir = tempDir();
+  try {
+    const migrations = join(dir, "migrations");
+    mkdirSync(migrations);
+    writeFileSync(join(migrations, "0001-wal.sql"),
+      "-- switch the journal before the transaction opens\nPRAGMA journal_mode = WAL;\nCREATE TABLE t (x INTEGER);\nPRAGMA user_version = 1;");
+    const db = openDatabase(join(dir, "awsf.db"), { migrationsDir: migrations });
     try {
-      assert.equal((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 0);
+      assert.equal((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 1);
+      assert.equal((db.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode, "wal");
     } finally {
       db.close();
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// B4-36: the pending list is read before BEGIN IMMEDIATE. A migration another
+// connection applies in that gap must be skipped under the lock, not replayed.
+test("a migration another connection applies while this one waits for the write lock is not replayed", () => {
+  const dir = tempDir();
+  try {
+    const migrations = join(dir, "migrations");
+    mkdirSync(migrations);
+    writeFileSync(join(migrations, "0001-base.sql"), "CREATE TABLE base (x INTEGER);\nPRAGMA user_version = 1;");
+    writeFileSync(join(migrations, "0002-add.sql"), "CREATE TABLE added (x INTEGER);\nPRAGMA user_version = 2;");
+    const path = join(dir, "awsf.db");
+    // The database starts at user_version 1: only the first migration exists yet.
+    const first = join(dir, "first");
+    mkdirSync(first);
+    writeFileSync(join(first, "0001-base.sql"), readFileSync(join(migrations, "0001-base.sql"), "utf8"));
+    openDatabase(path, { migrationsDir: first }).close();
+
+    const stale = new DatabaseSync(path);
+    let raced = false;
+    const racing = new Proxy(stale, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop, target) as unknown;
+        if (prop === "exec") {
+          return (sql: string) => {
+            if (sql === "BEGIN IMMEDIATE" && !raced) {
+              raced = true;
+              openDatabase(path, { migrationsDir: migrations }).close();
+            }
+            return target.exec(sql);
+          };
+        }
+        return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+      },
+    });
+    try {
+      runMigrations(racing as unknown as DatabaseSync, migrations);
+      assert.equal(raced, true, "the other connection must have run between the read and the lock");
+      assert.equal((stale.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 2);
+    } finally {
+      stale.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// B4-37: a checkpoint held back by a reader used to be swallowed, so a rebuild
+// could rename a file whose committed pages still sat in its -wal.
+test("closeDatabase reports a WAL checkpoint that a reader held back", () => {
+  const dir = tempDir();
+  try {
+    const path = join(dir, "awsf.db");
+    const writer = openDatabase(path);
+    writer.exec("CREATE TABLE t (x INTEGER)");
+    const reader = new DatabaseSync(path);
+    try {
+      reader.exec("BEGIN");
+      reader.prepare("SELECT count(*) AS n FROM t").get();
+      writer.exec("INSERT INTO t VALUES (1)");
+      const held = closeDatabase(writer);
+      assert.equal(held.checkpointed, false);
+      assert.notEqual(held.detail, null);
+    } finally {
+      reader.exec("COMMIT");
+      reader.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("closeDatabase reports a complete checkpoint when no reader holds the WAL", () => {
+  const dir = tempDir();
+  try {
+    const db = openDatabase(join(dir, "awsf.db"));
+    db.exec("CREATE TABLE t (x INTEGER)");
+    db.exec("INSERT INTO t VALUES (1)");
+    assert.deepEqual(closeDatabase(db), { checkpointed: true, detail: null });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

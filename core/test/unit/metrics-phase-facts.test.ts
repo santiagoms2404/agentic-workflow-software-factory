@@ -1,5 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import { readPhaseFacts, type PhaseFacts } from "../../src/metrics/phase-facts.ts";
 import { OPUS_HIGH, SyntheticAttempt, phase, session, usage } from "./_metrics-journal.ts";
@@ -157,5 +160,45 @@ test("only agent phases are facts, and a row projected before migration 0007 rea
     assert.equal(facts[0]!.identity.requestedModel, null);
   } finally {
     db.close();
+  }
+});
+
+// B4-23: a readonly reader never migrates, so a file last written by a build
+// before migration 0007 has no route columns on `phases`. Those phases read
+// with the route unresolved (null), as the module documents, instead of failing.
+test("a database that predates migration 0007 still reads its phases, with the route unresolved", () => {
+  const dir = mkdtempSync(join(tmpdir(), "awsf-phase-facts-b4-23-"));
+  try {
+    const migrations = join(dir, "migrations");
+    mkdirSync(migrations);
+    for (const name of readdirSync(resolve("core/src/observability/migrations"))) {
+      if (Number(name.slice(0, 4)) > 6) continue;
+      writeFileSync(join(migrations, name), readFileSync(resolve("core/src/observability/migrations", name), "utf8"));
+    }
+    const path = join(dir, "awsf.db");
+    const writer = openDatabase(path, { migrationsDir: migrations });
+    try {
+      writer.prepare(`INSERT INTO sessions (session_id, project_slug, task_id, attempt, workflow_id, risk_tier,
+          is_protected, lifecycle_state, request_text, call_ceiling, started_at, updated_at, config_snapshot_json, journal_path)
+        VALUES ('s1', 'awsf', 't1', 1, 'wf', 0, 0, 'LANDED', 'req', 5,
+          '2026-09-26T10:00:00.000Z', '2026-09-26T10:05:00.000Z', '{}', '/unused/journal.jsonl')`).run();
+      writer.prepare(`INSERT INTO phases (phase_id, session_id, ordinal, phase_key, name, kind, owner, description,
+          status, correction_count, max_corrections, started_at, ended_at, created_at)
+        VALUES ('p1', 's1', 1, 'build', 'build', 'agent', 'builder', 'd', 'SUCCEEDED', 0, 1,
+          '2026-09-26T10:00:00.000Z', '2026-09-26T10:01:00.000Z', '2026-09-26T10:00:00.000Z')`).run();
+    } finally {
+      writer.close();
+    }
+    const reader = openDatabase(path, { readonly: true });
+    try {
+      const facts = readPhaseFacts(reader);
+      assert.equal(facts.length, 1);
+      assert.equal(facts[0]!.route.adapterId, null);
+      assert.equal(facts[0]!.route.effortSource, null);
+    } finally {
+      reader.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

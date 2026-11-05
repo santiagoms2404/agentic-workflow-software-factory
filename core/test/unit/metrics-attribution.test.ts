@@ -12,7 +12,7 @@ import {
 } from "../../src/metrics/attribution.ts";
 
 function phase(key: string, ordinal: number, kind: string, owner: string, status = "SUCCEEDED", errorCode: string | null = null): RunPhase {
-  return { key, ordinal, kind, owner, status, errorCode };
+  return { key, ordinal, kind, owner, status, errorCode, startedAt: "2026-09-26T10:00:00.000Z" };
 }
 
 function blocked(phases: readonly RunPhase[], reasonCode: string | null = "phase-abort"): AttributionRun {

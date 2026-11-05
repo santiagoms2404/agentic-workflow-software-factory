@@ -1,7 +1,7 @@
 // One fact record per agent phase, read from the projection. Read-only SQL on
 // a caller's connection: this module imports the `DatabaseSync` type from the
-// observability driver and never `node:sqlite`, so it cannot write
-// (invariant 6, `sqlite-write-fence.test.ts`).
+// observability driver and issues only SELECTs. `sqlite-write-fence.test.ts`
+// flags any write statement added here (invariant 6).
 //
 // Tokens are the sum of the phase's `usage` events. `agent_sessions` token
 // columns are never read here: the projector replaces them on every call, so
@@ -178,11 +178,25 @@ function emptyByClass(): Record<ToolClass, number> {
   return Object.fromEntries(TOOL_CLASSES.map((name) => [name, 0])) as Record<ToolClass, number>;
 }
 
+const PHASE_ROUTE_COLUMNS = ["route_adapter", "route_provider", "route_model", "route_effort", "effort_source"] as const;
+
+/**
+ * The five migration-0007 route columns, read as NULL when the file predates
+ * them. A readonly connection never migrates, so a database last written by an
+ * older build keeps its phases without these columns until a rebuild (B4-23).
+ * NULL is the documented meaning of an unresolved route, so the rows still read.
+ */
+function phaseRouteSelect(db: DatabaseSync): string {
+  const present = new Set((db.prepare("PRAGMA table_info(phases)").all() as Array<{ name: string }>)
+    .map((column) => column.name));
+  return PHASE_ROUTE_COLUMNS.map((name) => (present.has(name) ? `p.${name}` : `NULL AS ${name}`)).join(", ");
+}
+
 /** Reads one `PhaseFacts` per agent phase, sessions in start order and phases in ordinal order. */
 export function readPhaseFacts(db: DatabaseSync): PhaseFacts[] {
   const phases = db.prepare(`SELECT p.phase_id, p.session_id, p.ordinal, p.phase_key, p.owner, p.status,
       p.correction_count, p.max_corrections, p.error_code, p.started_at, p.ended_at,
-      p.route_adapter, p.route_provider, p.route_model, p.route_effort, p.effort_source,
+      ${phaseRouteSelect(db)},
       s.project_slug, s.task_id, s.attempt, s.workflow_id, s.observability_degraded, s.config_snapshot_json
     FROM phases p JOIN sessions s ON s.session_id = p.session_id
     WHERE p.kind = 'agent'

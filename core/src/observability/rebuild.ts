@@ -20,7 +20,7 @@ import type { JournalRecord } from "../persistence/journal.ts";
 import { scanJournal } from "../persistence/replay.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { TaskState } from "../state/task-machine.ts";
-import { closeDatabase, integrityProblems, openDatabase, type DatabaseSync } from "./sqlite.ts";
+import { closeDatabase, integrityProblems, openDatabase, type CloseOutcome, type DatabaseSync } from "./sqlite.ts";
 import type { AttributionRecord } from "../contracts/attribution-record.ts";
 import type { DecisionRecord } from "../contracts/decision-record.ts";
 import {
@@ -174,6 +174,100 @@ export type RebuildReport = RebuildSucceeded | RebuildRefused;
 function order(primaryA: string, primaryB: string, tieA: string, tieB: string): number {
   if (primaryA !== primaryB) return primaryA < primaryB ? -1 : 1;
   return tieA < tieB ? -1 : tieA > tieB ? 1 : 0;
+}
+
+/** One thing the rebuild replays: a journal record of one attempt, or a task-level decision. */
+type ReplayItem =
+  | { kind: "record"; source: RebuildSource; sessionId: string; record: JournalRecord<unknown> }
+  | { kind: "decision"; record: DecisionRecord };
+
+function replayTime(item: ReplayItem): string {
+  return item.kind === "record" ? item.record.recorded_at : item.record.at;
+}
+
+function replayKey(item: ReplayItem): string {
+  return item.kind === "record"
+    ? `${item.sessionId}:${item.record.source_seq}`
+    : `decision:${item.record.project}:${item.record.taskId}:${item.record.id}`;
+}
+
+function replayPrecedes(a: ReplayItem, b: ReplayItem): boolean {
+  return order(replayTime(a), replayTime(b), replayKey(a), replayKey(b)) < 0;
+}
+
+/**
+ * Interleaves sorted streams into one sequence by always taking the earliest
+ * next item across the streams' heads. Each stream keeps its own order, so a
+ * same-millisecond tie or a backward clock step inside one journal cannot
+ * reorder that journal (B4-34). A binary heap keeps the merge at O(n log k).
+ */
+function mergeStreams<T>(streams: readonly (readonly T[])[], precedes: (a: T, b: T) => boolean): T[] {
+  const next = streams.map(() => 0);
+  const heap: number[] = [];
+  const head = (stream: number): T => streams[stream]![next[stream]!]!;
+  const before = (i: number, j: number): boolean => precedes(head(heap[i]!), head(heap[j]!));
+  const swap = (i: number, j: number): void => {
+    const held = heap[i]!;
+    heap[i] = heap[j]!;
+    heap[j] = held;
+  };
+  const siftUp = (start: number): void => {
+    let at = start;
+    while (at > 0) {
+      const parent = (at - 1) >> 1;
+      if (!before(at, parent)) return;
+      swap(at, parent);
+      at = parent;
+    }
+  };
+  const siftDown = (start: number): void => {
+    let at = start;
+    for (;;) {
+      const left = 2 * at + 1;
+      const right = left + 1;
+      let least = at;
+      if (left < heap.length && before(left, least)) least = left;
+      if (right < heap.length && before(right, least)) least = right;
+      if (least === at) return;
+      swap(at, least);
+      at = least;
+    }
+  };
+  streams.forEach((items, stream) => {
+    if (items.length === 0) return;
+    heap.push(stream);
+    siftUp(heap.length - 1);
+  });
+  const out: T[] = [];
+  while (heap.length > 0) {
+    const stream = heap[0]!;
+    out.push(head(stream));
+    next[stream] = (next[stream] ?? 0) + 1;
+    if (next[stream]! < streams[stream]!.length) {
+      siftDown(0);
+    } else {
+      heap[0] = heap[heap.length - 1]!;
+      heap.pop();
+      if (heap.length > 0) siftDown(0);
+    }
+  }
+  return out;
+}
+
+/**
+ * Each task's decisions as one stream, in file order (B4-33). A decision's
+ * `at` places it in the replay, so it sees the attempts that existed when it
+ * was recorded, exactly as the live projection did.
+ */
+function decisionStreams(decisions: readonly DecisionRecord[]): ReplayItem[][] {
+  const byTask = new Map<string, ReplayItem[]>();
+  for (const record of decisions) {
+    const key = `${record.project}\u0000${record.taskId}`;
+    const stream = byTask.get(key) ?? [];
+    stream.push({ kind: "decision", record });
+    byTask.set(key, stream);
+  }
+  return [...byTask.values()];
 }
 
 function defaultStamp(): string {
@@ -345,13 +439,15 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
   // reproduces the insertion order the live database saw, which is what
   // makes "every query view byte-identical" true and not just nearly true.
   loaded.sort((a, b) => order(a.source.session.startedAt, b.source.session.startedAt, a.source.session.sessionId, b.source.session.sessionId));
-  const merged = loaded
-    .flatMap(({ source, records: journalRecords }) =>
-      journalRecords.map((record) => ({ source, sessionId: source.session.sessionId, record })),
-    )
-    .sort((a, b) =>
-      order(a.record.recorded_at, b.record.recorded_at, `${a.sessionId}:${a.record.source_seq}`, `${b.sessionId}:${b.record.source_seq}`),
-    );
+  // Each journal keeps its own source_seq order; the merge only decides how the
+  // journals and the task-level decisions interleave, by recorded_at (B4-34, B4-33).
+  const streams: ReplayItem[][] = [
+    ...loaded.map(({ source, records: journalRecords }) =>
+      journalRecords.map((record): ReplayItem => ({ kind: "record", source, sessionId: source.session.sessionId, record })),
+    ),
+    ...decisionStreams(options.decisions ?? []),
+  ];
+  const merged = mergeStreams(streams, replayPrecedes);
 
   const db = openDatabase(
     candidatePath,
@@ -359,11 +455,24 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
   );
   let projected = 0;
   let records = 0;
+  let closed: CloseOutcome;
   try {
     for (const { source } of loaded) {
       if (source.attemptStatus === undefined) createSession(db, source.session);
     }
-    for (const { source, sessionId, record } of merged) {
+    for (const item of merged) {
+      if (item.kind === "decision") {
+        try {
+          projectDecision(db, item.record);
+        } catch (error) {
+          return refuse(
+            `projection failed replaying decision ${item.record.id} of ${item.record.project}/${item.record.taskId}: ` +
+              `${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        continue;
+      }
+      const { source, sessionId, record } = item;
       records += 1;
       const outcome = source.attemptStatus === undefined
         ? (() => {
@@ -398,16 +507,6 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
         );
       }
     }
-    for (const record of options.decisions ?? []) {
-      try {
-        projectDecision(db, record);
-      } catch (error) {
-        return refuse(
-          `projection failed replaying decision ${record.id} of ${record.project}/${record.taskId}: ` +
-            `${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
 
     const problems = integrityProblems(db);
     if (problems.length > 0) {
@@ -427,7 +526,15 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
       }
     }
   } finally {
-    closeDatabase(db);
+    closed = closeDatabase(db);
+  }
+  // A checkpoint that did not finish leaves committed pages in the candidate's
+  // -wal, which the swap would silently drop (B4-37). The candidate stays on disk.
+  if (!closed.checkpointed) {
+    return refuse(
+      `the rebuilt candidate's WAL did not checkpoint into its file (${closed.detail ?? "unknown"}), ` +
+        "so swapping it in would drop committed pages",
+    );
   }
 
   let retainedPath: string | null;

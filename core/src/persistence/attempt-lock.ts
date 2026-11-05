@@ -92,19 +92,25 @@ export async function reclaimLock(lockPath: string, expected: LockHolder | null)
 }
 
 /**
+ * The in-process queue of each lock path. Production builds a new `AttemptLock`
+ * per write, so the queue has to outlive any one instance: two instances for
+ * one attempt in one process queue here instead of racing for the file (B4-38).
+ */
+const processQueues = new Map<string, Promise<void>>();
+
+/**
  * The attempt's exclusive lock.
  *
- * Two layers: an in-process queue, so two writers in the SAME process (the
- * shape the 500-concurrent-writes proof exercises) never interleave their
- * critical sections; and a `wx`-created lock file on disk, so a second
- * PROCESS holding the same attempt directory fails loudly instead of
- * corrupting it. Sealing is checked before every acquisition — including
- * ones already queued when `seal` runs — so nothing queued behind a seal
- * sneaks a write through.
+ * Two layers: an in-process queue, shared by every instance for the same lock
+ * path, so two writers in the SAME process (the shape the 500-concurrent-writes
+ * proof exercises) never interleave their critical sections; and a
+ * link-created lock file on disk, so a second PROCESS holding the same attempt
+ * directory fails loudly instead of corrupting it. Sealing is checked before
+ * every acquisition — including ones already queued when `seal` runs — so
+ * nothing queued behind a seal sneaks a write through.
  */
 export class AttemptLock {
   private readonly lockPath: string;
-  private queue: Promise<void> = Promise.resolve();
   private sealedState: string | null = null;
 
   constructor(lockPath: string) {
@@ -125,11 +131,13 @@ export class AttemptLock {
       throw new SealedAttempt(this.sealedState);
     }
 
-    const previous = this.queue;
+    const key = this.lockPath;
+    const previous = processQueues.get(key) ?? Promise.resolve();
     let release = (): void => {};
-    this.queue = new Promise<void>((resolve) => {
+    const tail = new Promise<void>((resolve) => {
       release = resolve;
     });
+    processQueues.set(key, tail);
 
     try {
       await previous;
@@ -146,13 +154,26 @@ export class AttemptLock {
       } finally {
         await unlink(tmpPath).catch(() => {});
       }
+      let outcome: { ok: true; value: T } | { ok: false; error: unknown };
       try {
-        return await fn();
-      } finally {
-        await unlink(this.lockPath);
+        outcome = { ok: true, value: await fn() };
+      } catch (error) {
+        outcome = { ok: false, error };
       }
+      // Releasing the file must not replace the callback's own failure (B4-30):
+      // when the callback threw, its error is the one the caller needs, even if
+      // the lock file has already gone. A release that fails after a clean
+      // callback is still reported.
+      try {
+        await unlink(this.lockPath);
+      } catch (error) {
+        if (outcome.ok) throw error;
+      }
+      if (!outcome.ok) throw outcome.error;
+      return outcome.value;
     } finally {
       release();
+      if (processQueues.get(key) === tail) processQueues.delete(key);
     }
   }
 }

@@ -55,22 +55,80 @@ interface MigrationFile {
 
 const MIGRATION_FILENAME = /^(\d{4})-.+\.sql$/;
 
-function loadMigrations(migrationsDir: string): MigrationFile[] {
-  let entries: string[];
-  try {
-    entries = readdirSync(migrationsDir);
-  } catch {
-    return [];
+/** A migration set the runner cannot apply in a defined order (B4-27). */
+export class InvalidMigrationSet extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidMigrationSet";
   }
-  return entries
-    .map((name) => ({ name, match: MIGRATION_FILENAME.exec(name) }))
-    .filter((e): e is { name: string; match: RegExpExecArray } => e.match !== null)
-    .map(({ name, match }) => {
-      const path = join(migrationsDir, name);
-      const version = Number.parseInt(match[1] ?? "0", 10);
-      return { version, path, sql: readFileSync(path, "utf8") };
-    })
-    .sort((a, b) => a.version - b.version);
+}
+
+/**
+ * Every `.sql` file in the directory, ordered by version. A missing or
+ * unreadable directory throws with its real errno: an empty list would open a
+ * fresh database at user_version 0 with no tables (B4-28). A `.sql` name that
+ * does not match `NNNN-name.sql` is refused rather than dropped, and two files
+ * sharing a version are refused rather than applied in readdir order (B4-27).
+ */
+function loadMigrations(migrationsDir: string): MigrationFile[] {
+  const files: MigrationFile[] = [];
+  const seen = new Map<number, string>();
+  for (const name of readdirSync(migrationsDir).sort()) {
+    if (!name.endsWith(".sql")) continue;
+    const match = MIGRATION_FILENAME.exec(name);
+    if (match === null) {
+      throw new InvalidMigrationSet(`${name}: a migration file must be named NNNN-<name>.sql`);
+    }
+    const version = Number.parseInt(match[1] ?? "0", 10);
+    const earlier = seen.get(version);
+    if (earlier !== undefined) {
+      throw new InvalidMigrationSet(`${name} and ${earlier} both claim migration version ${version}`);
+    }
+    seen.set(version, name);
+    const path = join(migrationsDir, name);
+    files.push({ version, path, sql: readFileSync(path, "utf8") });
+  }
+  return files.sort((a, b) => a.version - b.version);
+}
+
+/**
+ * Rolls back the open transaction after a failed write. SQLite can roll a
+ * transaction back on its own (a full disk does), and then an explicit ROLLBACK
+ * throws "no transaction is active", which replaced the cause the caller was
+ * about to rethrow (B4-26). A connection that reports no open transaction is
+ * left alone; otherwise a ROLLBACK that fails is ignored, because the caller
+ * rethrows its own error, which is the one that matters.
+ */
+export function rollbackAfterFailure(db: DatabaseSync): void {
+  if (db.isTransaction === false) return;
+  try {
+    db.exec("ROLLBACK");
+  } catch {
+    // SQLite already rolled the transaction back; the caller's error is the cause.
+  }
+}
+
+/**
+ * The statement's code after any leading comments and whitespace. A PRAGMA
+ * behind a comment is still a PRAGMA: the splitter keeps the comment in the
+ * chunk, so an anchored test on the raw chunk misclassified it (B4-29).
+ */
+function leadingCodeOf(statement: string): string {
+  let rest = statement;
+  for (;;) {
+    rest = rest.trimStart();
+    if (rest.startsWith("--")) {
+      const newline = rest.indexOf("\n");
+      if (newline === -1) return "";
+      rest = rest.slice(newline + 1);
+    } else if (rest.startsWith("/*")) {
+      const close = rest.indexOf("*/", 2);
+      if (close === -1) return "";
+      rest = rest.slice(close + 2);
+    } else {
+      return rest;
+    }
+  }
 }
 
 /**
@@ -199,9 +257,9 @@ export function runMigrations(db: DatabaseSync, migrationsDir: string = DEFAULT_
 
   for (const migration of migrations.filter((m) => m.version > currentVersion)) {
     const statements = splitStatements(migration.sql);
-    const preamble = statements.filter((s) => TRANSACTION_UNSAFE_PRAGMA.test(s));
-    const transactional = statements.filter((s) => !TRANSACTION_UNSAFE_PRAGMA.test(s));
-    const changesForeignKeys = preamble.some((s) => FOREIGN_KEYS_PRAGMA.test(s));
+    const preamble = statements.filter((s) => TRANSACTION_UNSAFE_PRAGMA.test(leadingCodeOf(s)));
+    const transactional = statements.filter((s) => !TRANSACTION_UNSAFE_PRAGMA.test(leadingCodeOf(s)));
+    const changesForeignKeys = preamble.some((s) => FOREIGN_KEYS_PRAGMA.test(leadingCodeOf(s)));
     const previousForeignKeys = changesForeignKeys
       ? (db.prepare("PRAGMA foreign_keys").get() as { foreign_keys: number }).foreign_keys
       : null;
@@ -211,10 +269,15 @@ export function runMigrations(db: DatabaseSync, migrationsDir: string = DEFAULT_
 
       db.exec("BEGIN IMMEDIATE");
       try {
-        for (const stmt of transactional) db.exec(stmt);
+        // The pending list above was read before this connection took the write
+        // lock. Another writer may have applied this migration in the gap, so the
+        // decision is made again under the lock (B4-36).
+        if (getUserVersion(db) < migration.version) {
+          for (const stmt of transactional) db.exec(stmt);
+        }
         db.exec("COMMIT");
       } catch (err) {
-        db.exec("ROLLBACK");
+        rollbackAfterFailure(db);
         throw err;
       }
     } finally {
@@ -272,23 +335,38 @@ export function integrityProblems(db: DatabaseSync): string[] {
   }
 }
 
+/** What closing a connection achieved for its WAL. */
+export interface CloseOutcome {
+  /** `false` when committed pages may still sit in the `-wal` beside the file. */
+  readonly checkpointed: boolean;
+  /** Why the checkpoint did not complete, or `null` when it did. */
+  readonly detail: string | null;
+}
+
 /**
- * Checkpoints the WAL back into the main file, then closes.
+ * Checkpoints the WAL back into the main file, then closes, and says whether
+ * the checkpoint completed.
  *
  * A rebuild's freshly written candidate is swapped in as ONE file; anything
  * still sitting in its `-wal` at rename time would be silently dropped. This
  * is the only correct way to finish writing a database that is about to be
- * moved.
+ * moved, so a rebuild must refuse the swap when `checkpointed` is false
+ * (B4-37). The connection is closed either way.
  */
-export function closeDatabase(db: DatabaseSync): void {
+export function closeDatabase(db: DatabaseSync): CloseOutcome {
+  let outcome: CloseOutcome;
   try {
-    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-  } catch {
-    // A database too corrupt to checkpoint is one we are discarding anyway;
-    // closing it is still correct, and the caller already has the integrity
-    // report that decided its fate.
+    const row = db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get() as { busy: number | bigint };
+    outcome = Number(row.busy) === 0
+      ? { checkpointed: true, detail: null }
+      : { checkpointed: false, detail: "a reader still holds the WAL, so the checkpoint could not finish" };
+  } catch (err) {
+    // A database too corrupt to checkpoint is reported, not hidden: the rebuild
+    // treats it as a candidate it cannot swap in.
+    outcome = { checkpointed: false, detail: err instanceof Error ? err.message : String(err) };
   }
   db.close();
+  return outcome;
 }
 
 /**
