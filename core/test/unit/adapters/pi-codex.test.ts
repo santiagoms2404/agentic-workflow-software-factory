@@ -1147,7 +1147,7 @@ test("the terminal survives a stream that breaks AFTER the provider settled", as
   } as unknown as ProcessTransport;
 
   const events: NormalizedEvent[] = [];
-  for await (const event of adapter().parse(transport)) events.push(event);
+  for await (const event of adapter().parse(transport, undefined, { requestedModel: "gpt-5.6-sol" })) events.push(event);
   assert.equal(events[events.length - 1]?.kind, "run.completed");
   assert.deepEqual(validateEventSequence(events), []);
 });

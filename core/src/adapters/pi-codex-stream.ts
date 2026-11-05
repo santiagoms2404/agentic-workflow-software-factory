@@ -75,15 +75,16 @@ interface PiAssistantMessageEvent {
   type?: string;
   delta?: unknown;
   toolCall?: { id?: string; name?: string; arguments?: unknown };
-  error?: PiMessage;
+  /** Nullable: a JSON `null` is read as absent, never dereferenced (B11-14, B11-15). */
+  error?: PiMessage | null;
 }
 
 interface PiLine {
   type?: string;
   /** `session` header only: the run's session id. */
   id?: string;
-  message?: PiMessage;
-  assistantMessageEvent?: PiAssistantMessageEvent;
+  message?: PiMessage | null;
+  assistantMessageEvent?: PiAssistantMessageEvent | null;
   toolCallId?: string;
   toolName?: string;
   args?: unknown;
@@ -305,7 +306,7 @@ export class PiStreamDecoder {
    */
   #messageStart(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const message = line.message;
-    if (message === undefined || message.role !== "assistant") return [];
+    if (message === undefined || message === null || message.role !== "assistant") return [];
     const resolved =
       typeof message.responseModel === "string" && message.responseModel.length > 0
         ? message.responseModel
@@ -365,7 +366,7 @@ export class PiStreamDecoder {
    */
   #messageUpdate(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const event = line.assistantMessageEvent;
-    if (event === undefined) return [];
+    if (event === undefined || event === null) return [];
     switch (event.type) {
       case "text_delta":
         return typeof event.delta === "string" ? sequencer.text("text.delta", event.delta) : [];
@@ -482,7 +483,7 @@ export class PiStreamDecoder {
    */
   #turnEnd(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const message = line.message;
-    if (message === undefined || message.role !== "assistant") return [];
+    if (message === undefined || message === null || message.role !== "assistant") return [];
     this.#noteStop(message);
     const at = providerAt(message);
     const usage = message.usage;
@@ -501,8 +502,8 @@ export class PiStreamDecoder {
     this.#session.costUsd = (this.#session.costUsd ?? 0) + total;
   }
 
-  #noteStop(message: PiMessage | undefined): void {
-    if (message === undefined || message.role !== "assistant") return;
+  #noteStop(message: PiMessage | null | undefined): void {
+    if (message === undefined || message === null || message.role !== "assistant") return;
     if (typeof message.stopReason === "string" && message.stopReason.length > 0) {
       this.#stopReason = message.stopReason;
     }
@@ -704,4 +705,8 @@ const QUOTA_SHAPED =
   /\b(?:usage limit|quota|insufficient_quota|out of budget|billing)\b|\b(?:usage|plan|subscription|account) limit reached\b|available balance|UsageLimitError/i;
 
 /** `Try again in ~37 min.` — pi's rendering of the provider's `resets_at`. */
-const RESET_IN_MINUTES = /try again in\s*~?\s*(\d{1,6})\s*min/i;
+// The optional `~` is a literal between the two whitespace runs, so no run of
+// spaces can be split between two quantifiers. The earlier pattern had two
+// adjacent `\s*` with nothing fixed between them, which backtracked quadratically
+// on a long run of spaces (B11-16).
+const RESET_IN_MINUTES = /try again in\s*(?:~\s*)?(\d{1,6})\s*min/i;

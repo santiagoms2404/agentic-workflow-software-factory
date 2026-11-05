@@ -124,14 +124,43 @@ test("frameLines is the whole-string entry point and agrees with the incremental
   assert.deepEqual(drain(new LineFramer(), inChunks(stream, 2)), [...frameLines(stream)]);
 });
 
-test("the framer bounds nothing — it takes no budget and refuses no line", () => {
+test("the framer takes no budget, and a line under its ceiling is held whole", () => {
   // Framing reads PAST the output budget on purpose, so a run that overruns it
   // can still observe its own terminal. A framer that could be constructed with
-  // a limit would be a framer somebody could later teach to stop early.
+  // a limit would be a framer somebody could later teach to stop early. The one
+  // ceiling it has is on a single line's size (B11-20), and it is not an option.
   assert.equal(LineFramer.length, 0, "LineFramer's constructor takes no options");
 
   const lines = drain(new LineFramer(), [`${"x".repeat(200_000)}\n`, "terminal\n"]);
   assert.equal(lines.length, 2);
   assert.equal(lines[0]?.length, 200_000);
   assert.equal(lines[1], "terminal", "the terminal line is still readable behind an enormous one");
+});
+
+// B11-20: an unterminated line is held to a ceiling. Past it, the line is cut to
+// its head rather than grown until V8 refuses the string, and the next line
+// still frames.
+test("B11-20: an unterminated line stops growing at the ceiling, and the line behind it still frames", () => {
+  const attempted = 40_000_000;
+  const lines = drain(new LineFramer(), [`${"x".repeat(attempted)}\n`, "terminal\n"]);
+  assert.equal(lines.length, 2);
+  assert.ok((lines[0]?.length ?? attempted) < attempted, `the held line is bounded, at ${String(lines[0]?.length)} units`);
+  assert.equal(lines[1], "terminal", "the line after an overlong one is read whole");
+});
+
+test("B11-20: an overlong line that ends at EOF is released bounded too", () => {
+  const framer = new LineFramer();
+  const pushed = framer.push("y".repeat(40_000_000));
+  assert.deepEqual(pushed, []);
+  const released = framer.flush();
+  assert.equal(released.length, 1);
+  assert.ok((released[0]?.length ?? 40_000_000) < 40_000_000, "the tail is bounded at EOF as well");
+});
+
+test("B11-20: triangulation: many short lines each frame whole across chunk boundaries", () => {
+  const stream = Array.from({ length: 50 }, (_, index) => `{"n":${String(index)}}`).join("\n") + "\n";
+  const lines = drain(new LineFramer(), inChunks(stream, 7));
+  assert.equal(lines.length, 50, "a trailing newline closes the last line rather than opening an empty one");
+  assert.equal(lines[0], '{"n":0}');
+  assert.equal(lines[49], '{"n":49}');
 });

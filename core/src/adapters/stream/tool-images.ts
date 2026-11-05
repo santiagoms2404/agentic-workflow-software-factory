@@ -25,21 +25,35 @@ interface ImageBlock {
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
+/**
+ * The payload of an image block, wherever the shape keeps it.
+ *
+ * One provider nests it under `source`, the other keeps it at the top level. The shape decides
+ * only where the payload is read from. It never decides whether the payload is
+ * hidden: a block that is an image and carries a payload is always an image to
+ * redact, even when its source names no media type (B11-25). A block with no
+ * payload at all has nothing to redact and is not an image here.
+ */
 function imageBlock(block: unknown): ImageBlock | null {
   if (block === null || typeof block !== "object") return null;
   const candidate = block as { type?: unknown; source?: unknown; mimeType?: unknown; data?: unknown };
   if (candidate.type !== "image") return null;
-  if (candidate.source !== null && typeof candidate.source === "object") {
-    const source = candidate.source as { type?: unknown; media_type?: unknown; data?: unknown };
-    if (source.type === "base64" && typeof source.media_type === "string" && typeof source.data === "string") {
-      return { mediaType: source.media_type, data: source.data };
-    }
-    return null;
-  }
-  if (typeof candidate.mimeType === "string" && typeof candidate.data === "string") {
-    return { mediaType: candidate.mimeType, data: candidate.data };
-  }
-  return null;
+  const source =
+    candidate.source !== null && typeof candidate.source === "object"
+      ? (candidate.source as { media_type?: unknown; data?: unknown })
+      : undefined;
+  const sourceData = source?.data;
+  const data =
+    typeof sourceData === "string" ? sourceData : typeof candidate.data === "string" ? candidate.data : null;
+  if (data === null) return null;
+  const sourceMediaType = source?.media_type;
+  const declared =
+    typeof sourceMediaType === "string"
+      ? sourceMediaType
+      : typeof candidate.mimeType === "string"
+        ? candidate.mimeType
+        : null;
+  return { mediaType: declared ?? "unknown", data };
 }
 
 function blocksOf(content: unknown): readonly unknown[] {

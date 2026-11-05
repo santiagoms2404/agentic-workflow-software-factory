@@ -67,3 +67,28 @@ test("model capability is honest: pi's text-only model reports no image input, C
   assert.equal((await pi.getModelInfo("codex:gpt-5.6-sol")).supportsImages, true);
   assert.equal((await new ClaudeCodeAdapter().getModelInfo("claude:opus")).supportsImages, true);
 });
+
+// B11-25: an image block is redacted whatever shape its payload arrives in. A
+// source that is an object but not a complete base64 source must not let the
+// payload through unredacted, and its digest is still measured.
+test("B11-25: an image block whose base64 source names no media type is redacted, not passed through", () => {
+  const payload = "iVBORw0KGgo=";
+  const block = { type: "image", source: { type: "base64", data: payload } };
+  const redacted = JSON.stringify(redactToolImages([block]));
+  assert.doesNotMatch(redacted, /iVBORw0KGgo/, "the payload does not survive redaction");
+  assert.equal(toolResultImages([block]).length, 1, "its digest is still recorded");
+});
+
+test("B11-25: an image block whose source is a URL but which carries its own payload is redacted too", () => {
+  const payload = "iVBORw0KGgo=";
+  const block = { type: "image", source: { type: "url", url: "https://example.invalid/x.png" }, mimeType: "image/png", data: payload };
+  assert.doesNotMatch(JSON.stringify(redactToolImages([block])), /iVBORw0KGgo/, "the payload does not survive redaction");
+});
+
+test("B11-25: triangulation: a complete base64 source keeps its declared media type in the digest", () => {
+  const images = toolResultImages([
+    { type: "image", source: { type: "base64", media_type: "image/png", data: "iVBORw0KGgo=" } },
+  ]);
+  assert.deepEqual(images.map((image) => image.mediaType), ["image/png"]);
+  assert.equal(images[0]?.bytes, 8);
+});

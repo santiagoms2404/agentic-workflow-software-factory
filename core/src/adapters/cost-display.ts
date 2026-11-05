@@ -30,7 +30,10 @@ export const UNREPORTED_COST_DISPLAY = "—";
 export function formatCost(costAuthority: ModelInfo["costAuthority"], usd: number | null): string {
   if (costAuthority === "unavailable") return SUBSCRIPTION_COST_DISPLAY;
   if (usd === null || !Number.isFinite(usd)) return UNREPORTED_COST_DISPLAY;
-  const amount = `$${usd.toFixed(2)}`;
+  // A measured spend under half a cent rounds to `$0.00` at two places, and a
+  // real charge must never read as free. It says it is below a cent instead
+  // (B11-13). An exact zero is a genuine zero and keeps its figure.
+  const amount = usd > 0 && usd < 0.005 ? "<$0.01" : `$${usd.toFixed(2)}`;
   // An estimate is marked as one. A catalog price is arithmetic on a rate card,
   // not something the provider confirmed it charged.
   return costAuthority === "catalog-estimate" ? `≈ ${amount}` : amount;

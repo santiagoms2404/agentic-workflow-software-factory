@@ -55,8 +55,11 @@ interface ClaudeLine {
   error?: unknown;
   api_error_status?: unknown;
   usage?: Record<string, unknown>;
-  message?: { model?: string; content?: readonly ClaudeContentBlock[] };
-  event?: { type?: string; delta?: ClaudeStreamDelta; usage?: Record<string, unknown> };
+  // Nested values are typed nullable where the decoder reads them: a line is
+  // parsed from untrusted bytes, and a JSON `null` is read as absent, never
+  // dereferenced (B11-10).
+  message?: { model?: string; content?: readonly (ClaudeContentBlock | null)[] } | null;
+  event?: { type?: string; delta?: ClaudeStreamDelta | null; usage?: Record<string, unknown> } | null;
   rate_limit_info?: { status?: string; resetsAt?: unknown; rateLimitType?: string };
 }
 
@@ -297,14 +300,14 @@ export class ClaudeStreamDecoder {
    */
   #streamEvent(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const event = line.event;
-    if (event === undefined) return [];
+    if (event === undefined || event === null) return [];
     if (event.type === "message_delta") {
       this.#accumulate(event.usage);
       return [];
     }
     if (event.type !== "content_block_delta") return [];
     const delta = event.delta;
-    if (delta === undefined) return [];
+    if (delta === undefined || delta === null) return [];
     if (delta.type === "text_delta" && typeof delta.text === "string") {
       return sequencer.text("text.delta", delta.text);
     }
@@ -349,7 +352,7 @@ export class ClaudeStreamDecoder {
       );
     }
     for (const block of line.message?.content ?? []) {
-      if (block.type !== "tool_use" || typeof block.id !== "string" || block.id.length === 0) continue;
+      if (block === null || block.type !== "tool_use" || typeof block.id !== "string" || block.id.length === 0) continue;
       if (this.#openTools.has(block.id)) continue;
       this.#openTools.add(block.id);
       this.#toolNames.set(block.id, typeof block.name === "string" ? block.name : "tool");
@@ -369,7 +372,7 @@ export class ClaudeStreamDecoder {
   #user(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const out: NormalizedEvent[] = [];
     for (const block of line.message?.content ?? []) {
-      if (block.type !== "tool_result") continue;
+      if (block === null || block.type !== "tool_result") continue;
       const id = block.tool_use_id;
       if (typeof id !== "string" || id.length === 0) continue;
       this.#openTools.delete(id);

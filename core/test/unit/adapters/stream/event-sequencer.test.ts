@@ -437,3 +437,39 @@ test("every event carries the run id it was sequenced for", () => {
 test("a sequencer without a run id is not constructible", () => {
   assert.throws(() => new EventSequencer({ runId: "" }), RangeError);
 });
+
+// B11-19: provider-supplied text on the terminal and notice paths is bounded
+// too. The output budget charges text deltas; a refusal's text must not be a
+// way round it.
+test("B11-19: a provider's error text is bounded on the terminal, and says it was cut", () => {
+  const sequencer = sequencerFor({ budget: new OutputBudget({ maxOutputBytes: 4096 }) });
+  opened(sequencer);
+  const events = sequencer.fail("E_BACKEND_FAILURE", "e".repeat(1_000_000));
+  const failed = events.find((event) => event.kind === "run.failed");
+  assert.equal(failed?.kind, "run.failed");
+  assert.ok(failed?.kind === "run.failed" && failed.message.length < 10_000, "the terminal text is bounded");
+  assert.ok(failed?.kind === "run.failed" && failed.message.endsWith("…"), "and the cut is visible");
+  assert.equal(events[events.length - 1]?.kind, "run.failed");
+});
+
+test("B11-19: a huge cancel reason, notice message and notice detail are bounded as well", () => {
+  const cancelled = sequencerFor();
+  opened(cancelled);
+  const cancel = cancelled.cancel("r".repeat(1_000_000)).find((event) => event.kind === "run.cancelled");
+  assert.ok(cancel?.kind === "run.cancelled" && cancel.reason.length < 10_000, "the cancel reason is bounded");
+
+  const noticed = sequencerFor();
+  opened(noticed);
+  const notice = noticed
+    .notice("unknown-provider-event", "m".repeat(1_000_000), "d".repeat(1_000_000))
+    .find((event) => event.kind === "notice");
+  assert.ok(notice?.kind === "notice" && notice.message.length < 10_000, "the notice message is bounded");
+  assert.ok(notice?.kind === "notice" && notice.detail !== null && notice.detail.length < 10_000, "the notice detail is bounded");
+});
+
+test("B11-19: triangulation: an ordinary error text reaches the terminal unchanged", () => {
+  const sequencer = sequencerFor();
+  opened(sequencer);
+  const failed = sequencer.fail("E_BACKEND_FAILURE", "the provider refused the request").find((event) => event.kind === "run.failed");
+  assert.equal(failed?.kind === "run.failed" && failed.message, "the provider refused the request");
+});

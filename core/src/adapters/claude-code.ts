@@ -299,7 +299,11 @@ export function assertSameSession(first: ClaudeSessionRecord, next: ClaudeSessio
 }
 
 export interface ClaudeParseOptions {
-  /** What the host ASKED for. The stream says what answered; the two are different facts. */
+  /**
+   * What the host ASKED for. The stream says what answered; the two are different
+   * facts. Required: `parse` refuses a stream it was not told the request of,
+   * rather than journal a placeholder as the model the host asked for (B11-12).
+   */
   requestedModel?: string;
   /** Filled in as the stream names the session and the model. */
   session?: ClaudeSessionRecord;
@@ -474,12 +478,6 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     };
   }
 
-  /**
-   * Describe, hand to the broker, parse. The adapter never starts anything
-   * itself — and it never starts anything TWICE. There is no retry here, which
-   * is what makes "quota is never a retry" structural rather than a policy
-   * somebody has to remember: a run that ends `E_QUOTA_EXHAUSTED` ends, and the
-   * decision about what happens next belongs to a layer that can see the budget.   */
   /** Delegates to the module-level function so adapter tests and the runner share one rule. */
   assertSameSession(first: ObservedProviderSession, next: ObservedProviderSession): void {
     assertSameSession(
@@ -488,6 +486,13 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     );
   }
 
+  /**
+   * Describe, hand to the broker, parse. The adapter never starts anything
+   * itself — and it never starts anything TWICE. There is no retry here, which
+   * is what makes "quota is never a retry" structural rather than a policy
+   * somebody has to remember: a run that ends `E_QUOTA_EXHAUSTED` ends, and the
+   * decision about what happens next belongs to a layer that can see the budget.
+   */
   async *execute(
     request: ModelRequest,
     broker: TransportBroker,
@@ -552,6 +557,18 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     signal?: AbortSignal,
     options: ClaudeParseOptions = {},
   ): AsyncIterable<NormalizedEvent> {
+    // Refused before a byte is read. Every production caller passes the selector
+    // it launched with; a stream read without one has no request to check its
+    // identity against, and a placeholder would be journaled as the model asked
+    // for. The refusal matches how the descriptor refuses a selector it cannot
+    // honour (B11-12).
+    if (options.requestedModel === undefined) {
+      throw new AdapterError(
+        this.id,
+        "E_INVALID_REQUEST",
+        "parse was given no requested model; a stream is read against the model the host asked for",
+      );
+    }
     const framer = new LineFramer();
     const sequencer = new EventSequencer({
       runId: transport.runId,
@@ -561,7 +578,7 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     const decoder = new ClaudeStreamDecoder({
       adapter: this.id,
       provider: CLAUDE_PROVIDER,
-      requestedModel: options.requestedModel ?? "unknown-model",
+      requestedModel: options.requestedModel,
       ...(options.session === undefined ? {} : { session: options.session }),
       ...(options.images === undefined ? {} : { images: options.images }),
     });

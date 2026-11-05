@@ -352,6 +352,10 @@ function readPiSessionFile(path: string, expectedId: string): PiSessionFileFacts
       // be stricter about the file than the tool that writes it.
       continue;
     }
+    // A line that parses to a non-object (`null`, a bare number or string) is
+    // malformed for this purpose too. Reading a property off it throws, and the
+    // throw escapes a function whose contract is a named refusal (B11-17, B11-18).
+    if (entry === null || typeof entry !== "object") continue;
     if (header === null) {
       if (entry.type !== "session" || typeof entry.id !== "string") return null;
       if (entry.id !== expectedId) return null;
@@ -744,6 +748,16 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
     signal?: AbortSignal,
     options: PiParseOptions = {},
   ): AsyncIterable<NormalizedEvent> {
+    // Refused before a byte is read, for the same reason the sibling route refuses it:
+    // a stream with no request to check its identity against is not read, and
+    // the placeholder is never journaled as the model asked for (B11-12).
+    if (options.requestedModel === undefined) {
+      throw new AdapterError(
+        this.id,
+        "E_INVALID_REQUEST",
+        "parse was given no requested model; a stream is read against the model the host asked for",
+      );
+    }
     const framer = new LineFramer();
     const sequencer = new EventSequencer({
       runId: transport.runId,
@@ -753,7 +767,7 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
     const decoder = new PiStreamDecoder({
       adapter: this.id,
       provider: PI_PROVIDER,
-      requestedModel: options.requestedModel ?? "unknown-model",
+      requestedModel: options.requestedModel,
       now: this.#now,
       ...(options.session === undefined ? {} : { session: options.session }),
       ...(options.images === undefined ? {} : { images: options.images }),

@@ -338,14 +338,15 @@ test("framing reads PAST the output budget, so the terminal is still observable"
       '{"type":"started","script":"success"}\n',
       '{"type":"model","model":"stub-model-1"}\n',
       ...chatter,
-      '{"type":"result","exitCode":7}\n',
+      '{"type":"result"}\n',
     ],
     { maxEventCount: 8 },
   );
 
   const terminal = events[events.length - 1];
   assert.equal(terminal?.kind, "run.completed");
-  assert.equal(terminal?.kind === "run.completed" && terminal.exitCode, 7);
+  // The exit code is the process's own, measured on transport.exit (B11-24).
+  assert.equal(terminal?.kind === "run.completed" && terminal.exitCode, 0);
   assert.ok(events.length <= 10, `the cap held at ${events.length} events`);
   const truncated = events.filter((event) => event.kind === "notice" && event.code === "output-truncated");
   assert.equal(truncated.length, 1, "the run says out loud that it dropped output");
@@ -403,4 +404,82 @@ test("a stream that fails mid-run still settles: cancellation and fault are told
   const terminal = broke[broke.length - 1];
   assert.equal(terminal?.kind, "run.failed");
   assert.equal(terminal?.kind === "run.failed" && terminal.errorCode, "E_BACKEND_FAILURE");
+});
+
+// ---------------------------------------------------------------------------
+// B11-22, B11-23 and B11-24: the stub's own decoding, against the shared rules.
+// ---------------------------------------------------------------------------
+
+/** The stub's transport, with the process exit this test chooses. */
+function transportExiting(chunks: readonly string[], code: number | null): ProcessTransport {
+  return { ...transportOf(chunks), exit: Promise.resolve({ code, signal: null }) };
+}
+
+test("B11-22: a bare null line is a notice, and the run that follows still completes", async () => {
+  const events = await collect([
+    "null\n",
+    '{"type":"started","script":"success"}\n',
+    '{"type":"model","model":"stub-model-1"}\n',
+    '{"type":"result"}\n',
+  ]);
+  assert.equal(events.filter((event) => event.kind === "run.failed").length, 0);
+  assert.equal(events[events.length - 1]?.kind, "run.completed");
+  assert.ok(events.some((event) => event.kind === "notice" && event.code === "non-json-output"));
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("B11-23: the requested model is the host's, and a started line naming another script cannot rename it", async () => {
+  const events: NormalizedEvent[] = [];
+  for await (const event of adapterFor("/tmp/ran.json").parse(
+    transportOf([
+      '{"type":"started","script":"timeout"}\n',
+      '{"type":"model","model":"stub-model-1"}\n',
+      '{"type":"result"}\n',
+    ]),
+    undefined,
+    { requestedModel: "stub/success" },
+  )) {
+    events.push(event);
+  }
+  const started = events.find((event) => event.kind === "run.started");
+  assert.equal(started?.kind === "run.started" && started.requestedModel, "stub/success");
+  const resolved = events.find((event) => event.kind === "model.resolved");
+  assert.equal(resolved?.kind === "model.resolved" && resolved.requestedModel, "stub/success");
+  assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("B11-24: the exit code is the process's, measured on the transport, not the result line's", async () => {
+  const events: NormalizedEvent[] = [];
+  for await (const event of adapterFor("/tmp/ran.json").parse(
+    transportExiting(
+      [
+        '{"type":"started","script":"success"}\n',
+        '{"type":"model","model":"stub-model-1"}\n',
+        '{"type":"result","exitCode":0}\n',
+      ],
+      1,
+    ),
+  )) {
+    events.push(event);
+  }
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.completed" && terminal.exitCode, 1);
+});
+
+test("B11-24: triangulation: a process that exits 0 is recorded as 0, and a declared code does not override it", async () => {
+  const events: NormalizedEvent[] = [];
+  for await (const event of adapterFor("/tmp/ran.json").parse(
+    transportExiting(
+      [
+        '{"type":"started","script":"success"}\n',
+        '{"type":"model","model":"stub-model-1"}\n',
+        '{"type":"result","exitCode":9}\n',
+      ],
+      0,
+    ),
+  )) {
+    events.push(event);
+  }
+  const terminal = events[events.length - 1];
+  assert.equal(terminal?.kind === "run.completed" && terminal.exitCode, 0);
 });
