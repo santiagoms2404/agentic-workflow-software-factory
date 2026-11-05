@@ -10,6 +10,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  candidateGateEvidence,
   candidateGateRows,
   recordedReviews,
   recordedRoutes,
@@ -138,6 +139,24 @@ test("an invalid or payload-less review envelope is not a review on record", () 
     },
   } as unknown as AttemptEvidence;
   assert.deepEqual(recordedReviews([broken], SESSION), []);
+});
+
+test("candidate gate evidence is built from rows measured on the current candidate", () => {
+  const rows = [
+    gate("tests", "candidate_hygiene", true, CANDIDATE),
+    gate("tests", "commands_pass", true, CANDIDATE),
+    gate("tests", "commands_pass", true, OTHER),
+    gate("reviewer", "review_evidence_present", false, CANDIDATE),
+  ];
+  assert.deepEqual(candidateGateEvidence(rows, CANDIDATE, SESSION), {
+    configured: ["candidate_hygiene", "commands_pass"],
+    rows: [
+      { gateId: "candidate_hygiene", passed: true, candidateSha: CANDIDATE },
+      { gateId: "commands_pass", passed: true, candidateSha: CANDIDATE },
+    ],
+  });
+  assert.deepEqual(candidateGateEvidence(rows.slice(2), CANDIDATE, SESSION).rows, [],
+    "stale rows are not promoted to current candidate evidence");
 });
 
 test("the review phases' own gate rows are excluded from the candidate gate evidence", () => {

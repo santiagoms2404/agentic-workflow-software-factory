@@ -15,7 +15,7 @@ import { gatherFreshness, K1_EXEMPT_WORKFLOWS } from "./preflight.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { createWorktree, seedWorktreePaths, type ManagedWorktree } from "../../git/worktrees.ts";
 import { transition } from "../../state/task-machine.ts";
-import { callCeilingsOf } from "../../state/tiers.ts";
+import { ceilingFor } from "../../state/tiers.ts";
 import {
   compiledWorkflow,
   CompiledWorkflowUnbound,
@@ -311,7 +311,10 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   // contacted. It also deliberately does NOT block the DRAFT: `awsf raise` is
   // legal on a live attempt and terminal on a BLOCKED one, so blocking here
   // would seal away the one remedy the message names.
-  const ceiling = current.budget.ceiling ?? callCeilingsOf(config.risk.call_ceiling);
+  // Legacy statuses with no persisted ceiling use the same documented tier
+  // default as transition() and CallBudget; the current config is not evidence
+  // of the dial this already-created attempt was run under.
+  const ceiling = ceilingFor(current.tier, current.budget.ceiling);
   const headroom = correctionHeadroom(config, recipe, ceiling);
   if (headroom.unfundable) {
     throw new Error(

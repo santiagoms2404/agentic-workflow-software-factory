@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { canonicalJson } from "./owner-amendment.ts";
+import { sha256 } from "./hash.ts";
+import { SHA256_HEX_PATTERN } from "./typebox.ts";
 import { SHA_PATTERN } from "./test-output.ts";
 import { stringUnion } from "./typebox.ts";
 
@@ -63,7 +64,7 @@ export type SuiteSource = (typeof SUITE_SOURCES)[number];
 
 const id = Type.String({ minLength: 1 });
 const sha = Type.String({ pattern: SHA_PATTERN });
-const digest = Type.String({ pattern: "^[0-9a-f]{64}$" });
+const digest = Type.String({ pattern: SHA256_HEX_PATTERN });
 /** The longest reason any K1 record carries, in UTF-16 code units as the schema counts them. */
 export const K1_REASON_MAX_LENGTH = 4_000;
 const reason = Type.String({ minLength: 1, maxLength: K1_REASON_MAX_LENGTH });
@@ -224,10 +225,6 @@ export const GrantRefusedRecordSchema = Type.Object(
   { additionalProperties: false, $id: GRANT_REFUSED_SCHEMA_ID, title: "GrantRefusedRecord" },
 );
 export type GrantRefusedRecord = Static<typeof GrantRefusedRecordSchema>;
-
-function sha256(text: string): string {
-  return createHash("sha256").update(text, "utf8").digest("hex");
-}
 
 /** The digest both records bind the request to: the exact recorded text, byte for byte. */
 export function requestTextDigest(request: string): string {

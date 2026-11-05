@@ -101,6 +101,13 @@ function landingRequest(candidateSha: string, budget: TransitionInput["budget"],
     from: "AWAITING_OWNER", to: "LANDING", actor: "human", tier: 2, reason: { source: "human" }, interactive: true, budget,
     evidence: {
       candidateSha, gatesPass: true,
+      gateEvidence: {
+        configured: ["candidate_hygiene", "commands_pass"],
+        rows: [
+          { gateId: "candidate_hygiene", passed: true, candidateSha },
+          { gateId: "commands_pass", passed: true, candidateSha },
+        ],
+      },
       landing: {
         shaDisplayed: candidateSha, summaryDisplayed: "one fixture file", confirmed: true,
         requiredReviewPresent: true, journeyApproved: true, protectedApprovalsValid: true, fastForwardPreflightPasses: true,
@@ -142,21 +149,21 @@ test("awsf run --stub true refuses an attempt that awsf start --stub true did no
   } finally { b.close(); }
 });
 
-test("the full stub demo still works, and every attestation it writes carries stub provenance", async () => {
+test("a stub T2 run cannot enter review without current candidate gate rows", async () => {
   const b = box("demo");
   try {
     const attemptDir = await measuredDraft(b, "demo");
     assert.equal(await b.cli(["start", "demo", "--stub", "true"]), 0, b.errors.join("\n"));
-    assert.equal(await b.cli(["run", "demo", "--stub", "true"]), 0, b.errors.join("\n"));
+    assert.equal(await b.cli(["run", "demo", "--stub", "true"]), 1);
+    assert.match(b.errors.join("\n"), /no gate rows were attested/u);
     const status = await readAttempt(attemptDir);
-    assert.equal(status.lifecycleState, "AWAITING_OWNER");
+    assert.equal(status.lifecycleState, "GATING");
     assert.match(status.candidateSha ?? "", /^[0-9a-f]{40}$/u);
     assert.equal(status.budget.callsSpent, 0, "no provider was called");
-    // The flags the stub writes are now named for what wrote them.
-    assert.equal(status.journeyApproved, true);
-    assert.equal(status.requiredReviewPresent, true);
-    assert.equal(status.attestationProvenance, "stub");
-    assert.ok(b.lines.some((line) => line.startsWith("AWAITING_OWNER:")), b.lines.join("\n"));
+    assert.equal(status.journeyApproved, false);
+    assert.equal(status.requiredReviewPresent, false);
+    assert.notEqual(status.attestationProvenance, "stub", "the run could not attest a green without gate rows");
+    assert.ok(!b.lines.some((line) => line.startsWith("AWAITING_OWNER:")), b.lines.join("\n"));
   } finally { b.close(); }
 });
 
@@ -177,22 +184,19 @@ test("the T2 land guard refuses journey and review evidence with stub provenance
   });
 });
 
-test("awsf land refuses a stub T2 candidate and leaves it AWAITING_OWNER", async () => {
+test("a stub T2 run stops at GATING and cannot reach the landing command", async () => {
   const b = box("land");
   try {
     const attemptDir = await measuredDraft(b, "land");
     assert.equal(await b.cli(["start", "land", "--stub", "true"]), 0, b.errors.join("\n"));
-    assert.equal(await b.cli(["run", "land", "--stub", "true"]), 0, b.errors.join("\n"));
+    assert.equal(await b.cli(["run", "land", "--stub", "true"]), 1);
+    assert.match(b.errors.join("\n"), /no gate rows were attested/u);
     const before = git(b.repository, "rev-parse", "HEAD");
     await assert.rejects(
       landCommand({ attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => true } }),
-      (error: unknown) => {
-        assert.ok(error instanceof InsufficientEvidence, String(error));
-        assert.match(error.message, /"stub" provenance/u);
-        return true;
-      },
+      /not one of the legal transitions/u,
     );
-    assert.equal((await readAttempt(attemptDir)).lifecycleState, "AWAITING_OWNER");
+    assert.equal((await readAttempt(attemptDir)).lifecycleState, "GATING");
     assert.equal(git(b.repository, "rev-parse", "HEAD"), before, "the canonical branch did not move");
   } finally { b.close(); }
 });

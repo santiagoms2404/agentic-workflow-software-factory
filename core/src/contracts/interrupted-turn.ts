@@ -1,10 +1,11 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { canonicalJson, sha256 } from "./owner-amendment.ts";
+import { OBJECT_ID_PATTERN, SHA256_HEX_PATTERN } from "./typebox.ts";
 
 const id = Type.String({ minLength: 1, maxLength: 256 });
-const digest = Type.String({ pattern: "^[a-f0-9]{64}$" });
-const sha = Type.String({ pattern: "^[a-f0-9]{40}$" });
+const digest = Type.String({ pattern: SHA256_HEX_PATTERN });
+const sha = Type.String({ pattern: OBJECT_ID_PATTERN });
 const nullableDigest = Type.Union([digest, Type.Null()]);
 
 export const CONTINUITY_REFUSALS = ["continuity-not-enabled", "proof-unavailable", "recovery-ambiguous", "checkpoint-invalid", "binding-mismatch", "turn-already-completed"] as const;

@@ -66,15 +66,27 @@ export function renderSchemaBlock(schemaId: string): string {
 }
 
 /**
- * Substitutes the emitted schema into a prompt template.
+ * Substitutes the emitted schema and any supplied tokens into a prompt template.
+ * Replacements are applied against the original template only; inserted text is never rescanned.
  *
  * Throws when the placeholder is absent: a template that silently ships
  * without its schema is precisely the failure this task exists to make
  * impossible, so it fails loudly at compile time rather than at parse time.
  */
-export function injectOutputSchema(template: string, schemaId: string): string {
+export function injectOutputSchema(
+  template: string,
+  schemaId: string,
+  replacements: Readonly<Record<string, string>> = {},
+): string {
   if (!template.includes(OUTPUT_SCHEMA_PLACEHOLDER)) {
     throw new MissingSchemaPlaceholderError();
   }
-  return template.split(OUTPUT_SCHEMA_PLACEHOLDER).join(renderSchemaBlock(schemaId));
+  const byToken = new Map(Object.entries(replacements));
+  byToken.set(OUTPUT_SCHEMA_PLACEHOLDER, renderSchemaBlock(schemaId));
+  const tokens = [...byToken.keys()]
+    .filter((token) => token.length > 0)
+    .sort((a, b) => b.length - a.length);
+  const alternatives = tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
+  const tokenPattern = new RegExp(alternatives.join("|"), "gu");
+  return template.replace(tokenPattern, (token) => byToken.get(token) ?? token);
 }

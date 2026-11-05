@@ -16,6 +16,8 @@ import { EDGE_BLOCKER_CODES, InsufficientEvidence, REVIEW_EVIDENCE_DEFECTS } fro
 import type { EdgeId, LegalEdge, TransitionInput } from "./task-machine.ts";
 import { BLOCKING_SEVERITIES, severityRank } from "../contracts/review-output.ts";
 import { SHA_PATTERN } from "../contracts/test-output.ts";
+import { PLAN_OUTPUT_SCHEMA_ID } from "../contracts/plan-output.ts";
+import { SCOUT_OUTPUT_SCHEMA_ID } from "../contracts/scout-output.ts";
 
 /**
  * The same `^[0-9a-f]{40}$` the envelope contracts already hold every object
@@ -26,6 +28,16 @@ const SHA = new RegExp(SHA_PATTERN);
 
 function isSha(value: unknown): value is string {
   return typeof value === "string" && SHA.test(value);
+}
+
+function candidateTreeViolations(
+  sha: unknown,
+  candidateSha: unknown,
+  invalidLabel: string,
+  mismatchMessage: string,
+): string[] {
+  if (!isSha(sha)) return [`${invalidLabel} ${show(sha)} is not a 40-hex object id`];
+  return sha === candidateSha ? [] : [mismatchMessage];
 }
 
 function isTrue(value: unknown): boolean {
@@ -69,7 +81,7 @@ function readOnlyResult(input: TransitionInput): string[] {
   if (result === undefined) return ["no read-only result was attested"];
   const violations: string[] = [];
   if (input.tier !== 0) violations.push(`read-only result completion is a T0 path, not T${input.tier}`);
-  if (!["awsf.scout-output/v1", "awsf.plan-output/v1"].includes(result.schema)) {
+  if (result.schema !== SCOUT_OUTPUT_SCHEMA_ID && result.schema !== PLAN_OUTPUT_SCHEMA_ID) {
     violations.push(`read-only result schema ${show(result.schema)} is not a shipped scout or plan envelope`);
   }
   if (result.writesObserved !== false) violations.push("the read-only workflow changed the managed worktree");
@@ -205,10 +217,12 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
   },
 
   // L11 / L12 — the tier fork out of GATING. T2 may not skip review; T0/T1 may
-  // not invent one.
+  // not invent one. L11 spends the review call to preserve the current green,
+  // so the rows behind `gatesPass` must name and measure that exact candidate.
   L11: (input) => {
     const violations = candidate(input);
     if (!isTrue(input.evidence?.gatesPass)) violations.push("the gates did not pass");
+    violations.push(...gateEvidenceViolations(input));
     if (input.tier < 2) violations.push(`review is a T2 control and this task is T${input.tier}`);
     return violations;
   },
@@ -257,11 +271,12 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     const violations = candidate(input);
     const review = input.evidence?.review;
     if (review === undefined) return [...violations, "no review verdict was recorded"];
-    if (!isSha(review.reviewedSha)) {
-      violations.push(`the reviewed SHA ${show(review.reviewedSha)} is not a 40-hex object id`);
-    } else if (review.reviewedSha !== input.evidence?.candidateSha) {
-      violations.push("the review names a different tree than the candidate");
-    }
+    violations.push(...candidateTreeViolations(
+      review.reviewedSha,
+      input.evidence?.candidateSha,
+      "the reviewed SHA",
+      "the review names a different tree than the candidate",
+    ));
     const blocking = review.findings.filter((f) =>
       (BLOCKING_SEVERITIES as readonly string[]).includes(f.severity),
     );
@@ -283,11 +298,12 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     if (review === undefined) {
       violations.push("no review was recorded, so no finding can have been accepted");
     } else {
-      if (!isSha(review.reviewedSha)) {
-        violations.push(`the reviewed SHA ${show(review.reviewedSha)} is not a 40-hex object id`);
-      } else if (review.reviewedSha !== input.evidence?.candidateSha) {
-        violations.push("the review names a different tree than the candidate");
-      }
+      violations.push(...candidateTreeViolations(
+        review.reviewedSha,
+        input.evidence?.candidateSha,
+        "the reviewed SHA",
+        "the review names a different tree than the candidate",
+      ));
       const qualifying = review.findings.filter(
         (f) => severityRank(f.severity) >= severityRank("medium") && isText(f.file) && isText(f.detail),
       );
@@ -346,18 +362,21 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
 
   // L20 — the human gate's evidence. The SHA the human saw, the SHA the
   // review read, and the SHA the host will fast-forward to are one object id
-  // or the human confirmed one tree and the host lands another.
+  // or the human confirmed one tree and the host lands another. The gate rows
+  // must still prove that exact candidate is green at authorization time.
   L20: (input) => {
     const e = input.evidence;
     const violations = candidate(input);
     if (!isTrue(e?.gatesPass)) violations.push("the gates did not pass");
+    violations.push(...gateEvidenceViolations(input));
     const landing = e?.landing;
     if (landing === undefined) return [...violations, "no landing evidence was recorded"];
-    if (!isSha(landing.shaDisplayed)) {
-      violations.push(`the displayed SHA ${show(landing.shaDisplayed)} is not a 40-hex object id`);
-    } else if (landing.shaDisplayed !== e?.candidateSha) {
-      violations.push("the SHA shown to the human is not the candidate");
-    }
+    violations.push(...candidateTreeViolations(
+      landing.shaDisplayed,
+      e?.candidateSha,
+      "the displayed SHA",
+      "the SHA shown to the human is not the candidate",
+    ));
     if (!isText(landing.summaryDisplayed)) violations.push("no summary was displayed");
     if (!isTrue(landing.confirmed)) violations.push("the human did not confirm");
     if (!isTrue(landing.protectedApprovalsValid)) violations.push("the protected-path approvals are not valid");
@@ -402,11 +421,12 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     const e = input.evidence;
     const head = e?.headSha;
     const violations = candidate(input);
-    if (!isSha(head)) {
-      violations.push(`canonical HEAD ${show(head)} is not a 40-hex object id`);
-    } else if (head !== e?.candidateSha) {
-      violations.push("canonical HEAD is not the candidate");
-    }
+    violations.push(...candidateTreeViolations(
+      head,
+      e?.candidateSha,
+      "canonical HEAD",
+      "canonical HEAD is not the candidate",
+    ));
     if (!isTrue(e?.checkoutClean)) violations.push("the canonical checkout is not clean");
     return violations;
   },
@@ -449,10 +469,13 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
     const review = e?.review;
     if (review === undefined) {
       violations.push("no review was recorded, so there is no review to supersede");
-    } else if (!isSha(review.reviewedSha)) {
-      violations.push(`the reviewed SHA ${show(review.reviewedSha)} is not a 40-hex object id`);
-    } else if (review.reviewedSha !== e?.candidateSha) {
-      violations.push("the recorded review names a different tree than the candidate");
+    } else {
+      violations.push(...candidateTreeViolations(
+        review.reviewedSha,
+        e?.candidateSha,
+        "the reviewed SHA",
+        "the recorded review names a different tree than the candidate",
+      ));
     }
     const defect = e?.reviewEvidenceDefect;
     if (defect === undefined || !(REVIEW_EVIDENCE_DEFECTS as readonly string[]).includes(defect)) {
@@ -519,11 +542,12 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
        if (landing === undefined) {
          return [...violations, "no landing approval evidence was recorded"];
        }
-       if (!isSha(landing.shaDisplayed)) {
-         violations.push(`the displayed SHA ${show(landing.shaDisplayed)} is not a 40-hex object id`);
-       } else if (landing.shaDisplayed !== e?.candidateSha) {
-         violations.push("the SHA shown to the human is not the candidate");
-       }
+       violations.push(...candidateTreeViolations(
+         landing.shaDisplayed,
+         e?.candidateSha,
+         "the displayed SHA",
+         "the SHA shown to the human is not the candidate",
+       ));
        if (!isTrue(landing.confirmed)) {
          violations.push("the human did not confirm publication");
        }

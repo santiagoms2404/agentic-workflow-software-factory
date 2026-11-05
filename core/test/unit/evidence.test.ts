@@ -244,6 +244,23 @@ test("L11 needs passing gates AND tier 2; L12 needs passing gates AND tier below
   await expectAccepted(validInput("L11"));
 });
 
+test("L11 and L20 require passing rows measured against the current candidate", async () => {
+  for (const id of ["L11", "L20"] as const) {
+    const valid = validInput(id);
+    const gateEvidence = valid.evidence?.gateEvidence;
+    assert.ok(gateEvidence, `${id} fixture carries host gate rows`);
+    const failedRows = gateEvidence.rows.map((row, index) => index === 0 ? { ...row, passed: false } : row);
+    const staleRows = gateEvidence.rows.map((row, index) => index === 0 ? { ...row, candidateSha: BASE_SHA } : row);
+    await expectAllInsufficient([
+      [`${id} has no gate evidence`, withoutEvidence(id, "gateEvidence")],
+      [`${id} omits a configured row`, withEvidence(id, { gateEvidence: { ...gateEvidence, rows: gateEvidence.rows.slice(0, 1) } })],
+      [`${id} has a failed row`, withEvidence(id, { gateEvidence: { ...gateEvidence, rows: failedRows } })],
+      [`${id} has a stale row`, withEvidence(id, { gateEvidence: { ...gateEvidence, rows: staleRows } })],
+    ]);
+    await expectAccepted(valid);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // L13 — the budget must really be gone.
 // ---------------------------------------------------------------------------

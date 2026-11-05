@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { Type, type Static } from "@sinclair/typebox";
 import { canonicalJson } from "./owner-amendment.ts";
+import { sha256 } from "./hash.ts";
 import { TICKET_WORKFLOWS } from "./ticket.ts";
-import { stringUnion, toJsonSchema } from "./typebox.ts";
+import { SHA256_HEX_PATTERN, stringUnion, toJsonSchema } from "./typebox.ts";
 
 // The durable record of one shift selection: which plan, which milestones in
 // the owner's order, and every selected ticket file with a digest of its bytes.
@@ -12,7 +12,7 @@ import { stringUnion, toJsonSchema } from "./typebox.ts";
 // one, and there is no singular form.
 export const SHIFT_MANIFEST_SCHEMA_ID = "awsf.shift-manifest/v1";
 
-const Sha256Hex = Type.String({ pattern: "^[a-f0-9]{64}$" });
+const Sha256Hex = Type.String({ pattern: SHA256_HEX_PATTERN });
 
 export const ShiftManifestTicketSchema = Type.Object(
   {
@@ -49,7 +49,7 @@ export type ShiftManifestBody = Omit<ShiftManifest, "manifestDigest">;
  */
 export function shiftManifestDigest(body: ShiftManifestBody): string {
   const { plan, milestones, tickets } = body;
-  return createHash("sha256").update(canonicalJson({ plan, milestones, tickets }), "utf8").digest("hex");
+  return sha256(canonicalJson({ plan, milestones, tickets }));
 }
 
 export function sealShiftManifest(body: ShiftManifestBody): ShiftManifest {

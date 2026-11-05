@@ -74,7 +74,7 @@ import {
   requestOutput,
 } from "./production-run.ts";
 import {
-  candidateGateRows,
+  candidateGateEvidence,
   readAttemptEvidence,
   recordedReviews,
   recordedRoutes,
@@ -108,18 +108,6 @@ const SUPPORTED = new Map<string, WorkflowRecipe>([
   [buildReviewWorkflow.id, buildReviewWorkflow],
   [simpleSdlcWorkflow.id, simpleSdlcWorkflow],
 ]);
-
-/**
- * The host gate set a candidate is measured by, and therefore the set L25's
- * `gateEvidence.configured` demands a passing row for.
- *
- * These two are what `measureCandidate` produces against an exact SHA and what
- * `gatesPass` summarises: hygiene, and the aggregate of every configured
- * command. The individual `config.gates` entries are deliberately not listed —
- * they are aggregated into one `commands_pass` row by construction, so
- * demanding a row per entry would demand rows the host never writes.
- */
-const CANDIDATE_GATE_IDS = Object.freeze(["candidate_hygiene", "commands_pass"]);
 
 /** The sentence D5 requires the owner to read before the call is spent. */
 export const CANDIDATE_LOSS_WARNING = "if this review fails, the candidate is lost";
@@ -469,8 +457,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
     );
   }
   const reviewPhaseIds = new Set(reviews.map((review) => review.phaseId));
-  const rows = candidateGateRows(evidenceRecords, inspection.candidate, reviewPhaseIds);
-  const gateEvidence = { configured: CANDIDATE_GATE_IDS, rows };
+  const gateEvidence = candidateGateEvidence(evidenceRecords, inspection.candidate, status.sessionId);
   const recorded = recordedRoutes(evidenceRecords, reviewPhaseIds);
   const route: ReviewRoute = await resolveReviewRoute({
     config: options.config, configPath: options.configPath, infra, recipe,

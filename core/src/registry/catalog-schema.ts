@@ -1,6 +1,6 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { GateEntrySchema, ProjectSlugSchema } from "../config/schema.ts";
-import { stringUnion, toJsonSchema } from "../contracts/typebox.ts";
+import { SHA256_DIGEST_PATTERN, stringUnion, toJsonSchema } from "../contracts/typebox.ts";
 
 export const PROJECT_CATALOG_VERSION = "awsf.project/v1" as const;
 export const PROJECT_REPOSITORY_ROLES = ["plan", "service", "application", "library", "source"] as const;
@@ -30,12 +30,22 @@ const HostnameSchema = Type.String({
 export const ExplicitIdSchema = Type.String({ minLength: 1, pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" });
 
 /** Shared verbatim by the parent catalog and every participating repository's projection. */
-export const ContractDigestSchema = Type.String({ pattern: "^sha256:[0-9a-f]{64}$" });
+export const ContractDigestSchema = Type.String({ pattern: SHA256_DIGEST_PATTERN });
 
-const RepositoryReferenceSchema = Type.Object(
+export const RepositoryReferenceSchema = Type.Object(
   {
     repository: ExplicitIdSchema,
     path: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+export const ContractEntrySchema = Type.Object(
+  {
+    id: ExplicitIdSchema,
+    digest: ContractDigestSchema,
+    producer: RepositoryReferenceSchema,
+    consumers: Type.Array(RepositoryReferenceSchema, { minItems: 1 }),
   },
   { additionalProperties: false },
 );
@@ -112,19 +122,7 @@ export const ProjectCatalogSchema = Type.Object(
       },
       { additionalProperties: false },
     ),
-    contracts: Type.Optional(
-      Type.Array(
-        Type.Object(
-          {
-            id: ExplicitIdSchema,
-            digest: ContractDigestSchema,
-            producer: RepositoryReferenceSchema,
-            consumers: Type.Array(RepositoryReferenceSchema, { minItems: 1 }),
-          },
-          { additionalProperties: false },
-        ),
-      ),
-    ),
+    contracts: Type.Optional(Type.Array(ContractEntrySchema)),
     // Whether this project may send state to Jev at all. Only the Jev
     // transport reads it; off is a typed refusal there, never an exception.
     decision: Type.Optional(

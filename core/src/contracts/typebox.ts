@@ -6,6 +6,11 @@ import { Type, type Static, type TLiteral, type TSchema, type TUnion } from "@si
 // injected into agent prompts. Anything here that would let those three drift
 // apart is a defect.
 
+/** Shared wire patterns for persisted object ids and digests. */
+export const OBJECT_ID_PATTERN = "^[0-9a-f]{40}$";
+export const SHA256_HEX_PATTERN = "^[0-9a-f]{64}$";
+export const SHA256_DIGEST_PATTERN = "^sha256:[0-9a-f]{64}$";
+
 /** A tuple of literal schemas mirroring a readonly string tuple, mutable so it satisfies `TSchema[]`. */
 type LiteralsOf<T extends readonly string[]> = {
   -readonly [K in keyof T]: TLiteral<T[K] & string>;
@@ -39,36 +44,15 @@ export type UnionOf<T extends readonly string[]> = Static<TUnion<LiteralsOf<T>>>
 export const NullableCount = Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]);
 
 /**
- * UTF-8 byte length of a string, without `TextEncoder` or `Buffer`.
+ * UTF-8 byte length, using the same encoder as the host's byte buffers.
  *
  * The envelope cap is stated in bytes, and a cap that silently measured
- * UTF-16 code units would let a multibyte payload sail past it. Written out
- * rather than borrowed so `core/src/contracts/` stays free of any runtime
- * import — it is the one directory every other module depends on.
+ * UTF-16 code units would let a multibyte payload sail past it. Buffer's
+ * built-in implementation also handles lone surrogates exactly as UTF-8
+ * encoding does elsewhere in the host.
  */
 export function utf8ByteLength(text: string): number {
-  let bytes = 0;
-  for (let index = 0; index < text.length; index += 1) {
-    const code = text.charCodeAt(index);
-    if (code < 0x80) {
-      bytes += 1;
-    } else if (code < 0x800) {
-      bytes += 2;
-    } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < text.length) {
-      const next = text.charCodeAt(index + 1);
-      if (next >= 0xdc00 && next <= 0xdfff) {
-        // A well-formed surrogate pair is one 4-byte code point.
-        bytes += 4;
-        index += 1;
-      } else {
-        // A lone surrogate encodes as U+FFFD — three bytes.
-        bytes += 3;
-      }
-    } else {
-      bytes += 3;
-    }
-  }
-  return bytes;
+  return Buffer.byteLength(text, "utf8");
 }
 
 /**

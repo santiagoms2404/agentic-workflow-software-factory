@@ -1,5 +1,7 @@
 import { Type, type Static } from "@sinclair/typebox";
+import { GateEntrySchema } from "../config/schema.ts";
 import {
+  ContractEntrySchema,
   PROJECT_DELIVERY_POSTURES,
   PROJECT_PLAN_FORMATS,
   PROJECT_REPOSITORY_ROLES,
@@ -12,8 +14,8 @@ export const PROJECT_REGISTER_OUTPUT_SCHEMA_ID = "awsf.project-register-output/v
 const ResolvedCommandSchema = Type.Object(
   {
     gateId: Type.String({ minLength: 1 }),
-    argv: Type.Array(Type.String()),
-    timeout_seconds: Type.Integer({ minimum: 1 }),
+    argv: GateEntrySchema.properties.argv,
+    timeout_seconds: GateEntrySchema.properties.timeout_seconds,
   },
   { additionalProperties: false },
 );
@@ -44,21 +46,7 @@ const ResolvedProjectSchema = Type.Object(
       },
       { additionalProperties: false },
     ),
-    contracts: Type.Array(Type.Object(
-      {
-        id: Type.String({ minLength: 1 }),
-        digest: Type.String({ pattern: "^sha256:[0-9a-f]{64}$" }),
-        producer: Type.Object(
-          { repository: Type.String({ minLength: 1 }), path: Type.String({ minLength: 1 }) },
-          { additionalProperties: false },
-        ),
-        consumers: Type.Array(Type.Object(
-          { repository: Type.String({ minLength: 1 }), path: Type.String({ minLength: 1 }) },
-          { additionalProperties: false },
-        ), { minItems: 1 }),
-      },
-      { additionalProperties: false },
-    )),
+    contracts: Type.Array(ContractEntrySchema),
   },
   { additionalProperties: false },
 );

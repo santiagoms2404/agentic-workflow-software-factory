@@ -47,7 +47,8 @@ import type { IntakeOutput } from "../../contracts/intake-output.ts";
 import { DOCUMENT_OUTPUT_SCHEMA_ID, type DocumentOutput } from "../../contracts/document-output.ts";
 import { UNREPORTED_TOKEN_USAGE, isPersistableKind, type ModelResolutionProvenance, type NormalizedEvent, type TokenUsage } from "../../contracts/normalized-events.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
-import type { PlanOutput } from "../../contracts/plan-output.ts";
+import { PLAN_OUTPUT_SCHEMA_ID, type PlanOutput } from "../../contracts/plan-output.ts";
+import { SCOUT_OUTPUT_SCHEMA_ID } from "../../contracts/scout-output.ts";
 import {
   ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID,
   type ArchitectureReviewOutput,
@@ -151,7 +152,7 @@ import {
 } from "../../workflow/phase-launch-authorization.ts";
 import type { AgentPurpose, AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
-import { readAttemptEvidence } from "./review-record.ts";
+import { candidateGateEvidence, readAttemptEvidence } from "./review-record.ts";
 import type { VisualReferenceBinding, VisualReferencesBound } from "../../contracts/visual-references.ts";
 import { visualReferencesInspected, type PhaseVisualObservation } from "../../gates/visual-inspection.ts";
 import {
@@ -360,9 +361,9 @@ export async function stopFactsPhases(
   return { phases, roles };
 }
 
-const READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW: ReadonlyMap<string, "awsf.scout-output/v1" | "awsf.plan-output/v1"> = new Map([
-  ["scout", "awsf.scout-output/v1"],
-  ["plan", "awsf.plan-output/v1"],
+const READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW: ReadonlyMap<string, typeof SCOUT_OUTPUT_SCHEMA_ID | typeof PLAN_OUTPUT_SCHEMA_ID> = new Map([
+  ["scout", SCOUT_OUTPUT_SCHEMA_ID],
+  ["plan", PLAN_OUTPUT_SCHEMA_ID],
 ]);
 
 /** A review phase is one that produces a review envelope; the id is not the evidence. */
@@ -665,7 +666,7 @@ export async function readProductionPromptPair(
 export function requestOutput(status: AttemptStatus, config: AwsfConfig): PlanOutput {
   const commands = Object.entries(config.gates).map(([gateId, gate]) => `${gateId}: ${JSON.stringify(gate.argv)}`);
   return {
-    schema: "awsf.plan-output/v1",
+    schema: PLAN_OUTPUT_SCHEMA_ID,
     producerStatus: "success",
     summary: status.request,
     artifacts: [],
@@ -3372,7 +3373,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   const applyAcceptedContext = (): void => {
     const context = reducePhaseContext(acceptedEnvelopes, seededRequest);
     previous = context.previous;
-    intent = context.schemas.get("awsf.plan-output/v1") as PlanOutput | undefined ?? seededRequest;
+    intent = context.schemas.get(PLAN_OUTPUT_SCHEMA_ID) as PlanOutput | undefined ?? seededRequest;
     designContext = context.schemas.get(DESIGN_CONTEXT_SCHEMA_ID) as DesignContext | undefined ?? null;
     designOutput = context.schemas.get(DESIGN_OUTPUT_SCHEMA_ID) as DesignOutput | undefined ?? null;
     architectureReviewOutput = context.schemas.get(ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID) as ArchitectureReviewOutput | undefined ?? null;
@@ -3793,7 +3794,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         }
         const result = await runAgent(phase, index + 1, previous, reservation, recovery === undefined && agentOrdinal === 1, null);
         previous = result.envelope;
-        if (phase.schemaId === "awsf.plan-output/v1") intent = result.envelope as PlanOutput;
+        if (phase.schemaId === PLAN_OUTPUT_SCHEMA_ID) intent = result.envelope as PlanOutput;
         if (phase.schemaId === DESIGN_OUTPUT_SCHEMA_ID) designOutput = result.envelope as DesignOutput;
         if (phase.schemaId === ARCHITECTURE_REVIEW_OUTPUT_SCHEMA_ID) {
           architectureReviewOutput = result.envelope as ArchitectureReviewOutput;
@@ -4066,9 +4067,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         { candidateSha: reviewed, candidatePaths: candidatePathsBetween(status.worktree!, status.baseSha!, reviewed), evidence: reviewEvidence, expectation: reviewExpectation });
       reviewOutput = result.envelope as ReviewOutput;
     } else {
+    const gateEvidence = candidateGateEvidence(await readAttemptEvidence(options.attemptDir), reviewed, status.sessionId);
     const l11 = budget.authorize({
       from: "GATING", to: "REVIEWING", actor: "host", reason: { source: "gate" }, interactive: false,
-      evidence: { gatesPass: true, candidateSha: reviewed }, spawn: { cost: 1 },
+      evidence: { gatesPass: true, candidateSha: reviewed, gateEvidence }, spawn: { cost: 1 },
     });
     const heldReviewDescription = inversion!.mode === "same-provider-degraded"
       ? `EXPLICIT DEGRADED same-provider ${inversion!.reviewProvider} review`

@@ -1,8 +1,9 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
+import { OBJECT_ID_PATTERN } from "./typebox.ts";
 
 export const CLOSURE_RECORD_SCHEMA_ID = "awsf.closure-record/v1";
-const sha = Type.String({ pattern: "^[a-f0-9]{40}$" });
+const sha = Type.String({ pattern: OBJECT_ID_PATTERN });
 const path = Type.String({ minLength: 1, pattern: "^(?!/)(?![\\s\\S]*(?:^|[/\\n\\r\\u2028\\u2029])\\.\\.(?:[/\\n\\r\\u2028\\u2029]|$))[^\\\\]+$" });
 const row = Type.Object({ path, ticket: Type.String({ pattern: "^[TW][0-9]{2}$" }),
   taskNumber: Type.Integer({ minimum: 1 }), rowIndex: Type.Integer({ minimum: 0 }),

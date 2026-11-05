@@ -1,9 +1,10 @@
 import { Type, type Static } from "@sinclair/typebox";
+import { OBJECT_ID_PATTERN, SHA256_HEX_PATTERN } from "./typebox.ts";
 import { Value } from "@sinclair/typebox/value";
 import { recoveryDigest } from "./phase-recovery.ts";
 
-const digest = Type.String({ pattern: "^[a-f0-9]{64}$" });
-const oid = Type.String({ pattern: "^[a-f0-9]{40}$" });
+const digest = Type.String({ pattern: SHA256_HEX_PATTERN });
+const oid = Type.String({ pattern: OBJECT_ID_PATTERN });
 const id = Type.String({ minLength: 1, maxLength: 256 });
 const text = Type.String({ minLength: 1, maxLength: 16384 });
 const path = Type.String({ minLength: 1, maxLength: 4096 });

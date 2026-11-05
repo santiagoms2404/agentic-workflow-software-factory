@@ -58,3 +58,16 @@ test("a phase recorded while confirmation is open is included in the rework ordi
   assert.doesNotMatch(source, /const builderOrdinal = nextReworkPhaseOrdinal\(governingEvidence\)/u);
   assert.doesNotMatch(source, /recipe\.phases\.length\s*\+/u);
 });
+
+test("rework resolves prompt placeholders before appending owner-provided text", () => {
+  const source = readFileSync(new URL("../../../src/cli/commands/rework.ts", import.meta.url), "utf8");
+  const start = source.indexOf("function reworkPrompt(");
+  const end = source.indexOf("\nasync function validateMaterializedSystemPrompt", start);
+  assert.ok(start >= 0 && end > start, "the rework prompt composer must remain a local function");
+  const prompt = source.slice(start, end);
+  const renderTemplate = prompt.indexOf("injectOutputSchema(route.userPrompt");
+  const appendOwnerText = prompt.indexOf("`Concrete defect: ${defect}`");
+  assert.ok(renderTemplate >= 0 && appendOwnerText > renderTemplate,
+    "untrusted text must be appended only after template placeholders are rendered");
+  assert.doesNotMatch(prompt, /injectOutputSchema\(handoff/u);
+});

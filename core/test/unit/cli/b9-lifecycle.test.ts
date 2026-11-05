@@ -34,6 +34,33 @@ function terminal(confirmFn: () => Promise<boolean> = async () => true): OwnerTe
   };
 }
 
+async function persistPassingCandidateGateRows(attemptDir: string, candidateSha: string): Promise<void> {
+  let status = await readAttempt(attemptDir);
+  for (const gateId of ["candidate_hygiene", "commands_pass"] as const) {
+    const at = "2026-09-01T00:00:00.000Z";
+    status = await persistAttempt(attemptDir, status.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(status, {}),
+      evidence: {
+        type: "gate",
+        id: `${status.sessionId}:candidate:${gateId}`,
+        phaseId: `${status.sessionId}:candidate-gates`,
+        round: 0,
+        gateId,
+        kind: gateId === "candidate_hygiene" ? "git" : "subprocess",
+        candidateSha,
+        passed: true,
+        exitCode: 0,
+        checks: [{ item: gateId, ok: true, note: "fixture host measurement" }],
+        violations: [],
+        outputPath: null,
+        startedAt: at,
+        endedAt: at,
+      },
+    });
+  }
+}
+
 function createTestRepo(
   dir: string,
   slug = "test-project",
@@ -427,6 +454,7 @@ test("B9-32: protected landing authorization uses options.now", async () => {
         requiredReviewPresent: true, journeyApproved: true, protectedApprovalsValid: true,
       }),
     });
+    await persistPassingCandidateGateRows(created.attemptDir, candidateSha);
 
     const injected = "2026-09-02T10:00:00.000Z";
     let clockReads = 0;
@@ -486,6 +514,7 @@ test("B9-26: failure after completeLanding moves canonical HEAD does not seal at
         protectedApprovalsValid: true,
       }),
     });
+    await persistPassingCandidateGateRows(created.attemptDir, candidateSha);
 
     // Run landCommand with a projector that throws AFTER completeLanding has already fast-forwarded HEAD (on LANDED)
     await assert.rejects(

@@ -27,13 +27,16 @@ export function parseRouteArm(spec: string): RouteArm {
   if (at < 0) throw new RouteArmSpecInvalid(spec, "expected <adapter>/<provider>/<model>@<effort>");
   const segments = spec.slice(0, at).split("/");
   const effort = spec.slice(at + 1);
-  if (segments.length !== 3 || segments.some((segment) => segment.length === 0)) {
+  const modelSegments = segments.slice(2);
+  if (segments.length < 3 || segments.slice(0, 2).some((segment) => segment.length === 0) || modelSegments.some((segment) => segment.length === 0)) {
     throw new RouteArmSpecInvalid(spec, "an arm names its adapter, provider and model, each non-empty");
   }
   if (!(ROUTE_EFFORT_LEVELS as readonly string[]).includes(effort)) {
     throw new RouteArmSpecInvalid(spec, `no effort level named ${JSON.stringify(effort)}; expected one of ${ROUTE_EFFORT_LEVELS.join(", ")}`);
   }
-  const [adapter, provider, model] = segments as [string, string, string];
+  const adapter = segments[0]!;
+  const provider = segments[1]!;
+  const model = modelSegments.join("/");
   // The effort is the part after the last @, so a model id that itself holds
   // @ would be split here and accepted. The --route flag refuses the same
   // spelling as an unrepresentable selector, so the arm refuses it too (B3-16).

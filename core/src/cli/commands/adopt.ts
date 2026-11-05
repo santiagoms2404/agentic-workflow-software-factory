@@ -77,7 +77,7 @@ import {
 import { requestOutput } from "./production-run.ts";
 import { newCommand } from "./new.ts";
 import { enforceK1 } from "./start.ts";
-import { readAttemptEvidence, recordedReviews, recordedRoutes } from "./review-record.ts";
+import { candidateGateEvidence, readAttemptEvidence, recordedReviews, recordedRoutes } from "./review-record.ts";
 import {
   REVIEW_HEADROOM_CALLS,
   lastTestOutputFrom,
@@ -1179,13 +1179,14 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       ownerReentries: status.budget.ownerReentries,
     },
   });
+  const gateEvidence = candidateGateEvidence(await readAttemptEvidence(attemptDir), pair.candidateSha, status.sessionId);
   const l11 = budget.authorize({
     from: "GATING",
     to: "REVIEWING",
     actor: "host",
     reason: { source: "gate" },
     interactive: false,
-    evidence: { gatesPass: true, candidateSha: pair.candidateSha },
+    evidence: { gatesPass: true, candidateSha: pair.candidateSha, gateEvidence },
     spawn: { cost: 1 },
   });
   const reviewState = createReviewRunState();

@@ -25,7 +25,7 @@ import { renderHeadroomAdvice, renderOwnerAlternatives, type AdviceSelector } fr
 import { gateEnv } from "../../adapters/env.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { assertPrivateSystemPrompt, writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
-import { injectOutputSchema } from "../../contracts/json-schema.ts";
+import { injectOutputSchema, PREVIOUS_ENVELOPE_PLACEHOLDER } from "../../contracts/json-schema.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
 import type { BuildOutput } from "../../contracts/build-output.ts";
@@ -111,6 +111,7 @@ import {
 } from "./review-phase.ts";
 import {
   assertPromptCompositionCurrent,
+  candidateGateEvidence,
   readAttemptEvidence,
   recordedReviews,
   recordedRoutes,
@@ -492,8 +493,11 @@ async function resolveRoute(
 
 function reworkPrompt(status: AttemptStatus, defect: string, prior: PriorBuild, route: Route): string {
   const request = bounded(credentialSafeText(status.request, "persisted original request", true), 2_000);
+  const userPrompt = injectOutputSchema(route.userPrompt, "awsf.build-output/v1", {
+    [PREVIOUS_ENVELOPE_PLACEHOLDER]: "See the exact retained envelope reference and bounded summary above.",
+  });
   const handoff = [
-    route.userPrompt,
+    userPrompt,
     "",
     "Owner-authorized fresh rework call (L19). This is not a same-session correction.",
     `Concrete defect: ${defect}`,
@@ -505,12 +509,7 @@ function reworkPrompt(status: AttemptStatus, defect: string, prior: PriorBuild, 
     `Write policy: ${route.agent.writes.join(", ")}`,
     "Edit only the named defect on top of the exact prior candidate. Do not commit, change HEAD, route work, broaden scope, or touch protected paths. The host owns Git and all gates.",
   ].join("\n");
-  return credentialSafeText(
-    injectOutputSchema(handoff, "awsf.build-output/v1")
-      .replaceAll("{previous_envelope}", "See the exact retained envelope reference and bounded summary above."),
-    "final provider prompt",
-    true,
-  );
+  return credentialSafeText(handoff, "final provider prompt", true);
 }
 
 async function validateMaterializedSystemPrompt(
@@ -1436,9 +1435,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       throw afterAnswer ? new ReplacementReviewEvidenceInvalid(detail) : new ReworkCandidateMismatch(detail);
     };
 
+    const gateEvidence = candidateGateEvidence(await readAttemptEvidence(options.attemptDir), candidate, status.sessionId);
     const l11 = budget.authorize({
       from: "GATING", to: "REVIEWING", actor: "host", reason: { source: "gate" }, interactive: false,
-      evidence: { gatesPass: true, candidateSha: candidate }, spawn: { cost: 1 },
+      evidence: { gatesPass: true, candidateSha: candidate, gateEvidence }, spawn: { cost: 1 },
     });
     await persistTransition("GATING", "REVIEWING", l11.result.edge, "host", "gate", null,
       `held one call for the ${reviewRoute!.model.provider} review of the reworked candidate`, true, {

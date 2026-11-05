@@ -90,6 +90,27 @@ function firstObjectEnd(text: string, first: number): number | null {
   return null;
 }
 
+/** Return the opening brace paired with a closing brace, ignoring braces inside JSON strings. */
+function openingBraceFor(text: string, closing: number): number | null {
+  let depth = 0;
+  let quoted = false;
+  for (let index = closing; index >= 0; index -= 1) {
+    const char = text[index];
+    if (char === '"') {
+      let backslashes = 0;
+      for (let previous = index - 1; previous >= 0 && text[previous] === "\\"; previous -= 1) {
+        backslashes += 1;
+      }
+      if (backslashes % 2 === 0) quoted = !quoted;
+    } else if (!quoted && char === "}") depth += 1;
+    else if (!quoted && char === "{") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return null;
+}
+
 /** Recovers the single JSON object from a model's final message, recording how much digging it took. */
 function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown } | { why: string | null } {
   const trimmed = raw.trim();
@@ -120,14 +141,14 @@ function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown 
     sliceFailure = parsed.why;
 
     // Some provider streams retain an abandoned partial object immediately
-    // before the corrected final object. Work backward from the final closing
-    // brace and accept only a suffix that parses whole. The bound prevents a
-    // brace-heavy malformed response from turning salvage into unbounded work.
-    let opening = trimmed.lastIndexOf("{", last - 1);
-    for (let attempts = 0; opening > first && attempts < 1_024; attempts += 1) {
+    // before the corrected final object. A valid JSON suffix ending at `last`
+    // must begin at the opening brace paired with that close, so one
+    // string-aware scan is sufficient; repeatedly parsing every earlier brace
+    // only re-parsed longer prefixes of the same malformed suffix.
+    const opening = openingBraceFor(trimmed, last);
+    if (opening !== null && opening > first) {
       const suffix = tryParseObject(trimmed.slice(opening, last + 1));
       if (suffix.ok) return { extraction: "trailing-object", value: suffix.value };
-      opening = trimmed.lastIndexOf("{", opening - 1);
     }
 
     // The suffix scan cannot recover the first object when prose after it

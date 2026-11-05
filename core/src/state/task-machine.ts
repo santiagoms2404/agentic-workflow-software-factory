@@ -27,6 +27,8 @@ import {
 } from "./errors.ts";
 import { ceilingFor, fitsCeiling, type Tier } from "./tiers.ts";
 import type { ReviewFinding, ReviewVerdict } from "../contracts/index.ts";
+import type { PLAN_OUTPUT_SCHEMA_ID } from "../contracts/plan-output.ts";
+import type { SCOUT_OUTPUT_SCHEMA_ID } from "../contracts/scout-output.ts";
 
 // ---------------------------------------------------------------------------
 // Vocabulary.
@@ -219,7 +221,7 @@ export interface LandingEvidence {
 /** Host-observed proof that a shipped T0 analysis intentionally produced no tree. */
 export interface ReadOnlyResultEvidence {
   /** The two shipped analysis envelopes that intentionally produce no candidate tree. */
-  schema: "awsf.scout-output/v1" | "awsf.plan-output/v1";
+  schema: typeof SCOUT_OUTPUT_SCHEMA_ID | typeof PLAN_OUTPUT_SCHEMA_ID;
   /** Host observation across the managed worktree, never an agent claim. */
   writesObserved: boolean;
 }

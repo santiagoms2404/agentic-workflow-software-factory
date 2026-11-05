@@ -15,6 +15,7 @@ import {
 import {
   transition,
   type Actor,
+  type GateEvidence,
   type TransitionResult,
 } from "../../state/task-machine.ts";
 import type { OwnerTerminal } from "../tty.ts";
@@ -30,7 +31,7 @@ import {
   type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
-import { readAttemptEvidence, recordedReviews, supersededReviewLines } from "./review-record.ts";
+import { candidateGateEvidence, readAttemptEvidence, recordedReviews, supersededReviewLines } from "./review-record.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
 import { verifiedTargetSeed } from "../../workflow/candidate-seed.ts";
 import { PROVE_WORKFLOW_ID, ReplayNotDeliverable } from "../../workflow/prove/compile.ts";
@@ -65,6 +66,7 @@ function authorizeLanding(
   interactive: boolean,
   inspection: LandingInspection,
   confirmed: boolean,
+  gateEvidence?: GateEvidence,
 ): TransitionResult {
   return transition({
     from: status.lifecycleState,
@@ -77,6 +79,7 @@ function authorizeLanding(
     evidence: {
       candidateSha: status.candidateSha ?? "",
       gatesPass: status.gatesPass,
+      ...(gateEvidence === undefined ? {} : { gateEvidence }),
       landing: {
         shaDisplayed: status.candidateSha ?? "",
         summaryDisplayed: inspection.summary,
@@ -354,7 +357,8 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
       integrationBaseSha: current.baseSha!, bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest });
   }
   options.assertAdvancement?.(current.sessionId, "LANDING");
-  const decision = authorizeLanding(current, actor, true, inspection, true);
+  const gateEvidence = candidateGateEvidence(evidence, current.candidateSha, current.sessionId);
+  const decision = authorizeLanding(current, actor, true, inspection, true, gateEvidence);
   const now = (options.now ?? ((): string => new Date().toISOString()))();
   const landing = nextRevision(current, {
     lifecycleState: decision.to,

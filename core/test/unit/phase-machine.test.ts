@@ -322,6 +322,7 @@ test("an uncorrectable fault still reaches FAILED directly from RUNNING", () => 
 test("the host draws the automatic tranche and the owner draws the owner tranche", () => {
   const correcting = { from: "VALIDATING", to: "CORRECTING", cause: "gate-violation" } as const;
   assert.equal(phaseTransition(input({ ...correcting, actor: "host" })).correctionTranche, "auto");
+  assert.equal(phaseTransition(input({ ...correcting })).correctionTranche, "auto");
   assert.equal(phaseTransition(input({ ...correcting, actor: "owner" })).correctionTranche, "owner");
   assert.equal(phaseTransition(input({ ...correcting, actor: "human" })).correctionTranche, "owner");
 });

@@ -16,6 +16,7 @@
 //
 // Pure, like the task machine: nothing here spawns, waits, or reads a clock.
 
+import { ACTOR_TRANCHE, type Actor } from "./task-machine.ts";
 import {
   CorrectionAllowanceExhausted,
   IllegalPhaseTransition,
@@ -99,7 +100,7 @@ export interface PhaseTransitionInput {
   /** VALIDATING → CORRECTING, and every → FAILED: what went wrong. */
   cause?: PhaseCause;
   /** Who authorizes a correction. `host` draws `auto`, `owner`/`human` draw `owner`. */
-  actor?: "host" | "owner" | "human";
+  actor?: Actor;
   corrections: PhaseCorrections;
   allowance: PhaseCorrections;
 }
@@ -186,7 +187,7 @@ export function phaseTransition(input: PhaseTransitionInput): PhaseTransitionRes
     // The allowance is per phase — `correction_allowance: {auto: 1, owner: 1}` —
     // and running out is not an error state, it is the road to VALIDATING →
     // FAILED and from there to L8 / L13.
-    correctionTranche = input.actor === "host" || input.actor === undefined ? "auto" : "owner";
+    correctionTranche = ACTOR_TRANCHE[input.actor ?? "host"];
     const used = correctionTranche === "auto" ? corrections.auto : corrections.owner;
     const limit = correctionTranche === "auto" ? allowance.auto : allowance.owner;
     if (used >= limit) {

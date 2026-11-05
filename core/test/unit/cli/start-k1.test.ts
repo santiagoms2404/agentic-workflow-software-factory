@@ -134,6 +134,31 @@ test("the preflight-refused record is a registered host record, and a field is n
   assert.throws(() => assertPreflightRefusedRecord({ ...base, refusal: "no-record", field: "invented" }), /invalid awsf.preflight-refused/u);
 });
 
+test("a legacy absent ceiling uses the enforcement default, not the current config dial", async () => {
+  const b = box("legacy-ceiling");
+  try {
+    const configured = readFileSync(b.configPath, "utf8");
+    const lowerDial = configured.replace("T2: 5", "T2: 2");
+    assert.notEqual(lowerDial, configured);
+    writeFileSync(b.configPath, lowerDial);
+
+    const created = await draft(b, "legacy-ceiling");
+    const statusPath = join(created.attemptDir, "status.json");
+    const persisted = JSON.parse(readFileSync(statusPath, "utf8")) as { budget: Record<string, unknown> };
+    delete persisted.budget.ceiling;
+    writeFileSync(statusPath, JSON.stringify(persisted));
+    const legacy = await readAttempt(created.attemptDir);
+    await persistAttempt(created.attemptDir, legacy.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(legacy, { lastActivity: "legacy status read without a persisted ceiling" }),
+    });
+
+    const prepared = await startUnderK1(startOptions(b, created.attemptDir));
+    assert.equal(prepared.lifecycleState, "PREPARED");
+    assert.equal(prepared.budget.ceiling, undefined, "the preflight does not invent a persisted legacy dial");
+  } finally { b.close(); }
+});
+
 test("a fresh preflight and the owner's confirmation let start prepare the attempt", async () => {
   const b = box("pass");
   try {

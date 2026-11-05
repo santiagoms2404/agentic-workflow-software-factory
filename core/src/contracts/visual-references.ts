@@ -1,4 +1,5 @@
 import { Type, type Static } from "@sinclair/typebox";
+import { OBJECT_ID_PATTERN, SHA256_HEX_PATTERN } from "./typebox.ts";
 
 // Visual references: owner-authorized design images a phase must open through
 // its own image tool before any visual decision.
@@ -32,7 +33,7 @@ export const VISUAL_MEDIA_TYPES = ["image/png", "image/jpeg"] as const;
 
 const FrameIdSchema = Type.String({ pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" });
 const IdentifierSchema = Type.String({ minLength: 1, pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" });
-const Sha256Schema = Type.String({ pattern: "^[a-f0-9]{64}$" });
+const Sha256Schema = Type.String({ pattern: SHA256_HEX_PATTERN });
 const RelativePathSchema = Type.String({ minLength: 1, maxLength: 1024 });
 
 export const VisualSelectionSchema = Type.Union([
@@ -87,7 +88,7 @@ export const VisualReferencesBoundSchema = Type.Object({
   schema: Type.Literal(VISUAL_REFERENCES_BOUND_SCHEMA_ID),
   bindingDigest: Sha256Schema,
   indexSha256: Sha256Schema,
-  indexCommit: Type.String({ pattern: "^[a-f0-9]{40}$" }),
+  indexCommit: Type.String({ pattern: OBJECT_ID_PATTERN }),
   selection: VisualSelectionSchema,
   phases: Type.Array(IdentifierSchema, { minItems: 1 }),
   frames: Type.Array(BoundFrameSchema, { minItems: 1, maxItems: VISUAL_REFERENCE_LIMITS.maxFrames }),

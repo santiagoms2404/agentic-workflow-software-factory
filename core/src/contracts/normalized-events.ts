@@ -1,4 +1,4 @@
-import { Type, type Static, type TProperties } from "@sinclair/typebox";
+import { Type, type Static, type TProperties, type TSchema } from "@sinclair/typebox";
 import { NullableCount, stringUnion, type UnionOf } from "./typebox.ts";
 
 // The normalized event vocabulary — twelve kinds, adopted from
@@ -226,22 +226,9 @@ export const NORMALIZED_EVENT_SCHEMAS = {
   "run.completed": RunCompletedEventSchema,
   "run.failed": RunFailedEventSchema,
   "run.cancelled": RunCancelledEventSchema,
-} as const;
+} as const satisfies Record<NormalizedEventKind, TSchema>;
 
-export const NormalizedEventSchema = Type.Union([
-  RunStartedEventSchema,
-  ModelResolvedEventSchema,
-  TextDeltaEventSchema,
-  ThinkingDeltaEventSchema,
-  ToolRequestedEventSchema,
-  ToolCompletedEventSchema,
-  UsageEventSchema,
-  QuotaEventSchema,
-  NoticeEventSchema,
-  RunCompletedEventSchema,
-  RunFailedEventSchema,
-  RunCancelledEventSchema,
-]);
+export const NormalizedEventSchema = Type.Union(Object.values(NORMALIZED_EVENT_SCHEMAS));
 export type NormalizedEvent = Static<typeof NormalizedEventSchema>;
 
 /** Host-minted tool call id. Provider ids are never propagated. */

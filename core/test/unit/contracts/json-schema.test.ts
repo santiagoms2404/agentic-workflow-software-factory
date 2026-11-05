@@ -100,6 +100,17 @@ test("injection replaces every occurrence of the placeholder", () => {
   assert.equal(compiled.split('"$id"').length - 1, 2);
 });
 
+test("injected replacement text is not scanned for other placeholders", () => {
+  const replacement = `literal ${OUTPUT_SCHEMA_PLACEHOLDER} and ${PREVIOUS_ENVELOPE_PLACEHOLDER}`;
+  const compiled = injectOutputSchema(
+    `${OUTPUT_SCHEMA_PLACEHOLDER}\n${PREVIOUS_ENVELOPE_PLACEHOLDER}`,
+    "awsf.build-output/v1",
+    { [PREVIOUS_ENVELOPE_PLACEHOLDER]: replacement },
+  );
+  assert.ok(compiled.endsWith(replacement));
+  assert.equal(compiled.split("```json").length - 1, 1);
+});
+
 test("a template with no placeholder is a compile-time error, not a silently schema-less prompt", () => {
   assert.throws(() => injectOutputSchema("You are the planner.", "awsf.plan-output/v1"), MissingSchemaPlaceholderError);
 });

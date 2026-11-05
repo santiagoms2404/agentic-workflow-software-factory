@@ -23,6 +23,14 @@ test("the same spec is refused as a --route flag with the same reason (B3-16)", 
   assert.throws(() => parseRouteFlag(`builder=${TWO_AT}`), /not a representable selector/u);
 });
 
+test("a model id with a slash remains one route-arm model value (B3-55)", () => {
+  const arm = parseRouteArm("openrouter/openrouter/openai/gpt-5@high");
+  assert.deepEqual(
+    { adapter: arm.adapter, provider: arm.provider, model: arm.model, effort: arm.effort },
+    { adapter: "openrouter", provider: "openrouter", model: "openai/gpt-5", effort: "high" },
+  );
+});
+
 test("a plain arm and the matching --route flag name the same adapter, provider, model and effort", () => {
   const arm = parseRouteArm("claude/vertex/claude-3-5-sonnet@high");
   assert.deepEqual(

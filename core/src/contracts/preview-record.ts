@@ -12,6 +12,7 @@
 // way a hand-set flag does, and it needs no schema change.
 import { Type, type Static } from "@sinclair/typebox";
 import { PROJECT_DELIVERY_POSTURES, type ProjectCatalog } from "../registry/catalog-schema.ts";
+import { OBJECT_ID_PATTERN } from "./typebox.ts";
 import { stringUnion } from "./typebox.ts";
 
 export const PREVIEW_RECORD_SCHEMA = "awsf.preview/v1" as const;
@@ -21,7 +22,7 @@ export type DeliveryPosture = (typeof PROJECT_DELIVERY_POSTURES)[number];
 export type PreviewForm = (typeof PREVIEW_FORMS)[number];
 export type PreviewDeclaration = NonNullable<ProjectCatalog["repositories"][string]["preview"]>;
 
-const Sha = Type.String({ pattern: "^[0-9a-f]{40}$" });
+const Sha = Type.String({ pattern: OBJECT_ID_PATTERN });
 
 export const PreviewRecordSchema = Type.Object(
   {
