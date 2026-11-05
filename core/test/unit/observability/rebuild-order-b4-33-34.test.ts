@@ -167,3 +167,100 @@ test("a task-level decision attaches to the attempt that was newest when it was 
     }
   });
 });
+
+function decisionFor(id: string, attempt: number | null, at: string): DecisionRecord {
+  return {
+    id,
+    project: "p",
+    taskId: "t",
+    attempt,
+    questionSet: { id: "replay-check", version: 1 },
+    outcome: "answered",
+    at,
+  } as unknown as DecisionRecord;
+}
+
+test("a decision recorded before its task's first journal record waits for that session, then attaches to it (B4-33)", async () => {
+  await withDir(async (dir) => {
+    const journalPath = join(dir, "attempt-1.jsonl");
+    writeJournal(journalPath, 1, [[1, "2026-08-06T00:00:02.000Z"], [2, "2026-08-06T00:00:03.000Z"]]);
+    const targetPath = join(dir, "awsf.db");
+    // Both are stamped before the session's first record, so neither has a session to attach to yet.
+    const report = await rebuildDatabase({
+      targetPath,
+      stamp: () => "b4-33-held",
+      sources: [sourceFor(1, journalPath)],
+      decisions: [
+        decisionFor("d-task", null, "2026-08-06T00:00:01.000Z"),
+        decisionFor("d-attempt", 1, "2026-08-06T00:00:01.500Z"),
+      ],
+    });
+    assert.equal(report.ok, true, report.ok ? "" : report.reason);
+
+    const db = openDatabase(targetPath, { readonly: true });
+    try {
+      const rows = (db.prepare("SELECT event_id, session_id FROM events WHERE type = 'decision' ORDER BY event_row")
+        .all() as { event_id: string; session_id: string }[]).map((row) => ({ ...row }));
+      assert.deepEqual(rows, [
+        { event_id: "p:t:1:decision:d-task", session_id: "p:t:1" },
+        { event_id: "p:t:1:decision:d-attempt", session_id: "p:t:1" },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+test("a held decision for a later attempt does not hold back a task-level decision that attaches now (B4-33)", async () => {
+  await withDir(async (dir) => {
+    const first = join(dir, "attempt-1.jsonl");
+    const second = join(dir, "attempt-2.jsonl");
+    writeJournal(first, 1, [[1, "2026-08-06T00:00:02.000Z"]]);
+    writeJournal(second, 2, [[1, "2026-08-06T00:00:06.000Z"]]);
+    const targetPath = join(dir, "awsf.db");
+    const report = await rebuildDatabase({
+      targetPath,
+      stamp: () => "b4-33-independent",
+      sources: [sourceFor(1, first), sourceFor(2, second)],
+      decisions: [
+        decisionFor("d-later", 2, "2026-08-06T00:00:01.000Z"),
+        decisionFor("d-now", null, "2026-08-06T00:00:03.000Z"),
+      ],
+    });
+    assert.equal(report.ok, true, report.ok ? "" : report.reason);
+
+    const db = openDatabase(targetPath, { readonly: true });
+    try {
+      const rows = (db.prepare("SELECT event_id, session_id FROM events WHERE type = 'decision' ORDER BY event_row")
+        .all() as { event_id: string; session_id: string }[]).map((row) => ({ ...row }));
+      assert.deepEqual(rows, [
+        { event_id: "p:t:1:decision:d-now", session_id: "p:t:1" },
+        { event_id: "p:t:2:decision:d-later", session_id: "p:t:2" },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+test("a decision whose session never appears is not projected, and the rebuild still succeeds (B4-33)", async () => {
+  await withDir(async (dir) => {
+    const journalPath = join(dir, "attempt-1.jsonl");
+    writeJournal(journalPath, 1, [[1, "2026-08-06T00:00:02.000Z"]]);
+    const targetPath = join(dir, "awsf.db");
+    const report = await rebuildDatabase({
+      targetPath,
+      stamp: () => "b4-33-orphan",
+      sources: [sourceFor(1, journalPath)],
+      decisions: [decisionFor("d-orphan", 7, "2026-08-06T00:00:01.000Z")],
+    });
+    assert.equal(report.ok, true, report.ok ? "" : report.reason);
+
+    const db = openDatabase(targetPath, { readonly: true });
+    try {
+      assert.equal((db.prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'decision'").get() as { n: number }).n, 0);
+    } finally {
+      db.close();
+    }
+  });
+});

@@ -98,6 +98,25 @@ export async function reclaimLock(lockPath: string, expected: LockHolder | null)
  */
 const processQueues = new Map<string, Promise<void>>();
 
+/** How a `withLock` call treats a lock that is already held. */
+export interface LockOptions {
+  /**
+   * `true` (the default) queues behind a holder in this process, so two writers
+   * of one attempt take turns (B4-38). `false` refuses at once, by the lock's
+   * name, when the lock is held here or in another process, for a caller that
+   * reports a busy lock rather than wait on a holder that may never come back.
+   */
+  wait?: boolean;
+}
+
+/** The refusal a `wait: false` caller gets: the same `EEXIST` a held lock file gives, naming the lock. */
+function lockHeld(lockPath: string): NodeJS.ErrnoException {
+  const error = new Error(`EEXIST: lock ${lockPath} is held by another writer in this process`) as NodeJS.ErrnoException;
+  error.code = "EEXIST";
+  error.path = lockPath;
+  return error;
+}
+
 /**
  * The attempt's exclusive lock.
  *
@@ -126,13 +145,17 @@ export class AttemptLock {
     return this.sealedState !== null;
   }
 
-  async withLock<T>(fn: () => Promise<T>): Promise<T> {
+  async withLock<T>(fn: () => Promise<T>, options: LockOptions = {}): Promise<T> {
     if (this.sealedState !== null) {
       throw new SealedAttempt(this.sealedState);
     }
 
     const key = this.lockPath;
-    const previous = processQueues.get(key) ?? Promise.resolve();
+    const queued = processQueues.get(key);
+    if (options.wait === false && queued !== undefined) {
+      throw lockHeld(this.lockPath);
+    }
+    const previous = queued ?? Promise.resolve();
     let release = (): void => {};
     const tail = new Promise<void>((resolve) => {
       release = resolve;

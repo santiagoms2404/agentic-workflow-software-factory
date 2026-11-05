@@ -213,7 +213,8 @@ export async function relateCommand(options: RelateCommandOptions): Promise<Rela
   // overwrite this command promises to refuse. The lock is the existing
   // `AttemptLock`: a second holder, in this process or another, fails loudly
   // on the `wx` lock file naming `relations.lock` rather than waiting on a
-  // holder that may never come back.
+  // holder that may never come back. `wait: false` keeps that for a second
+  // holder in this process too, where the default would queue it (B4-38).
   const relation = await new AttemptLock(relationLockPath(root)).withLock(async (): Promise<TaskRelation> => {
     const existing = await declaredContinuation(options.stateRoot, project, taskId);
     if (existing !== null) throw new RelateAlreadyDeclared(project, taskId, existing);
@@ -224,7 +225,7 @@ export async function relateCommand(options: RelateCommandOptions): Promise<Rela
     };
     await appendTaskRelation(root, declared);
     return declared;
-  });
+  }, { wait: false });
   // Durable first, projected second: the declaration is the journal's, and a
   // projection that cannot be written degrades the screen, never the record.
   options.projectRelation?.(relation);

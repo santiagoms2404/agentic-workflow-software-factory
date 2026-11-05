@@ -33,6 +33,7 @@ import {
   type SessionInit,
 } from "./projector.ts";
 import { getSession } from "./queries.ts";
+import { scrubCredentialString } from "../policy/redaction.ts";
 
 // ---------------------------------------------------------------------------
 // The degraded hold
@@ -137,7 +138,8 @@ export interface RebuildOptions {
   attributions?: readonly AttributionRecord[];
   /**
    * Every task's Jev decision records, each task's in file order (W19 DD3).
-   * Task-scoped like attributions, and projected after them.
+   * Task-scoped like attributions, they are replayed in time with the journals
+   * (B4-33), and held until the session they attach to has been replayed.
    */
   decisions?: readonly DecisionRecord[];
   migrationsDir?: string;
@@ -254,6 +256,11 @@ function mergeStreams<T>(streams: readonly (readonly T[])[], precedes: (a: T, b:
   return out;
 }
 
+/** The key a task's decisions and its replayed records share. */
+function taskKey(project: string, taskId: string): string {
+  return `${project}\u0000${taskId}`;
+}
+
 /**
  * Each task's decisions as one stream, in file order (B4-33). A decision's
  * `at` places it in the replay, so it sees the attempts that existed when it
@@ -262,12 +269,61 @@ function mergeStreams<T>(streams: readonly (readonly T[])[], precedes: (a: T, b:
 function decisionStreams(decisions: readonly DecisionRecord[]): ReplayItem[][] {
   const byTask = new Map<string, ReplayItem[]>();
   for (const record of decisions) {
-    const key = `${record.project}\u0000${record.taskId}`;
+    const key = taskKey(record.project, record.taskId);
     const stream = byTask.get(key) ?? [];
     stream.push({ kind: "decision", record });
     byTask.set(key, stream);
   }
   return [...byTask.values()];
+}
+
+/**
+ * Whether the session a decision attaches to is in the candidate yet: the
+ * attempt it names, or for a task-level decision any attempt of its task. The
+ * lookup is the one `projectDecision` makes, so "present" means "will attach".
+ */
+function decisionTargetExists(db: DatabaseSync, record: DecisionRecord): boolean {
+  const row = db.prepare(
+    "SELECT 1 AS found FROM sessions WHERE project_slug = ? AND task_id = ? AND (? IS NULL OR attempt = ?) LIMIT 1",
+  ).get(
+    scrubCredentialString(record.project),
+    scrubCredentialString(record.taskId),
+    record.attempt,
+    record.attempt,
+  );
+  return row !== undefined;
+}
+
+/**
+ * Projects every held decision of one task whose session now exists, in file
+ * order, and keeps the rest held. Returns the failure message, or `null`.
+ *
+ * A decision whose session has not been replayed yet waits here, and the first
+ * record of that session releases it. This is what keeps a decision from being
+ * dropped when its `at` precedes its task's first journal record (B4-33 places
+ * it in time, and the time can be earlier than the session it belongs to). A
+ * decision whose session never appears is never projected, which is also what
+ * the live projection does when no session exists to attach it to.
+ */
+function drainHeldDecisions(db: DatabaseSync, held: Map<string, DecisionRecord[]>, key: string): string | null {
+  const queue = held.get(key);
+  if (queue === undefined) return null;
+  const waiting: DecisionRecord[] = [];
+  for (const record of queue) {
+    if (!decisionTargetExists(db, record)) {
+      waiting.push(record);
+      continue;
+    }
+    try {
+      projectDecision(db, record);
+    } catch (error) {
+      return `projection failed replaying decision ${record.id} of ${record.project}/${record.taskId}: ` +
+        `${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  if (waiting.length === 0) held.delete(key);
+  else held.set(key, waiting);
+  return null;
 }
 
 function defaultStamp(): string {
@@ -460,16 +516,16 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
     for (const { source } of loaded) {
       if (source.attemptStatus === undefined) createSession(db, source.session);
     }
+    // Decisions not yet attachable, per task, in file order (see drainHeldDecisions).
+    const held = new Map<string, DecisionRecord[]>();
     for (const item of merged) {
       if (item.kind === "decision") {
-        try {
-          projectDecision(db, item.record);
-        } catch (error) {
-          return refuse(
-            `projection failed replaying decision ${item.record.id} of ${item.record.project}/${item.record.taskId}: ` +
-              `${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
+        const key = taskKey(item.record.project, item.record.taskId);
+        const queue = held.get(key) ?? [];
+        queue.push(item.record);
+        held.set(key, queue);
+        const failure = drainHeldDecisions(db, held, key);
+        if (failure !== null) return refuse(failure);
         continue;
       }
       const { source, sessionId, record } = item;
@@ -493,6 +549,11 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
         );
       }
       if (outcome.applied) projected += 1;
+      // This record may have created the session a held decision waits for.
+      if (held.size > 0) {
+        const failure = drainHeldDecisions(db, held, taskKey(source.session.projectSlug, source.session.taskId));
+        if (failure !== null) return refuse(failure);
+      }
     }
     // After every journal, so every session an attribution names already
     // exists. In file order, so the latest record for an attempt is still the
