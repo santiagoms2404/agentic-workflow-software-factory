@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { initCommand } from "../../../src/cli/commands/init.ts";
 import { filterRuns, metricsFilter, parseUtcInstant } from "../../../src/cli/commands/metrics.ts";
-import { CONTENT_TYPES, previewCommand } from "../../../src/cli/commands/preview.ts";
+import { CONTENT_TYPES, livePreviewServer, PreviewRefused, previewCommand, reservePreviewServer } from "../../../src/cli/commands/preview.ts";
 import { candidateModifiesProjectCatalog, publishCommand, publishPolicyFor } from "../../../src/cli/commands/publish.ts";
 import { nextRevision, persistAttempt } from "../../../src/cli/commands/attempt.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
@@ -131,7 +131,49 @@ test("B9-16: CONTENT_TYPES includes .mjs, .wasm, .json, and common web extension
 });
 
 // ---------------------------------------------------------------------------
-// 4. B9-17 (preview.ts:303): serveBundle failure handling covers lease & preview.json writes
+// 4. B9-40 (preview.ts:282): malformed and recycled-pid leases fail safely
+// ---------------------------------------------------------------------------
+
+test("B9-40: a torn preview lease is not treated as an absent server", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-b9-40-torn-"));
+  try {
+    writeFileSync(join(root, "preview-server.json"), "{\"schema\":\"awsf.preview-server/v1\"");
+    await assert.rejects(livePreviewServer(root), PreviewRefused);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("B9-40: concurrent preview claims reserve one server slot", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-b9-40-race-"));
+  try {
+    const claims = await Promise.allSettled([
+      reservePreviewServer(root, "task-a", "a".repeat(40)),
+      reservePreviewServer(root, "task-b", "b".repeat(40)),
+    ]);
+    assert.equal(claims.filter((claim) => claim.status === "fulfilled").length, 1);
+    const refused = claims.find((claim) => claim.status === "rejected");
+    assert.ok(refused?.status === "rejected" && refused.reason instanceof PreviewRefused);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("B9-40: a recycled pid does not make an old preview lease live", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-b9-40-reused-pid-"));
+  try {
+    writeFileSync(join(root, "preview-server.json"), `${JSON.stringify({
+      schema: "awsf.preview-server/v1", pid: process.pid, startIdentity: "previous-process", state: "building",
+      url: null, task: "old-task", candidateSha: "a".repeat(40),
+    })}\n`);
+    assert.equal(await livePreviewServer(root), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 5. B9-17 (preview.ts:303): serveBundle failure handling covers lease & preview.json writes
 // ---------------------------------------------------------------------------
 
 test("B9-17: if lease write or preview.json write fails after server start, server is closed and lease released", async () => {

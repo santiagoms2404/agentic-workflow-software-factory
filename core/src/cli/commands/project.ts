@@ -31,7 +31,7 @@ export class ProjectAlreadyRegisteredError extends Error {
 }
 
 function repositoryPaths(values: readonly string[]): Record<string, string> {
-  const repositories: Record<string, string> = {};
+  const repositories: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const value of values) {
     const separator = value.indexOf("=");
     const id = value.slice(0, separator);
@@ -39,7 +39,7 @@ function repositoryPaths(values: readonly string[]): Record<string, string> {
     if (separator <= 0 || path.length === 0) {
       throw new Error(`--repository must be <id>=<absolute-path>; got ${JSON.stringify(value)}`);
     }
-    if (repositories[id] !== undefined) throw new Error(`--repository was provided more than once for ${JSON.stringify(id)}`);
+    if (Object.hasOwn(repositories, id)) throw new Error(`--repository was provided more than once for ${JSON.stringify(id)}`);
     repositories[id] = path;
   }
   return repositories;
@@ -99,7 +99,7 @@ function serializableResolvedProject(project: ResolvedProject): ProjectRegisterO
 export async function registerProject(options: RegisterProjectOptions): Promise<ProjectRegisterOutput> {
   const catalog = loadCatalog(await readFile(options.catalogPath, "utf8"));
   const repositories = repositoryPaths(options.repositories);
-  const missing = Object.keys(catalog.repositories).filter((id) => repositories[id] === undefined);
+  const missing = Object.keys(catalog.repositories).filter((id) => !Object.hasOwn(repositories, id));
   if (missing.length > 0) throw new Error(`missing explicit --repository path for: ${missing.join(", ")}`);
 
   const placement = loadPlacement(toYaml({
@@ -111,8 +111,7 @@ export async function registerProject(options: RegisterProjectOptions): Promise<
   if (await fileExists(placementPath)) throw new ProjectAlreadyRegisteredError(catalog.project.slug);
 
   const resolved = resolveProject(catalog, placement, options.stateRoot);
-  await writePlacement(options.stateRoot, catalog.project.slug, placement);
-  const placementFileBytes = await readFile(placementPath, "utf8");
+  const placementFileBytes = toYaml(placement);
   const line = `Registered ${resolved.slug} with ${Object.keys(resolved.repositories).length} repository(ies).`;
   const output: ProjectRegisterOutput = {
     schema: PROJECT_REGISTER_OUTPUT_SCHEMA_ID,
@@ -128,6 +127,7 @@ export async function registerProject(options: RegisterProjectOptions): Promise<
   if (!Value.Check(ProjectRegisterOutputSchema, output)) {
     throw new Error("host composed an invalid project register envelope");
   }
+  await writePlacement(options.stateRoot, catalog.project.slug, placement);
   return output;
 }
 

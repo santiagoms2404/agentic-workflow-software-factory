@@ -22,6 +22,7 @@ import {
   ReviewDegradeNoReviewPhase,
   ReviewDegradeNotInteractive,
   ReviewDegradeReasonRequired,
+  assertDegradeReason,
   degradeReviewCommand,
   workflowBuysReview,
 } from "../../../src/cli/commands/degrade-review.ts";
@@ -64,6 +65,10 @@ test("a piped stdin cannot take the act, whatever it is asking for", async (t) =
     ReviewDegradeNotInteractive,
   );
   assert.equal((await readAttempt(dir)).reviewDegradation, null, "nothing was written");
+});
+
+test("reason bounding never splits an astral code point", () => {
+  assert.equal(assertDegradeReason(`${"x".repeat(1_999)}😀tail`), "x".repeat(1_999));
 });
 
 test("the reason is required, bounded, and never credential-shaped", async (t) => {

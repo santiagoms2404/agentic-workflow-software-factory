@@ -148,6 +148,28 @@ test("a registration resolution failure leaves no placement file", async () => {
   }
 });
 
+test("an omitted prototype-named repository is refused before writing placement", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-project-prototype-id-"));
+  const stateRoot = join(root, "state");
+  const repository = join(root, "plans");
+  const catalogPath = join(repository, "awsf.project.yaml");
+  const placementPath = placementFilePath(stateRoot, "prototype-project");
+  try {
+    requireDirectory(repository);
+    writeFileSync(catalogPath, catalog("prototype-project", {
+      plans: planRepository(),
+      constructor: { role: "service", default_branch: "main" },
+    }));
+
+    await assert.rejects(
+      registerProject({ stateRoot, catalogPath, repositories: [`plans=${repository}`] }),
+    );
+    assert.equal(existsSync(placementPath), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("a second registration refuses without changing the placement file bytes", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-project-reregister-"));
   const stateRoot = join(root, "state");

@@ -135,31 +135,53 @@ export async function journeyCommand(options: JourneyCommandOptions): Promise<Jo
 
   const at = (options.now ?? ((): string => new Date().toISOString()))();
   const recordedEvidence = await readAttemptEvidence(options.attemptDir);
-  const ordinal = recordedEvidence.reduce(
-    (highest, evidence) => evidence.type === "phase" ? Math.max(highest, evidence.phase.ordinal) : highest,
-    0,
-  ) + 1;
   const phaseId = `${status.sessionId}:owner-journey`;
+  const phaseDescription = `Owner ran the recorded end-user journey ${trimmedId} against exact candidate ${status.candidateSha}`;
+  const legacyPhaseDescription = `Owner ran the recorded end-user journey ${trimmedId} against the exact candidate`;
+  const recordedActivity = `owner journey ${trimmedId} recorded against ${status.candidateSha}`;
+  const existingPhase = recordedEvidence.find(
+    (evidence) => evidence.type === "phase" && evidence.phase.phaseId === phaseId,
+  );
+  const existingPhaseMatches = existingPhase?.type === "phase" && existingPhase.phase.key === "owner-journey" &&
+    existingPhase.phase.status === "SUCCEEDED" &&
+    (existingPhase.phase.description === phaseDescription ||
+      (existingPhase.phase.description === legacyPhaseDescription && status.lastActivity === recordedActivity));
+  if (existingPhase !== undefined && !existingPhaseMatches) {
+    throw new JourneyNotApplicable("an existing owner-journey phase belongs to another journey or candidate");
+  }
 
-  // The phase row is written first because the gate references it: a gate result
-  // with no phase is not storable, and a journey with no gate is not evidence.
-  const withPhase = await persistAttempt(options.attemptDir, status.revision, {
-    kind: "attempt.updated",
-    next: nextRevision(status, {
-      lastActivityAt: at,
-      lastActivity: `owner journey ${trimmedId} recorded against ${status.candidateSha}`,
-    }),
-    evidence: {
-      type: "phase",
-      phase: {
-        phaseId, ordinal, key: "owner-journey", name: "owner journey",
-        kind: "engineer", owner: "owner",
-        description: `Owner ran the recorded end-user journey ${trimmedId} against the exact candidate`,
-        status: "SUCCEEDED", correctionCount: 0, maxCorrections: 0,
-        errorCode: null, errorMessage: null, startedAt: at, endedAt: at, createdAt: at,
+  // The phase row is written first because the gate references it. If the
+  // process stopped after that durable write, a retry reuses the exact phase
+  // rather than appending the same phase id a second time.
+  let withPhase: AttemptStatus;
+  if (existingPhase !== undefined) {
+    withPhase = await readAttempt(options.attemptDir);
+    if (withPhase.lifecycleState !== "AWAITING_OWNER" || withPhase.candidateSha !== status.candidateSha || withPhase.journeyApproved) {
+      throw new JourneyNotApplicable("the candidate changed after its owner-journey phase was recorded");
+    }
+  } else {
+    const ordinal = recordedEvidence.reduce(
+      (highest, evidence) => evidence.type === "phase" ? Math.max(highest, evidence.phase.ordinal) : highest,
+      0,
+    ) + 1;
+    withPhase = await persistAttempt(options.attemptDir, status.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(status, {
+        lastActivityAt: at,
+        lastActivity: `owner journey ${trimmedId} recorded against ${status.candidateSha}`,
+      }),
+      evidence: {
+        type: "phase",
+        phase: {
+          phaseId, ordinal, key: "owner-journey", name: "owner journey",
+          kind: "engineer", owner: "owner",
+          description: phaseDescription,
+          status: "SUCCEEDED", correctionCount: 0, maxCorrections: 0,
+          errorCode: null, errorMessage: null, startedAt: at, endedAt: at, createdAt: at,
+        },
       },
-    },
-  }, options.projectRecord);
+    }, options.projectRecord);
+  }
 
   return {
     status: await persistAttempt(options.attemptDir, withPhase.revision, {

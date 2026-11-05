@@ -336,7 +336,8 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
     if (!await options.terminal.confirm("Approve these exact protected contents and binding chain for this candidate?")) return { status: current, confirmed: false };
     const unsigned: ProtectedCandidateAuthorization = { schema: "awsf.protected-candidate-authorization/v1", id: randomUUID(),
       sessionId: current.sessionId, attempt: current.attempt, candidateSha: current.candidateSha, integrationBaseSha: current.baseSha!,
-      bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest, confirmedAt: new Date().toISOString(), digest: "" };
+      bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest,
+      confirmedAt: (options.now ?? ((): string => new Date().toISOString()))(), digest: "" };
     protectedAuthorization = { ...unsigned, digest: protectedFactDigest(unsigned) };
   }
   options.terminal.write("Cost: 0 provider calls. This locally fast-forwards the canonical branch to the exact candidate and invalidates no passing gate.");

@@ -129,7 +129,10 @@ export function assertRelateReason(reason: string): string {
   if (scrubCredentialString(normalized) !== normalized || normalized.includes(REDACTED_VALUE)) {
     throw new RelateCredentialRejected("relate reason");
   }
-  return normalized.length <= MAX_REASON ? normalized : normalized.slice(0, MAX_REASON);
+  if (normalized.length <= MAX_REASON) return normalized;
+  const last = normalized.charCodeAt(MAX_REASON - 1);
+  const end = last >= 0xd800 && last <= 0xdbff ? MAX_REASON - 1 : MAX_REASON;
+  return normalized.slice(0, end);
 }
 
 /**

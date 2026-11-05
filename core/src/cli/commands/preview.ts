@@ -14,18 +14,21 @@
 // No clock is read here (W17 INV-1): the build time is the caller's `now`. The
 // build runs through the transport broker's command boundary, exactly as a gate
 // command does, and nothing here adds a route, a push, or a skill.
+import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
-import { lstat, readdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { SECURITY_HEADERS, validateAuthority } from "../../api/security.ts";
 import {
   PREVIEW_RECORD_SCHEMA, PreviewRecordSchema, planPreview, type PreviewPlan, type PreviewRecord,
 } from "../../contracts/preview-record.ts";
+import { createHostPort } from "../../execution/process-controller.ts";
 import { runSystemCommand, type SystemCommandOptions } from "../../execution/transport-broker.ts";
 import type { CommandResult } from "../../execution/process-controller.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
+import { AttemptLock } from "../../persistence/attempt-lock.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
 
 const PREVIEW_RECORD_FILE = "preview.json";
@@ -84,6 +87,7 @@ export interface PreviewCommandResult {
 interface ServerLease {
   readonly schema: "awsf.preview-server/v1";
   readonly pid: number;
+  readonly startIdentity: string;
   readonly state: "building" | "serving" | "released";
   readonly url: string | null;
   readonly task: string;
@@ -101,21 +105,82 @@ export function processAlive(pid: number): boolean {
 }
 
 async function readLease(stateRoot: string): Promise<ServerLease | null> {
+  let text: string;
   try {
-    return JSON.parse(await readFile(join(stateRoot, PREVIEW_SERVER_FILE), "utf8")) as ServerLease;
-  } catch {
-    return null;
+    text = await readFile(join(stateRoot, PREVIEW_SERVER_FILE), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new PreviewRefused(`the preview lease cannot be read: ${error instanceof Error ? error.message : String(error)}`);
   }
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new PreviewRefused("the preview lease is malformed; refusing to assume no server is running");
+  }
+  if (typeof value !== "object" || value === null) {
+    throw new PreviewRefused("the preview lease is malformed; refusing to assume no server is running");
+  }
+  const lease = value as Partial<ServerLease>;
+  if (lease.schema !== "awsf.preview-server/v1" || !Number.isSafeInteger(lease.pid) || lease.pid! < 1 ||
+      typeof lease.startIdentity !== "string" || lease.startIdentity.length === 0 ||
+      (lease.state !== "building" && lease.state !== "serving" && lease.state !== "released") ||
+      (lease.url !== null && typeof lease.url !== "string") || typeof lease.task !== "string" || lease.task.length === 0 ||
+      typeof lease.candidateSha !== "string" || !/^[a-f0-9]{40}$/u.test(lease.candidateSha)) {
+    throw new PreviewRefused("the preview lease is ambiguous; refusing to assume no server is running");
+  }
+  return lease as ServerLease;
 }
 
 async function writeLease(stateRoot: string, lease: ServerLease): Promise<void> {
-  await writeFile(join(stateRoot, PREVIEW_SERVER_FILE), `${JSON.stringify(lease, null, 2)}\n`, { mode: 0o600 });
+  const target = join(stateRoot, PREVIEW_SERVER_FILE);
+  const temporary = join(stateRoot, `.preview-server-${randomUUID()}.tmp`);
+  await writeFile(temporary, `${JSON.stringify(lease, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  await rename(temporary, target);
 }
 
-/** The live preview server, if one is: a released lease or a dead process is not one. */
+/** The live preview server, if one is: a released lease or a different process identity is not one. */
 export async function livePreviewServer(stateRoot: string): Promise<ServerLease | null> {
   const lease = await readLease(stateRoot);
-  if (lease === null || lease.state === "released" || !processAlive(lease.pid)) return null;
+  if (lease === null || lease.state === "released") return null;
+  const row = createHostPort({ command: runSystemCommand }).census().find((processRow) => processRow.pid === lease.pid && processRow.alive);
+  if (row === undefined) return null;
+  if (row.startIdentity === null || lease.startIdentity === "") return lease;
+  return row.startIdentity === lease.startIdentity ? lease : null;
+}
+
+/** Claim the one server slot before any asynchronous build can race another preview start. */
+export async function reservePreviewServer(
+  stateRoot: string,
+  task: string,
+  candidateSha: string,
+): Promise<ServerLease> {
+  const self = createHostPort({ command: runSystemCommand }).census().find((row) => row.pid === process.pid && row.alive);
+  if (self?.startIdentity === null || self === undefined) {
+    throw new PreviewRefused("the host cannot establish this process identity, so it cannot safely claim the preview server slot");
+  }
+  const lease: ServerLease = {
+    schema: "awsf.preview-server/v1", pid: process.pid, startIdentity: self.startIdentity,
+    state: "building", url: null, task, candidateSha,
+  };
+  try {
+    await new AttemptLock(join(stateRoot, "preview-server.lock")).withLock(async () => {
+      const live = await livePreviewServer(stateRoot);
+      if (live !== null) {
+        throw new PreviewRefused(
+          `a preview server is already alive (pid ${String(live.pid)}, ${live.url ?? "still building"}, ${live.task} at ${live.candidateSha}); ` +
+            "exactly one runs at a time — stop it before starting another",
+        );
+      }
+      await writeLease(stateRoot, lease);
+    }, { wait: false });
+  } catch (error) {
+    if (error instanceof PreviewRefused) throw error;
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new PreviewRefused("another preview start is claiming the server slot; retry after it settles");
+    }
+    throw error;
+  }
   return lease;
 }
 
@@ -301,15 +366,7 @@ export async function previewCommand(options: PreviewCommandOptions): Promise<Pr
     return { record: written, server: null, close: async () => {} };
   }
 
-  const live = await livePreviewServer(options.stateRoot);
-  if (live !== null) {
-    throw new PreviewRefused(
-      `a preview server is already alive (pid ${String(live.pid)}, ${live.url ?? "still building"}, ${live.task} at ${live.candidateSha}); ` +
-        "exactly one runs at a time — stop it before starting another",
-    );
-  }
-  const lease = { schema: "awsf.preview-server/v1", pid: process.pid, task: status.taskId, candidateSha: status.candidateSha } as const;
-  await writeLease(options.stateRoot, { ...lease, state: "building", url: null });
+  const lease = await reservePreviewServer(options.stateRoot, status.taskId, status.candidateSha);
   let server: Server | null = null;
   let built: Awaited<ReturnType<typeof build>>;
   try {

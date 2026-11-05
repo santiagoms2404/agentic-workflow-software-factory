@@ -371,7 +371,79 @@ test("B9-22: failed adapter preflight stops before worktree creation and leaves 
 });
 
 // ---------------------------------------------------------------------------
-// 6. B9-26 (land.ts:224): Failure after completeLanding moves HEAD does not seal as BLOCKED
+// 6. B9-32 (land.ts:311): protected landing uses the injected confirmation clock
+// ---------------------------------------------------------------------------
+
+test("B9-32: protected landing authorization uses options.now", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-b9-32-"));
+  try {
+    const repo = join(root, "repo");
+    const { configPath, config } = createTestRepo(repo, "test-project", ["core/src/protected.ts"]);
+    mkdirSync(join(repo, "core", "src"), { recursive: true });
+    writeFileSync(join(repo, "core", "src", "protected.ts"), "base\n");
+    git(repo, "add", "core/src/protected.ts");
+    git(repo, "commit", "-m", "chore: add protected fixture");
+    const baseSha = git(repo, "rev-parse", "HEAD");
+    const worktree = join(root, "worktree");
+    git(repo, "worktree", "add", "--detach", worktree, baseSha);
+    const stateRoot = join(root, "state");
+    const created = await newCommand({
+      stateRoot,
+      project: "test-project",
+      taskId: "task-protected-land-clock",
+      repository: repo,
+      request: "pin protected landing time",
+      workflow: "build",
+      tier: 1,
+      configSnapshotJson: toConfigSnapshotJson(config),
+    });
+    await persistAttempt(created.attemptDir, created.status.revision, {
+      kind: "attempt.transitioned",
+      next: nextRevision(created.status, { lifecycleState: "PREPARED", baseSha, worktree }),
+    });
+    await grantCommand({
+      attemptDir: created.attemptDir,
+      config,
+      configPath,
+      stateRoot,
+      phase: "builder",
+      files: ["core/src/protected.ts"],
+      reason: "Allow writing protected fixture",
+      terminal: terminal(),
+      sandboxProbe: () => true,
+      now: () => "2026-09-01T15:30:00.000Z",
+    });
+    assert.equal(readProtectedState(created.attemptDir).grants.length, 1);
+
+    writeFileSync(join(worktree, "README.md"), "candidate\n");
+    git(worktree, "add", "README.md");
+    git(worktree, "commit", "-m", "feat: candidate fixture");
+    const candidateSha = git(worktree, "rev-parse", "HEAD");
+    const prepared = await readAttempt(created.attemptDir);
+    await persistAttempt(created.attemptDir, prepared.revision, {
+      kind: "attempt.transitioned",
+      next: nextRevision(prepared, {
+        lifecycleState: "AWAITING_OWNER", candidateSha, gatesPass: true,
+        requiredReviewPresent: true, journeyApproved: true, protectedApprovalsValid: true,
+      }),
+    });
+
+    const injected = "2026-09-02T10:00:00.000Z";
+    let clockReads = 0;
+    const landed = await landCommand({
+      attemptDir: created.attemptDir,
+      terminal: terminal(),
+      now: () => { clockReads += 1; return injected; },
+    });
+    assert.equal(landed.confirmed, true);
+    assert.equal(clockReads, 3, "protected authorization, landing approval, and completion use the injected clock");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 7. B9-26 (land.ts:224): Failure after completeLanding moves HEAD does not seal as BLOCKED
 // ---------------------------------------------------------------------------
 
 test("B9-26: failure after completeLanding moves canonical HEAD does not seal attempt as BLOCKED", async () => {
