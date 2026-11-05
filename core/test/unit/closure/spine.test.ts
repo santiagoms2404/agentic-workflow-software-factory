@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, readdirSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { closeCommand, type CloseCommandOptions } from "../../../src/cli/commands/close.ts";
@@ -14,7 +14,7 @@ import { ticketFileDigest } from "../../../src/persistence/plan-ticket-body.ts";
 import { readClosureSnapshot, closureGitRunner, verifyClosureCommit } from "../../../src/git/closure.ts";
 import { runGit } from "../../../src/git/changes.ts";
 import { proposeSpineRollUp } from "../../../src/closure/spine.ts";
-import { projectClosureJournalRecords, projectClosureJournalPath } from "../../../src/persistence/project-closure-journal.ts";
+import { projectClosureJournalRecords, projectClosureJournalPath, streamProjectClosureJournalRecords } from "../../../src/persistence/project-closure-journal.ts";
 import { readAttemptEvidence } from "../../../src/cli/commands/review-record.ts";
 import { treeAgreement } from "../../../src/closure/tree.ts";
 
@@ -309,4 +309,29 @@ test("project journal refuses a torn tail without repairing or writing any bytes
   writeFileSync(path, '{"source_seq":1'); const before = snapshot(w.root);
   await assert.rejects(closeCommand(w.ownerOptions), /torn project journal/);
   assert.deepEqual(snapshot(w.root), before);
+});
+
+test("batch and streaming project readers use the same evidence validation", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-project-closure-reader-"));
+  mkdirSync(join(root, "closure"));
+  const invalid = {
+    source_seq: 1,
+    recorded_at: "2026-10-01T00:00:00.000Z",
+    event: {
+      kind: "project-closure",
+      project: "fixture",
+      repository: "/repository",
+      operationKey: "close-1",
+      evidence: { type: "closure-intent", intent: { id: "intent-1", parentSha: "bad", candidateSha: "c".repeat(40) } },
+    },
+  };
+  writeFileSync(projectClosureJournalPath(root), `${JSON.stringify(invalid)}\n`);
+  try {
+    await assert.rejects(projectClosureJournalRecords(root), /invalid project evidence/u);
+    await assert.rejects(async () => {
+      for await (const row of streamProjectClosureJournalRecords(root)) void row;
+    }, /invalid project evidence/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

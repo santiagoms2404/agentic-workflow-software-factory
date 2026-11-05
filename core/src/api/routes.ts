@@ -40,7 +40,7 @@ import {
   type SessionRow,
 } from "../observability/queries.ts";
 import { buildEffectiveConfig } from "../config/effective-config.ts";
-import { buildMetricsPayload } from "../metrics/payload.ts";
+import { createMetricsPayloadReader } from "../metrics/payload.ts";
 import { assertReplayRecord } from "../contracts/proving-ground.ts";
 import type { AwsfConfig } from "../config/schema.ts";
 import type {
@@ -553,6 +553,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
   const opener = options.open ?? openDatabase;
   const readDb = opener(options.dbPath, { readonly: true });
   try {
+    const readMetricsPayload = createMetricsPayloadReader(readDb);
     const planningStateRoot = options.stateRoot ?? dirname(options.dbPath);
     // Catalog resolution is checked against the catalog, plan-root, and ticket
     // directory metadata on each read. A changed input is re-resolved so new
@@ -801,7 +802,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
     metrics: safely((request) => {
       // Read-only and unfiltered: the tab and the CLI apply their lenses to this one payload.
       searchParams(request, []);
-      return jsonResponse(buildMetricsPayload(readDb, { extractedAt: new Date().toISOString() }) satisfies MetricsResponse);
+      return jsonResponse(readMetricsPayload({ extractedAt: new Date().toISOString() }) satisfies MetricsResponse);
     }),
     adapters: safely(async () => {
       const adapters: AdapterHealth[] = await Promise.all(Object.entries(options.config.adapters).map(async ([id, entry]) => {

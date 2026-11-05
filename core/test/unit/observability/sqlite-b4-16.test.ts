@@ -144,15 +144,15 @@ test("the timeout is installed before pending migrations acquire their write loc
   const { root, path } = fixture(t);
   const migrationsDir = join(root, "migrations");
   mkdirSync(migrationsDir);
-  writeFileSync(join(migrationsDir, "0009-contention.sql"),
-    "CREATE TABLE contention_fixture (id INTEGER PRIMARY KEY); PRAGMA user_version = 9;\n");
+  writeFileSync(join(migrationsDir, "0010-contention.sql"),
+    "CREATE TABLE contention_fixture (id INTEGER PRIMARY KEY); PRAGMA user_version = 10;\n");
   const lock = await holdLock(path);
   try {
     lock.start();
     assert.doesNotThrow(() => {
       const db = openDatabase(path, { migrationsDir });
       try {
-        assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 9);
+        assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 10);
         assert.equal(db.prepare("SELECT COUNT(*) AS n FROM contention_fixture").get()?.n, 0);
       } finally { db.close(); }
     }, "pending migration must wait before BEGIN IMMEDIATE");

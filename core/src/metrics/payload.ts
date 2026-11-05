@@ -138,3 +138,39 @@ export function buildMetricsPayload(db: DatabaseSync, options: MetricsPayloadOpt
     untestedRoutes: UNTESTED_ROUTES,
   };
 }
+
+/**
+ * Reuses a payload only for a long-lived, read-only connection. SQLite's
+ * data_version advances when another connection commits, which is the write
+ * path used by the API router; each response still receives its own timestamp.
+ */
+export function createMetricsPayloadReader(db: DatabaseSync): (options: MetricsPayloadOptions) => MetricsResponse {
+  let version: number | null = null;
+  let payload: Omit<MetricsResponse, "extractedAt"> | null = null;
+  return (options) => {
+    const current = (db.prepare("PRAGMA data_version").get() as { data_version: number }).data_version;
+    if (payload === null || current !== version) {
+      const built = buildMetricsPayload(db, options);
+      payload = {
+        schema: built.schema,
+        runs: built.runs,
+        roleRows: built.roleRows,
+        causes: built.causes,
+        rateCard: built.rateCard,
+        priors: built.priors,
+        untestedRoutes: built.untestedRoutes,
+      };
+      version = current;
+    }
+    return {
+      schema: payload.schema,
+      extractedAt: options.extractedAt,
+      runs: payload.runs,
+      roleRows: payload.roleRows,
+      causes: payload.causes,
+      rateCard: payload.rateCard,
+      priors: payload.priors,
+      untestedRoutes: payload.untestedRoutes,
+    };
+  };
+}

@@ -46,6 +46,22 @@ function twoCallBuild(): SyntheticAttempt {
   return run;
 }
 
+test("metrics event reads have type-leading indexes for phase and session scans", () => {
+  const db = openDatabase(":memory:");
+  try {
+    const plans = [
+      db.prepare(`EXPLAIN QUERY PLAN SELECT phase_id, payload_json FROM events
+        WHERE type = 'route_resolution' AND phase_id IS NOT NULL ORDER BY event_row`).all(),
+      db.prepare(`EXPLAIN QUERY PLAN SELECT session_id, payload_json FROM events
+        WHERE type = 'attribution' ORDER BY session_id, event_row`).all(),
+    ] as Array<Array<{ detail: string }>>;
+    assert.ok(plans[0]!.some((row) => row.detail.includes("idx_events_type_phase_cursor")), JSON.stringify(plans[0]));
+    assert.ok(plans[1]!.some((row) => row.detail.includes("idx_events_type_session_cursor")), JSON.stringify(plans[1]));
+  } finally {
+    db.close();
+  }
+});
+
 test("a role with two calls: the phase sums both, while agent_sessions holds only the second (F8)", () => {
   const { facts, agentInput, agentCalls } = factsOf(twoCallBuild());
   assert.equal(facts.length, 1);
@@ -63,7 +79,7 @@ test("a role with two calls: the phase sums both, while agent_sessions holds onl
   assert.equal(facts[0]!.role?.callCount, 2);
 });
 
-test("turns, minutes, tool classes, tool errors and tool time come from the phase's own events", () => {
+test("turns, minutes, tool classes and tool errors come from the phase's own events", () => {
   const [build] = factsOf(twoCallBuild()).facts;
   assert.equal(build!.turns, 2);
   assert.equal(build!.minutes, 12);
@@ -72,7 +88,6 @@ test("turns, minutes, tool classes, tool errors and tool time come from the phas
     calls: 4,
     byClass: { read: 1, search: 1, edit: 1, exec: 1, other: 0 },
     errors: 1,
-    timeMs: 160,
   });
 });
 
@@ -86,7 +101,7 @@ test("an open phase has no minutes, and a phase without usage has null tokens ra
     inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, reasoningTokens: null,
     reasoningRelation: "unknown", usageEvents: 0,
   });
-  assert.deepEqual(open!.tools, { calls: 0, byClass: { read: 0, search: 0, edit: 0, exec: 0, other: 0 }, errors: 0, timeMs: 0 });
+  assert.deepEqual(open!.tools, { calls: 0, byClass: { read: 0, search: 0, edit: 0, exec: 0, other: 0 }, errors: 0 });
   assert.equal(open!.role, null);
 });
 
@@ -124,8 +139,8 @@ test("model identity stays two fields: the requested selector and the observed m
     modelProvenance: "route-attributed",
   });
   assert.deepEqual(legacy!.route, {
-    adapterId: "codex", adapterKind: "pi-codex", provider: "openai-codex", model: "codex:gpt-6-sol",
-    effort: "xhigh", effortSource: "config-agent", journalSource: null,
+    adapterId: "codex", provider: "openai-codex", model: "codex:gpt-6-sol",
+    effort: "xhigh", effortSource: "config-agent",
   });
 
   assert.deepEqual(review!.identity, {
@@ -134,8 +149,8 @@ test("model identity stays two fields: the requested selector and the observed m
     modelProvenance: "stream-authoritative",
   });
   assert.deepEqual(review!.route, {
-    adapterId: "claude", adapterKind: "claude-code", provider: "anthropic", model: "opus",
-    effort: "high", effortSource: "journal", journalSource: "attempt-override",
+    adapterId: "claude", provider: "anthropic", model: "opus",
+    effort: "high", effortSource: "journal",
   });
   assert.deepEqual(review!.role, {
     callCount: 1, modelProvenance: "stream-authoritative", costAuthority: "unavailable", contextTokens: 1, contextWindow: 400_000,
@@ -155,7 +170,7 @@ test("only agent phases are facts, and a row projected before migration 0007 rea
     const facts = readPhaseFacts(db);
     assert.deepEqual(facts.map((fact) => fact.phaseKey), ["t01-build"]);
     assert.deepEqual(facts[0]!.route, {
-      adapterId: null, adapterKind: null, provider: null, model: null, effort: null, effortSource: null, journalSource: null,
+      adapterId: null, provider: null, model: null, effort: null, effortSource: null,
     });
     assert.equal(facts[0]!.identity.requestedModel, null);
   } finally {

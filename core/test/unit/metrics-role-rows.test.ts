@@ -389,17 +389,21 @@ test("a role whose phases ran on two routes is marked mixed, with no route to ra
   assert.equal(builder!.firstPass, true);
 });
 
-test("owner rework phases are counted on the run and belong to the builder's row", () => {
+test("owner rework phases are counted only in the owning role's row", () => {
   const run = new SyntheticAttempt(session("s5"));
   run.phase(phase("builder", "builder", { ordinal: 1, status: "SUCCEEDED", endedAt: AT }));
   run.ownerReentries = 1;
   run.phase(phase("owner-rework-1", "builder", { ordinal: 2, maxCorrections: 0, status: "SUCCEEDED", endedAt: AT }));
   run.phase(phase("owner-rework-1-tests", "host", { ordinal: 3, kind: "code", status: "SUCCEEDED", endedAt: AT }));
+  run.phase(phase("reviewer", "reviewer", { ordinal: 4, status: "SUCCEEDED", endedAt: AT }));
   run.transition("AWAITING_OWNER");
-  const [builder] = rowsOf(run);
+  const rows = rowsOf(run);
+  const builder = rows.find((row) => row.role === "builder");
+  const reviewer = rows.find((row) => row.role === "reviewer");
   assert.equal(builder!.phases, 2);
   assert.equal(builder!.reworkPhases, 1);
   assert.equal(builder!.ownerReentries, 1);
+  assert.equal(reviewer!.reworkPhases, 0);
 });
 
 test("an open run's rows are not settled, so they are neither first pass nor clean", () => {

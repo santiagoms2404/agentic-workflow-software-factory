@@ -8,21 +8,18 @@
 // for any role with more than one call they hold the last call only (W18 F8).
 
 import type { DatabaseSync } from "../observability/sqlite.ts";
-import type { ModelResolutionProvenance, ReasoningRelation } from "../contracts/normalized-events.ts";
-import type { RouteEffort, RouteSelectionProvenance, RouteValueSource } from "../contracts/route-selection.ts";
-import { resolvePhaseRoute, type EffortSource } from "../observability/phase-route.ts";
+import { MODEL_RESOLUTION_PROVENANCES, type ModelResolutionProvenance, type ReasoningRelation } from "../contracts/normalized-events.ts";
+import type { RouteEffort, RouteSelectionProvenance } from "../contracts/route-selection.ts";
+import type { EffortSource } from "../observability/phase-route.ts";
 import { TOOL_CLASSES, toolClass, type ToolClass } from "./tool-class.ts";
 
 export interface PhaseRouteFacts {
   readonly adapterId: string | null;
-  readonly adapterKind: string | null;
   readonly provider: string | null;
   readonly model: string | null;
   readonly effort: RouteEffort | null;
   /** `null` only on a row projected before migration 0007 and not yet rebuilt. */
   readonly effortSource: EffortSource | null;
-  /** The route event's `requested.sources.effort`; `null` unless `effortSource` is `journal`. */
-  readonly journalSource: RouteValueSource | null;
 }
 
 /** Two fields, never merged: what the route asked for, and what was observed answering. */
@@ -48,8 +45,6 @@ export interface PhaseTools {
   readonly calls: number;
   readonly byClass: Readonly<Record<ToolClass, number>>;
   readonly errors: number;
-  /** Sum of `$.durationMs` over completed calls; a call still running has none. */
-  readonly timeMs: number;
 }
 
 /** Role-level: `agent_sessions` is keyed by session and agent, so every phase of one role shares it. */
@@ -64,11 +59,6 @@ export interface RoleSessionFacts {
 
 export interface PhaseFacts {
   readonly sessionId: string;
-  readonly projectSlug: string;
-  readonly taskId: string;
-  readonly attempt: number;
-  readonly workflowId: string;
-  readonly observabilityDegraded: boolean;
   readonly phaseId: string;
   readonly phaseKey: string;
   readonly ordinal: number;
@@ -109,12 +99,6 @@ interface PhaseQueryRow {
   route_model: string | null;
   route_effort: RouteEffort | null;
   effort_source: EffortSource | null;
-  project_slug: string;
-  task_id: string;
-  attempt: number;
-  workflow_id: string;
-  observability_degraded: number;
-  config_snapshot_json: string;
 }
 
 interface EventAggregateRow {
@@ -130,7 +114,6 @@ interface EventAggregateRow {
   relation: ReasoningRelation | null;
   tool_calls: number;
   tool_errors: number;
-  tool_ms: number | null;
 }
 
 interface AgentSessionRow {
@@ -148,10 +131,10 @@ interface ModelResolvedPayload {
   provenance?: unknown;
 }
 
-const PROVENANCES: readonly ModelResolutionProvenance[] = ["stream-authoritative", "route-attributed"];
-
 function provenanceOf(value: unknown): ModelResolutionProvenance | null {
-  return PROVENANCES.includes(value as ModelResolutionProvenance) ? value as ModelResolutionProvenance : null;
+  return (MODEL_RESOLUTION_PROVENANCES as readonly string[]).includes(value as string)
+    ? value as ModelResolutionProvenance
+    : null;
 }
 
 function textOf(value: unknown): string | null {
@@ -196,8 +179,7 @@ function phaseRouteSelect(db: DatabaseSync): string {
 export function readPhaseFacts(db: DatabaseSync): PhaseFacts[] {
   const phases = db.prepare(`SELECT p.phase_id, p.session_id, p.ordinal, p.phase_key, p.owner, p.status,
       p.correction_count, p.max_corrections, p.error_code, p.started_at, p.ended_at,
-      ${phaseRouteSelect(db)},
-      s.project_slug, s.task_id, s.attempt, s.workflow_id, s.observability_degraded, s.config_snapshot_json
+      ${phaseRouteSelect(db)}
     FROM phases p JOIN sessions s ON s.session_id = p.session_id
     WHERE p.kind = 'agent'
     ORDER BY s.started_at, s.session_id, p.ordinal`).all() as unknown as PhaseQueryRow[];
@@ -213,8 +195,7 @@ export function readPhaseFacts(db: DatabaseSync): PhaseFacts[] {
       COUNT(DISTINCT CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.reasoningRelation') END) AS relation_count,
       MIN(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.reasoningRelation') END) AS relation,
       COALESCE(SUM(type = 'tool_call'), 0) AS tool_calls,
-      COALESCE(SUM(type = 'tool_call' AND status = 'error'), 0) AS tool_errors,
-      SUM(CASE WHEN type = 'tool_call' THEN json_extract(payload_json, '$.durationMs') END) AS tool_ms
+      COALESCE(SUM(type = 'tool_call' AND status = 'error'), 0) AS tool_errors
     FROM events
     WHERE phase_id IS NOT NULL AND type IN ('run.started', 'usage', 'tool_call')
     GROUP BY phase_id`).all() as unknown as EventAggregateRow[]).map((row) => [row.phase_id, row]));
@@ -236,22 +217,10 @@ export function readPhaseFacts(db: DatabaseSync): PhaseFacts[] {
   const roles = new Map((db.prepare(`SELECT session_id, agent, call_count, model_provenance, cost_authority,
       context_tokens, context_window FROM agent_sessions`).all() as unknown as AgentSessionRow[])
     .map((row) => [`${row.session_id}\u0000${row.agent}`, row]));
-  const snapshots = new Map<string, unknown>();
 
   return phases.map((phase): PhaseFacts => {
     const routeJson = routeEvents.get(phase.phase_id);
     const routeEvent = routeJson === undefined ? null : JSON.parse(routeJson) as RouteSelectionProvenance;
-    if (!snapshots.has(phase.session_id)) snapshots.set(phase.session_id, JSON.parse(phase.config_snapshot_json));
-    // The five columns are the projected truth. The resolver is consulted only
-    // for what they do not hold, the adapter kind and the journal's own source,
-    // and only when it resolves the same route the projector wrote.
-    const resolved = resolvePhaseRoute({
-      phase: { key: phase.phase_key, owner: phase.owner },
-      routeEvent,
-      configSnapshot: snapshots.get(phase.session_id),
-    });
-    const agrees = phase.effort_source !== null && resolved.effortSource === phase.effort_source &&
-      resolved.adapterId === phase.route_adapter;
 
     const modelJson = modelEvents.get(phase.phase_id);
     const modelEvent = modelJson === undefined ? null : JSON.parse(modelJson) as ModelResolvedPayload;
@@ -262,11 +231,6 @@ export function readPhaseFacts(db: DatabaseSync): PhaseFacts[] {
     const role = roles.get(`${phase.session_id}\u0000${phase.owner}`);
     return {
       sessionId: phase.session_id,
-      projectSlug: phase.project_slug,
-      taskId: phase.task_id,
-      attempt: phase.attempt,
-      workflowId: phase.workflow_id,
-      observabilityDegraded: phase.observability_degraded === 1,
       phaseId: phase.phase_id,
       phaseKey: phase.phase_key,
       ordinal: phase.ordinal,
@@ -281,12 +245,10 @@ export function readPhaseFacts(db: DatabaseSync): PhaseFacts[] {
       turns: events?.turns ?? 0,
       route: {
         adapterId: phase.route_adapter,
-        adapterKind: agrees ? resolved.adapterKind : null,
         provider: phase.route_provider,
         model: phase.route_model,
         effort: phase.route_effort,
         effortSource: phase.effort_source,
-        journalSource: agrees ? resolved.journalSource : null,
       },
       identity: {
         // A configured route's model column IS the selector the runner asked
@@ -310,7 +272,6 @@ export function readPhaseFacts(db: DatabaseSync): PhaseFacts[] {
         calls: events?.tool_calls ?? 0,
         byClass: Object.freeze(toolClasses.get(phase.phase_id) ?? emptyByClass()),
         errors: events?.tool_errors ?? 0,
-        timeMs: events?.tool_ms ?? 0,
       },
       role: role === undefined ? null : {
         callCount: role.call_count,

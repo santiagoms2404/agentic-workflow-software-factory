@@ -129,6 +129,18 @@ function workerColumnClause(purpose: RecordedAgentPurpose | undefined): string {
   return purpose === "support" ? " AND worker_provider IS NULL" : "";
 }
 
+function projectRoleRoute(db: DatabaseSync, sessionId: string, purpose: RecordedAgentPurpose | undefined,
+  provider: string, requestedModel: string, resolvedModel: string | null): void {
+  const safeProvider = scrubCredentialString(provider);
+  if (purpose === "review") {
+    db.prepare("UPDATE sessions SET review_provider=? WHERE session_id=?").run(safeProvider, sessionId);
+    return;
+  }
+  db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=?
+    WHERE session_id=?${workerColumnClause(purpose)}`).run(
+    safeProvider, scrubCredentialString(requestedModel), resolvedModel === null ? null : scrubCredentialString(resolvedModel), sessionId);
+}
+
 export function persistDegradedMarker(
   journalOrAttemptPath: string,
   sessionId: string,
@@ -181,7 +193,8 @@ export function projectAttemptStatus(
   sourceSeq: number,
 ): ProjectionOutcome {
   try {
-    createSession(db, status);
+    const session = db.prepare("SELECT 1 AS present FROM sessions WHERE session_id = ?").get(status.sessionId);
+    if (session === undefined) createSession(db, status);
     const lastSeq = getLastProjectedSeq(db, status.sessionId);
     if (lastSeq === null) throw new Error(`no session row for ${status.sessionId}`);
     if (sourceSeq <= lastSeq) {
@@ -791,14 +804,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
       // A review call reaching them would overwrite the very fact the inversion
       // is proved from; so would a second and a third *worker*, which is what
       // `simple-sdlc` actually does — see `workerColumnClause`.
-      if (evidence.purpose === "review") {
-        db.prepare(`UPDATE sessions SET review_provider=? WHERE session_id=?`)
-          .run(scrubCredentialString(evidence.provider), sessionId);
-      } else {
-        db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=NULL
-          WHERE session_id=?${workerColumnClause(evidence.purpose)}`).run(scrubCredentialString(evidence.provider),
-            scrubCredentialString(evidence.requestedModel), sessionId);
-      }
+      projectRoleRoute(db, sessionId, evidence.purpose, evidence.provider, evidence.requestedModel, null);
       return;
     }
     case "agent": {
@@ -818,8 +824,9 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           reasoning_tokens=excluded.reasoning_tokens, total_tokens=excluded.total_tokens,
           estimated_cost_usd=excluded.estimated_cost_usd, cost_authority=excluded.cost_authority,
           last_used_at=excluded.last_used_at`)
-        .run(sessionId, evidence.agent, evidence.adapterId, evidence.provider, evidence.color,
-          evidence.requestedModel, evidence.resolvedModel, evidence.modelProvenance,
+        .run(sessionId, scrubCredentialString(evidence.agent), scrubCredentialString(evidence.adapterId),
+          scrubCredentialString(evidence.provider), evidence.color, scrubCredentialString(evidence.requestedModel),
+          evidence.resolvedModel === null ? null : scrubCredentialString(evidence.resolvedModel), evidence.modelProvenance,
           evidence.contextTokens, evidence.contextWindow, usage.inputTokens, usage.outputTokens,
           usage.cacheReadTokens, usage.cacheWriteTokens, usage.reasoningTokens, total,
           evidence.costUsd, evidence.costAuthority, evidence.at, evidence.at);
@@ -874,13 +881,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
           pendingRoute.event_id,
         );
       }
-      if (evidence.purpose === "review") {
-        db.prepare(`UPDATE sessions SET review_provider=? WHERE session_id=?`).run(evidence.provider, sessionId);
-      } else {
-        db.prepare(`UPDATE sessions SET worker_provider=?, worker_model_requested=?, worker_model_resolved=?
-          WHERE session_id=?${workerColumnClause(evidence.purpose)}`)
-          .run(evidence.provider, evidence.requestedModel, evidence.resolvedModel, sessionId);
-      }
+      projectRoleRoute(db, sessionId, evidence.purpose, evidence.provider, evidence.requestedModel, evidence.resolvedModel);
       return;
     }
     case "ceiling-grant":
@@ -1019,7 +1020,7 @@ function applyEvent(
     record.source_seq,
     record.source_seq,
     event.kind,
-    stringifyRedacted(event),
+    JSON.stringify(event),
     event.hostAt,
   );
 }

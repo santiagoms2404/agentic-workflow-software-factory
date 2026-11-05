@@ -160,4 +160,11 @@ test("only a sealed candidate with L7 completion evidence is reported", () => {
     reasonSource: "git", reasonCode: null, reasonDetail: null, spawnSite: false, at: "2026-09-01T00:00:00.000Z",
   }], () => false);
   assert.equal(completed.candidateSha, SHA);
+  for (const lifecycleState of ["AWAITING_OWNER", "LANDING", "LANDED"] as const) {
+    const pending = diagnoseRecovery(status({ lifecycleState, candidateSha: SHA }), [
+      { type: "transition", id: "l7", seq: 1, from: "RUNNING", to: "GATING", actor: "host", edgeId: "L7",
+        reasonSource: "git", reasonCode: null, reasonDetail: null, spawnSite: false, at: "2026-09-01T00:00:00.000Z" },
+    ], () => false);
+    assert.equal(pending.candidateSha, SHA, `${lifecycleState} retains the completed candidate`);
+  }
 });

@@ -15,6 +15,34 @@ export interface ProjectClosureEvent {
   readonly evidence: ClosureEvidence;
 }
 export type ProjectClosureProjector = (record: JournalRecord<ProjectClosureEvent>) => Promise<void> | void;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function assertProjectClosureRow(value: unknown, expectedSeq: number): asserts value is JournalRecord<ProjectClosureEvent> {
+  if (!isRecord(value) || value.source_seq !== expectedSeq || !isRecord(value.event)) {
+    throw new Error("closure refuses an invalid project journal");
+  }
+  const event = value.event;
+  if (event.kind !== "project-closure" || typeof event.project !== "string" ||
+    typeof event.repository !== "string" || typeof event.operationKey !== "string" || !isRecord(event.evidence)) {
+    throw new Error("closure refuses an invalid project journal");
+  }
+  const evidence = event.evidence;
+  if (evidence.type === "closure-record" || evidence.type === "closure-prepared") {
+    assertClosureRecord(evidence.record);
+    return;
+  }
+  const intent = evidence.intent;
+  if (evidence.type !== "closure-intent" || !isRecord(intent) ||
+    typeof intent.parentSha !== "string" || !/^[a-f0-9]{40}$/u.test(intent.parentSha) ||
+    typeof intent.candidateSha !== "string" || !/^[a-f0-9]{40}$/u.test(intent.candidateSha) ||
+    typeof intent.id !== "string" || intent.id.length === 0) {
+    throw new Error("closure refuses invalid project evidence");
+  }
+}
+
 export function projectClosureJournalPath(projectDir: string): string { return join(projectDir, "closure", "journal.jsonl"); }
 
 export async function projectClosureJournalRecords(projectDir: string): Promise<readonly JournalRecord<ProjectClosureEvent>[]> {
@@ -22,15 +50,14 @@ export async function projectClosureJournalRecords(projectDir: string): Promise<
   try { text = await readFile(projectClosureJournalPath(projectDir), "utf8"); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
   if (!text.endsWith("\n")) throw new Error("closure refuses a torn project journal");
-  const records = text.split("\n").filter(Boolean).map(line => JSON.parse(line) as JournalRecord<ProjectClosureEvent>);
-  for (const [index, row] of records.entries()) {
-    const event = row.event;
-    if (row.source_seq !== index + 1 || event.kind !== "project-closure" || typeof event.project !== "string" ||
-      typeof event.repository !== "string" || typeof event.operationKey !== "string") throw new Error("closure refuses an invalid project journal");
-    if (event.evidence.type === "closure-record" || event.evidence.type === "closure-prepared") assertClosureRecord(event.evidence.record);
-    else if (event.evidence.type !== "closure-intent" || !/^[a-f0-9]{40}$/u.test(event.evidence.intent.parentSha) ||
-      !/^[a-f0-9]{40}$/u.test(event.evidence.intent.candidateSha) || !event.evidence.intent.id) throw new Error("closure refuses invalid project evidence");
-  }
+  const lines = text.slice(0, -1).split("\n");
+  const records = lines.map((line, index): JournalRecord<ProjectClosureEvent> => {
+    let value: unknown;
+    try { value = JSON.parse(line); }
+    catch { throw new Error(`closure refuses an invalid project journal at line ${String(index + 1)}`); }
+    assertProjectClosureRow(value, index + 1);
+    return value;
+  });
   return records;
 }
 
@@ -49,15 +76,12 @@ export async function* streamProjectClosureJournalRecords(projectDir: string): A
     try {
       let seq = 0;
       for await (const line of lines) {
-        if (!line) continue;
-        const row = JSON.parse(line) as JournalRecord<ProjectClosureEvent>;
-        const event = row.event;
-        if (row.source_seq !== ++seq || event.kind !== "project-closure" || typeof event.project !== "string" ||
-          typeof event.repository !== "string" || typeof event.operationKey !== "string") throw new Error("closure refuses an invalid project journal");
-        if (event.evidence.type === "closure-record" || event.evidence.type === "closure-prepared") assertClosureRecord(event.evidence.record);
-        else if (event.evidence.type !== "closure-intent" || !/^[a-f0-9]{40}$/u.test(event.evidence.intent.parentSha) ||
-          !/^[a-f0-9]{40}$/u.test(event.evidence.intent.candidateSha) || !event.evidence.intent.id) throw new Error("closure refuses invalid project evidence");
-        yield row;
+        seq += 1;
+        let value: unknown;
+        try { value = JSON.parse(line); }
+        catch { throw new Error(`closure refuses an invalid project journal at line ${String(seq)}`); }
+        assertProjectClosureRow(value, seq);
+        yield value;
       }
     } finally { lines.close(); }
   } finally { await handle.close(); }

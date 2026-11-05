@@ -396,8 +396,8 @@ function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], att
     reviewVerdict: run.reviewVerdict,
     ownerReentries: run.ownerReentries,
     // A queued rework that never launched is not a rework the run did (B4-24).
-    reworkPhases: run.phases.filter((phase) =>
-      phase.kind === "agent" && phase.key.startsWith("owner-rework-") && phaseRan(phase)).length,
+    reworkPhases: phases.filter((phase) =>
+      phase.phaseKey.startsWith("owner-rework-") && phaseRan(phase)).length,
     observabilityDegraded: run.observabilityDegraded,
     usageAuthority: run.usageAuthority,
     startedAt: run.startedAt,

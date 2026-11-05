@@ -4,7 +4,7 @@
 
 import { mkdir, open, stat, type FileHandle } from "node:fs/promises";
 import { dirname } from "node:path";
-import { scrubCredentials, stringifyRedacted } from "../policy/redaction.ts";
+import { scrubCredentials } from "../policy/redaction.ts";
 
 /** Fsyncs a directory descriptor so newly created directory entries survive power failure. */
 export async function syncDirectory(dir: string): Promise<void> {
@@ -273,7 +273,7 @@ export async function lastSourceSeq(path: string, options: LastSourceSeqOptions 
   return (await readJournalTail(path, options)).lastSourceSeq;
 }
 
-async function readFully(handle: TailHandle, buffer: Buffer, position: number): Promise<void> {
+export async function readFully(handle: TailHandle, buffer: Buffer, position: number): Promise<void> {
   let offset = 0;
   while (offset < buffer.length) {
     const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, position + offset);
@@ -346,12 +346,12 @@ export class Journal<T = unknown> {
   /** Appends the next canonical event, fsyncs, and returns the stamped record. */
   async append(event: T): Promise<JournalRecord<T>> {
     const source_seq = await this.ensureNextSeq();
-    const record: JournalRecord<T> = {
+    const record = scrubCredentials({
       source_seq,
       recorded_at: new Date().toISOString(),
-      event: scrubCredentials(event),
-    };
-    await this.log.appendLine(stringifyRedacted(record));
+      event,
+    } satisfies JournalRecord<T>);
+    await this.log.appendLine(JSON.stringify(record));
     this.nextSeq = source_seq + 1;
     return record;
   }
