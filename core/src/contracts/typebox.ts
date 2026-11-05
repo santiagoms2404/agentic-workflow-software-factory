@@ -77,6 +77,11 @@ export function utf8ByteLength(text: string): number {
  * TypeBox schemas *are* JSON Schema objects with extra symbol keys, so a
  * structured clone through JSON is a faithful, lossless emission of the same
  * definition — not a second, hand-maintained copy of it.
+ *
+ * Precedence: a `$id`, `title` or `description` the schema declares is the one
+ * emitted. The options fill only the keys the schema leaves open, so an option
+ * the schema contradicts never reaches the output (B3-20). `$schema` is always
+ * the draft 2020-12 URI.
  */
 export function toJsonSchema(
   schema: TSchema,

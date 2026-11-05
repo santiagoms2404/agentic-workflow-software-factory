@@ -16,11 +16,15 @@ export type ProducerStatus = UnionOf<typeof PRODUCER_STATUSES>;
 // rule travels with the emitted JSON Schema into the agent's own prompt,
 // rather than only firing at gate time. Rejects: absolute POSIX paths,
 // Windows drive-letter and UNC paths, any backslash separator, any `..`
-// segment, a `./` prefix, and empty or doubled separators. Containment
+// segment, a `./` prefix, and empty or doubled separators. A line break ends a
+// segment as a slash does, and the lookaheads match `[\s\S]`, not `.`, which
+// skips a line break: a line break before `../` used to blind the traversal
+// rule (B3-09). A name that merely contains a line break stays valid, as git
+// allows it. Containment
 // against the actual worktree root is still checked at gate time — this is
 // the structural floor, not the whole check.
 const WORKTREE_RELATIVE_PATH_RE =
-  /^(?![/\\])(?![A-Za-z]:)(?!\.\/)(?!.*(?:^|\/)\.\.(?:\/|$))(?!.*\/\/)(?!.*\/$)[^\\]+$/;
+  /^(?![/\\])(?![A-Za-z]:)(?!\.\/)(?![\s\S]*(?:^|[/\n\r\u2028\u2029])\.\.(?:[/\n\r\u2028\u2029]|$))(?![\s\S]*\/\/)(?![\s\S]*\/$)[^\\]+$/;
 export const WORKTREE_RELATIVE_PATH_PATTERN = WORKTREE_RELATIVE_PATH_RE.source;
 
 export const WorktreeRelativePath = Type.String({

@@ -92,7 +92,7 @@ export interface PhaseTransitionInput {
   to: PhaseState;
   /** The session the phase is bound to now. */
   session: PhaseSession;
-  /** CORRECTING → RUNNING only: the session the next turn would actually run in. */
+  /** CORRECTING → RUNNING: required, and the session the next turn would actually run in. */
   resumeSession?: PhaseSession;
   /** Cold means the host reserved a separate provider call; omitted means call-neutral resume. */
   correctionTransport?: PhaseCorrectionTransport;
@@ -123,6 +123,11 @@ const PHASE_EDGES: readonly (readonly [PhaseState, PhaseState])[] = [
   ["VALIDATING", "CORRECTING"],
   ["VALIDATING", "FAILED"],
   ["CORRECTING", "RUNNING"],
+  // The abnormal exits from the two live states that had no FAILED edge. The
+  // header promises that any abnormal exit records a failure, and production
+  // reaches CORRECTING -> FAILED through PhaseExecution.fail() (B3-24, B3-25).
+  ["QUEUED", "FAILED"],
+  ["CORRECTING", "FAILED"],
   ...PHASE_CANCELLABLE_STATES.map((from) => [from, "CANCELLED"] as const),
 ];
 
@@ -199,8 +204,14 @@ export function phaseTransition(input: PhaseTransitionInput): PhaseTransitionRes
   // resume must preserve all four identity fields. A cold paid correction may
   // mint a session id, while changing its configured route remains terminal.
   const transport = input.correctionTransport ?? "same-session";
-  const resumed = input.resumeSession ?? session;
+  const resumed = input.resumeSession;
   if (from === "CORRECTING" && to === "RUNNING") {
+    // Without the session the next turn runs in, the identity cannot be checked.
+    // Defaulting to the phase's own session compared it with itself and passed
+    // any turn, so an omission is refused (B3-26).
+    if (resumed === undefined) {
+      throw new SessionIdentityBroken(phase, ["resumeSession was not named, so the session the next turn runs in is unknown"]);
+    }
     const differences = sessionDifferences(session, resumed, transport);
     if (differences.length > 0) {
       throw new SessionIdentityBroken(phase, differences);
@@ -212,7 +223,7 @@ export function phaseTransition(input: PhaseTransitionInput): PhaseTransitionRes
     from,
     to,
     terminal: isPhaseTerminal(to),
-    session: from === "CORRECTING" && to === "RUNNING" && transport === "cold" ? resumed : session,
+    session: from === "CORRECTING" && to === "RUNNING" && transport === "cold" && resumed !== undefined ? resumed : session,
     correctionTranche,
   };
 }

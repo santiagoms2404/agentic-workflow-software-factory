@@ -1,7 +1,8 @@
 import { Value } from "@sinclair/typebox/value";
 import type { EnvelopeBase } from "./envelope-base.ts";
 import { isEnvelopeSchemaId, schemaForId, type EnvelopeSchemaId, type EnvelopeTypeById } from "./registry.ts";
-import { VIOLATION_VALUE_MAX_CHARS, type ValidationViolation } from "./stored-envelope.ts";
+import { VIOLATION_VALUE_MAX_CHARS, type EnvelopeExtraction, type ValidationViolation } from "./stored-envelope.ts";
+import { PUBLISH_OUTPUT_SCHEMA_ID, publishedRecoveryRefusal } from "./publish-output.ts";
 import { utf8ByteLength } from "./typebox.ts";
 
 // The envelope parser.
@@ -22,21 +23,13 @@ import { utf8ByteLength } from "./typebox.ts";
 
 export const MAX_ENVELOPE_BYTES = 256 * 1024;
 
-/** How the JSON object was recovered from the model's final message. */
-export type EnvelopeExtraction =
-  | "exact"
-  | "fence-stripped"
-  | "outermost-object"
-  /**
-   * The backward suffix salvage, and its own kind on purpose.
-   *
-   * It is not an outermost-object extraction: it deliberately returns an INNER
-   * object, the last suffix that parses whole. Labelling it `outermost-object`
-   * made the retained trace claim the host had taken the outermost object when
-   * it had taken a trailing one, which is unreadable afterwards precisely when
-   * the salvage went wrong.
-   */
-  | "trailing-object";
+// How the JSON object was recovered (`EnvelopeExtraction`) is defined in
+// stored-envelope.ts, so the persisted record can name it. `trailing-object` is
+// the backward suffix salvage and its own kind on purpose: it deliberately
+// returns an INNER object, the last suffix that parses whole. Labelling it
+// `outermost-object` made the retained trace claim the host had taken the
+// outermost object when it had taken a trailing one, which is unreadable
+// afterwards precisely when the salvage went wrong.
 
 export type ParseEnvelopeResult<T extends EnvelopeBase> =
   | { valid: true; payload: T; extraction: EnvelopeExtraction }
@@ -53,7 +46,13 @@ function bound(value: unknown): string | null {
     rendered = String(value);
   }
   if (rendered.length <= VIOLATION_VALUE_MAX_CHARS) return rendered;
-  return `${rendered.slice(0, VIOLATION_VALUE_MAX_CHARS - 1)}…`;
+  // The cut is in UTF-16 code units. Backing off one unit when it would strand a
+  // high surrogate keeps the retained text whole, so a character is never split
+  // into a lone half that does not survive UTF-8 (B3-11).
+  let cut = VIOLATION_VALUE_MAX_CHARS - 1;
+  const kept = rendered.charCodeAt(cut - 1);
+  if (kept >= 0xd800 && kept <= 0xdbff) cut -= 1;
+  return `${rendered.slice(0, cut)}…`;
 }
 
 function tryParseObject(text: string): { ok: true; value: unknown } | { ok: false; why: string } {
@@ -238,6 +237,17 @@ export function parseEnvelope(raw: string, schemaId: string): ParseEnvelopeResul
       received: bound(error.value),
     }));
     return { valid: false, extraction: extracted.extraction, violations };
+  }
+  // Cross-field rules the structural schema cannot state (B3-32).
+  if (schemaId === PUBLISH_OUTPUT_SCHEMA_ID) {
+    const refusal = publishedRecoveryRefusal(extracted.value);
+    if (refusal !== null) {
+      return {
+        valid: false,
+        extraction: extracted.extraction,
+        violations: [{ kind: "schema-mismatch", path: "/result/status/recovery", message: refusal, received: null }],
+      };
+    }
   }
 
   return { valid: true, extraction: extracted.extraction, payload: extracted.value as unknown as EnvelopeBase };

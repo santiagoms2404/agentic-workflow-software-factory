@@ -14,6 +14,7 @@
 import { createHash } from "node:crypto";
 import { deliverReviewDiff, type ReviewDeliveryLocation } from "./review-diff-delivery.ts";
 import { parseEnvelope } from "../contracts/parse-envelope.ts";
+import { utf8ByteLength } from "../contracts/typebox.ts";
 import {
   REVIEW_CONTEXT_DIFF_MAX_CHARS,
   REVIEW_CONTEXT_SCHEMA_ID,
@@ -24,7 +25,37 @@ import type { TestOutput } from "../contracts/test-output.ts";
 import { runGit, systemGitRunner } from "../git/changes.ts";
 import { GateReport } from "../gates/interface.ts";
 import { reviewEvidenceFitness, type ReviewEvidenceExpectation } from "../gates/review.ts";
-import { boundReviewDiff, diffRemovesLines, type DiffFileSection } from "../gates/review-diff.ts";
+import { boundReviewDiff, diffRemovesLines, type BoundedReviewDiff, type DiffFileSection } from "../gates/review-diff.ts";
+
+/**
+ * The UTF-8 bytes the bounded diff may take inside the envelope. The envelope
+ * cap is 256 KiB; the diff is most of it, and the stat tail, the output tail,
+ * paths and prose take what remains.
+ */
+export const REVIEW_DIFF_BYTE_ALLOWANCE = 192 * 1024;
+
+/**
+ * Bounds the diff in characters, then tightens the budget while its JSON form
+ * would exceed REVIEW_DIFF_BYTE_ALLOWANCE. The character budget does not bound
+ * bytes: a diff of mostly three-byte characters serialized past the envelope
+ * cap, so the candidate could not be reviewed (B3-15). An ASCII diff already sits
+ * well under the allowance and keeps its full budget.
+ */
+export function boundReviewDiffForEnvelope(
+  sections: readonly DiffFileSection[],
+  charBudget: number = REVIEW_CONTEXT_DIFF_MAX_CHARS,
+): BoundedReviewDiff {
+  let budget = charBudget;
+  let bounded = boundReviewDiff(sections, budget);
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const bytes = utf8ByteLength(JSON.stringify(bounded.diff));
+    if (bytes <= REVIEW_DIFF_BYTE_ALLOWANCE || budget <= 0) break;
+    // Strictly smaller each round, so the loop always makes progress.
+    budget = Math.max(0, Math.min(budget - 1, Math.floor((budget * REVIEW_DIFF_BYTE_ALLOWANCE) / bytes)));
+    bounded = boundReviewDiff(sections, budget);
+  }
+  return bounded;
+}
 
 export function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -158,7 +189,7 @@ export interface ComposedReviewEvidence {
 export async function composeReviewEvidence(request: ReviewEvidenceRequest): Promise<ComposedReviewEvidence> {
   const changedFiles = candidatePathsBetween(request.worktree, request.baseSha, request.candidateSha);
   const observed = candidateDiff(request.worktree, request.baseSha, request.candidateSha, changedFiles);
-  const bounded = boundReviewDiff(observed.sections, REVIEW_CONTEXT_DIFF_MAX_CHARS);
+  const bounded = boundReviewDiffForEnvelope(observed.sections);
   const limitationRequiredFiles = new Set([...bounded.omittedFiles, ...bounded.partialFiles]);
   const onDisk = await request.retainFullDiff(request.diffRef, observed.whole);
   const context: ReviewContext = {

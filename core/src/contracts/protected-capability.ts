@@ -32,11 +32,18 @@ export function protectedWriteContext(value: unknown): { grant: ProtectedGrant; 
   return proof?.kind === "write" && proof.grant !== undefined && proof.consumption !== undefined && proof.policy !== undefined
     ? { grant: proof.grant, consumption: proof.consumption, policy: proof.policy } : null;
 }
+/**
+ * The write authority over one verified grant. `kind` and `paths` are set after
+ * the verifier's fields, so no key the verifier returns can replace the grant's
+ * own path set (B3-31).
+ */
+export function mintWriteCapability(proof: { readonly grant: ProtectedGrant; readonly consumption: ProtectedGrantConsumption; readonly policy: ProtectedPermissionBinding }): ProtectedFilesCapability {
+  return mint(Object.freeze({ ...proof, kind: "write", paths: Object.freeze(proof.grant.files.map(file => file.path)) }));
+}
 /** Only host verification can reach the private mint. No public data-to-capability constructor exists. */
 export async function verifyProtectedWrite(input: { attemptDir: string; subject: ProtectedGrantSubject; operationId: string; reservationId: string }): Promise<ProtectedFilesCapability> {
   const host = await import("../workflow/protected-grants.ts");
-  const proof = await host.verifyConsumedProtectedGrant(input);
-  return mint(Object.freeze({ kind: "write", paths: Object.freeze(proof.grant.files.map(file => file.path)), ...proof }));
+  return mintWriteCapability(await host.verifyConsumedProtectedGrant(input));
 }
 export async function verifyProtectedPreservation(attemptDir: string, candidateSha: string, writing?: ProtectedFilesCapability): Promise<ProtectedFilesCapability> {
   const host = await import("../workflow/protected-grants.ts");

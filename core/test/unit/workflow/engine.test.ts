@@ -267,3 +267,27 @@ test("permission enforcement happens after clean gates and a breach aborts witho
   );
   assert.equal(session.prompts.length, 1);
 });
+
+test("the agent session persisted after a cold correction is the one that produced the accepted envelope (B3-33)", async () => {
+  let gateRuns = 0;
+  const gate = {
+    id: "envelope_valid",
+    run: () => new GateReport("envelope_valid").check("findings state a concrete consequence", gateRuns++ > 0, "missing consequence: F1"),
+  };
+  const coldIdentity = { ...identity, sessionId: "provider-s2" };
+  const session = new ScriptedSession([
+    turn(JSON.stringify(payload("first"))),
+    turn(JSON.stringify(payload("second")), 4, 3, coldIdentity),
+  ]);
+  const recorded: { identity: { sessionId: string } }[] = [];
+  const result = await runAgentPhase(options(session, compiled([gate]), {
+    persist: () => undefined,
+    persistAgentSession: (record) => { recorded.push(record); },
+  }, {
+    authorizeCorrection: () => ({ actor: "host", transport: "cold" }),
+  }));
+
+  assert.equal(result.state, "SUCCEEDED");
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0]?.identity.sessionId, "provider-s2", "the accepted envelope came from the cold session, not the original");
+});

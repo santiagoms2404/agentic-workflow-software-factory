@@ -103,7 +103,7 @@ export function assertProtectedCandidateAuthorization(value: unknown, expected: 
 
 export function assertExactProtectedPath(value: string): void {
   if (value !== value.normalize("NFC") || value.length === 0 || value.length > 4096 ||
-      [...value].some(character => character.codePointAt(0)! <= 31 || character.codePointAt(0) === 127 || "\\:*?[]{}!".includes(character)) || value.startsWith("/") ||
+      [...value].some(character => character.codePointAt(0)! <= 31 || character.codePointAt(0) === 127 || "\\:*?[]{}!\"<>|".includes(character)) || value.startsWith("/") ||
       value.split("/").some(segment => segment === "" || segment === "." || segment === ".." || segment.toLowerCase() === ".git" ||
         /[. ]$/u.test(segment) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(segment))) {
     throw new Error("protected grant requires an exact normalized repository-relative file path");

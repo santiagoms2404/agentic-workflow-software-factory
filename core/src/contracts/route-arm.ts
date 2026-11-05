@@ -34,5 +34,11 @@ export function parseRouteArm(spec: string): RouteArm {
     throw new RouteArmSpecInvalid(spec, `no effort level named ${JSON.stringify(effort)}; expected one of ${ROUTE_EFFORT_LEVELS.join(", ")}`);
   }
   const [adapter, provider, model] = segments as [string, string, string];
+  // The effort is the part after the last @, so a model id that itself holds
+  // @ would be split here and accepted. The --route flag refuses the same
+  // spelling as an unrepresentable selector, so the arm refuses it too (B3-16).
+  if (model.includes("@")) {
+    throw new RouteArmSpecInvalid(spec, `model ${JSON.stringify(model)} is not a representable selector; @ separates the effort`);
+  }
   return Object.freeze({ spec, adapter, provider, model, effort: effort as RouteEffort });
 }

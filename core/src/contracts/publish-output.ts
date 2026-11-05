@@ -2,7 +2,7 @@ import { Type, type Static } from "@sinclair/typebox";
 import { PUBLISH_OUTCOMES } from "../publish/argv.ts";
 import { phaseEnvelope } from "./envelope-base.ts";
 import { CandidateSeedSchema } from "./candidate-seed.ts";
-import { PhaseRecoverySchema } from "./phase-recovery.ts";
+import { assertPhaseRecovery, PhaseRecoverySchema } from "./phase-recovery.ts";
 import { ReplayRecordSchema } from "./proving-ground.ts";
 import { ShiftManifestSchema } from "./shift-selection-record.ts";
 import { TicketSelectionSchema } from "./ticket-selection-record.ts";
@@ -186,6 +186,24 @@ export const PublishResultSchema = Type.Object(
   },
   { additionalProperties: false },
 );
+
+/**
+ * The cross-field rules of the checkpoint a published status carries. The
+ * structural schema cannot state them, and publish validates only structure, so
+ * the parser applies this after the schema pass (B3-32). Returns the refusal,
+ * or null when the checkpoint is consistent or absent.
+ */
+export function publishedRecoveryRefusal(output: unknown): string | null {
+  const status = (output as { result?: { status?: { recovery?: unknown } } } | null)?.result?.status;
+  const recovery = status?.recovery;
+  if (recovery === undefined || recovery === null) return null;
+  try {
+    assertPhaseRecovery(recovery);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
 
 export const PublishOutputSchema = phaseEnvelope(
   PUBLISH_OUTPUT_SCHEMA_ID,

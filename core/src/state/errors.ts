@@ -179,7 +179,8 @@ export class HumanGateBypass extends StateError {
 /** Step 5. Only now is "unknown pair" the true, most-specific complaint. */
 export class IllegalTransition extends StateError {
   constructor(from: TaskState, to: TaskState) {
-    super("IllegalTransition", from, to, `${pair(from, to)}: not one of the twenty-five legal transitions`);
+    // No edge count in the wording: a count here drifts every time an edge is added (B3-21).
+    super("IllegalTransition", from, to, `${pair(from, to)}: not one of the legal transitions`);
   }
 }
 

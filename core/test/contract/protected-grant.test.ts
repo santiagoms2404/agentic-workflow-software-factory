@@ -39,7 +39,7 @@ test("protected-grant contracts bind issuance, consumption and the produced cand
   assert.throws(() => assertProtectedGrant({ ...g, candidateSha: b.candidateSha }), /schema/);
 });
 
-for (const path of ["", "/absolute.ts", "../escape.ts", "a/../b.ts", "a//b.ts", "a/./b.ts", "a\\b.ts", "a/*", "a/?.ts", "a/[x]", "a/{x}", "a/!x", ".git/config", "a/.GIT/config", "C:/file.ts", "a/name:stream", "a/name.", "a/name ", "a/CON.ts", "a/LPT1", "a/cafe\u0301.ts", "a/line\n.ts"]) {
+for (const path of ["", "/absolute.ts", "../escape.ts", "a/../b.ts", "a//b.ts", "a/./b.ts", "a\\b.ts", "a/*", "a/?.ts", "a/[x]", "a/{x}", "a/!x", "a/\"x.ts", "a/<x>.ts", "a/x|y.ts", ".git/config", "a/.GIT/config", "C:/file.ts", "a/name:stream", "a/name.", "a/name ", "a/CON.ts", "a/LPT1", "a/cafe\u0301.ts", "a/line\n.ts"]) {
   test(`exact protected path refuses ${JSON.stringify(path)}`, () => assert.throws(() => assertExactProtectedPath(path), /exact normalized/));
 }
 test("exact protected path accepts normalized Unicode and literal internal spaces", () => {

@@ -35,7 +35,13 @@ import {
   UncorrectableViolation,
 } from "../../src/state/errors.ts";
 
-/** The diagram, transcribed by hand. Twelve edges, and no thirteenth. */
+/**
+ * The diagram, transcribed by hand: twelve edges, and no thirteenth, plus the
+ * two abnormal exits the prose requires. "Any abnormal exit records a failure",
+ * and production reaches CORRECTING -> FAILED through PhaseExecution.fail(), so
+ * a queued or correcting phase that dies must have a legal edge to FAILED
+ * (B3-24 / B3-25).
+ */
 const LEGAL_PHASE_EDGES: readonly (readonly [PhaseState, PhaseState])[] = [
   ["QUEUED", "RUNNING"],
   ["QUEUED", "SKIPPED"],
@@ -49,6 +55,8 @@ const LEGAL_PHASE_EDGES: readonly (readonly [PhaseState, PhaseState])[] = [
   ["RUNNING", "CANCELLED"],
   ["VALIDATING", "CANCELLED"],
   ["CORRECTING", "CANCELLED"],
+  ["QUEUED", "FAILED"],
+  ["CORRECTING", "FAILED"],
 ];
 
 const SESSION: PhaseSession = {
@@ -113,9 +121,9 @@ test("the submachine has the plan's eight phase states", () => {
   assert.deepEqual([...PHASE_CANCELLABLE_STATES], ["QUEUED", "RUNNING", "VALIDATING", "CORRECTING"]);
 });
 
-test("exactly the twelve diagrammed edges are accepted, and the other fifty-two are not", () => {
+test("exactly the diagrammed edges and the abnormal exits are accepted, and the other fifty are not", () => {
   const legal = new Set(LEGAL_PHASE_EDGES.map(([from, to]) => `${from}->${to}`));
-  assert.equal(legal.size, 12);
+  assert.equal(legal.size, 14);
 
   const accepted: string[] = [];
   for (const from of PHASE_STATES) {
@@ -127,6 +135,7 @@ test("exactly the twelve diagrammed edges are accepted, and the other fifty-two 
         to,
         cause: "gate-violation",
         actor: "host",
+        resumeSession: { ...SESSION },
       });
       try {
         phaseTransition(probe);
@@ -144,7 +153,16 @@ test("exactly the twelve diagrammed edges are accepted, and the other fifty-two 
     }
   }
   assert.deepEqual(accepted.sort(), [...legal].sort());
-  assert.equal(PHASE_STATES.length * PHASE_STATES.length - accepted.length, 52);
+  assert.equal(PHASE_STATES.length * PHASE_STATES.length - accepted.length, 50);
+});
+
+test("every settlement settleAbnormalExit prescribes is a legal edge out of its live state (B3-25)", () => {
+  for (const from of ["QUEUED", "RUNNING", "VALIDATING", "CORRECTING"] as const) {
+    const settled = settleAbnormalExit(from);
+    const result = phaseTransition(input({ from, to: settled, cause: "host-failure", actor: "host" }));
+    assert.equal(result.to, "FAILED", `${from} must record its abnormal exit through phaseTransition`);
+    assert.equal(result.terminal, true);
+  }
 });
 
 test("no edge leaves a terminal phase state", () => {
@@ -195,8 +213,12 @@ test("CORRECTING -> RUNNING resumes the identical session", () => {
   const result = phaseTransition(input({ from: "CORRECTING", to: "RUNNING", resumeSession: { ...SESSION } }));
   assert.deepEqual(result.session, SESSION);
   assert.equal(result.terminal, false);
-  // Absent an explicit resume session, the phase stays bound to the one it has.
-  assert.deepEqual(phaseTransition(input({ from: "CORRECTING", to: "RUNNING" })).session, SESSION);
+  // Absent an explicit resume session the identity cannot be checked. Defaulting
+  // to the phase's own session compared the session with itself and passed any
+  // turn, so the omission is refused rather than assumed (B3-26).
+  const unnamed = identityBreak(() => phaseTransition(input({ from: "CORRECTING", to: "RUNNING" })));
+  assert.equal(unnamed.name, "SessionIdentityBroken");
+  assert.match(unnamed.differences[0] ?? "", /resumeSession/);
 });
 
 test("a correction that changes ANY of adapter, provider, model or session id is a cold restart", () => {

@@ -320,6 +320,11 @@ const GUARDS: Readonly<Record<EdgeId, (input: TransitionInput) => string[]>> = {
       if (retries === undefined || retries < 1) {
         violations.push(`the mandatory review was retried ${show(retries)} times; review-unavailable requires one fixed-route transport retry`);
       }
+      // The retry is the transport remedy. A recorded failure that names another
+      // code is a different fact, and it must not be settled as unavailability (B3-23).
+      if (failure !== undefined && failure !== code) {
+        violations.push(`reviewFailure ${show(failure)} does not match reason.code ${show(code)}`);
+      }
     } else if (failure !== code) {
       violations.push(`reviewFailure ${show(failure)} does not match reason.code ${show(code)}`);
     }

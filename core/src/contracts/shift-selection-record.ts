@@ -17,8 +17,8 @@ const Sha256Hex = Type.String({ pattern: "^[a-f0-9]{64}$" });
 export const ShiftManifestTicketSchema = Type.Object(
   {
     id: Type.String({ pattern: "^[TW][0-9]{2}$" }),
-    /** Repository-relative POSIX path of the ticket file. */
-    path: Type.String({ pattern: "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+\\.md$" }),
+    /** Repository-relative POSIX path of the ticket file. Lookaheads span newlines (B3-09). */
+    path: Type.String({ pattern: "^(?!/)(?![\\s\\S]*(?:^|[/\\n\\r\\u2028\\u2029])\\.\\.(?:[/\\n\\r\\u2028\\u2029]|$))[^\\\\]+\\.md$" }),
     /** sha256 hex over the whole ticket file, not its prompt block. */
     digest: Sha256Hex,
     tier: Type.Optional(Type.Union([Type.Literal(0), Type.Literal(1), Type.Literal(2)])),
@@ -63,8 +63,8 @@ export function sealShiftManifest(body: ShiftManifestBody): ShiftManifest {
 
 /** The JSON Schema emission of ShiftManifestSchema; never a hand-maintained copy. */
 export function emitShiftManifestJsonSchema(): Record<string, unknown> {
+  // The schema declares its $id; an option the schema overrides would be dead (B3-20).
   return toJsonSchema(ShiftManifestSchema, {
-    $id: `https://awsf.local/schemas/${SHIFT_MANIFEST_SCHEMA_ID}`,
     title: "ShiftManifest",
     description: "One shift selection: a plan, its selected milestones, and a byte digest per ticket file.",
   });

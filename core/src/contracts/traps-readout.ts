@@ -6,7 +6,9 @@ import { NO_TRAP_KINDS } from "../traps/catalogue.ts";
 /** Read-only host inventory, never an owner act or a provider envelope. */
 export const TRAPS_READOUT_SCHEMA_ID = "awsf.traps/v1";
 const text = Type.String({ minLength: 1, pattern: "\\S" });
-const instant = Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}T" });
+// A full ISO instant, as every producer writes it. The end is anchored: a date
+// with no time, or with trailing text, is not a timestamp (B3-19).
+const instant = Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$" });
 const count = Type.Integer({ minimum: 0 });
 const trapId = Type.String({ pattern: "^TR-[0-9]{2}$" });
 const identity = { project: text, taskId: text, attempt: Type.Integer({ minimum: 1 }) };

@@ -359,7 +359,10 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     if (options.initialEnvelope !== undefined && options.initialUsage === undefined) throw new Error("saved reply lost its original usage accounting");
     const usage = new UsageAccumulator();
     const envelopes: StoredEnvelope<T>[] = [];
-    const expectedSession = phaseSession(options.session.identity);
+    // The session the phase is bound to now. A cold correction rebinds it to the
+    // session that produced the next turn, so later checks and the persisted
+    // agent session follow the accepted envelope rather than the original (B3-33).
+    let boundSession: PhaseSession = phaseSession(options.session.identity);
     let correctionRound = options.initialEnvelope?.correctionRound ?? 0;
     let parseFixes = 0;
     let gateRound = 0;
@@ -400,7 +403,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       phase: options.phase.id,
       from: "VALIDATING",
       to: "CORRECTING",
-      session: expectedSession,
+      session: boundSession,
       cause,
       actor: authorization.actor,
       correctionTransport: authorization.transport,
@@ -429,14 +432,15 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       nextRound,
       authorization.transport,
     );
-    options.budget.recordPhaseTransition({
+    const resumed = options.budget.recordPhaseTransition({
       phase: options.phase.id,
       from: "CORRECTING",
       to: "RUNNING",
-      session: expectedSession,
+      session: boundSession,
       resumeSession: phaseSession(turn.identity),
       correctionTransport: authorization.transport,
     });
+    boundSession = resumed.session;
     execution.running();
     correctionRound = nextRound;
     usage.add(turn);
@@ -573,7 +577,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     if (phaseUsage === undefined) throw new Error("saved reply lost its original usage accounting");
     await options.persistence.persistAgentSession?.({
       phaseId: options.phase.id,
-      identity: expectedSession,
+      identity: boundSession,
       usage: phaseUsage,
       candidateSha,
     });

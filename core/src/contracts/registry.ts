@@ -1,6 +1,7 @@
 import type { TObject } from "@sinclair/typebox";
 import { PlanAuthorOutputSchema, PLAN_AUTHOR_OUTPUT_SCHEMA_ID, type PlanAuthorOutput } from "./plan-author-output.ts";
 import { PlanAdmissionRecordSchema, PLAN_ADMISSION_SCHEMA_ID } from "./plan-admission.ts";
+import { PREVIEW_RECORD_SCHEMA, PreviewRecordSchema } from "./preview-record.ts";
 import { ClosureRecordSchema, CLOSURE_RECORD_SCHEMA_ID } from "./closure-record.ts";
 import {
   ArchitectureReviewOutputSchema,
@@ -129,6 +130,7 @@ export const RECORD_SCHEMAS = {
   [REQUEST_CONFIRMATION_SCHEMA_ID]: RequestConfirmationRecordSchema,
   [PREFLIGHT_REFUSED_SCHEMA_ID]: PreflightRefusedRecordSchema,
   [GRANT_REFUSED_SCHEMA_ID]: GrantRefusedRecordSchema,
+  [PREVIEW_RECORD_SCHEMA]: PreviewRecordSchema,
 } as const;
 
 export class UnknownEnvelopeSchemaError extends Error {

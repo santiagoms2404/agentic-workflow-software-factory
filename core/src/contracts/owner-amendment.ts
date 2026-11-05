@@ -57,12 +57,22 @@ export function sha256(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
 
+/**
+ * Sorted-key JSON for digests. Anything it cannot represent faithfully is refused,
+ * as undefined already is. Built-ins such as Date, Map, Set and boxed or typed
+ * values keep their state in internal slots that Object.entries cannot see, so
+ * they would serialize as {} or as a misleading object, and two different inputs
+ * shared one digest (B3-10). NaN and Infinity would serialize as null.
+ */
 export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
+    const tag = Object.prototype.toString.call(value);
+    if (tag !== "[object Object]") throw new Error(`a ${tag.slice(8, -1)} is not canonical JSON; digest its plain data`);
     return `{${Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
       .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
   }
+  if (typeof value === "number" && !Number.isFinite(value)) throw new Error("a non-finite number is not canonical JSON");
   const encoded = JSON.stringify(value);
   if (encoded === undefined) throw new Error("undefined is not canonical JSON");
   return encoded;

@@ -9,12 +9,35 @@ const IMPURE_IMPORT = new RegExp(
   `(?:from\\s+|import\\s*\\(?\\s*|require\\s*\\(\\s*)(['"])${IMPURE_MODULES}(?:\\/[^'"]*)?\\1`,
 );
 
-test("core/src/state imports nothing impure", () => {
+// Invariant 5 names the clock as well as I/O. A read of the clock, a timer,
+// randomness or the process needs no import at all (globals), so it is matched
+// at the call site. The import fence above cannot see it.
+const IMPURE_CALL = /\b(?:Date\s*\.\s*now|new\s+Date\b|performance\s*\.\s*now|setTimeout|setInterval|setImmediate|Math\s*\.\s*random|randomUUID|process\.[A-Za-z_$])/;
+
+test("core/src/state imports nothing impure and reads no clock, timer or randomness", () => {
   const files = walkFiles(join(repoRoot(), "core", "src", "state"), [".ts"]);
   const offenders = files
     .map(relRepo)
-    .filter((f) => IMPURE_IMPORT.test(readFileSync(join(repoRoot(), f), "utf8")));
+    .filter((f) => {
+      const source = readFileSync(join(repoRoot(), f), "utf8");
+      return IMPURE_IMPORT.test(source) || IMPURE_CALL.test(source);
+    });
   assert.deepEqual(offenders, []);
+});
+
+test("state purity fence rejects clock, timer, randomness and process reads with no import (B3-28)", () => {
+  for (const call of [
+    "const at = Date.now();",
+    "const at = new Date();",
+    "const at = performance.now();",
+    "setTimeout(resume, 1);",
+    "const roll = Math.random();",
+    "const id = randomUUID();",
+    "const pid = process.pid;",
+  ]) {
+    assert.equal(IMPURE_CALL.test(call), true, `${call} must be refused`);
+  }
+  assert.equal(IMPURE_CALL.test("const at = transition(evidence);"), false);
 });
 
 test("state purity fence rejects clocks, readline, bare and dynamic imports", () => {

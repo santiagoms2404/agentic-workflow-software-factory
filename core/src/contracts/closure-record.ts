@@ -3,7 +3,7 @@ import { Value } from "@sinclair/typebox/value";
 
 export const CLOSURE_RECORD_SCHEMA_ID = "awsf.closure-record/v1";
 const sha = Type.String({ pattern: "^[a-f0-9]{40}$" });
-const path = Type.String({ minLength: 1, pattern: "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$" });
+const path = Type.String({ minLength: 1, pattern: "^(?!/)(?![\\s\\S]*(?:^|[/\\n\\r\\u2028\\u2029])\\.\\.(?:[/\\n\\r\\u2028\\u2029]|$))[^\\\\]+$" });
 const row = Type.Object({ path, ticket: Type.String({ pattern: "^[TW][0-9]{2}$" }),
   taskNumber: Type.Integer({ minimum: 1 }), rowIndex: Type.Integer({ minimum: 0 }),
   oldValue: Type.String(), newValue: Type.String() }, { additionalProperties: false });

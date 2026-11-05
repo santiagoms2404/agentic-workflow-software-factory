@@ -1,4 +1,4 @@
-// The task lifecycle: eleven states, twenty-six legal edges, ninety-five
+// The task lifecycle: eleven states, twenty-seven legal edges, ninety-four
 // rejected ordered pairs, one ordered rejection contract.
 //
 // `transition()` is a pure function. It starts no process, reads no file, asks
@@ -91,7 +91,7 @@ export interface LegalEdge {
   readonly interactive: boolean;
 }
 
-/** The twenty-five legal transitions, in L-order. */
+/** The legal transitions, in L-order. */
 export const LEGAL_EDGES: readonly LegalEdge[] = [
   { id: "L1",  from: "DRAFT",          to: "PREPARED",       actors: ["host"],           spawnSite: false, interactive: false },
   { id: "L2",  from: "DRAFT",          to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
