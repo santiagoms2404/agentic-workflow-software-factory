@@ -10,26 +10,12 @@
 // argv" a descriptor test instead of a code review.
 
 import type { EdgeId, TaskState } from "../state/task-machine.ts";
-import type { NormalizedEvent, RunErrorCode } from "../contracts/normalized-events.ts";
+import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { ProcessIdentity, TerminationReport } from "../execution/launcher-barrier.ts";
+import { AdapterError } from "../contracts/adapter-error.ts";
 
-/**
- * An adapter refusal, carrying one of the eleven error codes the contract
- * names. The code is the vocabulary the UI and the journal share, so an adapter
- * that fails for a reason outside it has to widen the list rather than invent a
- * private one.
- */
-export class AdapterError extends Error {
-  readonly code: RunErrorCode;
-  readonly adapter: string;
+export { AdapterError };
 
-  constructor(adapter: string, code: RunErrorCode, message: string) {
-    super(`${adapter}: ${message} (${code})`);
-    this.name = "AdapterError";
-    this.code = code;
-    this.adapter = adapter;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // What an adapter knows about a model.
@@ -432,21 +418,7 @@ export type BrokerProcessRegistration =
   | PhaseCorrectionProcessRegistration
   | TurnReconnectProcessRegistration;
 
-/**
- * The reservation a launch is accounted against, whichever class it is.
- *
- * A correction names it `originReservationId` rather than `reservationId`
- * because the two are in different STATES — a task-edge or agent-phase launch
- * holds its reservation and spends it on GO, while a correction's was spent by
- * the phase's first turn and is only being cited. One field name for both would
- * make "reserve before launch, never after" unreadable at the call site. This
- * function is for the callers that legitimately need either.
- */
-export function reservationIdOf(registration: BrokerProcessRegistration): string {
-  return registration.kind === "phase-correction" || registration.kind === "turn-reconnect"
-    ? registration.originReservationId
-    : registration.reservationId;
-}
+export { reservationIdOf } from "../execution/process-registration.ts";
 
 /** Whether a launch is a task transition, and therefore carries an edge. */
 export function isTaskEdgeRegistration(

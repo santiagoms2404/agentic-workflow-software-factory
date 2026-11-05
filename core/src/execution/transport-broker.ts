@@ -71,8 +71,8 @@ import type {
 import type { Reservation } from "./call-budget.ts";
 import { isVerifiedReconnectAuthorization, type TurnReconnectLaunchVerifier, type VerifiedReconnectAuthorization } from "../workflow/turn-reconnect-authorization.ts";
 import { continuityDigest } from "../contracts/interrupted-turn.ts";
-import { filterEnv } from "../adapters/env.ts";
-import { reservationIdOf } from "../adapters/interface.ts";
+import { filterEnv } from "./process-environment.ts";
+import { reservationIdOf } from "./process-registration.ts";
 
 type PhaseLaunchIdentity = Pick<AgentPhaseProcessRegistration,
   "runId" | "taskSessionId" | "workflowId" | "phaseId" | "phaseOrdinal" | "adapterId" | "role">;

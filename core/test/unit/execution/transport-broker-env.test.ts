@@ -5,7 +5,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CallBudget } from "../../../src/execution/call-budget.ts";
 import { ProcessTransportBroker } from "../../../src/execution/transport-broker.ts";
-import type { ProcessRegistration, ProcessSpec } from "../../../src/adapters/interface.ts";
+import {
+  reservationIdOf as interfaceReservationIdOf,
+  type BrokerProcessRegistration,
+  type ProcessRegistration,
+  type ProcessSpec,
+} from "../../../src/adapters/interface.ts";
+import { reservationIdOf as neutralReservationIdOf } from "../../../src/execution/process-registration.ts";
+
+test("the public reservation helper reexports the neutral implementation", () => {
+  assert.equal(interfaceReservationIdOf, neutralReservationIdOf);
+  assert.equal(interfaceReservationIdOf({ kind: "phase-correction", originReservationId: "spent" } as BrokerProcessRegistration), "spent");
+  assert.equal(interfaceReservationIdOf({ kind: "turn-reconnect", originReservationId: "origin" } as BrokerProcessRegistration), "origin");
+  assert.equal(interfaceReservationIdOf({ kind: "agent-phase", reservationId: "held" } as BrokerProcessRegistration), "held");
+});
 
 test("the launch boundary filters an adapter descriptor environment", async () => {
   const directory = mkdtempSync(join(tmpdir(), "awsf-broker-env-"));
