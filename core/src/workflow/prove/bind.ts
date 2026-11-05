@@ -38,7 +38,14 @@ export async function bindProveRecipe(attempt: ReplayAttempt, config: ProveCompi
     throw new ReplayBindingRefused(error instanceof Error ? error.message : String(error));
   }
   const itemPath = `${PROVING_GROUND_DIR}/${replay.itemId}.json`;
-  const item: unknown = JSON.parse(await readFile(join(attempt.repository, itemPath), "utf8"));
+  const raw = await readFile(join(attempt.repository, itemPath), "utf8");
+  let item: unknown;
+  try {
+    item = JSON.parse(raw);
+  } catch (error) {
+    // Refused with the item's path, as the corpus reader does for the same file (B6-27).
+    throw new ProveItemInvalid(`${itemPath}: ${error instanceof Error ? error.message : String(error)}`);
+  }
   try {
     assertProvingGroundItem(item);
   } catch (error) {

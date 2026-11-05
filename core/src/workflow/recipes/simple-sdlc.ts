@@ -31,7 +31,7 @@ export const simpleSdlcWorkflow = {
       outputSchema: PlanOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("planner"),
+      get prompt() { return loadUserPrompt("planner"); },
     },
     {
       id: "builder",
@@ -42,7 +42,7 @@ export const simpleSdlcWorkflow = {
       outputSchema: BuildOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("builder"),
+      get prompt() { return loadUserPrompt("builder"); },
     },
     {
       id: "tests",
@@ -64,7 +64,7 @@ export const simpleSdlcWorkflow = {
       outputSchema: DocumentOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("documenter"),
+      get prompt() { return loadUserPrompt("documenter"); },
     },
     {
       id: "final-tests",
@@ -100,7 +100,7 @@ export const simpleSdlcWorkflow = {
       outputSchema: ReviewOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("reviewer"),
+      get prompt() { return loadUserPrompt("reviewer"); },
     },
   ],
 } as const satisfies WorkflowRecipe;

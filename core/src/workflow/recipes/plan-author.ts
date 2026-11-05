@@ -31,7 +31,11 @@ export function assertPlanAuthorRole(config: AwsfConfig): void {
   if (config.routing.review !== "invert-provider") throw new Error("plan-author requires cross-provider review");
 }
 
-/** Compilation is selection-bound; the shipped config does not enable this role. */
+/**
+ * Compilation is selection-bound: the workflow runs only for a route the caller
+ * selects. The shipped config enables the plan-author role and workflow (G03-W,
+ * `awsf.config.yaml`), so this path is live rather than dormant (B6-30).
+ */
 export function compilePlanAuthor(input: {
   readonly planRef?: string | null;
   readonly ticketSelection?: TicketSelection | null;

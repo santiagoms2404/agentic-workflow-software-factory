@@ -102,7 +102,9 @@ export function requestedPhaseRoute(
   // the config already chose rather than discarding the rest of it.
   const override = layered(configured, attempted);
   const adapterId = override.adapter ?? role.harness.adapter;
-  const adapterEntry = config.adapters[adapterId];
+  // Own properties only: a bare lookup takes `toString` or `__proto__` from
+  // Object.prototype as a declared adapter (B6-25).
+  const adapterEntry = Object.hasOwn(config.adapters, adapterId) ? config.adapters[adapterId] : undefined;
   if (adapterEntry === undefined || adapterEntry.enabled === false) {
     throw new InvalidPhaseRouteSelection(phaseId, `adapter ${JSON.stringify(adapterId)} is disabled or undeclared`);
   }

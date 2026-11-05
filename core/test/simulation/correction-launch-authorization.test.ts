@@ -235,6 +235,35 @@ test("a spent allowance refuses the next round, and there is no unbounded loop",
   } finally { w.close(); }
 });
 
+// B6-22: the verifier checked only an upper bound on the counters, so a launch
+// whose tranche was never charged was accepted. The phase machine charges before
+// the launch is described, so an honest launch always finds its charge.
+test("B6-22: a correction launch in a tranche that was never charged is refused", async () => {
+  const w = world({ allowance: { used: { auto: 0, owner: 0 }, allowance: { auto: 1, owner: 1 } } });
+  try {
+    await assert.rejects(() => launch(w), /no correction was charged to the auto tranche/);
+    assert.equal(existsSync(w.sideEffect), false, "a refused launch must not reach a provider");
+    assert.equal(w.corrections.length, 0);
+  } finally { w.close(); }
+});
+
+test("B6-22: a round with no charge behind it is refused even when its own tranche was drawn", async () => {
+  const w = world({ allowance: { used: { auto: 1, owner: 0 }, allowance: { auto: 1, owner: 1 } } });
+  try {
+    await assert.rejects(() => launch(w, { correctionRound: 2 }), /round 2 has no charge behind it \(1 charged\)/);
+    assert.equal(existsSync(w.sideEffect), false);
+  } finally { w.close(); }
+});
+
+test("B6-22: a charged owner-tranche round launches", async () => {
+  const w = world({ allowance: { used: { auto: 1, owner: 1 }, allowance: { auto: 1, owner: 1 } } });
+  try {
+    await launch(w, { correctionRound: 2, tranche: "owner" });
+    assert.equal(existsSync(w.sideEffect), true, "the charged round must reach a provider");
+    assert.equal(w.corrections.length, 1);
+  } finally { w.close(); }
+});
+
 test("a tranche configured to zero can never be drawn", async () => {
   const w = world({ allowance: { used: { auto: 0, owner: 0 }, allowance: { auto: 0, owner: 0 } } });
   try {

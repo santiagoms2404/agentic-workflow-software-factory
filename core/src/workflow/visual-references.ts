@@ -20,7 +20,7 @@
 
 import { createHash } from "node:crypto";
 import { constants, promises as fs } from "node:fs";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { parse as parseYaml } from "yaml";
 import type { ModelInfo, ObservedToolImage } from "../adapters/interface.ts";
@@ -99,7 +99,8 @@ function sha256(bytes: Buffer | string): string {
 
 function isContained(root: string, candidate: string): boolean {
   const offset = relative(root, candidate);
-  return offset === "" || (!offset.startsWith("..") && !isAbsolute(offset));
+  // Only a leading ".." component is a parent-directory escape; `..archive` is an ordinary name (B6-26).
+  return offset === "" || (offset !== ".." && !offset.startsWith(`..${sep}`) && !isAbsolute(offset));
 }
 
 function relativePath(value: string, code: VisualRefusalCode, label: string): string {
@@ -356,7 +357,10 @@ export function assertVisualRoute(input: VisualRouteInput): void {
   const demonstrated = Object.entries(VISUAL_ROUTES).flatMap(([adapter, models]) => Object.keys(models).map((model) => `${adapter}/${model}`));
   const selector = input.model.requestedModel.replace(/^[a-z]+:/, "");
   if (!input.model.supportsImages) refuse("route-text-only", `${input.phaseId} runs on ${input.model.requestedModel}, which takes no image input`);
-  if (VISUAL_ROUTES[input.adapterId]?.[selector] === undefined) {
+  // Own properties at both levels: `toString`, `constructor` and friends are
+  // Object.prototype members, not measured routes (B6-34).
+  const adapterRoutes = Object.hasOwn(VISUAL_ROUTES, input.adapterId) ? VISUAL_ROUTES[input.adapterId] : undefined;
+  if (adapterRoutes === undefined || !Object.hasOwn(adapterRoutes, selector)) {
     refuse("route-unsupported", `${input.phaseId} runs on ${input.adapterId}/${selector}, which has no demonstrated image delivery; demonstrated routes: ${demonstrated.join(", ")}`);
   }
   if (input.profile === "no-tools" || !input.tools.includes("read")) {

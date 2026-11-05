@@ -96,7 +96,7 @@ function candidateDiff(
   baseSha: string,
   candidateSha: string,
   paths: readonly string[],
-): { readonly whole: string; readonly sections: readonly DiffFileSection[]; readonly stat: string; readonly insertions: number; readonly deletions: number } {
+): { readonly whole: string; readonly sections: readonly DiffFileSection[]; readonly stat: string; readonly insertions: number; readonly deletions: number; readonly binaryFiles: number } {
   const git = systemGitRunner(worktree);
   const range = `${baseSha}..${candidateSha}`;
   const whole = runGit(git, ["diff", ...DIFF_ISOLATION_FLAGS, range, "--"]);
@@ -105,11 +105,18 @@ function candidateDiff(
   const stat = runGit(git, ["diff", ...DIFF_ISOLATION_FLAGS, "--stat=200,160", range, "--"]);
   let insertions = 0;
   let deletions = 0;
+  let binaryFiles = 0;
   for (const record of runGit(git, ["diff", "--numstat", ...DIFF_ISOLATION_FLAGS, "-z", range, "--"]).split("\0")) {
     const fields = record.split("\t");
     if (fields.length < 3) continue;
     // Binary files report `-` for both counts; they are not zero-line changes,
-    // they are unmeasurable ones, and adding them as zero would be a lie.
+    // they are unmeasurable ones, and adding them as zero would be a lie. They are
+    // counted apart, and the review summary names them, so the totals never read as
+    // a complete measure of a change that added a file (B6-31).
+    if (fields[0] === "-" || fields[1] === "-") {
+      binaryFiles += 1;
+      continue;
+    }
     insertions += Number.parseInt(fields[0] ?? "", 10) || 0;
     deletions += Number.parseInt(fields[1] ?? "", 10) || 0;
   }
@@ -117,7 +124,7 @@ function candidateDiff(
     path,
     text: runGit(git, ["--literal-pathspecs", "diff", ...DIFF_ISOLATION_FLAGS, range, "--", path]),
   }));
-  return { whole, sections: Object.freeze(sections), stat, insertions, deletions };
+  return { whole, sections: Object.freeze(sections), stat, insertions, deletions, binaryFiles };
 }
 
 export async function attachReviewDelivery(context: ReviewContext, location: ReviewDeliveryLocation): Promise<ReviewContext> {
@@ -195,7 +202,8 @@ export async function composeReviewEvidence(request: ReviewEvidenceRequest): Pro
   const context: ReviewContext = {
     schema: REVIEW_CONTEXT_SCHEMA_ID,
     producerStatus: "success",
-    summary: `Candidate ${request.candidateSha} against base ${request.baseSha}: ${String(changedFiles.length)} file(s), +${String(observed.insertions)}/-${String(observed.deletions)}`,
+    summary: `Candidate ${request.candidateSha} against base ${request.baseSha}: ${String(changedFiles.length)} file(s), +${String(observed.insertions)}/-${String(observed.deletions)}` +
+      (observed.binaryFiles === 0 ? "" : ` (${String(observed.binaryFiles)} binary file(s) not counted)`),
     artifacts: [],
     notesForNextPhase: "Judge this candidate against the recorded request. The diff below is the host's; no command may be run.",
     request: request.intent.request,

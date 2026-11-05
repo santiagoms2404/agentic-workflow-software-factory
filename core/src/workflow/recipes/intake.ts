@@ -27,7 +27,7 @@ export const intakeWorkflow = {
       outputSchema: IntakeOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("intake"),
+      get prompt() { return loadUserPrompt("intake"); },
     },
   ],
 } as const satisfies WorkflowRecipe;

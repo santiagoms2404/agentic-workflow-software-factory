@@ -27,7 +27,7 @@ export const scoutWorkflow = {
       outputSchema: ScoutOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("scout"),
+      get prompt() { return loadUserPrompt("scout"); },
     },
   ],
 } as const satisfies WorkflowRecipe;

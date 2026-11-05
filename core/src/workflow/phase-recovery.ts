@@ -192,7 +192,9 @@ export async function reconcileHostValidation(
   // A protected host effect is identified against its own durable intent and
   // binding, under the execution lease, by `git/protected-reconcile.ts`.
   // Preflight states the plan and touches nothing.
-  if (plan.action === "reconcile-protected") return Object.freeze({ plan, commit: null, candidateSha: inherited });
+  // The protected publication is identified by its own evidence, which this function never reads,
+  // so it cannot name the revision: the previous phase's candidate is not this phase's (B6-23).
+  if (plan.action === "reconcile-protected") return Object.freeze({ plan, commit: null, candidateSha: null });
   if (plan.action === "replay") {
     if (runGit(git, ["rev-parse", "HEAD"]).trim() !== checkpoint.worktreeHeadSha) throw new Error("recovery refused: HEAD moved during read-only host validation");
     if (await savedResultTreeDigest(status.worktree!, git, seedPaths) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");

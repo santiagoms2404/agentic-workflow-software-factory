@@ -208,6 +208,23 @@ test("V2 the private binding and its journal record must agree in both direction
   }
 });
 
+test("B6-26: a reference frame under a root-level directory whose name starts with two dots is admitted", async () => {
+  // The containment test refused any root-relative path starting with "..", so
+  // `..archive/f1.png` was taken for a parent-directory escape (B6-26).
+  const library = referenceLibrary();
+  try {
+    const bytes = library.images.f1!;
+    mkdirSync(join(library.root, "..archive"), { recursive: true });
+    writeFileSync(join(library.root, "..archive", "f1.png"), bytes);
+    writeFileSync(library.indexPath, JSON.stringify({ version: 1, frames: [{ id: "f1", image: "..archive/f1.png" }], ticketFrames: { T01: ["f1"] } }));
+    library.writeDigests(); library.commit("test: dotted directory name");
+    const verified = await verify(library, { frames: ["f1"] });
+    assert.equal(verified.bound.frames[0]?.sha256, sha256(bytes));
+  } finally {
+    rmSync(join(library.root, ".."), { recursive: true, force: true });
+  }
+});
+
 test("V1/V2 the route check admits demonstrated image routes and refuses text-only, no-tools and read-less ones", async () => {
   const model = { supportsImages: true, requestedModel: "opus" };
   for (const [adapterId, requestedModel] of [["claude-code", "opus"], ["claude-code", "claude:opus"], ["claude-code", "sonnet"], ["pi-codex", "gpt-5.6-sol"],

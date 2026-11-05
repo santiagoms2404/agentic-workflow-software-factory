@@ -194,7 +194,8 @@ function reviewBuildPhaseIds(workflowId: string, phases: readonly PhaseDefinitio
   if (buildPhaseIds.length === 0) {
     const seeds = workflowId === SEEDED_REVIEW_WORKFLOW ? seedPhaseIds(phases) : [];
     if (seeds.length === 1) return Object.freeze(seeds);
-    throw new InvalidReviewBuildProducerCount(buildPhaseIds);
+    // Name the colliding seeds, not the empty agent list, so the refusal says what collided (B6-16).
+    throw new InvalidReviewBuildProducerCount(seeds);
   }
   return Object.freeze(buildPhaseIds);
 }

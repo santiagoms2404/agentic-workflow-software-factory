@@ -431,7 +431,12 @@ export async function verifiedTargetSeed(dir: string, status: AttemptStatus): Pr
 
 export async function validateSeedStartup(seed: CandidateSeed, status: AttemptStatus, config: AwsfConfig, configPath: string, attemptDir: string): Promise<void> {
   assertSeedTarget(status);
-  const source = await inspectSeedSource(join(dirname(dirname(attemptDir)), seed.source.taskId, String(seed.source.attempt)), status.repository, {
+  // The source is named by the seed record, so it must be a sealed attempt beside this one, as
+  // assertIntegrationSource requires, before anything is read from it (B6-14).
+  const tasks = dirname(dirname(attemptDir));
+  const sourceDir = join(tasks, seed.source.taskId, String(seed.source.attempt));
+  if (dirname(dirname(sourceDir)) !== tasks) throw new CandidateSeedRejected("seed source is not a sealed attempt beside the target");
+  const source = await inspectSeedSource(sourceDir, status.repository, {
     project: seed.source.project, taskId: seed.source.taskId, attempt: seed.source.attempt, candidateSha: seed.seedCandidateSha,
   });
   if (source.journalDigest !== seed.source.journalDigest || source.status.sessionId !== seed.source.sessionId || source.status.revision !== seed.source.revision) {

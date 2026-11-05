@@ -8,7 +8,8 @@ import { DesignPlanOutputSchema, type DesignPlanOutput } from "../../contracts/d
 import { DocumentOutputSchema } from "../../contracts/document-output.ts";
 import { PlanContextSchema, type PlanContext } from "../../contracts/plan-context.ts";
 import { PlanOutputSchema } from "../../contracts/plan-output.ts";
-import { architectureReviewClear, architectureVerdictConsistent } from "../../gates/architecture-review.ts";
+import { architectureVerdictConsistent } from "../../gates/architecture-review.ts";
+import { GateReport } from "../../gates/interface.ts";
 import { spineCarried, spineDeclared } from "../../gates/design-spine.ts";
 import type { WorkflowRecipe } from "../compiler.ts";
 import { loadUserPrompt, requireHostExecution } from "../recipe-support.ts";
@@ -58,7 +59,7 @@ export const designToPlanWorkflow = {
           ownerRecordedRequest: context.previousEnvelope?.summary ?? "",
         }),
       }],
-      prompt: loadUserPrompt("designer"),
+      get prompt() { return loadUserPrompt("designer"); },
     },
     {
       id: "architecture-review",
@@ -75,7 +76,7 @@ export const designToPlanWorkflow = {
           context.previousEnvelope as DesignOutput,
         ),
       }],
-      prompt: loadUserPrompt("architecture-reviewer"),
+      get prompt() { return loadUserPrompt("architecture-reviewer"); },
     },
     {
       id: "plan-context",
@@ -87,26 +88,16 @@ export const designToPlanWorkflow = {
       maxCorrections: 0,
       gates: [{
         id: "architecture_review_clear",
-        run: (context) => {
-          const planContext = context.envelope as PlanContext;
-          return architectureReviewClear(
-            {
-              schema: "awsf.architecture-review-output/v1",
-              producerStatus: planContext.producerStatus,
-              summary: planContext.summary,
-              artifacts: planContext.artifacts,
-              notesForNextPhase: planContext.notesForNextPhase,
-              reviewedDesign: planContext.summary,
-              verdict: planContext.reviewVerdict,
-              findings: planContext.nonBlockingFindings,
-              limitations: ["The original review limitations are bound by the host executor."],
-            },
-            {
-              design: planContext.identifierSet,
-              planContext: planContext.identifierSet,
-            },
-          );
-        },
+        // The gate context carries the plan context and the review, never the stored design, so this
+        // declaration cannot compare the identifier spine against the design. It used to pass the plan
+        // context's own identifiers as both sides, a comparison that could never fail. Production
+        // composes and checks the spine (composeProductionPlanContext), so this declaration refuses
+        // rather than passes (B6-29).
+        run: () => new GateReport("architecture_review_clear").check(
+          "identifier spine checked against the stored design",
+          false,
+          "this recipe gate has no stored design to compare; production composes and checks the spine",
+        ),
       }],
       execute: (context) => requireHostExecution("plan-context", context),
     },
@@ -129,7 +120,7 @@ export const designToPlanWorkflow = {
           ["design-to-plan"],
         ),
       }],
-      prompt: loadUserPrompt("planner"),
+      get prompt() { return loadUserPrompt("planner"); },
     },
     {
       id: "plan-render",

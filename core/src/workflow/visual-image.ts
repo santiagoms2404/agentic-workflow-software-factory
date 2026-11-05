@@ -109,6 +109,9 @@ function jpegFacts(bytes: Buffer): ImageFacts {
     const length = bytes.readUInt16BE(offset + 2);
     if (length < 2 || offset + 2 + length > bytes.length) throw new ImageDecodeFailure("JPEG segment runs past the end of the file");
     if (JPEG_FRAMES.has(marker)) {
+      // Precision, height, width and a component count: a shorter segment would read
+      // its dimensions from outside itself, or past the end of the file (B6-32, B6-33).
+      if (length < 8) throw new ImageDecodeFailure("JPEG frame header is shorter than its dimensions");
       const height = bytes.readUInt16BE(offset + 5);
       const width = bytes.readUInt16BE(offset + 7);
       if (width === 0 || height === 0) throw new ImageDecodeFailure("JPEG frame header has no dimensions");

@@ -31,7 +31,10 @@ export const PHASE_OUTPUT_OWNERSHIP = Object.freeze({
 } as const satisfies Readonly<Record<string, PhaseOutputOwnership>>);
 
 export function outputOwnershipCheck(phaseId: string, envelope: EnvelopeBase): GateCheck {
-  const ownership = (PHASE_OUTPUT_OWNERSHIP as Readonly<Record<string, PhaseOutputOwnership>>)[phaseId];
+  // Own properties only: an inherited name such as `constructor` is not a declaration (B6-35).
+  const ownership = Object.hasOwn(PHASE_OUTPUT_OWNERSHIP, phaseId)
+    ? (PHASE_OUTPUT_OWNERSHIP as Readonly<Record<string, PhaseOutputOwnership>>)[phaseId]
+    : undefined;
   if (ownership === undefined) {
     return { item: "phase output ownership", ok: false, note: `phase ${JSON.stringify(phaseId)} has no ownership declaration` };
   }

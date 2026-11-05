@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { assertCommandDispatchIntent, assertCommandDispatchResult,
   assertCommandOccurrenceClosed, assertCommandOccurrenceOpened, type CommandDispatchIntent,
   type CommandDispatchResult, type CommandOccurrenceClosed,
@@ -119,6 +119,10 @@ export async function readCommandLedger(attemptDir: string): Promise<CommandLedg
 
 async function observeRetained(attemptDir: string, intentId: string, outputRef: string): Promise<RetainedOutputObservation> {
   const absolute = join(attemptDir, outputRef);
+  // The journal names the file, so it must stay inside this attempt. A reference that
+  // climbs out would measure a host file as the retained output (B6-15).
+  const rel = relative(resolve(attemptDir), absolute);
+  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return { intentId, bytes: null, digest: null };
   try {
     const info = await stat(absolute);
     if (!info.isFile()) return { intentId, bytes: null, digest: null };
