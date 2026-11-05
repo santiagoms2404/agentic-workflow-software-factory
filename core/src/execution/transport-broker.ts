@@ -22,7 +22,13 @@
 // point — a rejection that arrives after `spawn()` has already returned has
 // already failed.
 
-import { spawn, spawnSync, type ChildProcess, type SpawnSyncOptionsWithStringEncoding } from "node:child_process";
+import {
+  spawn,
+  spawnSync,
+  type ChildProcess,
+  type SpawnSyncOptionsWithBufferEncoding,
+  type SpawnSyncReturns,
+} from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { IllegalSpawnSite } from "../state/errors.ts";
@@ -238,16 +244,25 @@ export interface SystemCommandOptions {
   readonly cwd?: string;
   readonly maxBuffer?: number;
   readonly env?: Readonly<Record<string, string>>;
+  /**
+   * How stdout is returned. "utf8" (the default) decodes it as text. "latin1"
+   * maps every byte to exactly one character, so `Buffer.from(stdout, "latin1")`
+   * recovers the bytes the command wrote. Stored content whose digest matters
+   * must use "latin1": UTF-8 decoding replaces every byte that is not valid UTF-8.
+   */
+  readonly encoding?: "utf8" | "latin1";
 }
 
-export function runSystemCommand(
+/**
+ * The one spawn behind every read. Output is captured as bytes; runSystemCommand
+ * decodes it, in the encoding the caller asked for, only once the whole stream
+ * is in hand.
+ */
+function spawnSystemCommand(
   executable: string,
   argv: readonly string[],
-  timeoutOrOptions: number | SystemCommandOptions,
-): CommandResult {
-  const options = typeof timeoutOrOptions === "number"
-    ? { timeoutMs: timeoutOrOptions }
-    : timeoutOrOptions;
+  options: SystemCommandOptions,
+): SpawnSyncReturns<Buffer> {
   // The timeout bounds the whole command, not only its direct child (B1-17).
   // spawnSync's timeout signals the one process it started, so the ssh, the
   // credential helper or the test-runner workers that process started used to
@@ -259,8 +274,8 @@ export function runSystemCommand(
   // `detached` is read by spawnSync exactly as by spawn (both go through the
   // same argument normalisation into libuv's DETACHED flag), but the typings
   // only declare it for spawn — hence the widened options type.
-  const spawnOptions: SpawnSyncOptionsWithStringEncoding & { readonly detached: boolean } = {
-    encoding: "utf8",
+  const spawnOptions: SpawnSyncOptionsWithBufferEncoding & { readonly detached: boolean } = {
+    encoding: "buffer",
     timeout: options.timeoutMs,
     shell: false,
     windowsHide: true,
@@ -282,10 +297,22 @@ export function runSystemCommand(
       // ESRCH: nothing of the command was left running.
     }
   }
+  return result;
+}
+
+export function runSystemCommand(
+  executable: string,
+  argv: readonly string[],
+  timeoutOrOptions: number | SystemCommandOptions,
+): CommandResult {
+  const options: SystemCommandOptions = typeof timeoutOrOptions === "number"
+    ? { timeoutMs: timeoutOrOptions }
+    : timeoutOrOptions;
+  const result = spawnSystemCommand(executable, argv, options);
   return {
     status: result.status,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
+    stdout: result.stdout?.toString(options.encoding ?? "utf8") ?? "",
+    stderr: result.stderr?.toString("utf8") ?? "",
     error: result.error === undefined || result.error === null ? null : result.error.message,
   };
 }

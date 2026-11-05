@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { ShiftManifestSchema, shiftManifestDigest, type ShiftManifest } from "../contracts/shift-selection-record.ts";
 import type { TicketTaskClass } from "../contracts/ticket.ts";
-import { systemGitRunner, type GitRunner } from "../git/changes.ts";
+import { systemGitByteRunner, type GitByteRunner } from "../git/changes.ts";
 import { parsePlanTicketData } from "../persistence/plan-tickets.ts";
 import { shiftTicketOf, shiftPhaseRole } from "../workflow/shift/bind.ts";
 import { compileShift } from "../workflow/shift/compile.ts";
@@ -19,13 +19,13 @@ export interface ShiftClassSource {
 }
 
 /** Keys are compiled phase keys, never guessed from a build phase's name. */
-export function shiftTaskClasses(source: ShiftClassSource, runner?: GitRunner): ReadonlyMap<string, TicketTaskClass> {
+export function shiftTaskClasses(source: ShiftClassSource, runner?: GitByteRunner): ReadonlyMap<string, TicketTaskClass> {
   if (!Value.Check(ShiftManifestSchema, source.shift) || shiftManifestDigest(source.shift) !== source.shift.manifestDigest) {
     throw new Error("invalid sealed selection");
   }
   const bodies = new Map<string, Uint8Array>();
   const classes = new Map<string, TicketTaskClass>();
-  const git = runner ?? systemGitRunner(source.repository);
+  const git = runner ?? systemGitByteRunner(source.repository);
   for (const ticket of source.shift.tickets) {
     let bytes: Uint8Array;
     if (source.baseSha === null) {
@@ -34,7 +34,9 @@ export function shiftTaskClasses(source: ShiftClassSource, runner?: GitRunner): 
       if (!/^[a-f0-9]{40}$/u.test(source.baseSha)) throw new Error("invalid recorded base");
       const blob = git(["cat-file", "blob", `${source.baseSha}:${ticket.path}`]);
       if (blob.status !== 0) throw new Error("unavailable recorded ticket blob");
-      bytes = Buffer.from(blob.stdout, "utf8");
+      // The stored bytes are what the digest covers. Decoding them here would
+      // change any byte that is not UTF-8 before the compiler checks the digest.
+      bytes = blob.stdout;
     }
     bodies.set(ticket.id, bytes);
     const data = parsePlanTicketData(Buffer.from(bytes).toString("utf8"));

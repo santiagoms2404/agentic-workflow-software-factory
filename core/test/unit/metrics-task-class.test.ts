@@ -8,6 +8,8 @@ import { TicketSchema, TICKET_TASK_CLASSES } from "../../src/contracts/ticket.ts
 import { sealShiftManifest } from "../../src/contracts/shift-selection-record.ts";
 import { parsePlanTicketData } from "../../src/persistence/plan-tickets.ts";
 import { ticketFileDigest } from "../../src/persistence/plan-ticket-body.ts";
+import { runGit, systemGitRunner } from "../../src/git/changes.ts";
+import { ShiftTicketUnreadable } from "../../src/workflow/shift/compile.ts";
 import { readShiftTaskClasses, shiftTaskClasses } from "../../src/metrics/task-class.ts";
 import { buildRoleRows, readRunFacts } from "../../src/metrics/role-rows.ts";
 import { buildMetricsPayload } from "../../src/metrics/payload.ts";
@@ -84,7 +86,7 @@ test("the shift join uses sealed ticket bytes at the recorded base and excludes 
     const classes = shiftTaskClasses({ repository: f.root, baseSha, shift: f.shift }, (argv) => {
       assert.deepEqual(argv.slice(0, 2), ["cat-file", "blob"]);
       assert.ok(argv[2]!.startsWith(`${baseSha}:`));
-      return { status: 0, stdout: f.bodies.get(argv[2]!.slice(41))!, stderr: "", error: null };
+      return { status: 0, stdout: Buffer.from(f.bodies.get(argv[2]!.slice(41))!), stderr: "", error: null };
     });
     assert.deepEqual([...classes], [["t01-build", TICKET_TASK_CLASSES[0]], ["t02-build", TICKET_TASK_CLASSES[1]]]);
     assert.equal(classes.has("shift-review"), false);
@@ -93,6 +95,43 @@ test("the shift join uses sealed ticket bytes at the recorded base and excludes 
   } finally {
     rmSync(f.root, { recursive: true, force: true });
   }
+});
+
+// B4-25: the sealed digest covers the bytes Git stored at the recorded base. A
+// text round trip changed a non-UTF-8 ticket's bytes, so it refused as a digest
+// mismatch that named the wrong cause. Real Git, so the bytes cross the real runner.
+function committedTickets(root: string, files: Readonly<Record<string, Buffer>>) {
+  const git = systemGitRunner(root);
+  runGit(git, ["init", "--quiet", "-b", "main"]);
+  for (const [name, bytes] of Object.entries(files)) writeFileSync(join(root, name), bytes);
+  runGit(git, ["add", "--", ...Object.keys(files)]);
+  runGit(git, ["-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com",
+    "commit", "--quiet", "--no-gpg-sign", "-m", "base"]);
+  const shift = sealShiftManifest({ plan: "fixture", milestones: ["M1"], tickets: Object.entries(files).map(([path, bytes]) => ({
+    id: path.slice(0, 3), path, digest: ticketFileDigest(bytes),
+  })) });
+  return { baseSha: runGit(git, ["rev-parse", "HEAD"]).trim(), shift };
+}
+
+test("B4-25: a sealed ticket that is not UTF-8 refuses on its own UTF-8 rule, never as a digest mismatch", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-task-class-bytes-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  // 0x93 is a Windows-1252 quotation mark: a sealed ticket whose bytes are not UTF-8.
+  const bytes = Buffer.from(ticket("T01", TICKET_TASK_CLASSES[0]).replace("Fixture", "Fixture \x93quoted\x93"), "latin1");
+  const { baseSha, shift } = committedTickets(root, { "T01.md": bytes });
+  assert.throws(() => shiftTaskClasses({ repository: root, baseSha, shift }), (error: unknown) => {
+    assert.ok(error instanceof ShiftTicketUnreadable, `expected an unreadable-ticket refusal, got ${String(error)}`);
+    assert.equal(error.message, "ticket T01 cannot be compiled: its bytes are not valid UTF-8");
+    return true;
+  });
+});
+
+test("B4-25: a valid non-ASCII ticket at the recorded base still classifies its builder", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-task-class-utf8-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const bytes = Buffer.from(ticket("T01", TICKET_TASK_CLASSES[0]).replace("Fixture", "Fixture Café —"), "utf8");
+  const { baseSha, shift } = committedTickets(root, { "T01.md": bytes });
+  assert.deepEqual([...shiftTaskClasses({ repository: root, baseSha, shift })], [["t01-build", TICKET_TASK_CLASSES[0]]]);
 });
 
 test("the projected payload separates a shift's builder classes; tokens, calls, gates and blocks never cross classes", () => {

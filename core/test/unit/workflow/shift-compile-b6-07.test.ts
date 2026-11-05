@@ -136,7 +136,7 @@ test("B6-07: removing a sealed BOM does not bypass the raw-byte digest", () => {
     ShiftTicketDigestMismatch);
 });
 
-test("B6-07: valid Unicode rebuilds identically through the recorded-base text boundary", () => {
+test("B6-07: valid Unicode rebuilds identically through the recorded-base byte boundary", () => {
   const text = source("Build Café 東京 🧭 e\u0301 \ufffd.", "Preserve Café", "Keep 東京.");
   const { manifest, bodies } = fixture(Buffer.from(text));
   const base = "a".repeat(40);
@@ -144,18 +144,19 @@ test("B6-07: valid Unicode rebuilds identically through the recorded-base text b
   const rebuilt = bindShiftRecipeAt("/unused", manifest, base, CONFIG, (args) => {
     calls++;
     assert.deepEqual(args, ["cat-file", "blob", `${base}:T01.md`]);
-    return { status: 0, stdout: text, stderr: "", error: null };
+    return { status: 0, stdout: Buffer.from(text), stderr: "", error: null };
   });
   assert.equal(calls, 1);
   assert.equal(serializeShiftRecipe(rebuilt as ShiftRecipe), serializeShiftRecipe(compileShift(manifest, bodies, CONFIG)));
 });
 
-test("B6-07: malformed bytes refuse both direct compilation and the lossy recorded-base rebuild", () => {
+test("B6-07: malformed bytes refuse both direct compilation and the recorded-base rebuild", () => {
   const bytes = malformed([0xe9]);
   const { manifest, bodies } = fixture(bytes);
   assert.throws(() => compileShift(manifest, bodies, CONFIG), invalidUtf8);
+  // The stored bytes reach the digest check unchanged (B4-25), so the rebuild refuses on the UTF-8 rule.
   assert.throws(() => bindShiftRecipeAt("/unused", manifest, "a".repeat(40), CONFIG,
-    () => ({ status: 0, stdout: bytes.toString("utf8"), stderr: "", error: null })), ShiftTicketDigestMismatch);
+    () => ({ status: 0, stdout: bytes, stderr: "", error: null })), invalidUtf8);
   // The shared decoder must recover after a fatal decode; a later valid ticket stays valid.
   const valid = fixture(Buffer.from(source("Build Café.")));
   const brief = compileShift(valid.manifest, valid.bodies, CONFIG).phases[0] as ShiftBriefPhase;

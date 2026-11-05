@@ -9,10 +9,16 @@ export interface GitResult {
   error: string | null;
 }
 
+/** Git's output as the bytes it wrote. A blob's digest covers exactly these bytes, so decoding them is lossy. */
+export interface GitByteResult extends Omit<GitResult, "stdout"> {
+  readonly stdout: Uint8Array;
+}
+
 export type GitRunner = (argv: readonly string[]) => GitResult;
+export type GitByteRunner = (argv: readonly string[]) => GitByteResult;
 export type ChangeSetFingerprint = Readonly<Record<string, string>>;
 
-export function systemGitRunner(repository: string): GitRunner {
+function gitEnvironment(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined) env[key] = value;
@@ -21,11 +27,25 @@ export function systemGitRunner(repository: string): GitRunner {
   // would hang until the timeout rather than reach anybody. This is a process
   // liveness setting, not a credential control.
   env["GIT_TERMINAL_PROMPT"] = "0";
+  return env;
+}
 
+export function systemGitRunner(repository: string): GitRunner {
+  const env = gitEnvironment();
   return (argv) => runSystemCommand("git", ["-C", repository, ...argv], {
     timeoutMs: 30_000,
     env,
   });
+}
+
+/** The same host Git as systemGitRunner, for reads whose stored bytes are the value (blob reads). */
+export function systemGitByteRunner(repository: string): GitByteRunner {
+  const env = gitEnvironment();
+  return (argv) => {
+    // latin1 maps each byte to one character, so the round trip back to bytes is exact.
+    const result = runSystemCommand("git", ["-C", repository, ...argv], { timeoutMs: 30_000, env, encoding: "latin1" });
+    return { ...result, stdout: Buffer.from(result.stdout, "latin1") };
+  };
 }
 
 export class GitCommandFailed extends Error {
