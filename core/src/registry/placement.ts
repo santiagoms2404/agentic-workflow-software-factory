@@ -45,7 +45,8 @@ function assertStructure(doc: unknown): asserts doc is Placement {
 }
 
 function assertAbsolutePath(path: string, value: string): void {
-  if (!isAbsoluteMachinePath(value)) throw new PlacementRelativePathError(path, value);
+  // The shared predicate also admits `~`, which nothing expands here, so a placement must spell the directory out.
+  if (!isAbsoluteMachinePath(value) || value.startsWith("~")) throw new PlacementRelativePathError(path, value);
 }
 
 function assertAbsolutePaths(placement: Placement): void {

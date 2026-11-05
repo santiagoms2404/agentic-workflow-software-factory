@@ -105,7 +105,8 @@ function renderStepDocuments(envelope: PlanDocumentEnvelope): RenderedStepDocume
     // newlines from the ticket, so retaining boundary whitespace would make its
     // two readers disagree even though both copies came from the same field.
     const normalized = step.buildPrompt.trim();
-    const buildPrompt = normalized.startsWith("```\n") && normalized.endsWith("\n```")
+    // An empty prompt stays empty. A fence around nothing would pass the empty-prompt refusal in plan admission.
+    const buildPrompt = normalized === "" || (normalized.startsWith("```\n") && normalized.endsWith("\n```"))
       ? normalized : `\`\`\`\n${normalized}\n\`\`\``;
     const title = JSON.stringify(step.title);
     const ticket = [

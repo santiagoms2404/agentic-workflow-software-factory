@@ -285,3 +285,11 @@ test("rejects observability.persist_thinking_text: true", () => {
   doc.observability.persist_thinking_text = true;
   assert.throws(() => loadConfig(toYaml(doc)), ConfigInvalidPersistThinkingError);
 });
+
+test("B10-30: an Antigravity adapter with enabled omitted needs the same verification as enabled: true", () => {
+  const doc = deepClone(validConfig());
+  doc.adapters.antigravity = { kind: "antigravity", executable: "agy" };
+  assert.throws(() => loadConfig(toYaml(doc)), ConfigUnverifiedAdapterError);
+  doc.adapters.antigravity = { kind: "antigravity", executable: "agy", enabled: false };
+  assert.doesNotThrow(() => loadConfig(toYaml(doc)));
+});

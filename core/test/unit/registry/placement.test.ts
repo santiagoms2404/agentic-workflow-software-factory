@@ -52,3 +52,13 @@ for (const field of ["default_branch", "role"] as const) {
     assertCode(() => loadPlacement(toYaml(doc)), PlacementSchemaError, "E_PLACEMENT_SCHEMA");
   });
 }
+
+test("B10-35: a home-relative placement path is refused, since nothing expands it", () => {
+  const repository = clonePlacement();
+  repository.repositories.service.path = "~/code/service";
+  assertCode(() => loadPlacement(toYaml(repository)), PlacementRelativePathError, "E_PLACEMENT_RELATIVE_PATH");
+
+  const worktree = clonePlacement();
+  worktree.worktree_root = "~/awsf-worktrees";
+  assertCode(() => loadPlacement(toYaml(worktree)), PlacementRelativePathError, "E_PLACEMENT_RELATIVE_PATH");
+});

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { sealShiftManifest } from "../../../src/contracts/shift-selection-record.ts";
@@ -110,5 +110,25 @@ test("all selected tickets are scanned even when the first ticket only writes re
       writers: [{ phase: "builder", writes: ["core/src/**"] }], shift: { builderWrites: ["core/src/**"], tickets } });
     assert.equal(verdict.passed, false);
     if (!verdict.passed) assert.match(verdict.reason, /ticket T02 DO token specs\/synthetic.html/u);
+  } finally { b.close(); }
+});
+
+test("B10-32: a registered ticket set reached through a symlinked plans root is accepted, and a symlinked ticket file is refused", async () => {
+  const b = box();
+  try {
+    const real = join(b.repository, "real-plans");
+    mkdirSync(join(real, "tickets", "synthetic"), { recursive: true });
+    symlinkSync("real-plans", join(b.repository, "plans"));
+    registerShiftPlan(b.repository, b.config.project.slug, "synthetic", "plans");
+    const path = "plans/tickets/synthetic/T02.md";
+    const source = `---\nid: T02\ntitle: Synthetic\nmilestone: M1\nstate: todo\ndepends_on: []\n---\n## Handoff\nDO\n  specs/handoff.html\n\n## Build prompt\n\n\`\`\`\n${prompt}\`\`\`\n`;
+    writeFileSync(join(b.repository, path), source);
+    const manifest = sealShiftManifest({ plan: "synthetic", milestones: ["M1"], tickets: [{ id: "T02", path, digest: ticketFileDigest(Buffer.from(source)) }] });
+    assert.deepEqual(await readShiftTicketDoBlocks(b.repository, manifest), [{ id: "T02", doBlock: ticketDoBlock(prompt) }]);
+
+    writeFileSync(join(real, "elsewhere.md"), source);
+    symlinkSync(join(real, "elsewhere.md"), join(b.repository, "plans/tickets/synthetic/T03.md"));
+    const linked = sealShiftManifest({ plan: "synthetic", milestones: ["M1"], tickets: [{ id: "T03", path: "plans/tickets/synthetic/T03.md", digest: ticketFileDigest(Buffer.from(source)) }] });
+    await assert.rejects(readShiftTicketDoBlocks(b.repository, linked), /symbolic link/u);
   } finally { b.close(); }
 });

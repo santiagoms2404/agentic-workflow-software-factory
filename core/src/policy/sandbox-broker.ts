@@ -113,7 +113,8 @@ function physical(path: string): string {
 
 function inside(parent: string, child: string): boolean {
   const path = relative(parent, child);
-  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
+  // Only a leading `..` segment escapes; a name that merely begins with two dots is inside.
+  return path === "" || ((path !== ".." && !path.startsWith(`..${sep}`)) && !isAbsolute(path));
 }
 
 /** Q8 plus layer seven: execution and runtime roots are disjoint from the canonical checkout. */

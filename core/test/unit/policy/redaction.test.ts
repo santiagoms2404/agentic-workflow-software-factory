@@ -101,3 +101,16 @@ test("JSON text remains valid JSON and keeps safe siblings", () => {
   const scrubbed = JSON.parse(scrubJsonText(JSON.stringify({ safe: 1, auth_token: shapedAccessId() }))) as Record<string, unknown>;
   assert.deepEqual(scrubbed, { safe: 1, auth_token: REDACTED_VALUE });
 });
+
+test("B10-41: a credential-named field is redacted in text that is not valid JSON, and other fields survive", () => {
+  const secret = ["zq", "81", "kx", "vb"].join("");
+  const truncated = `{"route": "small-route", "api_key": "${secret}", "note": "clipped mid-str`;
+  const scrubbed = JSON.parse(scrubJsonText(truncated)) as string;
+  assert.ok(!scrubbed.includes(secret), "a truncated body must not keep the credential-named value");
+  assert.ok(scrubbed.includes(`"api_key": "${REDACTED_VALUE}"`));
+  assert.ok(scrubbed.includes(`"route": "small-route"`));
+
+  const prose = `The provider said "token": 4421 and then "password": "${secret} trailing words".`;
+  const scrubbedProse = JSON.parse(scrubJsonText(prose)) as string;
+  assert.ok(!scrubbedProse.includes(secret) && !scrubbedProse.includes("4421"));
+});

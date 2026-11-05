@@ -43,13 +43,47 @@ export function scrubCredentials<T>(value: T): T {
   return visit(value) as T;
 }
 
-/** Keeps JSON columns valid while scrubbing a snapshot supplied as text. */
+/**
+ * Keeps JSON columns valid while scrubbing a snapshot supplied as text. Text
+ * that is not JSON, such as a truncated body, has no parsed keys, so its
+ * credential-named fields are redacted by name before the shape scrubber runs.
+ */
 export function scrubJsonText(json: string): string {
   try {
     return JSON.stringify(scrubCredentials(JSON.parse(json) as unknown));
   } catch {
-    return JSON.stringify(scrubCredentialString(json));
+    return JSON.stringify(scrubCredentialString(redactCredentialFieldsInText(json)));
   }
+}
+
+/** Where the value starting at `start` ends. A nested value runs to the end of the text, which fails closed. */
+function valueEnd(text: string, start: number): number {
+  const first = text[start];
+  if (first === '"') {
+    let index = start + 1;
+    while (index < text.length && text[index] !== '"') index += text[index] === "\\" ? 2 : 1;
+    return Math.min(index + 1, text.length);
+  }
+  if (first === "{" || first === "[") return text.length;
+  let index = start;
+  while (index < text.length && !/[\s,}\]]/u.test(text[index]!)) index += 1;
+  return index;
+}
+
+/** Replaces the value of every credential-named `"key": value` pair in text that is not JSON. */
+function redactCredentialFieldsInText(text: string): string {
+  const field = /"([^"\\\n]{1,200})"\s*:\s*/gu;
+  let out = "";
+  let cursor = 0;
+  for (let match = field.exec(text); match !== null; match = field.exec(text)) {
+    if (!credentialKey(match[1]!)) continue;
+    const start = match.index + match[0].length;
+    const end = valueEnd(text, start);
+    out += `${text.slice(cursor, start)}"${REDACTED_VALUE}"`;
+    cursor = end;
+    field.lastIndex = end;
+  }
+  return out + text.slice(cursor);
 }
 
 export function stringifyRedacted(value: unknown): string {

@@ -73,6 +73,17 @@ export function lightTicketAgreement(records: readonly { readonly path: string; 
       tickets.push(ticket);
     }
   }
+  // Every declared id counts, valid frontmatter or not, so a dependency is judged against the store as written.
+  const declaredIds = new Set<string>();
+  for (const record of records) {
+    const id = (record.frontmatter as { id?: unknown } | null)?.id;
+    if (typeof id === "string") declaredIds.add(id);
+  }
+  for (const ticket of tickets) {
+    for (const dep of ticket.depends_on) {
+      if (!declaredIds.has(dep)) out.push({ plan: "light", rule: "DEPENDENCIES", message: `light/${ticket.id}: depends on ${dep}, which does not exist` });
+    }
+  }
   const cycle = lightTicketCycle(tickets);
   if (cycle !== null) out.push({ plan: "light", rule: "DEPENDENCY_CYCLES", message: `ticket dependency cycle: ${cycle.join(" -> ")}` });
   return Object.freeze(out);

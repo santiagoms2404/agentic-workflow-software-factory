@@ -480,3 +480,8 @@ test("pi declares exactly its agent directory under the child's HOME; Claude dec
   assert.deepEqual(new PiCodexAdapter().providerWritableRoots({}), []);
   assert.equal("providerWritableRoots" in new ClaudeCodeAdapter(), false);
 });
+
+test("B10-31: a managed worktree or runtime whose name starts with two dots and sits inside the checkout is refused", () => {
+  assert.throws(() => assertSandboxRoots({ ...ROOTS, worktree: "/srv/repos/project/..wt" }), /disjoint/);
+  assert.throws(() => assertSandboxRoots({ ...ROOTS, sessionRuntime: "/srv/repos/project/..runtime" }), /canonical repository writable/);
+});

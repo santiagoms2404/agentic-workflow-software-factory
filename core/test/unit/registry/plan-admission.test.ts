@@ -176,3 +176,12 @@ for (const defect of ["bytes", "mode", "hardlink", "symlink", "missing", "other-
     } finally { w.close(); }
   });
 }
+
+test("B10-38: a whitespace-only build prompt is refused at admission rather than admitted as an empty ticket", () => {
+  const plan = validDesignPlanOutput();
+  plan.steps[0]!.buildPrompt = " \n ";
+  const docs = renderPlanDocument({ stem, plan, identifierSet: validPlanContext().identifierSet });
+  const blank: PlanAdmissionInput = { stem, planHtml: docs.get(`specs/${stem}.html`)!, buildPrompts: docs.get(`specs/${stem}-build-prompts.md`)!,
+    tickets: plan.steps.map(step => ({ id: step.id, title: step.title, milestone: step.milestone, depends_on: step.dependsOn, serves: step.serves })) };
+  assert.throws(() => planAdmissionDocuments(blank), /Section B title or prompt differs/u);
+});

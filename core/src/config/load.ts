@@ -203,10 +203,10 @@ function assertKnownReferences(config: AwsfConfig): void {
     if (!(KNOWN_ADAPTER_KINDS as readonly string[]).includes(adapter.kind)) {
       throw new ConfigUnknownAdapterError(adapter.kind);
     }
-    // Q1's default is a shipped but inert slot. `enabled: true` therefore
-    // needs a separate, explicit attestation; otherwise a typo turns an
-    // unread provider protocol into a run path.
-    if (adapter.kind === "antigravity" && adapter.enabled === true && adapter.verified !== true) {
+    // Q1's default is a shipped but inert slot. An omitted `enabled` is on, as
+    // the registry reads it, so only an explicit `enabled: false` skips the
+    // attestation; otherwise a typo turns an unread provider protocol into a run path.
+    if (adapter.kind === "antigravity" && adapter.enabled !== false && adapter.verified !== true) {
       throw new ConfigUnverifiedAdapterError(adapterId);
     }
   }

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { ProjectCatalog } from "./catalog-schema.ts";
 import type { Placement } from "./placement-schema.ts";
@@ -292,7 +292,10 @@ function planRepositoryId(catalog: ProjectCatalog): string {
 function planStems(plansRoot: string): string[] {
   if (!existsSync(plansRoot)) return [];
   return readdirSync(plansRoot, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".html"))
+    // A symbolic link is a plan when it resolves to a file. A dangling link throws from statSync:
+    // a plan that cannot be resolved is a hard failure, never a silent skip.
+    .filter((entry) => entry.name.endsWith(".html")
+      && (entry.isFile() || (entry.isSymbolicLink() && statSync(join(plansRoot, entry.name)).isFile())))
     .map((entry) => entry.name.slice(0, -".html".length))
     .sort();
 }
