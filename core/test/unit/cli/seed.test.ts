@@ -380,12 +380,12 @@ test("a shift's completed prefix is its contiguous run of tickets whose gates ac
   }
 });
 
-test("a ticket blob that is not UTF-8 refuses by digest rather than binding other bytes", async () => {
+test("a ticket blob that is not UTF-8 refuses on the UTF-8 rule rather than binding other bytes", async () => {
   const { root, status } = shiftSource(Uint8Array.from([0xff, 0xfe, 0x0a]));
   try {
     const run = [acceptedPhase("t01-build", "a".repeat(40)), acceptedPhase("t01-tests", "a".repeat(40))];
     await assert.rejects(completedShift(status, run, seedRefusal),
-      (error: unknown) => error instanceof CandidateSeedRejected && /cannot be rebuilt from its recorded selection at its base: ticket T01 changed since selection/u.test(error.message));
+      (error: unknown) => error instanceof CandidateSeedRejected && /cannot be rebuilt from its recorded selection at its base: ticket T01 cannot be compiled: its bytes are not valid UTF-8/u.test(error.message));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
