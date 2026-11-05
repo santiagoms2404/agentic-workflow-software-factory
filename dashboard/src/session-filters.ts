@@ -1,6 +1,6 @@
 import type { LifecycleState, SessionCard } from "../shared/types.ts";
 import type { GroupedSession } from "./session-groups.ts";
-import { PLAN_KINDS, type PlanKindFilter, type PlannedSession } from "./session-plans.ts";
+import { PLAN_KINDS, type PlannedSession } from "./session-plans.ts";
 
 export const LIFECYCLE_STATES = [
   "DRAFT",
@@ -122,6 +122,18 @@ export function workflowFilterValues(
   return [...configuredWorkflows, ...unconfigured];
 }
 
+function filterEntries<Value extends string>(
+  values: readonly Value[],
+  sessions: readonly FilterableSession[],
+  matches: (session: FilterableSession) => boolean,
+  valueOf: (session: FilterableSession) => Value,
+): SessionFilterEntry[] {
+  return values.map((value) => ({
+    value,
+    count: sessions.filter((session) => valueOf(session) === value && matches(session)).length,
+  }));
+}
+
 /** Workflow counts are constrained only by the OTHER filters, never by their own. */
 export function workflowFilterEntries(
   configuredWorkflows: readonly string[],
@@ -132,10 +144,7 @@ export function workflowFilterEntries(
 ): readonly SessionFilterEntry[] {
   const workflows = workflowFilterValues(configuredWorkflows, sessions);
   const others = matchesSelections(workflows, selectedStates, selectedPlanKinds, selectedGroups);
-  return workflows.map((workflow) => ({
-    value: workflow,
-    count: sessions.filter((session) => session.workflowId === workflow && others(session)).length,
-  }));
+  return filterEntries(workflows, sessions, others, (session) => session.workflowId);
 }
 
 /** State counts are constrained only by the other filters. */
@@ -146,10 +155,7 @@ export function stateFilterEntries(
   selectedGroups: readonly string[],
 ): readonly SessionFilterEntry[] {
   const others = matchesSelections(selectedWorkflows, LIFECYCLE_STATES, selectedPlanKinds, selectedGroups);
-  return LIFECYCLE_STATES.map((state) => ({
-    value: state,
-    count: sessions.filter((session) => session.state === state && others(session)).length,
-  }));
+  return filterEntries(LIFECYCLE_STATES, sessions, others, (session) => session.state);
 }
 
 /**
@@ -165,10 +171,7 @@ export function planKindFilterEntries(
   selectedGroups: readonly string[],
 ): readonly SessionFilterEntry[] {
   const others = matchesSelections(selectedWorkflows, selectedStates, PLAN_KINDS, selectedGroups);
-  return PLAN_KINDS.map((kind: PlanKindFilter) => ({
-    value: kind,
-    count: sessions.filter((session) => session.planKind === kind && others(session)).length,
-  }));
+  return filterEntries(PLAN_KINDS, sessions, others, (session) => session.planKind);
 }
 
 /** Select-all state is defined only over the supplied menu entries. */

@@ -1,6 +1,7 @@
 import type { MetricsResponse, RateCardRow, UntestedRoute } from "../shared/types.ts";
 import {
   RAISED_HALF_WIDTH,
+  compareText,
   canonicalModel,
   coverage,
   depth,
@@ -14,7 +15,7 @@ import {
   type RowPrice,
 } from "../shared/route-metrics.ts";
 import { formatListEquivalent } from "../shared/rate-card.ts";
-import { EFFORT_ORDER, ROLE_ORDER, modelProvider, providerOf, type Provider } from "./metrics-lens.ts";
+import { EFFORT_ORDER, rankIn, ROLE_ORDER, modelProvider, providerOf, type Provider } from "./metrics-lens.ts";
 
 /**
  * The Matrix: routes down, roles across, one tile per role on a route. Every
@@ -25,11 +26,7 @@ import { EFFORT_ORDER, ROLE_ORDER, modelProvider, providerOf, type Provider } fr
 /** The role order, keeping only roles the rows show; unknown roles follow in code-point order. */
 export function roleColumns(rows: readonly Pick<MetricsRow, "role">[]): string[] {
   const seen = [...new Set(rows.map((row) => row.role))];
-  const rank = (role: string) => {
-    const index = (ROLE_ORDER as readonly string[]).indexOf(role);
-    return index < 0 ? ROLE_ORDER.length : index;
-  };
-  return seen.sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0));
+  return seen.sort((a, b) => rankIn(ROLE_ORDER, a) - rankIn(ROLE_ORDER, b) || compareText(a, b));
 }
 
 /** A rate-card price pair per 1M tokens, as the row label shows it. It is a published price, not a list-price equivalent. */
@@ -142,10 +139,6 @@ function effortRank(effort: string | null): number {
 }
 
 type SortableRow = MatrixRow & { readonly cards: readonly RateCardRow[] };
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
 
 /** Tested first, then Anthropic before OpenAI, dearer before cheaper (a pooled route by its dearest model), higher effort first. */
 function compareRows(a: SortableRow, b: SortableRow): number {

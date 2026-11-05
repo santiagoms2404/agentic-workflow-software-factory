@@ -1,4 +1,5 @@
 import type { GroupTree, TreeProposal, TreeUnit } from "../shared/types.ts";
+import { askLine } from "./canvas-session.ts";
 
 /**
  * Laying the journal out as a real tree.
@@ -49,18 +50,13 @@ export interface TreeLayout {
   readonly rows: number;
 }
 
-function line(text: string, budget: number): string {
-  const first = text.split("\n").map((value) => value.trim()).find((value) => value.length > 0) ?? "";
-  return first.length <= budget ? first : `${first.slice(0, budget - 1)}…`;
-}
-
 interface Branch { readonly id: string; readonly kind: NodeKind; readonly label: string; readonly detail: string }
 
 function decisionBranches(decision: TreeProposal, units: readonly TreeUnit[]): readonly Branch[] {
   const branches: Branch[] = decision.alternatives.map((alternative, index) => ({
     id: `${decision.id}:alt:${index}`,
     kind: "alternative",
-    label: line(alternative, 72),
+    label: askLine(alternative, 72) ?? "",
     detail: alternative,
   }));
   // A unit revision this decision superseded hangs off it too: the decision is
@@ -126,7 +122,7 @@ export function layoutTree(tree: GroupTree): TreeLayout {
       ? decisionBranches(proposal, tree.units)
       : proposal.alternatives.map((alternative, index) => ({
         id: `${id}:alt:${index}`, kind: "alternative" as NodeKind,
-        label: line(alternative, 72), detail: alternative,
+        label: askLine(alternative, 72) ?? "", detail: alternative,
       }));
     for (const branch of branches) {
       nodes.push({ ...branch, column: 2, row, at: null, parent: id });
@@ -138,7 +134,7 @@ export function layoutTree(tree: GroupTree): TreeLayout {
   const placed = new Set<string>();
   for (const ask of tree.asks) {
     const id = `ask:${ask.inputId}`;
-    nodes.push({ id, kind: "ask", column: 0, row, label: line(ask.text, 64), detail: ask.text, at: ask.at, parent: null });
+    nodes.push({ id, kind: "ask", column: 0, row, label: askLine(ask.text, 64) ?? "", detail: ask.text, at: ask.at, parent: null });
     row += 1;
     for (const decision of tree.spine) {
       if (decision.ask !== ask.inputId) continue;

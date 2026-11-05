@@ -326,7 +326,7 @@ export function stats(rows: readonly MetricsRow[], price: RowPrice): Stats {
   const gateChecks = total(rows.map((row) => row.gates.total));
   const gatePasses = total(rows.map((row) => row.gates.pass));
   const failures = tally(rows.flatMap((row) => [...new Set(row.gates.firstRoundFail)]));
-  const [top] = Object.entries(failures).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const [top] = Object.entries(failures).sort((a, b) => b[1] - a[1] || compareText(a[0], b[0]));
   const tools = Object.fromEntries(TOOL_CLASSES.map((name) => [name, total(rows.map((row) => row.tools[name]))])) as
     Record<ToolClass, number>;
   const toolTotal = total(Object.values(tools));
@@ -405,7 +405,7 @@ export function routeCells(rows: readonly MetricsRow[]): RouteCell[] {
     else group.rows.push(row);
   }
   return [...groups.values()]
-    .sort((a, b) => (a.role < b.role ? -1 : a.role > b.role ? 1 : a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .sort((a, b) => compareText(a.role, b.role) || compareText(a.key, b.key))
     .map((group) => ({ ...group, route: routeOfGroup(group.rows) }));
 }
 
@@ -600,7 +600,7 @@ export function frontier(rows: readonly MetricsRow[], role: string, y: FrontierY
       key: point.key,
       route: point.route,
       reason: point.interval.p === null ? "no-observation" : x === "list-per-row" ? "unpriced" : "no-minutes",
-    })).sort((a, b) => (a.key < b.key ? -1 : 1));
+    })).sort((a, b) => compareText(a.key, b.key));
   const excluded = rows.filter((row) => row.role === role && routeKey(row.route) !== null && !isRankable(row)).length;
   const solid = placed.filter((point) => point.n >= MIN_SETTLED);
   const points = placed.map((point): RoutePoint => ({
@@ -608,7 +608,7 @@ export function frontier(rows: readonly MetricsRow[], role: string, y: FrontierY
     ...point,
     hollow: point.n < MIN_SETTLED,
     onFrontier: point.n >= MIN_SETTLED && !solid.some((other) => other !== point && dominates(other, point)),
-  })).sort((a, b) => a.x - b.x || (a.key < b.key ? -1 : 1));
+  })).sort((a, b) => a.x - b.x || compareText(a.key, b.key));
   return { role, y, x, points, line: points.filter((point) => point.onFrontier), unplaced, excluded };
 }
 
@@ -631,14 +631,19 @@ const Y_LABEL: Readonly<Record<FrontierY, string>> = {
   landed: "run landed",
 };
 
-function pct(value: number | null): string {
+export function formatPercent(value: number | null): string {
   return value === null ? "–" : `${Math.round(value * 100)}%`;
+}
+
+/** Code-point order used for deterministic ties across metric views. */
+export function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** The highest y among eligible points; ties go to the cheaper, then to the first key. */
 function bestOf<T extends { key: string; interval: Interval; x: number | null }>(eligible: readonly T[]): T | undefined {
   return [...eligible].sort((a, b) => b.interval.p! - a.interval.p! || (a.x ?? Infinity) - (b.x ?? Infinity) ||
-    (a.key < b.key ? -1 : 1))[0];
+    compareText(a.key, b.key))[0];
 }
 
 /** The sentence a verdict on an unconfirmed route ends with. */
@@ -667,22 +672,22 @@ export function verdicts(front: Frontier): Verdict[] {
     const { interval } = point;
     if (point.hollow) {
       return { key: point.key, tag: "insufficient", against: null, ratio: null,
-        text: stated(point, `Insufficient evidence: n ${point.n}, 95% CI ${pct(interval.lo)} to ${pct(interval.hi)}.`) };
+        text: stated(point, `Insufficient evidence: n ${point.n}, 95% CI ${formatPercent(interval.lo)} to ${formatPercent(interval.hi)}.`) };
     }
     if (best !== undefined && best !== point && interval.hi < best.interval.lo) {
       return { key: point.key, tag: "underpowered", against: best.key, ratio: null,
-        text: stated(point, `Underpowered next to ${verdictLabel(best)}: upper bound ${pct(interval.hi)} is below its lower bound ${pct(best.interval.lo)}.`) };
+        text: stated(point, `Underpowered next to ${verdictLabel(best)}: upper bound ${formatPercent(interval.hi)} is below its lower bound ${formatPercent(best.interval.lo)}.`) };
     }
     // A zero-cost route is no comparator: nothing is "N× less" than zero, and the ratio below would divide by it (B13-18, B13-19).
     const cheaper = eligible.filter((other) => other !== point && other.x > 0 && other.x * OVERKILL_RATIO <= point.x && overlaps(other.interval, interval))
-      .sort((a, b) => a.x - b.x || (a.key < b.key ? -1 : 1))[0];
+      .sort((a, b) => a.x - b.x || compareText(a.key, b.key))[0];
     if (cheaper !== undefined) {
       const ratio = point.x / cheaper.x;
       return { key: point.key, tag: "overkill", against: cheaper.key, ratio,
         text: stated(point, `Overkill candidate: ${verdictLabel(cheaper)} ${cheaperWord} ${ratio.toFixed(1)}× ${lessWord} with an overlapping interval. Confirm on paired replays before switching.`) };
     }
     return { key: point.key, tag: "frontier", against: null, ratio: null,
-      text: stated(point, `On or near the frontier for ${front.role}: ${pct(interval.p)} ${Y_LABEL[front.y]}.`) };
+      text: stated(point, `On or near the frontier for ${front.role}: ${formatPercent(interval.p)} ${Y_LABEL[front.y]}.`) };
   });
 }
 
@@ -729,7 +734,7 @@ export interface RecommendOptions {
 
 function byCost(a: RouteEvidence, b: RouteEvidence): number {
   return (a.listPerRow ?? Infinity) - (b.listPerRow ?? Infinity) || (b.firstPass.p ?? -1) - (a.firstPass.p ?? -1) ||
-    (a.key < b.key ? -1 : 1);
+    compareText(a.key, b.key);
 }
 
 /**
@@ -771,7 +776,7 @@ export function recommend(
     const best = bestOf(eligible.map((route) => ({ ...route, interval: route.firstPass, x: route.listPerRow })))!;
     const within = eligible.filter((route) => overlaps(route.firstPass, best.firstPass)).sort(byCost);
     const rest = eligible.filter((route) => !within.includes(route))
-      .sort((a, b) => b.firstPass.p! - a.firstPass.p! || (a.key < b.key ? -1 : 1));
+      .sort((a, b) => b.firstPass.p! - a.firstPass.p! || compareText(a.key, b.key));
     const ranked = [...within, ...rest];
     return { role, taskClass, source, basis: "local", choice: ranked[0]!, best: evidence.find((route) => route.key === best.key)!, ranked };
   }

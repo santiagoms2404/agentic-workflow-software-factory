@@ -65,18 +65,28 @@ export function rateFor(model: string | null): RateCardRow | null {
   return model === null ? null : RATE_CARD_ROWS.find((row) => row.model === model) ?? null;
 }
 
+/** The token kinds that make up a list-price equivalent, in display order. */
+export type ListPriceKind = "input" | "cache read" | "cache write" | "output";
+
 /**
- * USD at list price: input, cache read, cache write and output at their rates.
- * Reasoning is added to output only when the relation is `additive`; when it is
- * `included-in-output` it is already there, and `unknown` adds nothing. A kind
- * no usage reported counts as zero.
+ * USD at list price by kind. Reasoning is added to output only when the
+ * relation is `additive`; when it is `included-in-output` it is already there,
+ * and `unknown` adds nothing. A kind no usage reported counts as zero.
  */
-export function listEquivalentUsd(tokens: MetricsTokens, rate: RateCardRow): number {
+export function listEquivalentByKindUsd(tokens: MetricsTokens, rate: RateCardRow): Readonly<Record<ListPriceKind, number>> {
   const reasoning = tokens.reasoningRelation === "additive" ? tokens.reasoningTokens ?? 0 : 0;
-  return ((tokens.inputTokens ?? 0) * rate.input +
-    (tokens.cacheReadTokens ?? 0) * rate.cacheRead +
-    (tokens.cacheWriteTokens ?? 0) * rate.cacheWrite +
-    ((tokens.outputTokens ?? 0) + reasoning) * rate.output) / 1_000_000;
+  return {
+    input: ((tokens.inputTokens ?? 0) * rate.input) / 1_000_000,
+    "cache read": ((tokens.cacheReadTokens ?? 0) * rate.cacheRead) / 1_000_000,
+    "cache write": ((tokens.cacheWriteTokens ?? 0) * rate.cacheWrite) / 1_000_000,
+    output: (((tokens.outputTokens ?? 0) + reasoning) * rate.output) / 1_000_000,
+  };
+}
+
+/** The row's USD at list price is the sum of its per-kind amounts. */
+export function listEquivalentUsd(tokens: MetricsTokens, rate: RateCardRow): number {
+  const byKind = listEquivalentByKindUsd(tokens, rate);
+  return byKind.input + byKind["cache read"] + byKind["cache write"] + byKind.output;
 }
 
 export const UNPRICED_REASONS = ["off-card", "unresolved-selector", "no-usage"] as const;

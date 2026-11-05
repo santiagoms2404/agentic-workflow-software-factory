@@ -57,7 +57,9 @@ export function summarizeQuota(item: EventItem): string {
 
 export function summarizeNotice(item: EventItem): string {
   const payload = payloadOf(item);
-  return join([stringValue(payload, "code"), stringValue(payload, "message")]).replace(" · ", ": ");
+  const parts = [stringValue(payload, "code"), stringValue(payload, "message")]
+    .filter((part): part is string => part !== null && part !== "");
+  return parts.join(": ") || "—";
 }
 
 export function summarizeRunStarted(item: EventItem): string {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { BacklogTicket, SessionCard, SessionPlan } from "../../shared/types.ts";
-import { planBoard, TICKET_STATES, waitingOn } from "../canvas-plan.ts";
+import { planBoard, TICKET_STATES, waitingOnByTicket } from "../canvas-plan.ts";
 import { formatDate, shortSessionId, stateLabel, stateTone } from "../display.ts";
 
 const props = defineProps<{
@@ -11,9 +11,10 @@ const props = defineProps<{
 }>();
 
 const board = computed(() => planBoard(props.tickets, props.sessions, props.plan.id));
+const blockersByTicket = computed(() => waitingOnByTicket(props.tickets));
 
 function blockers(ticket: BacklogTicket): readonly string[] {
-  return waitingOn(ticket, props.tickets.filter((candidate) => candidate.plan === ticket.plan));
+  return blockersByTicket.value.get(ticket.uid) ?? [];
 }
 </script>
 

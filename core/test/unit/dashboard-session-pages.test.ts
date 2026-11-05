@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { SessionCard, SessionsResponse } from "../../../dashboard/shared/types.ts";
-import { loadAllSessions } from "../../../dashboard/src/session-pages.ts";
+import { loadAllSessions, reuseSessionCollections } from "../../../dashboard/src/session-pages.ts";
 import { buildCanvasGraph } from "../../../dashboard/src/canvas-graph.ts";
 import { createApiRouter } from "../../src/api/routes.ts";
 import { createSession } from "../../src/observability/projector.ts";
@@ -95,6 +95,25 @@ test("a non-advancing cursor fails instead of requesting the same page forever",
   assert.equal(calls, 2);
 });
 
+test("unchanged session and plan collections retain their identity across polls", () => {
+  const previous: SessionsResponse = { sessions: [card(1)], plans: [{ id: "p", name: "Plan", kind: "spine", parentSpine: null, parentSpineName: null }] };
+  const next: SessionsResponse = {
+    sessions: [{ ...card(1) }],
+    plans: [{ ...previous.plans[0]! }],
+    stale: true,
+  };
+  const shared = reuseSessionCollections(previous, next);
+  assert.equal(shared.sessions, previous.sessions);
+  assert.equal(shared.plans, previous.plans);
+  assert.equal(shared.stale, true);
+
+  const changedSessions = [card(2)];
+  const changed = reuseSessionCollections(previous, { ...next, sessions: changedSessions });
+  assert.equal(changed.sessions, changedSessions);
+  assert.notEqual(changed.sessions, previous.sessions);
+  assert.equal(changed.plans, previous.plans);
+});
+
 test("every list view reads all sessions, and a poll whose view changed publishes nothing", () => {
   // The sessions board once read the API's first page alone and showed "50 of
   // 50 runs" with more recorded. The board, the groups view and the canvas all
@@ -105,5 +124,5 @@ test("every list view reads all sessions, and a poll whose view changed publishe
   assert.match(app, /: kind === "sessions" \? loadAllSessions\(\)/);
   assert.doesNotMatch(app, /fetch\("\/api\/v1\/sessions"\)/, "no view reads one page of sessions");
   assert.match(app, /if \(kind !== readKind\(\)\) return;/);
-  assert.match(app, /else if \(kind === "sessions"\) \{\s*sessions\.value = nextData as SessionsResponse;/);
+  assert.match(app, /else if \(kind === "sessions"\) \{\s*sessions\.value = reuseSessionCollections\(sessions\.value, nextData as SessionsResponse\);/);
 });

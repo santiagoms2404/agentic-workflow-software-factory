@@ -12,7 +12,7 @@ import MetricsScreen from "./routes/metrics.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
 import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
-import { loadAllSessions } from "./session-pages.ts";
+import { loadAllSessions, reuseSessionCollections } from "./session-pages.ts";
 import { memoizeUntilRejected } from "./memo-loader.ts";
 import { readSequence } from "./latest-read.ts";
 import { planBanner, sessionsPlanBanner, type PlanBanner } from "./plan-banner.ts";
@@ -261,7 +261,7 @@ async function load(): Promise<void> {
     }
     detail.value = null;
   } else if (kind === "sessions") {
-    sessions.value = nextData as SessionsResponse;
+    sessions.value = reuseSessionCollections(sessions.value, nextData as SessionsResponse);
     detail.value = null;
   } else {
     const response = nextData as Response;

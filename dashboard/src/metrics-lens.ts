@@ -7,7 +7,9 @@ import {
   STATE_GROUPS,
   applyLens,
   canonicalModel,
+  compareText,
   evidenceSource,
+  formatPercent,
   routeKey,
   stats,
   type FacetValue,
@@ -371,13 +373,13 @@ function facetById(id: FacetId): LensFacet {
   return METRICS_FACETS.find((facet) => facet.id === id)!;
 }
 
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+export function rankIn(order: readonly string[], value: string): number {
+  const index = order.indexOf(value);
+  return index < 0 ? order.length : index;
 }
 
 function orderIn(order: readonly string[]): (a: string, b: string) => number {
-  const rank = (value: string) => (order.includes(value) ? order.indexOf(value) : order.length);
-  return (a, b) => rank(a) - rank(b) || compareText(a, b);
+  return (a, b) => rankIn(order, a) - rankIn(order, b) || compareText(a, b);
 }
 
 /** Anthropic before OpenAI, then by label. */
@@ -519,10 +521,6 @@ export interface SummaryStat {
   readonly caption: string;
 }
 
-function pct(value: number | null): string {
-  return value === null ? "–" : `${Math.round(value * 100)}%`;
-}
-
 /** The five figures over the rows in the lens, every one the module's. */
 export function summaryStats(rows: readonly MetricsRow[], price: RowPrice): SummaryStat[] {
   const s = stats(rows, price);
@@ -531,8 +529,8 @@ export function summaryStats(rows: readonly MetricsRow[], price: RowPrice): Summ
     {
       id: "first-pass",
       label: "First-pass yield",
-      value: pct(s.firstPass.p),
-      caption: s.firstPass.p === null ? "no settled rows" : `95% CI ${pct(s.firstPass.lo)} to ${pct(s.firstPass.hi)}`,
+      value: formatPercent(s.firstPass.p),
+      caption: s.firstPass.p === null ? "no settled rows" : `95% CI ${formatPercent(s.firstPass.lo)} to ${formatPercent(s.firstPass.hi)}`,
     },
     { id: "landed", label: "Runs landed", value: `${s.landed}/${s.runs}`, caption: `${s.blockedHere} role-rows blocked here, model-attributed` },
     // The label carries no "$": every dollar sign on the tab comes through

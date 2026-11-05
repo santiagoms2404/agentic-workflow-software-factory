@@ -72,6 +72,17 @@ test("a decision gets both edges: the trunk from the one before it and a branch 
   );
 });
 
+test("tree labels use the shared first-line limits and keep blank text empty", () => {
+  const layout = layoutTree(tree({
+    asks: [ask("a1", `  ${"a".repeat(80)}\nsecond line`), ask("a2", "  \n  ")],
+    spine: [proposal("p1", "a1", { alternatives: [`  ${"b".repeat(90)}\nsecond option`, "  \n  "] })],
+  }));
+  assert.equal(layout.nodes.find((node) => node.id === "ask:a1")?.label, `${"a".repeat(63)}…`);
+  assert.equal(layout.nodes.find((node) => node.id === "ask:a2")?.label, "");
+  assert.equal(layout.nodes.find((node) => node.id === "p1:alt:0")?.label, `${"b".repeat(71)}…`);
+  assert.equal(layout.nodes.find((node) => node.id === "p1:alt:1")?.label, "");
+});
+
 test("alternatives and superseded revisions hang off the decision that weighed them", () => {
   const layout = layoutTree(tree({
     asks: [ask("a1", "the ask")],

@@ -69,11 +69,14 @@ export function axisTicks(spanMs: number, count = 5): Array<{ percent: number; l
   });
 }
 
+const DATE_FORMAT = new Intl.DateTimeFormat([], { month: "short", day: "numeric" });
+const TIME_FORMAT = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: false });
+
 export function formatDate(value: string): string {
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return "—";
   const date = new Date(time);
-  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${date.toLocaleTimeString([], { hour12: false })}`;
+  return `${DATE_FORMAT.format(date)} ${TIME_FORMAT.format(date)}`;
 }
 
 export function modelProvenanceLabel(provenance: ModelProvenance): string {

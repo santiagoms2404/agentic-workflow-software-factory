@@ -8,8 +8,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { MetricsResponse, MetricsRoleRow, MetricsRun, MetricsRunPhase } from "../../../dashboard/shared/types.ts";
-import { formatListEquivalent, listPrice, RATE_CARD } from "../../../dashboard/shared/rate-card.ts";
-import { STATE_GROUPS, stats } from "../../../dashboard/shared/route-metrics.ts";
+import { formatListEquivalent, listEquivalentByKindUsd, listPrice, RATE_CARD } from "../../../dashboard/shared/rate-card.ts";
+import { compareText, formatPercent, STATE_GROUPS, stats } from "../../../dashboard/shared/route-metrics.ts";
 import {
   DEFAULT_FAMILIES,
   DEFAULT_METRICS_ROUTE,
@@ -17,6 +17,8 @@ import {
   metricsRouteHash,
   parseMetricsRoute,
   rowsInLens,
+  rankIn,
+  STATE_LABEL,
   toToken,
   withFamily,
   withRun,
@@ -53,6 +55,7 @@ import {
   roleLines,
   runFacts,
   runListTotal,
+  runOptionLabel,
   runPicker,
 } from "../../../dashboard/src/metrics-run.ts";
 import { ATTRIBUTION_CAUSES as CORE_CAUSES } from "../../src/contracts/attribution-record.ts";
@@ -67,6 +70,16 @@ const runOf = (id: string) => payload.runs.find((run) => run.sessionId === id)!;
 // ---------------------------------------------------------------------------
 // The Ledger.
 // ---------------------------------------------------------------------------
+
+test("metrics label and ordering helpers retain shared null, rounding, and unknown-value rules", () => {
+  assert.equal(formatPercent(null), "–");
+  assert.equal(formatPercent(0.504), "50%");
+  assert.equal(compareText("a", "b"), -1);
+  assert.equal(compareText("b", "a"), 1);
+  assert.equal(compareText("a", "a"), 0);
+  assert.equal(rankIn(["first", "second"], "second"), 1);
+  assert.equal(rankIn(["first", "second"], "other"), 2);
+});
 
 test("every group is the module's stats over its rows, keyed as the lens keys it", () => {
   for (const group of LEDGER_GROUPS) {
@@ -215,6 +228,13 @@ test("grouped by run, a row opens the Run view with the lens kept", () => {
 // The Run view.
 // ---------------------------------------------------------------------------
 
+test("the run picker uses the same state labels as the other metrics views", () => {
+  for (const stateGroup of Object.keys(STATE_LABEL) as Array<keyof typeof STATE_LABEL>) {
+    const run = { ...runOf("f1"), stateGroup };
+    assert.ok(runOptionLabel(run).endsWith(` · ${STATE_LABEL[stateGroup]}`));
+  }
+});
+
 test("the picker lists the lens's runs newest first and keeps a shown run the lens leaves out", () => {
   const all = runPicker(payload, DEFAULT_METRICS_ROUTE);
   assert.equal(all.selected, all.runs[0] ?? null, "no run named: the newest in the lens");
@@ -278,6 +298,9 @@ test("the per-role table: design role order, tool counts, first-pass marks and l
   assert.deepEqual(lines.map((line) => line.role), ["builder", "reviewer"]);
   const builder = lines[0]!;
   const row = rows.find((candidate) => candidate.role === "builder")!;
+  const rate = RATE_CARD.rows.find((candidate) => candidate.model === row.resolvedModel)!;
+  const byKindUsd = listEquivalentByKindUsd(row.tokens, rate);
+  assert.equal(byKindUsd.input + byKindUsd["cache read"] + byKindUsd["cache write"] + byKindUsd.output, listPrice(row));
   assert.equal(builder.route, "GPT-6 Sol · xhigh");
   assert.equal(builder.provider, "openai");
   assert.equal(builder.provenance, "stream-authoritative");

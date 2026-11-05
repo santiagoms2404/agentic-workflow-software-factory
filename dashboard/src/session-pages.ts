@@ -2,6 +2,19 @@ import type { SessionCard, SessionsResponse } from "../shared/types.ts";
 
 const PAGE_SIZE = 100;
 
+function reuseEqual<T>(previous: T[], next: T[]): T[] {
+  return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
+}
+
+/** Preserve collection identity when a poll returned the same wire data. */
+export function reuseSessionCollections(previous: SessionsResponse, next: SessionsResponse): SessionsResponse {
+  return {
+    ...next,
+    sessions: reuseEqual(previous.sessions, next.sessions),
+    plans: reuseEqual(previous.plans, next.plans),
+  };
+}
+
 /**
  * Every session, page by page. The sessions board, the groups view and the
  * canvas each count and draw the whole projection, so none of them may stop at

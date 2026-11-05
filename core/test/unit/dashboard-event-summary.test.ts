@@ -48,10 +48,13 @@ test("quota summary keeps the recorded message", () => {
   assert.equal(summarizeEvent(item), "quota resets at 10:00");
 });
 
-test("notice summary combines code and message", () => {
+test("notice summary combines code and message without rewriting message punctuation", () => {
   const item = event("notice", { code: "clock-skew", message: "provider clock differs" });
   assert.equal(summarizeNotice(item), "clock-skew: provider clock differs");
   assert.equal(summarizeEvent(item), "clock-skew: provider clock differs");
+  assert.equal(summarizeNotice(event("notice", { message: "disk · full" })), "disk · full");
+  assert.equal(summarizeNotice(event("notice", { code: "", message: "a · b" })), "a · b");
+  assert.equal(summarizeNotice(event("notice", {})), "—");
 });
 
 test("run.started summary identifies adapter and requested model", () => {
