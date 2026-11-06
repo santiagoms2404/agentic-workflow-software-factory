@@ -51,13 +51,12 @@ export async function packet(group: Group, observation: Checklist, selection: st
     }),
     affectedSuccessors: affectedSuccessors(group, changedUnits(proposal)) }));
   const stages = group.stages.filter((stage) => stage.input !== null);
-  const prerequisites = units.flatMap((unit) => unit.prerequisites.map((dep) => ({ ...dep,
-    currentRevision: currentUnit(group, dep.unit).revision,
-    acceptance: currentUnit(group, dep.unit).acceptance,
-    decisions: currentUnit(group, dep.unit).decisions,
-    references: currentUnit(group, dep.unit).references,
-    observation: observation.rows.find((row) => row.id === dep.unit),
-  })));
+  const prerequisites = units.flatMap((unit) => unit.prerequisites.map((dep) => {
+    const target = currentUnit(group, dep.unit);
+    return { ...dep, currentRevision: target.revision, acceptance: target.acceptance,
+      decisions: target.decisions, references: target.references,
+      observation: observation.rows.find((row) => row.id === dep.unit) };
+  }));
   const refs: Reference[] = [...units.flatMap((unit) => unit.references), ...prerequisites.flatMap((dep) => dep.references),
     ...amendments.filter((amendment) => amendment.applicability === "current proposal").flatMap((amendment) => amendment.narrative.references)];
   // Superseded narratives remain readable history. Requiring their old file hashes
@@ -120,8 +119,8 @@ export async function packet(group: Group, observation: Checklist, selection: st
 // units. A flat timeline shows the 71 and hides the other 70.
 // ---------------------------------------------------------------------------
 
-import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { listDirectories } from "../persistence/directories.ts";
 import { identifier, type Change, type Narrative, type Stage, type Unit } from "./model.ts";
 import { replay, type Location } from "./store.ts";
 
@@ -294,7 +293,13 @@ function askAt(stages: readonly Stage[], index: number): string | null {
   return null;
 }
 
-export function decisionTree(group: import("./model.ts").Group): GroupTree {
+function groupCounts(group: Group, applied: number, notTaken: number): TreeCounts {
+  return { stages: group.stages.length, inputs: group.inputs.length, proposals: group.proposals.length,
+    applied, notTaken, alternatives: group.proposals.reduce((total, proposal) => total + proposal.alternatives.length, 0),
+    unitRecords: group.units.length, units: group.order.length };
+}
+
+export function decisionTree(group: Group): GroupTree {
   const stages = group.stages;
   const proposalStage = new Map<string, { stage: Stage; index: number }>();
   const decisionStage = new Map<string, Stage>();
@@ -360,6 +365,8 @@ export function decisionTree(group: import("./model.ts").Group): GroupTree {
   for (const unit of units) entry(unit.taskId);
 
   const first = asks[0] ?? null;
+  const spine = group.decisions.flatMap((id) => proposals.filter((proposal) => proposal.id === id));
+  const notTaken = proposals.filter((proposal) => proposal.status === "not-taken");
   return {
     schema: "awsf/decision-tree/v1",
     group: group.id, project: group.project, revision: group.revision, head: group.head, closed: group.closed,
@@ -367,39 +374,38 @@ export function decisionTree(group: import("./model.ts").Group): GroupTree {
       text: firstLine(first.text), full: first.text, inputId: first.inputId, stageId: first.stageId, at: first.at,
     },
     asks,
-    spine: group.decisions.flatMap((id) => proposals.filter((proposal) => proposal.id === id)),
-    notTaken: proposals.filter((proposal) => proposal.status === "not-taken"),
+    spine,
+    notTaken,
     units,
     byTask,
-    counts: {
-      stages: stages.length,
-      inputs: group.inputs.length,
-      proposals: proposals.length,
-      applied: proposals.filter((proposal) => proposal.status === "applied").length,
-      notTaken: proposals.filter((proposal) => proposal.status === "not-taken").length,
-      alternatives: proposals.reduce((total, proposal) => total + proposal.alternatives.length, 0),
-      unitRecords: group.units.length,
-      units: group.order.length,
-    },
+    counts: groupCounts(group, spine.length, notTaken.length),
   };
 }
 
 /** Group ids present for a project. An absent directory is zero groups, not an error. */
 export async function listGroupIds(stateRoot: string, project: string): Promise<readonly string[]> {
   identifier(project);
-  try {
-    const entries = await readdir(join(stateRoot, "projects", project, "groups"), { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
+  return listDirectories(join(stateRoot, "projects", project, "groups"));
 }
 
 /** Replays one group's journal and projects its decision tree. Read-only. */
 export async function readGroupTree(location: Location): Promise<GroupTree> {
   const { group } = await replay(location);
   return decisionTree(group);
+}
+
+/** Replays the same journal authority as the tree, without copying full asks into an intermediate projection. */
+export async function readGroupSummary(location: Location): Promise<GroupSummary> {
+  const { group } = await replay(location);
+  const decisions = new Set(group.decisions);
+  const applied = group.proposals.filter((proposal) => decisions.has(proposal.id)).length;
+  const notTaken = group.proposals.length - applied;
+  const firstStage = group.stages.find((stage) => stage.input !== null
+    && group.inputs.some((input) => input.id === stage.input));
+  const firstInput = firstStage === undefined ? undefined : group.inputs.find((input) => input.id === firstStage.input);
+  return { group: group.id, project: group.project, revision: group.revision, closed: group.closed,
+    title: firstInput === undefined ? null : firstLine(firstInput.text), at: firstInput === undefined ? null : firstStage?.at ?? null,
+    counts: groupCounts(group, applied, notTaken) };
 }
 
 export function groupSummary(tree: GroupTree): GroupSummary {

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compareAskedFor, planTicketAsk, lightTicketAsk, withoutHandoffs,
   type AskedForSelection } from "../../../src/closure/asked-for.ts";
+import { proposeClosure } from "../../../src/closure/propose.ts";
 import { PLAN, TICKET, LIGHT, registry, lightRegistry, plan, ticket, light, tree, change } from "./_fixtures.ts";
 
 const selected: readonly AskedForSelection[] = [{ kind: "plan", plan: "sample", ticket: "T01" }];
@@ -65,6 +66,8 @@ test("a non-parser status lookalike inside a checklist row remains part of the a
 test("a link element cannot truncate the protected acceptance row before a token", () => {
   const before = change(tree(), PLAN, '<li><code class="status">', '<li>Fixed prefix <link href="fixture.css"><code class="status">');
   assert.deepEqual(fields(before, change(before, PLAN, "Fixed prefix", "Changed prefix")), ["checklist"]);
+  const proposed = proposeClosure(before, registry, "sample", ["T01"]);
+  assert.equal(proposed.rows[0]?.text, '<li>Fixed prefix <link href="fixture.css"><code class="status">[]</code> Acceptance row.</li>');
 });
 
 test("the parser's bare-line checklist rows protect their texts and mask only their tokens", () => {

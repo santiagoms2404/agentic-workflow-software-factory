@@ -1,5 +1,6 @@
 import { parseAwsfPlanHtmlV1, scanAwsfPlanHtmlV1, UnsupportedPlanFormatError, type PlanTaskSlice } from "../registry/plan-source.ts";
 import { parsePlanTicketBody } from "../persistence/plan-ticket-body.ts";
+import { planRowSpan } from "./plan-row.ts";
 import { ClosureTreeError, ticketFrontmatter, treeText, type ClosureRegistry, type ClosureTree } from "./tree.ts";
 
 export type AskedForSelection =
@@ -70,12 +71,7 @@ function checklistRows(html: string, task: PlanTaskSlice): readonly string[] {
     const end = token.end - task.start;
     // Normal plans use li rows. The parser also consumes status elements on
     // bare lines, so those lines must retain their ask text too.
-    const opening = [...slice.slice(0, start).matchAll(/<li\b[^>]*>/gu)].at(-1)?.index ?? -1;
-    const previousClose = slice.lastIndexOf("</li>", start);
-    const closing = slice.indexOf("</li>", end);
-    const rowStart = opening > previousClose && closing !== -1 ? opening : slice.lastIndexOf("\n", start) + 1;
-    const newline = slice.indexOf("\n", end);
-    const rowEnd = opening > previousClose && closing !== -1 ? closing + "</li>".length : newline === -1 ? slice.length : newline;
+    const { rowStart, rowEnd } = planRowSpan(slice, start, end);
     const row = slice.slice(rowStart, rowEnd);
     // Only this task's parser-consumed values, using immutable segment joins.
     const spans = task.tokens.filter((candidate) => candidate.valueStart >= task.start + rowStart

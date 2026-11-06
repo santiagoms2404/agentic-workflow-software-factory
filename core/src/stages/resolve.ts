@@ -104,33 +104,30 @@ function compareEvidence(left: StageEnvelopeRow, right: StageEnvelopeRow, phases
     || left.envelope_id.localeCompare(right.envelope_id);
 }
 
+function latestEvidence(envelopes: readonly StageEnvelopeRow[], phases: ReadonlyMap<string, PhaseRow>,
+  accepts: (envelope: StageEnvelopeRow) => boolean): StageEnvelopeRow | undefined {
+  return envelopes.filter(accepts).sort((left, right) => compareEvidence(left, right, phases)).at(-1);
+}
+
 /** Answers where the project is and what the owner types next. It never acts. */
 export function resolveStage(project: ResolvedProjectValue, rows: StageJournalRows): StageResolution {
   const sessions = rows.sessions.filter((session) => session.project_slug === project.slug);
   const registered = isProjectRegistered(project);
 
-  if (sessions.length === 0) {
-    if (registered) {
-      const current = STAGES[1];
-      const next = STAGES[2];
-      return {
-        current: current.id,
-        next: next.id,
-        ownerAct: stageCommand(next),
-        evidence: null,
-      };
-    }
-    const first = STAGES[0];
+  if (sessions.length === 0 && registered) {
+    const current = STAGES[1];
+    const next = STAGES[2];
     return {
-      current: "before S1",
-      next: first.id,
-      ownerAct: stageCommand(first),
+      current: current.id,
+      next: next.id,
+      ownerAct: stageCommand(next),
       evidence: null,
     };
   }
 
   const sessionIds = new Set(sessions.map((session) => session.session_id));
   const sessionById = new Map(sessions.map((session) => [session.session_id, session] as const));
+  const stageBySession = new Map(sessions.map((session) => [session.session_id, stageIndexForWorkflow(session.workflow_id)] as const));
   const published = rows.transitions.some((transition) =>
     sessionIds.has(transition.session_id) && transition.to_state === "PUBLISHED",
   ) || sessions.some((session) => session.lifecycle_state === "PUBLISHED");
@@ -147,15 +144,14 @@ export function resolveStage(project: ResolvedProjectValue, rows: StageJournalRo
   let currentIndex = registered ? 1 : -1;
   for (const session of sessions) {
     if (!isSuccessfulSession(session)) continue;
-    const stageIndex = stageIndexForWorkflow(session.workflow_id);
+    const stageIndex = stageBySession.get(session.session_id) ?? -1;
     const stage = STAGES[stageIndex];
     if (stage !== undefined && stage.blocked) {
       currentIndex = Math.max(currentIndex, stageIndex);
     }
   }
   for (const envelope of envelopes) {
-    const session = sessionById.get(envelope.session_id);
-    const envelopeIndex = session === undefined ? -1 : stageIndexForWorkflow(session.workflow_id);
+    const envelopeIndex = stageBySession.get(envelope.session_id) ?? -1;
     const envelopeStage = STAGES[envelopeIndex];
     if (envelopeStage !== undefined && !envelopeStage.blocked && envelopeStage.schemaId === envelope.schema_id) {
       currentIndex = Math.max(currentIndex, envelopeIndex);
@@ -163,13 +159,8 @@ export function resolveStage(project: ResolvedProjectValue, rows: StageJournalRo
   }
 
   if (published) {
-    const evidenceEnvelope = envelopes
-      .filter((envelope) =>
-        envelope.schema_id === STAGES[3].schemaId
-        && stageIndexForWorkflow(sessionById.get(envelope.session_id)?.workflow_id ?? "") === 3,
-      )
-      .sort((left, right) => compareEvidence(left, right, phaseById))
-      .at(-1);
+    const evidenceEnvelope = latestEvidence(envelopes, phaseById, (envelope) =>
+      envelope.schema_id === STAGES[3].schemaId && stageBySession.get(envelope.session_id) === 3);
     return {
       current: "past S5",
       next: null,
@@ -193,24 +184,14 @@ export function resolveStage(project: ResolvedProjectValue, rows: StageJournalRo
   const current = STAGES[currentIndex]!;
   const next = STAGES[currentIndex + 1] ?? null;
   const evidenceEnvelope = current.blocked
-    ? envelopes
-      .filter((envelope) => {
-        const evidenceIndex = stageIndexForWorkflow(sessionById.get(envelope.session_id)?.workflow_id ?? "");
-        const evidenceStage = STAGES[evidenceIndex];
-        return evidenceIndex < currentIndex
-          && evidenceStage !== undefined
-          && !evidenceStage.blocked
-          && evidenceStage.schemaId === envelope.schema_id;
-      })
-      .sort((left, right) => compareEvidence(left, right, phaseById))
-      .at(-1)
-    : envelopes
-      .filter((envelope) =>
-        envelope.schema_id === current.schemaId
-        && stageIndexForWorkflow(sessionById.get(envelope.session_id)?.workflow_id ?? "") === currentIndex,
-      )
-      .sort((left, right) => compareEvidence(left, right, phaseById))
-      .at(-1);
+    ? latestEvidence(envelopes, phaseById, (envelope) => {
+      const evidenceIndex = stageBySession.get(envelope.session_id) ?? -1;
+      const evidenceStage = STAGES[evidenceIndex];
+      return evidenceIndex < currentIndex && evidenceStage !== undefined
+        && !evidenceStage.blocked && evidenceStage.schemaId === envelope.schema_id;
+    })
+    : latestEvidence(envelopes, phaseById, (envelope) =>
+      envelope.schema_id === current.schemaId && stageBySession.get(envelope.session_id) === currentIndex);
 
   return {
     current: current.id,

@@ -23,8 +23,12 @@ export interface LandingClosureFact {
   readonly degraded?: readonly string[];
 }
 
+export function selectionOf(status: Pick<AttemptStatus, "shift" | "ticketSelection">) {
+  return status.shift ?? status.ticketSelection;
+}
+
 export function hasTicketSelection(status: AttemptStatus): boolean {
-  return ((status.shift ?? status.ticketSelection)?.tickets.length ?? 0) > 0;
+  return (selectionOf(status)?.tickets.length ?? 0) > 0;
 }
 
 /**
@@ -36,11 +40,14 @@ export function hasTicketSelection(status: AttemptStatus): boolean {
  * not a missing one (W03 task 11: a closure that left rows open is not unclosed); its not-closable
  * tickets keep it "open by the owner's choice" and stay listed on the record.
  */
+export function closureRecordMatches(status: AttemptStatus, record: ClosureRecord): boolean {
+  const selection = selectionOf(status);
+  return record.candidateSha === status.candidateSha && selection != null && record.plan === selection.plan &&
+    selection.tickets.every(ticket => record.tickets.includes(ticket.id) || record.notClosable.includes(ticket.id));
+}
+
 export function closureReadout(status: AttemptStatus, records: readonly ClosureRecord[]): ClosureReadout {
-  const selection = status.shift ?? status.ticketSelection;
-  const record = records.findLast(record => record.candidateSha === status.candidateSha &&
-    selection != null && record.plan === selection.plan &&
-    selection.tickets.every(ticket => record.tickets.includes(ticket.id) || record.notClosable.includes(ticket.id))) ?? null;
+  const record = records.findLast(value => closureRecordMatches(status, value)) ?? null;
   return { state: record === null ? "not closed" : record.rowsLeftOpen.length > 0 || record.notClosable.length > 0 || (record.lightState !== undefined && record.lightState.newValue !== "done")
     ? "open by the owner's choice" : "closed", record };
 }

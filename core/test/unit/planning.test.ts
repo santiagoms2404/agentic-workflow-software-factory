@@ -3,10 +3,10 @@ import { test, type TestContext } from "node:test";
 import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { capture, propose, apply, replay, hash, proposalHash, reference, groupDirectory, type Location } from "../../src/planning/store.ts";
+import { capture, propose, apply, replay, hash, proposalHash, reference, groupDirectory, readInput, type Location } from "../../src/planning/store.ts";
 import { currentUnit, affectedSuccessors, type Change, type Group, type Narrative, type Proposal, type Unit } from "../../src/planning/model.ts";
 import { checklist } from "../../src/planning/evidence.ts";
-import { bounded, decisionTree, packet, previewGroup } from "../../src/planning/views.ts";
+import { bounded, decisionTree, groupSummary, packet, previewGroup, readGroupSummary, readGroupTree } from "../../src/planning/views.ts";
 import { writePlacement } from "../../src/registry/placement.ts";
 import { main } from "../../src/cli/main.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
@@ -47,6 +47,23 @@ async function attempt(location: Location, taskId = "one") {
 async function bind(location: Location, group: Group, sessionId = "session-one") {
   return amendment(location, [{ kind: "bind", binding: { unit: "one", revision: currentUnit(group, "one").revision, taskId: "one", attempt: 1, sessionId } }], `binding-${group.revision}`);
 }
+
+test("readInput enforces its admission bound before loading an oversized source", async (t) => {
+  const location = await fixture(t);
+  const path = join(location.stateRoot, "bounded-input.txt");
+  await writeFile(path, Buffer.alloc(1_048_576, 0x61));
+  assert.equal((await readInput(path)).length, 1_048_576);
+  await writeFile(path, Buffer.alloc(1_048_577, 0x61));
+  await assert.rejects(readInput(path), /input exceeds 1 MiB admission limit/u);
+});
+
+test("group summary projection matches the full decision-tree readout", async (t) => {
+  const location = await fixture(t);
+  await initial(location);
+  await amendment(location, [{ kind: "requirements", values: [{ id: "R1", text: "Preserve intended behavior" }] },
+    { kind: "define", unit: unit() }]);
+  assert.deepEqual(await readGroupSummary(location), groupSummary(await readGroupTree(location)));
+});
 
 test("exact mixed-language UTF-8 input round-trips once, including BOM, CRLF and whitespace", async (t) => {
   const location = await fixture(t);
@@ -431,6 +448,19 @@ async function landedRegisteredUnit(location: Location, catalog: string, html: s
   await persistAttempt(created.attemptDir, 1, { kind: "attempt.transitioned", next: nextRevision(created.status, { lifecycleState: "LANDED", candidateSha: "a".repeat(40) }) });
   return group;
 }
+
+test("B12-25: W-ticket identity resolves through its numeric Section B task key", async (t) => {
+  const location = await fixture(t);
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task\n\n${registeredPrompt}\n`;
+  const ticket = registeredTicket.replace("id: T01", "id: W01");
+  const catalog = await registeredRepository(location, registeredHtml, sectionB, ticket);
+  await writeFile(join(location.stateRoot, "foreign-plan-repository", "specs", "tickets", "sample-plan", "W01.md"), ticket);
+  const group = await defined(location, [{ ...unit(), plan: { catalog, stem: "sample-plan", task: "W01", sourceSha256: hash(registeredHtml) } }]);
+  const row = (await checklist(group, location.stateRoot, at)).rows[0]!;
+  assert.equal(row.delivery, "todo");
+  assert.ok(row.evidence.some((value) => value.endsWith(`#W01@${hash(registeredHtml)}`)));
+  assert.deepEqual(row.conditions, []);
+});
 
 test("B12-19: a duplicated plan task number refuses the registered join instead of reading its first copy", async (t) => {
   const location = await fixture(t);

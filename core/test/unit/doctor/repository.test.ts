@@ -14,6 +14,7 @@ import { gatherRepositoryRows } from "../../../src/doctor/repository.ts";
 import { buildDoctorReport } from "../../../src/doctor/report.ts";
 import { parseWorktrees, insideWorktreeRoot } from "../../../src/doctor/worktrees.ts";
 import { runGit, systemGitRunner } from "../../../src/git/changes.ts";
+import { runSystemCommand } from "../../../src/execution/transport-broker.ts";
 
 const config = loadConfig(readFileSync(new URL("../../../../awsf.config.yaml", import.meta.url), "utf8"));
 const OWNER = ["-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com"];
@@ -99,6 +100,23 @@ test("real Git: stale branch, terminal/unowned linked trees, dirty and aged seed
   const managed = await gatherRepositoryRows({ cwd: active, stateRoot: world.stateRoot, env: { ...process.env } as Record<string, string>, config: world.measuredConfig });
   assert.deepEqual(managed.markers, rows.markers, "a managed checkout still joins attempts recorded against its placed canonical repository");
   assert.deepEqual(snapshot(world.root), before);
+});
+
+test("doctor reuses its measured Git common directory for baseline comparison", async t => {
+  const world = setup(t);
+  const baseline = join(world.worktreeRoot, "awsf-baseline-synthetic");
+  git(world.repository, "worktree", "add", "--quiet", "--detach", baseline, world.head);
+  const calls: { cwd: string; argv: string[] }[] = [];
+  await gatherRepositoryRows({ cwd: world.repository, stateRoot: world.stateRoot, env: { ...process.env } as Record<string, string>,
+    config: world.measuredConfig, gitCommonDirectory: join(world.repository, ".git"),
+    runCommand: (executable, argv, options) => {
+      calls.push({ cwd: options.cwd!, argv: [...argv] });
+      return runSystemCommand(executable, argv, options);
+    } });
+  assert.ok(!calls.some(call => call.cwd === world.repository && call.argv[0] === "rev-parse"
+    && call.argv.includes("--git-common-dir")));
+  assert.ok(calls.some(call => call.cwd === baseline && call.argv[0] === "rev-parse"
+    && call.argv.includes("--git-common-dir")));
 });
 
 test("task-terminal branch matching uses exact task names, all retries and recorded tree ownership", async t => {

@@ -142,6 +142,27 @@ function emptyStateCounts(): Record<TicketState, number> {
   return Object.fromEntries(TICKET_STATES.map((name) => [name, 0])) as Record<TicketState, number>;
 }
 
+function withReadiness<T extends { readonly id: string; readonly state: TicketState; readonly depends_on: readonly string[] }>(
+  tickets: readonly T[],
+): (T & { readonly ready: boolean })[] {
+  const byId = new Map(tickets.map((ticket) => [ticket.id, ticket]));
+  return tickets.map((ticket) => ({ ...ticket,
+    ready: ticket.state === "todo" && ticket.depends_on.every((id) => byId.get(id)?.state === "done"),
+  }));
+}
+
+function tallyTickets(rows: readonly { readonly state: TicketState; readonly milestone: string; readonly tier?: 0 | 1 | 2 }[]) {
+  const state = emptyStateCounts();
+  const milestone: Record<string, number> = {};
+  const tier: Record<"T0" | "T1" | "T2", number> = { T0: 0, T1: 0, T2: 0 };
+  for (const row of rows) {
+    state[row.state] += 1;
+    milestone[row.milestone] = (milestone[row.milestone] ?? 0) + 1;
+    if (row.tier !== undefined) tier[`T${row.tier}`] += 1;
+  }
+  return { state, milestone, tier };
+}
+
 /** Plan-aware dashboard projection; dependencies and duplicate ids stay plan-scoped. */
 export async function queryPlanBacklog(
   reader: Pick<PlanTicketReader, "load">,
@@ -150,9 +171,6 @@ export async function queryPlanBacklog(
   const groups = await reader.load();
   const tickets: PlanBacklogTicket[] = [];
   const plans: PlanBacklogPlan[] = [];
-  const state = emptyStateCounts();
-  const milestone: Record<string, number> = {};
-  const tier: Record<"T0" | "T1" | "T2", number> = { T0: 0, T1: 0, T2: 0 };
 
   for (const group of groups) {
     // Plan admission normally refuses cycles, but a read path must still fail
@@ -163,11 +181,9 @@ export async function queryPlanBacklog(
       group.records.map((record) => ({ id: record.ticket.id, depends_on: [...record.ticket.depends_on] })),
     );
     if (cycle !== null) throw new TicketDependencyCycleError(cycle);
-    const byId = new Map(group.records.map((record) => [record.ticket.id, record.ticket]));
-    const counts = emptyStateCounts();
-    for (const record of group.records) {
+    const rows = withReadiness(group.records.map((record) => {
       const ticket = record.ticket;
-      const row: PlanBacklogTicket = {
+      return {
         uid: record.uid,
         plan: record.plan,
         id: ticket.id,
@@ -175,24 +191,20 @@ export async function queryPlanBacklog(
         milestone: ticket.milestone,
         state: ticket.state,
         depends_on: ticket.depends_on,
-        ready: ticket.state === "todo" && ticket.depends_on.every((id) => byId.get(id)?.state === "done"),
         ...(ticket.tier === undefined ? {} : { tier: ticket.tier }),
         ...(ticket.workflow === undefined ? {} : { workflow: ticket.workflow }),
       };
-      tickets.push(row);
-      counts[row.state] += 1;
-      state[row.state] += 1;
-      milestone[row.milestone] = (milestone[row.milestone] ?? 0) + 1;
-      if (row.tier !== undefined) tier[`T${row.tier}`] += 1;
-    }
-    plans.push({ ...group.plan, counts, ticketCount: group.records.length });
+    }));
+    tickets.push(...rows);
+    plans.push({ ...group.plan, counts: tallyTickets(rows).state, ticketCount: group.records.length });
   }
 
+  const totals = tallyTickets(tickets);
   return {
     plans,
     tickets,
     ready: tickets.filter((ticket) => ticket.ready),
-    counts: { state, milestone, tier, invalid: 0 },
+    counts: { ...totals, invalid: 0 },
     projectedCost: projectedCost(tickets, sessions),
   };
 }
@@ -202,19 +214,9 @@ export async function queryBacklog(store: TicketStore, sessions: readonly Backlo
   const records = await store.load();
   const invalidRecords = records.filter((record) => record.ticket === null);
   const tickets = records.flatMap((record) => record.ticket === null ? [] : [record.ticket]);
-  const byId = new Map(tickets.map((ticket) => [ticket.id, ticket]));
-  const rows = tickets.map((ticket) => ({
-    ...ticket,
-    ready: ticket.state === "todo" && ticket.depends_on.every((id) => byId.get(id)?.state === "done"),
-  }));
-  const state: Record<TicketState, number> & { invalid?: number } = emptyStateCounts();
-  const milestone: Record<string, number> = {};
-  const tier: Record<"T0" | "T1" | "T2", number> = { T0: 0, T1: 0, T2: 0 };
-  for (const ticket of rows) {
-    state[ticket.state] += 1;
-    milestone[ticket.milestone] = (milestone[ticket.milestone] ?? 0) + 1;
-    tier[`T${ticket.tier}`] += 1;
-  }
+  const rows = withReadiness(tickets);
+  const totals = tallyTickets(rows);
+  const state: Record<TicketState, number> & { invalid?: number } = totals.state;
   if (invalidRecords.length > 0) {
     state.invalid = invalidRecords.length;
   }
@@ -225,8 +227,8 @@ export async function queryBacklog(store: TicketStore, sessions: readonly Backlo
     ready: rows.filter((ticket) => ticket.ready),
     counts: {
       state,
-      milestone,
-      tier,
+      milestone: totals.milestone,
+      tier: totals.tier,
       invalid: invalidRecords.length,
     },
     ...(invalidRecords.length > 0 ? { invalid: invalidRecords, invalidCount: invalidRecords.length } : {}),

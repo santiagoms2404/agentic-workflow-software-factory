@@ -1,9 +1,10 @@
 // Read-only repository facts. Git reads go through the transport broker; there
 // is no gc join, provider launch, trap run, state writer or repair operation.
 import { readClosure, type ClosureState } from "../closure/readout.ts";
+import { selectionOf } from "../closure/model.ts";
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import { readAttempt, type AttemptStatus } from "../cli/commands/attempt.ts";
+import { isTerminalStatus, readAttempt, type AttemptStatus } from "../cli/commands/attempt.ts";
 import type { AwsfConfig } from "../config/schema.ts";
 import type { DoctorReadout } from "../contracts/doctor-readout.ts";
 import type { TicketState } from "../contracts/ticket.ts";
@@ -13,6 +14,7 @@ import { parseStoredTicket } from "../persistence/ticket-store.ts";
 import { parsePlanTicketData } from "../persistence/plan-tickets.ts";
 import { defaultWorktreeRoot } from "../persistence/platform-paths.ts";
 import { baselineWorktreeName } from "../preflight/baseline-worktree.ts";
+import { LANDED_STATES } from "../state/task-machine.ts";
 import type { RunQuotaCommand, ResolveQuotaExecutable } from "../quota/probe.ts";
 import { loadCatalog } from "../registry/catalog.ts";
 import { readPlacement } from "../registry/placement.ts";
@@ -28,14 +30,18 @@ interface RepositoryInput {
   readonly stateRoot: string;
   readonly env: Readonly<Record<string, string>>;
   readonly config: AwsfConfig | null;
+  readonly gitCommonDirectory?: string | null;
   readonly runCommand?: RunQuotaCommand;
   readonly resolveExecutable?: ResolveQuotaExecutable;
 }
-const terminal = (attempt: AttemptStatus) => ["LANDED", "PUBLISHED", "BLOCKED", "CANCELLED"].includes(attempt.lifecycleState);
-const landed = (attempt: AttemptStatus) => ["LANDED", "PUBLISHED"].includes(attempt.lifecycleState);
+const terminal = isTerminalStatus;
+const landed = (attempt: AttemptStatus) => (LANDED_STATES as readonly string[]).includes(attempt.lifecycleState);
 
+async function physicalPath(path: string): Promise<string> {
+  try { return await realpath(path); } catch { return resolve(path); }
+}
 async function samePath(a: string, b: string): Promise<boolean> {
-  try { return await realpath(a) === await realpath(b); } catch { return resolve(a) === resolve(b); }
+  return await physicalPath(a) === await physicalPath(b);
 }
 async function mtime(path: string): Promise<number | null> {
   try { return (await stat(path)).mtimeMs; } catch { return null; }
@@ -88,8 +94,17 @@ export async function gatherRepositoryRows(input: RepositoryInput): Promise<Repo
     }
   } catch { attemptNotes.push("attempt inventory not measured"); }
   const local = [] as AttemptStatus[];
-  for (const attempt of attempts) if ((project === null || attempt.project === project)
-    && (await samePath(attempt.repository, repositoryPath) || await samePath(attempt.repository, input.cwd))) local.push(attempt);
+  const resolvedPaths = new Map<string, Promise<string>>();
+  const resolved = (path: string): Promise<string> => {
+    let value = resolvedPaths.get(path);
+    if (value === undefined) { value = physicalPath(path); resolvedPaths.set(path, value); }
+    return value;
+  };
+  const [repositoryPhysical, cwdPhysical] = await Promise.all([resolved(repositoryPath), resolved(input.cwd)]);
+  for (const attempt of attempts) if (project === null || attempt.project === project) {
+    const attemptRepository = await resolved(attempt.repository);
+    if (attemptRepository === repositoryPhysical || attemptRepository === cwdPhysical) local.push(attempt);
+  }
   const byTree = new Map<string, AttemptStatus[]>();
   for (const attempt of local) if (attempt.worktree !== null) {
     const key = resolve(attempt.worktree);
@@ -136,10 +151,13 @@ export async function gatherRepositoryRows(input: RepositoryInput): Promise<Repo
     baselineFact = { ...baseline, present };
     if (present) {
       const top = query(path, ["rev-parse", "--show-toplevel"]);
-      const ownCommon = query(input.cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+      const ownCommon = input.gitCommonDirectory === undefined
+        ? query(input.cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        : input.gitCommonDirectory;
+      const ownCommonPath = ownCommon === null ? null : input.gitCommonDirectory === undefined ? resolve(input.cwd, ownCommon.trim()) : ownCommon;
       const treeCommon = query(path, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-      const foreign = top === null || ownCommon === null || treeCommon === null || !await samePath(top.trim(), path)
-        || !await samePath(resolve(input.cwd, ownCommon.trim()), resolve(path, treeCommon.trim()));
+      const foreign = top === null || ownCommonPath === null || treeCommon === null || !await samePath(top.trim(), path)
+        || !await samePath(ownCommonPath, resolve(path, treeCommon.trim()));
       const dirty = foreign ? null : query(path, ["status", "--porcelain", "--untracked-files=normal"]);
       baselineFact = { ...baselineFact, foreign, head: foreign ? null : query(path, ["rev-parse", "HEAD"])?.trim() ?? null,
         dirty: dirty === null ? null : dirty.length > 0, nodeModulesMtime: await mtime(join(path, "node_modules")), lockfileMtime: await mtime(join(input.cwd, "package-lock.json")) };
@@ -156,7 +174,7 @@ export async function gatherRepositoryRows(input: RepositoryInput): Promise<Repo
     try { closure = (await readClosure(join(input.stateRoot, "projects", attempt.project, "tasks", attempt.taskId, String(attempt.attempt)), attempt)).state; }
     catch { attemptNotes.push(`${label}: closure records not measured`); }
     const source = sources.find(source => basename(source.planPath, ".html") === plan);
-    const selection = attempt.shift ?? attempt.ticketSelection;
+    const selection = selectionOf(attempt);
     if (selection == null || selection.plan !== (light ? null : plan) || selection.tickets.length === 0) {
       markerFacts.push({ attempt: label, plan, tickets: null, ...(closure === undefined ? {} : { closure }) });
       continue;

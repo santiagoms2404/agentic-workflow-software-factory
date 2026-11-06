@@ -15,9 +15,9 @@
 // passing suite at the base, or run once in the project's baseline worktree,
 // never in the owner's checkout and never in a tree created for this run alone.
 
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { gatherLandingClosures } from "../../closure/readout.ts";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { loadConfig } from "../../config/load.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
@@ -41,6 +41,7 @@ import {
   type TaskRequestFact,
 } from "../../preflight/fields.ts";
 import { writingPhases } from "../../preflight/grant-plan.ts";
+import { storageMode } from "../../preflight/storage-mode.ts";
 import { readShiftTicketDoBlocks } from "../../preflight/shift-tickets.ts";
 import {
   gatherSuite,
@@ -135,24 +136,10 @@ export async function pinnedBase(attemptDir: string, status: AttemptStatus): Pro
   return status.replay?.baseSha ?? seed?.integrationBaseSha ?? runGit(systemGitRunner(status.repository), ["rev-parse", "HEAD"]).trim();
 }
 
-/** Mode bits read with stat and nothing else. A path not yet created is measured at its nearest existing parent. */
-async function modeOf(path: string): Promise<StorageMode> {
-  let cursor = resolve(path);
-  for (;;) {
-    try {
-      return { path: cursor, mode: (await stat(cursor)).mode };
-    } catch (error) {
-      const parent = dirname(cursor);
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT" || parent === cursor) return { path: cursor, mode: null };
-      cursor = parent;
-    }
-  }
-}
-
 /** The Git common directory's HEAD and config, and the worktree root. Nothing is written to measure them. */
 export async function measureGitStorage(repository: string, worktreeRoot: string): Promise<readonly StorageMode[]> {
   const common = runGit(systemGitRunner(repository), ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
-  return Promise.all([modeOf(join(common, "HEAD")), modeOf(join(common, "config")), modeOf(worktreeRoot)]);
+  return Promise.all([storageMode(resolve(join(common, "HEAD")), true), storageMode(resolve(join(common, "config")), true), storageMode(resolve(worktreeRoot), true)]);
 }
 
 async function taskIds(stateRoot: string, project: string): Promise<string[]> {

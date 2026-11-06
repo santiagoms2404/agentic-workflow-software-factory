@@ -14,9 +14,10 @@
 // rebuildable, and invisible completion is impossible.
 
 import { existsSync, readdirSync, readlinkSync } from "node:fs";
-import { link, mkdir, readdir, rename, stat } from "node:fs/promises";
+import { link, mkdir, rename, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { JournalRecord } from "../persistence/journal.ts";
+import { listDirectories } from "../persistence/directories.ts";
 import { scanJournal } from "../persistence/replay.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { TaskState } from "../state/task-machine.ts";
@@ -350,19 +351,10 @@ export async function discoverAttempts(stateRoot: string): Promise<string[]> {
   const found: string[] = [];
   const projects = join(stateRoot, "projects");
 
-  const entries = async (dir: string): Promise<string[]> => {
-    try {
-      return (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw err;
-    }
-  };
-
-  for (const project of await entries(projects)) {
+  for (const project of await listDirectories(projects)) {
     const tasks = join(projects, project, "tasks");
-    for (const task of await entries(tasks)) {
-      for (const attempt of await entries(join(tasks, task))) {
+    for (const task of await listDirectories(tasks)) {
+      for (const attempt of await listDirectories(join(tasks, task))) {
         const dir = join(tasks, task, attempt);
         if (await exists(join(dir, "journal.jsonl"))) found.push(dir);
       }

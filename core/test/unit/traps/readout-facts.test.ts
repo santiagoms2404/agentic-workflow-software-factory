@@ -31,6 +31,10 @@ function transition(status: AttemptStatus, at: string): AttemptEvent {
     reasonCode: null, reasonDetail: "synthetic", spawnSite: false, at } };
 }
 
+function journalRow(event: AttemptEvent, recordedAt: string | null = POST) {
+  return { source_seq: 1, recorded_at: recordedAt as unknown as string, event };
+}
+
 async function syntheticRoot() {
   const root = mkdtempSync(join(tmpdir(), "awsf-traps-facts-"));
   const stateRoot = join(root, "state");
@@ -95,18 +99,18 @@ test("readTrapsReadout hands only reduced facts to its builder across synthetic 
   } finally { box.close(); }
 });
 
-test("transitionAt keeps last-transition evidence, matching journal stamp fallback and no activity fallback", async () => {
+test("transitionAt uses the production journal-record shape and its own stamp fallback", async () => {
   const box = await syntheticRoot();
   try {
     const status = { ...box.status, lifecycleState: "BLOCKED" as const, lastActivityAt: LATER };
-    assert.equal(transitionAt([transition(status, PRE)], "BLOCKED"), PRE);
-    assert.equal(transitionAt([transition(status, PRE), { kind: "attempt.transitioned", next: status, recordedAt: POST }], "BLOCKED"), POST);
+    assert.equal(transitionAt([journalRow(transition(status, PRE), POST)], "BLOCKED"), PRE);
+    assert.equal(transitionAt([journalRow(transition(status, PRE)), journalRow({ kind: "attempt.transitioned", next: status }, POST)], "BLOCKED"), POST);
     const mismatched = transition(status, PRE);
     assert.equal(mismatched.evidence?.type, "transition");
     if (mismatched.evidence?.type !== "transition") assert.fail("synthetic transition evidence");
-    assert.equal(transitionAt([{ ...mismatched, evidence: { ...mismatched.evidence, to: "CANCELLED" }, recordedAt: POST }], "BLOCKED"), POST);
-    assert.equal(transitionAt([{ kind: "attempt.transitioned", next: status }], "BLOCKED"), null);
-    assert.equal(transitionAt([{ kind: "attempt.updated", next: status, recordedAt: POST }], "BLOCKED"), null);
+    assert.equal(transitionAt([journalRow({ ...mismatched, evidence: { ...mismatched.evidence, to: "CANCELLED" } }, POST)], "BLOCKED"), POST);
+    assert.equal(transitionAt([journalRow({ kind: "attempt.transitioned", next: status }, null)], "BLOCKED"), null);
+    assert.equal(transitionAt([journalRow({ kind: "attempt.updated", next: status })], "BLOCKED"), null);
   } finally { box.close(); }
 });
 

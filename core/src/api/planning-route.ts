@@ -12,7 +12,7 @@
 // one, and no operation, event, capture, proposal or approval type is imported:
 // the tree is a projection, and this file can only read it.
 
-import { groupSummary, listGroupIds, readGroupTree, type GroupSummary, type GroupTree } from "../planning/views.ts";
+import { listGroupIds, readGroupSummary, readGroupTree, type GroupSummary, type GroupTree } from "../planning/views.ts";
 
 export interface GroupsResponse {
   readonly groups: readonly GroupSummary[];
@@ -63,9 +63,9 @@ export async function listGroupSummaries(options: PlanningReadOptions): Promise<
   const groups: GroupSummary[] = [];
   const unreadable: string[] = [];
   for (const group of await listGroupIds(options.stateRoot, options.project)) {
-    let tree: GroupTree;
+    let summary: GroupSummary;
     try {
-      tree = await readGroupTree({ ...options, group });
+      summary = await readGroupSummary({ ...options, group });
     } catch (error) {
       if (isJournalReplayError(error)) {
         unreadable.push(group);
@@ -76,7 +76,7 @@ export async function listGroupSummaries(options: PlanningReadOptions): Promise<
     // A directory can survive a failed first capture without any journal. The
     // detail route and CLI both treat revision zero as absent, so the list must
     // not advertise it as a group that can be opened.
-    if (tree.revision !== 0) groups.push(groupSummary(tree));
+    if (summary.revision !== 0) groups.push(summary);
   }
   // Newest first: the group a reader is most likely looking for is the one they
   // were just driving. A group with no input has no time and sorts last.

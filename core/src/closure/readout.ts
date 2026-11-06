@@ -1,4 +1,4 @@
-import { access, readdir } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { assertClosureRecord, type ClosureRecord } from "../contracts/closure-record.ts";
 import { landingJournalTail } from "../persistence/closure-tail.ts";
@@ -6,21 +6,22 @@ import type { JournalRecord } from "../persistence/journal.ts";
 import { journalFilePath, statusFilePath } from "../persistence/platform-paths.ts";
 import { streamProjectClosureJournalRecords } from "../persistence/project-closure-journal.ts";
 import { scanJournal } from "../persistence/replay.ts";
+import { listDirectories } from "../persistence/directories.ts";
 import { tryReadStatus } from "../persistence/status-store.ts";
 import { deriveAttemptStatus, withLegacyDefaults, type AttemptEvent, type AttemptStatus } from "../cli/commands/attempt.ts";
+import { LANDED_STATES } from "../state/task-machine.ts";
 
-import { CLOSURE_CUT, closureReadout, hasTicketSelection, type ClosureReadout, type LandingClosureFact } from "./model.ts";
+import { CLOSURE_CUT, closureReadout, closureRecordMatches, hasTicketSelection, type ClosureReadout, type LandingClosureFact } from "./model.ts";
 export { CLOSURE_CUT, closureReadout, hasTicketSelection, unclosedLandings, closeArgv } from "./model.ts";
 export type { ClosureState, ClosureReadout, LandingClosureFact } from "./model.ts";
 
 export type LandingJournalReader = (attemptDir: string, projection: AttemptStatus) => Promise<readonly JournalRecord<AttemptEvent>[]>;
 
 async function readTailClosure(attemptDir: string, status: AttemptStatus, rows: readonly JournalRecord<AttemptEvent>[]): Promise<ClosureReadout> {
-  let result: ClosureReadout = { state: "not closed", record: null };
+  let latest: ClosureRecord | null = null;
   const consider = (record: ClosureRecord): void => {
     assertClosureRecord(record);
-    const matched = closureReadout(status, [record]);
-    if (matched.record !== null) result = matched;
+    if (closureRecordMatches(status, record)) latest = record;
   };
   for (const row of rows) if (row.event.evidence?.type === "closure-record") consider(row.event.evidence.record);
   const projectDir = resolve(attemptDir, "..", "..", "..");
@@ -28,24 +29,19 @@ async function readTailClosure(attemptDir: string, status: AttemptStatus, rows: 
     if (row.event.project !== status.project || resolve(row.event.repository) !== resolve(status.repository)) continue;
     if (row.event.evidence.type === "closure-record") consider(row.event.evidence.record);
   }
-  return result;
+  return closureReadout(status, latest === null ? [] : [latest]);
 }
 
 /** A pre-landing projection rules out closure evidence without opening any journal. */
 export async function readClosure(attemptDir: string, status: AttemptStatus,
   readJournal: LandingJournalReader = landingJournalTail): Promise<ClosureReadout> {
-  if ((status.lifecycleState !== "LANDED" && status.lifecycleState !== "PUBLISHED") || !hasTicketSelection(status)) {
+  if (!isLanded(status) || !hasTicketSelection(status)) {
     return { state: "not closed", record: null };
   }
   return readTailClosure(attemptDir, status, await readJournal(attemptDir, status));
 }
 
-async function directories(path: string): Promise<string[]> {
-  try { return (await readdir(path, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name).sort(); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
-}
-
-const isLanded = (status: AttemptStatus): boolean => status.lifecycleState === "LANDED" || status.lifecycleState === "PUBLISHED";
+const isLanded = (status: AttemptStatus): boolean => (LANDED_STATES as readonly string[]).includes(status.lifecycleState);
 
 /** status.json, or why it could not be read. Never throws: a projection is not the truth (B4-01). */
 async function readProjection(dir: string): Promise<{ status: AttemptStatus | null; problem: string | null }> {
@@ -85,7 +81,7 @@ export async function gatherLandingClosures(stateRoot: string, project: string,
   readJournal: LandingJournalReader = landingJournalTail): Promise<readonly LandingClosureFact[]> {
   const facts: LandingClosureFact[] = [];
   const tasks = join(stateRoot, "projects", project, "tasks");
-  for (const task of await directories(tasks)) for (const attempt of await directories(join(tasks, task))) {
+  for (const task of await listDirectories(tasks)) for (const attempt of await listDirectories(join(tasks, task))) {
     const dir = join(tasks, task, attempt);
     // Task-level report directories and incomplete directories are not attempts.
     try { await access(journalFilePath(dir)); }

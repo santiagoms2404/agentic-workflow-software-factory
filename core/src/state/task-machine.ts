@@ -54,6 +54,7 @@ export const TASK_STATES = [
 ] as const;
 export type TaskState = (typeof TASK_STATES)[number];
 
+export const LANDED_STATES = ["LANDED", "PUBLISHED"] as const;
 export const TERMINAL_STATES = ["LANDED", "PUBLISHED", "BLOCKED", "CANCELLED"] as const;
 
    /** States after which this attempt permits no further transition. */

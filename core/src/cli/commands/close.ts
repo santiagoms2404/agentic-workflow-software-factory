@@ -9,6 +9,7 @@ import { assertClosureRecord, type ClosureRecord } from "../../contracts/closure
 import { closureJournalRecords, withClosureJournal, type ClosureEvidence } from "../../persistence/closure-journal.ts";
 import { projectClosureJournalRecords, withProjectClosureJournal, type ProjectClosureProjector } from "../../persistence/project-closure-journal.ts";
 import { compareAskedFor, type AskedForSelection } from "../../closure/asked-for.ts";
+import { selectionOf } from "../../closure/model.ts";
 import { closureDelta } from "../../closure/delta.ts";
 import { proposeClosure, applyClosureChoices, type ClosureRow } from "../../closure/propose.ts";
 import { proposeSpineRollUp } from "../../closure/spine.ts";
@@ -76,7 +77,7 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
   }
   const status = ownerCommit ? null : await readAttempt(options.attemptDir!);
   if (status !== null && status.lifecycleState !== "LANDED" && status.lifecycleState !== "PUBLISHED") refuse("E_CLOSURE_NOT_LANDED", "closure requires a LANDED attempt");
-  const sealed = status?.shift ?? status?.ticketSelection;
+  const sealed = status === null ? undefined : selectionOf(status);
   if (status !== null && (sealed == null || sealed.tickets.length === 0 || status.planRef !== sealed.plan || status.baseSha === null || status.candidateSha === null)) {
     refuse("E_CLOSURE_SELECTION", "closure requires a sealed ticket selection and recorded base and candidate");
   }

@@ -3,6 +3,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { parse } from "yaml";
 import { scanJournalText } from "../persistence/replay.ts";
+import { TICKET_STATES } from "../contracts/ticket.ts";
+import { LANDED_STATES } from "../state/task-machine.ts";
 import { deriveAttemptStatus, withLegacyDefaults, type AttemptEvent, type AttemptStatus } from "../cli/commands/attempt.ts";
 import { loadCatalog } from "../registry/catalog.ts";
 import { readPlacement } from "../registry/placement.ts";
@@ -69,42 +71,69 @@ export async function observedAttempts(stateRoot: string, project: string, task:
 /** A refusal of the registered plan authority. The checklist names it on the row, not as a generic lookup gap. */
 class PlanAuthorityRefusal extends Error {}
 
-async function registeredPlan(unit: Unit, stateRoot: string, project: string): Promise<{ done: boolean; reference: string } | null> {
+interface RegisteredPlanCache {
+  readonly catalogs: Map<string, Promise<ReturnType<typeof loadCatalog>>>;
+  readonly placements: Map<string, Promise<Awaited<ReturnType<typeof readPlacement>>>>;
+  readonly plans: Map<string, Promise<{ readonly html: string; readonly tasks: ReturnType<typeof parseAwsfPlanHtmlV1> }>>;
+  readonly prompts: Map<string, Promise<{ readonly section: string; readonly blocks: RegExpMatchArray[] }>>;
+  readonly tickets: Map<string, Promise<string>>;
+}
+
+function remember<T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {
+  let value = cache.get(key);
+  if (value === undefined) {
+    value = load();
+    cache.set(key, value);
+  }
+  return value;
+}
+
+async function registeredPlan(unit: Unit, stateRoot: string, project: string, cache: RegisteredPlanCache): Promise<{ done: boolean; reference: string } | null> {
   try {
-    return await readRegisteredPlan(unit, stateRoot, project);
+    return await readRegisteredPlan(unit, stateRoot, project, cache);
   } catch (error) {
     throw new PlanAuthorityRefusal((error as Error).message);
   }
 }
 
-async function readRegisteredPlan(unit: Unit, stateRoot: string, project: string): Promise<{ done: boolean; reference: string } | null> {
+async function readRegisteredPlan(unit: Unit, stateRoot: string, project: string, cache: RegisteredPlanCache): Promise<{ done: boolean; reference: string } | null> {
   if (!unit.plan) return null;
   const { catalog: path, stem, task, sourceSha256 } = unit.plan;
-  const catalog = loadCatalog(await readFile(path, "utf8"));
+  const catalog = await remember(cache.catalogs, path, async () => loadCatalog(await readFile(path, "utf8")));
   if (catalog.project.slug !== project) throw new Error("registered plan project mismatch");
   // Resolve through the registry, including foreign placements. Never guess adjacency.
   let sources = resolvePlanSources(path, catalog);
-  if (sources.length === 0) sources = resolvePlanSources(path, catalog, await readPlacement(stateRoot, project));
+  if (sources.length === 0) {
+    const placement = await remember(cache.placements, `${stateRoot}\u0000${project}`, () => readPlacement(stateRoot, project));
+    sources = resolvePlanSources(path, catalog, placement);
+  }
   const source = sources.find((value) => basename(value.planPath, ".html") === stem);
   if (!source) throw new Error("registered plan source unresolved");
-  const html = await readFile(source.planPath, "utf8");
-  if (hash(html) !== sourceSha256) throw new Error("registered plan source revision changed");
+  const planData = await remember(cache.plans, `${source.planPath}\u0000${stem}`, async () => {
+    const html = await readFile(source.planPath, "utf8");
+    return { html, tasks: parseAwsfPlanHtmlV1(html, stem) };
+  });
+  if (hash(planData.html) !== sourceSha256) throw new Error("registered plan source revision changed");
   // Exactly one task may carry the number, as closure requires; a duplicate is refused, never read from its first copy.
-  const planTasks = parseAwsfPlanHtmlV1(html, stem).filter((value) => value.number === Number(task.slice(1)));
+  const planTasks = planData.tasks.filter((value) => value.number === Number(task.slice(1)));
   if (planTasks.length > 1) throw new Error(`registered plan task ${task} is not unique`);
   const planTask = planTasks[0];
-  const ticketText = await readFile(join(source.ticketsPath, `${task}.md`), "utf8");
+  const ticketPath = join(source.ticketsPath, `${task}.md`);
+  const ticketText = await remember(cache.tickets, ticketPath, () => readFile(ticketPath, "utf8"));
   const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/u.exec(ticketText);
   if (!planTask || !match) throw new Error("registered ticket or task missing");
   const ticket = parse(match[1]!) as Record<string, unknown>;
   const prompt = (match[2]!.split("## Build prompt\n\n")[1] ?? "").replace(/\n+$/u, "");
-  const section = (await readFile(source.promptsPath, "utf8")).split("# Section B — Task prompts (recommended)")[1] ?? "";
-  const blocks = [...section.matchAll(/^### ([TW]\d+) — (.+)$/gm)];
-  const index = blocks.findIndex((block) => block[1]?.[0] === task[0] && Number(block[1]?.slice(1)) === Number(task.slice(1)));
+  const promptData = await remember(cache.prompts, source.promptsPath, async () => {
+    const section = (await readFile(source.promptsPath, "utf8")).split("# Section B — Task prompts (recommended)")[1] ?? "";
+    return { section, blocks: [...section.matchAll(/^### ([TW]\d+) — (.+)$/gm)] };
+  });
+  const { section, blocks } = promptData;
+  const index = blocks.findIndex((block) => Number(block[1]?.slice(1)) === Number(task.slice(1)));
   const block = blocks[index];
   if (!block || prompt !== section.slice(block.index! + block[0].length, blocks[index + 1]?.index ?? section.length).trim()
     || ticket.id !== task || ticket.title !== block[2]?.trim() || ticket.milestone !== planTask.milestone) throw new Error("registered plan/ticket compatibility mismatch");
-  if (!["todo", "wip", "done", "failed"].includes(String(ticket.state)) || planTask.checklist.length === 0
+  if (!(TICKET_STATES as readonly string[]).includes(String(ticket.state)) || planTask.checklist.length === 0
     || !Array.isArray(ticket.depends_on) || ticket.depends_on.some((id) => typeof id !== "string" || id >= task)
     || canonical(ticket.serves ?? []) !== canonical(planTask.serves)) throw new Error("registered plan/ticket vocabulary or coverage mismatch");
   const done = planTask.checklist.every((marker) => marker === "x");
@@ -121,6 +150,7 @@ function delivery(state: string): Delivery {
 }
 export async function checklist(group: Group, stateRoot: string, asOf: string): Promise<Checklist> {
   const rows: Row[] = [];
+  const planCache: RegisteredPlanCache = { catalogs: new Map(), placements: new Map(), plans: new Map(), prompts: new Map(), tickets: new Map() };
   for (const unit of currentUnits(group)) {
     const row: Row = { id: unit.id, revision: unit.revision, title: unit.title, disposition: unit.disposition,
       delivery: "unknown", conditions: [], observed: [], evidence: [] };
@@ -139,7 +169,7 @@ export async function checklist(group: Group, stateRoot: string, asOf: string): 
         if (row.delivery !== "done") throw error;
       }
       row.evidence = row.observed.map((attempt) => `${attempt.journal}@${attempt.sha256}`);
-      const plan = await registeredPlan(unit, stateRoot, group.project);
+      const plan = await registeredPlan(unit, stateRoot, group.project, planCache);
       if (plan) row.evidence.push(plan.reference);
       const binding = group.bindings.filter((value) => value.unit === unit.id && value.revision === unit.revision).at(-1);
       const latest = row.observed.at(-1);
@@ -150,7 +180,7 @@ export async function checklist(group: Group, stateRoot: string, asOf: string): 
           row.conditions.push("execution is not bound to this unit revision");
         } else {
           row.delivery = delivery(latest.state);
-          if (unit.completion === "landed" && ["LANDED", "PUBLISHED"].includes(latest.state) && latest.candidateSha) row.delivery = "done";
+          if (unit.completion === "landed" && (LANDED_STATES as readonly string[]).includes(latest.state) && latest.candidateSha) row.delivery = "done";
         }
       }
       if (row.delivery === "done" && plan && !plan.done) {
