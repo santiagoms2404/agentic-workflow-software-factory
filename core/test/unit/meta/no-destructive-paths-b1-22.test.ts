@@ -46,6 +46,8 @@ test("non-destructive argv-array Git commands remain allowed", () => {
       "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
       "core/src/registry/plan-admission.ts: try { rmSync(file, { force: true }); } catch { /* best effort */ }",
       "core/src/registry/plan-admission.ts: rmdirSync(dir);",
+      "core/src/persistence/status-store.ts: try { await unlink(owned.path); } catch { /* preserve uncertain or no-longer-present paths */ }",
+      "core/src/cli/commands/metrics-export.ts: try { unlinkSync(owned.path); } catch { /* preserve uncertain temporary files */ }",
       'core/src/publish/argv.ts: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
       'core/src/publish/argv.ts: if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
     ],

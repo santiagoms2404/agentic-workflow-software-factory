@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -62,6 +62,31 @@ test("continuity.json is written mode 0600", { skip: process.platform === "win32
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("serialization failure before temp creation preserves the existing status input", async () => {
+  const dir = tempDir();
+  try {
+    const path = join(dir, "status.json");
+    writeFileSync(path, "existing status\n");
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
+    await assert.rejects(() => writeStatus(path, cyclic), /circular/i);
+    assert.equal(readFileSync(path, "utf8"), "existing status\n");
+    assert.deepEqual(readdirSync(dir), ["status.json"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("rename failure removes only this write's temporary and preserves the occupied directory", async () => {
+  const dir = tempDir();
+  try {
+    const path = join(dir, "status.json");
+    mkdirSync(path);
+    writeFileSync(join(path, "keep"), "user data\n");
+    await assert.rejects(() => writeStatus(path, { state: "RUNNING" }));
+    assert.equal(readFileSync(join(path, "keep"), "utf8"), "user data\n");
+    assert.deepEqual(readdirSync(dir), ["status.json"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("500 concurrent reads during 500 concurrent writes all parse — no partial status.json", async () => {

@@ -62,8 +62,9 @@ interface AllowedDelete {
 
 /**
  * The only deletes core/src is allowed to perform, each argued here: the
- * previously authorized lock releases and the six narrow operation-owned
- * cleanup callsites from invariant 8's dated owner amendment (2026-11-06, D1).
+ * previously authorized lock releases, the six narrow operation-owned cleanup
+ * callsites from invariant 8's dated owner amendment (2026-11-06, D1), and the
+ * two private-temp cleanup sites from its dated owner-resolution amendment.
  * D1 covers private temporaries and failed-admission rollback only, not user
  * work or refs. Publish deny-list and validation lines are tracked separately
  * in VALIDATION_ONLY_LINES; they are checks, not delete exceptions. A new delete
@@ -96,6 +97,10 @@ const ALLOWED_DELETES: readonly AllowedDelete[] = [
   { file: "core/src/registry/plan-admission.ts", line: "try { rmSync(file, { force: true }); } catch { /* best effort */ }" },
   // Admission rollback: remove only operation-created directories that remain empty.
   { file: "core/src/registry/plan-admission.ts", line: "rmdirSync(dir);" },
+  // Status atomic-write cleanup: the exact unchanged exclusive-created temporary only.
+  { file: "core/src/persistence/status-store.ts", line: "try { await unlink(owned.path); } catch { /* preserve uncertain or no-longer-present paths */ }" },
+  // Metrics export cleanup: the exact unchanged exclusive-created temporary only.
+  { file: "core/src/cli/commands/metrics-export.ts", line: "try { unlinkSync(owned.path); } catch { /* preserve uncertain temporary files */ }" },
 ];
 
 interface ValidationOnlyLine {
@@ -280,6 +285,8 @@ test("the lock releases pass, wherever their lines sit", () => {
     "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
     "core/src/registry/plan-admission.ts: try { rmSync(file, { force: true }); } catch { /* best effort */ }",
     "core/src/registry/plan-admission.ts: rmdirSync(dir);",
+    "core/src/persistence/status-store.ts: try { await unlink(owned.path); } catch { /* preserve uncertain or no-longer-present paths */ }",
+    "core/src/cli/commands/metrics-export.ts: try { unlinkSync(owned.path); } catch { /* preserve uncertain temporary files */ }",
     'core/src/publish/argv.ts: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
     'core/src/publish/argv.ts: if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
   ];
@@ -304,6 +311,8 @@ test("operation-owned cleanup and validator exceptions are exact and position-in
     "core/src/persistence/attempt-lock.ts: await unlink(lockPath);",
     "core/src/persistence/attempt-lock.ts: await unlink(tmpPath).catch(() => {});",
     "core/src/persistence/attempt-lock.ts: await unlink(this.lockPath);",
+    "core/src/persistence/status-store.ts: try { await unlink(owned.path); } catch { /* preserve uncertain or no-longer-present paths */ }",
+    "core/src/cli/commands/metrics-export.ts: try { unlinkSync(owned.path); } catch { /* preserve uncertain temporary files */ }",
   ];
   const continuity = {
     path: "core/src/execution/continuity-store.ts",
@@ -333,6 +342,20 @@ test("cleanup exceptions reject copied paths, excess occurrences and changed cal
     "core/src/other/cleanup.ts:1: await fs.unlink(temporary);",
     "core/src/execution/continuity-store.ts:4: await fs.unlink(temporary).catch(() => undefined);",
     "core/src/registry/plan-admission.ts:1: try { rmSync(userFile, { force: true }); } catch { /* best effort */ }",
+  ]);
+});
+
+test("new atomic-writer cleanup allowances are path- and count-limited", () => {
+  const statusLine = "try { await unlink(owned.path); } catch { /* preserve uncertain or no-longer-present paths */ }";
+  const exportLine = "try { unlinkSync(owned.path); } catch { /* preserve uncertain temporary files */ }";
+  assert.deepEqual(fenceHits([
+    { path: "core/src/persistence/status-store.ts", text: `${statusLine}\n${statusLine}` },
+    { path: "core/src/cli/commands/metrics-export.ts", text: `${exportLine}\n${exportLine}` },
+    { path: "core/src/fixture/copied-cleanup.ts", text: statusLine },
+  ]).offenders, [
+    `core/src/persistence/status-store.ts:2: ${statusLine}`,
+    `core/src/cli/commands/metrics-export.ts:2: ${exportLine}`,
+    `core/src/fixture/copied-cleanup.ts:1: ${statusLine}`,
   ]);
 });
 
@@ -370,6 +393,8 @@ test("a disappeared cleanup or validation exception is reported stale", () => {
   ]).unused;
   assert.equal(stale.filter((entry) => entry.startsWith("core/src/execution/continuity-store.ts:")).length, 4);
   assert.equal(stale.filter((entry) => entry.startsWith("core/src/registry/plan-admission.ts:")).length, 2);
+  assert.equal(stale.filter((entry) => entry.startsWith("core/src/persistence/status-store.ts:")).length, 1);
+  assert.equal(stale.filter((entry) => entry.startsWith("core/src/cli/commands/metrics-export.ts:")).length, 1);
   assert.equal(stale.filter((entry) => entry.startsWith("core/src/publish/argv.ts:")).length, 2);
 });
 
@@ -414,6 +439,8 @@ test("an unauthorized delete is flagged, even when it copies an allowed line", (
       "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
       "core/src/registry/plan-admission.ts: try { rmSync(file, { force: true }); } catch { /* best effort */ }",
       "core/src/registry/plan-admission.ts: rmdirSync(dir);",
+      "core/src/persistence/status-store.ts: try { await unlink(owned.path); } catch { /* preserve uncertain or no-longer-present paths */ }",
+      "core/src/cli/commands/metrics-export.ts: try { unlinkSync(owned.path); } catch { /* preserve uncertain temporary files */ }",
       'core/src/publish/argv.ts: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
       'core/src/publish/argv.ts: if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
     ],
@@ -434,6 +461,8 @@ test("an allowlisted release that disappears leaves a stale entry, not a silent 
     "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
     "core/src/registry/plan-admission.ts: try { rmSync(file, { force: true }); } catch { /* best effort */ }",
     "core/src/registry/plan-admission.ts: rmdirSync(dir);",
+    "core/src/persistence/status-store.ts: try { await unlink(owned.path); } catch { /* preserve uncertain or no-longer-present paths */ }",
+    "core/src/cli/commands/metrics-export.ts: try { unlinkSync(owned.path); } catch { /* preserve uncertain temporary files */ }",
     'core/src/publish/argv.ts: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
     'core/src/publish/argv.ts: if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
   ]);

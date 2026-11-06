@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstatSync, mkdirSync, readFileSync, realpathSync, readdirSync, rmdirSync, rmSync, writeFileSync, type Stats } from "node:fs";
+import { closeSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, readdirSync, rmdirSync, rmSync, writeSync, type Stats } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { stringify } from "yaml";
@@ -87,11 +87,36 @@ function proofFor(value: unknown): AdmissionProof | undefined {
 }
 export function isPlanAdmissionCapability(value: unknown): boolean { return proofFor(value) !== undefined; }
 
+declare const rollbackBrand: unique symbol;
+export interface PlanAdmissionRollbackCapability { readonly [rollbackBrand]: true }
+interface CreatedFile {
+  readonly relativePath: string;
+  readonly path: string;
+  readonly dev: number;
+  readonly ino: number;
+  readonly mode: number;
+  expected: Buffer;
+}
+interface CreatedDirectory { readonly path: string; readonly dev: number; readonly ino: number }
+interface AdmissionRollbackProof {
+  readonly worktree: string;
+  readonly headSha: string;
+  readonly files: Map<string, CreatedFile>;
+  readonly directories: CreatedDirectory[];
+  consumed: boolean;
+}
+const issuedRollbacks = new WeakMap<object, AdmissionRollbackProof>();
+
+export interface PlanAdmissionRollbackResult {
+  readonly removed: readonly string[];
+  readonly retained: readonly string[];
+}
+
 function statIfPresent(path: string): Stats | null {
   try { return lstatSync(path); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
-function parents(worktree: string, path: string, create: boolean, createdDirs?: string[]): void {
+function parents(worktree: string, path: string, create: boolean, createdDirs?: CreatedDirectory[]): void {
   if (realpathSync(worktree) !== worktree) refuse("worktree root is redirected");
   let parent = worktree;
   for (const component of path.split("/").slice(0, -1)) {
@@ -100,7 +125,11 @@ function parents(worktree: string, path: string, create: boolean, createdDirs?: 
     if (stat !== null && (stat.isSymbolicLink() || !stat.isDirectory())) refuse("rendered plan parent is not a managed directory");
     if (stat === null && create) {
       mkdirSync(parent);
-      if (createdDirs && !createdDirs.includes(parent)) createdDirs.push(parent);
+      const created = lstatSync(parent);
+      if (!created.isDirectory() || created.isSymbolicLink()) refuse("created plan parent is not a managed directory");
+      if (createdDirs && !createdDirs.some((entry) => entry.path === parent)) {
+        createdDirs.push({ path: parent, dev: created.dev, ino: created.ino });
+      }
     }
   }
 }
@@ -184,6 +213,67 @@ function assertGitBytes(proof: AdmissionProof): void {
   }
 }
 
+function unchangedCreatedFile(entry: CreatedFile, worktree: string): boolean {
+  try {
+    parents(worktree, entry.relativePath, false);
+    const before = lstatSync(entry.path);
+    if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.dev !== entry.dev ||
+      before.ino !== entry.ino || (before.mode & 0o777) !== entry.mode) return false;
+    const bytes = readFileSync(entry.path);
+    const after = lstatSync(entry.path);
+    return after.isFile() && !after.isSymbolicLink() && after.nlink === 1 && after.dev === entry.dev &&
+      after.ino === entry.ino && (after.mode & 0o777) === entry.mode && bytes.equals(entry.expected);
+  } catch { return false; }
+}
+
+function rollbackUncommittedAdmission(proof: AdmissionRollbackProof): PlanAdmissionRollbackResult {
+  const allPaths = [...proof.files.keys()];
+  if (proof.consumed) return { removed: [], retained: allPaths };
+  proof.consumed = true;
+  try {
+    const git = systemGitRunner(proof.worktree);
+    if (runGit(git, ["rev-parse", "HEAD"]).trim() !== proof.headSha) return { removed: [], retained: allPaths };
+    for (const path of allPaths) {
+      if (runGit(git, ["ls-files", "--stage", "-z", "--", path]).split("\0").some(Boolean) ||
+        runGit(git, ["ls-tree", "-z", "HEAD", "--", path]).split("\0").some(Boolean)) {
+        return { removed: [], retained: allPaths };
+      }
+    }
+  } catch { return { removed: [], retained: allPaths }; }
+
+  const removed: string[] = [];
+  const retained: string[] = [];
+  for (const entry of [...proof.files.values()].reverse()) {
+    const file = entry.path;
+    try {
+      if (!unchangedCreatedFile(entry, proof.worktree)) { retained.push(entry.relativePath); continue; }
+      try { rmSync(file, { force: true }); } catch { /* best effort */ }
+      if (statIfPresent(file) === null) removed.push(entry.relativePath);
+      else retained.push(entry.relativePath);
+    } catch { retained.push(entry.relativePath); }
+  }
+  for (const entry of [...proof.directories].reverse()) {
+    const dir = entry.path;
+    try {
+      const stat = lstatSync(dir);
+      if (stat.isDirectory() && !stat.isSymbolicLink() && stat.dev === entry.dev && stat.ino === entry.ino && readdirSync(dir).length === 0) {
+        const confirmed = lstatSync(dir);
+        if (confirmed.isDirectory() && !confirmed.isSymbolicLink() && confirmed.dev === entry.dev && confirmed.ino === entry.ino) {
+          rmdirSync(dir);
+        }
+      }
+    } catch { /* preserve directories with content or uncertain identity */ }
+  }
+  return { removed, retained };
+}
+
+/** Rolls back only this admission's unchanged, uncommitted files; an unknown token is inert. */
+export function rollbackPlanAdmission(value: unknown): PlanAdmissionRollbackResult | null {
+  if (typeof value !== "object" || value === null) return null;
+  const proof = issuedRollbacks.get(value);
+  return proof === undefined ? null : rollbackUncommittedAdmission(proof);
+}
+
 interface CachedProofCheck {
   readonly headSha: string;
   readonly verifiedAt: number;
@@ -235,9 +325,12 @@ export function verifyPlanAdmission(input: PlanAdmissionInput & { readonly workt
 export function admitPlanSet(input: PlanAdmissionInput & { readonly worktree: string; readonly baseSha: string; readonly at: string }): {
   readonly documents: ReadonlyMap<string, string>;
   readonly capability: PlanAdmissionCapability;
+  readonly rollback: PlanAdmissionRollbackCapability;
   readonly record: PlanAdmissionRecord;
 } {
   const worktree = resolve(input.worktree);
+  const git = systemGitRunner(worktree);
+  const headSha = runGit(git, ["rev-parse", "HEAD"]).trim();
   const root = plansRootFrom(worktree, input.plansRoot);
   const paths = cachedBasePaths(worktree, input.baseSha);
   const pattern = new RegExp(`^${escapeRegex(root)}/([^/]+)\\.html$`, "u");
@@ -254,30 +347,37 @@ export function admitPlanSet(input: PlanAdmissionInput & { readonly worktree: st
     parents(worktree, path, false);
     if (statIfPresent(join(worktree, path)) !== null) refuse(`${path}: admission target already exists`);
   }
-  const writtenFiles: string[] = [];
-  const createdDirs: string[] = [];
+  const rollbackProof: AdmissionRollbackProof = { worktree, headSha, files: new Map(), directories: [], consumed: false };
   try {
     for (const [path, content] of documents) {
-      parents(worktree, path, true, createdDirs);
+      parents(worktree, path, true, rollbackProof.directories);
       const target = join(worktree, path);
-      writeFileSync(target, content, { encoding: "utf8", flag: "wx", mode: 0o644 });
-      writtenFiles.push(target);
+      const fd = openSync(target, "wx", 0o644);
+      try {
+        const stat = fstatSync(fd);
+        if (!stat.isFile() || stat.nlink !== 1) refuse(`${path}: admission target is not an exclusive regular file`);
+        const bytes = Buffer.from(content, "utf8");
+        const owned: CreatedFile = { relativePath: path, path: target, dev: stat.dev, ino: stat.ino,
+          mode: stat.mode & 0o777, expected: Buffer.alloc(0) };
+        rollbackProof.files.set(path, owned);
+        let offset = 0;
+        while (offset < bytes.length) {
+          const written = writeSync(fd, bytes, offset, bytes.length - offset, null);
+          if (written === 0) refuse(`${path}: admission write made no progress`);
+          offset += written;
+          owned.expected = Buffer.from(bytes.subarray(0, offset));
+        }
+        fsyncSync(fd);
+      } finally { closeSync(fd); }
     }
     const capability = verifyPlanAdmission({ ...input, plansRoot: root, knownStems });
     const record: PlanAdmissionRecord = { schema: PLAN_ADMISSION_SCHEMA_ID, stem: input.stem,
       baseSha: input.baseSha, at: input.at, files: [...documents].map(([path, content]) => ({ path, sha256: digest(content) })) };
-    return Object.freeze({ documents, capability, record });
+    const rollback = Object.freeze(Object.create(null)) as PlanAdmissionRollbackCapability;
+    issuedRollbacks.set(rollback, rollbackProof);
+    return Object.freeze({ documents, capability, rollback, record });
   } catch (error) {
-    for (const file of writtenFiles.reverse()) {
-      try { rmSync(file, { force: true }); } catch { /* best effort */ }
-    }
-    for (const dir of createdDirs.reverse()) {
-      try {
-        if (readdirSync(dir).length === 0) {
-          rmdirSync(dir);
-        }
-      } catch { /* best effort */ }
-    }
+    rollbackUncommittedAdmission(rollbackProof);
     throw error;
   }
 }

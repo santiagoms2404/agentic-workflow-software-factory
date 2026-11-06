@@ -31,6 +31,8 @@ test("empty export has a header, exact empty-row digest and unique private files
       rowCount: 0, rowsSha256: createHash("sha256").update("").digest("hex") });
     assert.equal(first[1], `SHA-256 (rows): ${header.rowsSha256}`);
     assert.ok(readFileSync(path, "utf8").endsWith("\n"));
+    assert.equal(JSON.parse(readFileSync(path, "utf8").split("\n")[0]!).rowCount, 0, "final name resolves to a complete header");
+    assert.equal(readdirSync(join(f.stateRoot, "exports/route-metrics")).some((name) => name.endsWith(".tmp")), false);
     assert.equal(statSync(path).mode & 0o777, 0o600);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
@@ -67,6 +69,7 @@ test("symlink parents, dangling links and existing destinations (including hard 
     for (const output of ["symlink.jsonl", "hardlink.jsonl", "existing.jsonl"]) {
       assert.throws(() => metricsExportCommand({ ...f, output }), /EEXIST/);
     }
+    assert.equal(readdirSync(directory).some((name) => name.endsWith(".tmp")), false, "failed publication leaves no owned temp behind");
     assert.equal(readFileSync(original, "utf8"), "keep");
     assert.deepEqual(readdirSync(outside), ["original.jsonl"]);
     rmSync(join(f.stateRoot, "exports"), { recursive: true });
