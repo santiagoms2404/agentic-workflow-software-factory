@@ -291,6 +291,25 @@ function contextTokens(usage: TokenUsage): number | null {
   return usage.inputTokens === null && usage.outputTokens === null ? null : (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
 }
 
+/** Retain one complete text event per turn while preserving non-text evidence order. */
+export function coalescedPersistableEvents(
+  events: readonly NormalizedEvent[],
+  output: string,
+): NormalizedEvent[] {
+  const lastTextDelta = events.findLastIndex((event) => event.kind === "text.delta");
+  const retained: NormalizedEvent[] = [];
+  for (const [index, event] of events.entries()) {
+    if (!isPersistableKind(event.kind)) continue;
+    if (event.kind === "text.delta") {
+      if (index !== lastTextDelta) continue;
+      retained.push({ ...event, text: output });
+    } else {
+      retained.push(event);
+    }
+  }
+  return retained;
+}
+
 /** Replacement-review seam retained for the three-path prompt-bundle characterization. */
 export async function readReviewPromptPair(
   configPath: string,
@@ -1060,8 +1079,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
       // The reviewer's own words are not swept, for the reason the prompt is
       // not: it is reading the candidate and quoting it back, and the runner
       // retains the identical output from the identical phase unswept.
-      for (const event of events) {
-        if (!isPersistableKind(event.kind)) continue;
+      for (const event of coalescedPersistableEvents(events, output)) {
         await persist("attempt.updated", { lastActivityAt: event.hostAt, lastActivity: `${phaseKey}: ${event.kind}` }, {
           type: "normalized-event", phaseId: phaseDb, event,
         });

@@ -58,7 +58,7 @@ import { openDatabase } from "../../src/observability/sqlite.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { callCeilingsOf } from "../../src/state/tiers.ts";
 import { composePromptBundle } from "../../src/workflow/prompt-composition.ts";
-import { PromptCompositionMismatch } from "../../src/cli/commands/review-record.ts";
+import { PromptCompositionMismatch, readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 
 const AT = "2026-08-14T00:00:00.000Z";
@@ -411,9 +411,12 @@ class ScriptedReviewAdapter implements HarnessAdapter {
     const serialized = contractRetry && !correctedTurn
       ? JSON.stringify({ ...payload, findings: payload.findings.map((finding) => ({ ...finding, level: finding.severity })) })
       : JSON.stringify(payload);
-    yield { kind: "text.delta", seq: 3, runId, hostAt: AT, providerAt: null, text: this.#behaviour === "malformed" ? "not-json at all" : serialized };
-    yield { kind: "usage", seq: 4, runId, hostAt: AT, providerAt: null, usage: { inputTokens: 40, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" } };
-    yield { kind: "run.completed", seq: 5, runId, hostAt: AT, providerAt: null, exitCode: 0 };
+    const streamed = this.#behaviour === "malformed" ? "not-json at all" : serialized;
+    const split = Math.ceil(streamed.length / 2);
+    yield { kind: "text.delta", seq: 3, runId, hostAt: AT, providerAt: null, text: streamed.slice(0, split) };
+    yield { kind: "text.delta", seq: 4, runId, hostAt: AT, providerAt: null, text: streamed.slice(split) };
+    yield { kind: "usage", seq: 5, runId, hostAt: AT, providerAt: null, usage: { inputTokens: 40, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" } };
+    yield { kind: "run.completed", seq: 6, runId, hostAt: AT, providerAt: null, exitCode: 0 };
     // After the answer and after the gates, so only the third revalidation can
     // see it. The tree is CLEAN at a different commit, which is exactly the
     // shape `captureChangeSet` and `assertClean` are both blind to.
@@ -499,6 +502,13 @@ test("a replacement review spends exactly one call, runs no builder, and returns
     assert.equal(git(status.worktree!, "rev-parse", "HEAD"), fixture.candidate);
     assert.equal(status.requiredReviewPresent, true);
     assert.equal(status.journeyApproved, false, "the attestation is never touched by a review that changed no tree");
+    const deltas = (await readAttemptEvidence(fixture.attemptDir)).filter(
+      (record): record is Extract<AttemptEvidence, { type: "normalized-event" }> =>
+        record.type === "normalized-event" && record.phaseId.endsWith(":reviewer-re1") && record.event.kind === "text.delta",
+    );
+    assert.equal(deltas.length, 1, "the streamed response is durably coalesced once per turn");
+    assert.equal(deltas[0]?.event.kind === "text.delta" ? deltas[0].event.text : null,
+      readFileSync(join(fixture.attemptDir, "raw", "reviewer-re1.txt"), "utf8"));
 
     // Generation-qualified persistence: six identities, none of them the
     // superseded review's.
@@ -1052,6 +1062,15 @@ test("re-running awsf review on a stale reservation releases it and records a re
   // exits that otherwise dead sojourn through L17.
   const fixture = await world();
   try {
+    await append(fixture, {
+      type: "process", phaseId: `${fixture.sessionId}:builder`, adapterId: "codex", role: "builder",
+      record: {
+        identity: { pid: 4241, pgid: 4241, startIdentity: "fixture:4241", startIdentitySource: "fixture" },
+        runId: "earlier-builder", edge: "L4", reservationId: "earlier-reservation",
+        command: ["fixture"], cwd: fixture.status.worktree!,
+      },
+      status: "EXITED", registeredAt: AT, releasedAt: AT, endedAt: AT, exitCode: 0, exitSignal: null,
+    });
     await append(fixture, {
       type: "transition", id: `${fixture.sessionId}:L25:1`, seq: 1, from: "AWAITING_OWNER", to: "REVIEWING",
       actor: "human", edgeId: "L25", reasonSource: "human", reasonCode: null, reasonDetail: REASON,

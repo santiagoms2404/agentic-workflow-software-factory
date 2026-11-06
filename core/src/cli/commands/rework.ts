@@ -32,7 +32,6 @@ import type { BuildOutput } from "../../contracts/build-output.ts";
 import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
 import {
   UNREPORTED_TOKEN_USAGE,
-  isPersistableKind,
   type ModelResolutionProvenance,
   type NormalizedEvent,
   type TokenUsage,
@@ -102,6 +101,7 @@ import {
 import {
   REVIEW_HEADROOM_CALLS,
   ReplacementReviewEvidenceInvalid,
+  coalescedPersistableEvents,
   createReviewRunState,
   planIntentFrom,
   prepareReview,
@@ -1020,12 +1020,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     // Consolidate text into the last delta so retained fragments cannot reassemble
     // a credential that no individual delta matched. Keep the event order/metadata.
     output = scrubCredentialString(output);
-    const lastTextDelta = events.findLastIndex(event => event.kind === "text.delta");
-    for (const [index, retained] of events.entries()) {
-      const event = retained.kind === "text.delta"
-        ? { ...retained, text: index === lastTextDelta ? output : "" }
-        : retained;
-      if (!isPersistableKind(event.kind)) continue;
+    for (const event of coalescedPersistableEvents(events, output)) {
       await persist("attempt.updated", { lastActivityAt: event.hostAt, lastActivity: `${phaseKey}: ${event.kind}` }, {
         type: "normalized-event", phaseId, event,
       });
@@ -1181,55 +1176,55 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         exit = planned.result.exitCode;
         durationMs = planned.result.durationMs;
       } else {
-      const intentId = randomUUID();
-      await persist("attempt.updated", {}, { type: "command-dispatch-intent", intent: {
-        schema: "awsf.command-dispatch-intent/v1", intentId, dispatcherId: REWORK_DISPATCHER,
-        occurrenceKey, gateId, origin: "phase-dispatch", phaseKey, phaseOrdinal: 0, round: 0,
-        attempt: status.attempt, sessionId: status.sessionId,
-        argv: [...configured.argv], argvDigest: argvDigest(configured.argv),
-        cwd: status.worktree!, worktreeRealPath, timeoutMs: configured.timeout_seconds * 1_000,
-        maxOutputBytes: options.config.runtime.max_output_bytes,
-        gateConfigDigest: gateConfigDigest(configured), gatesConfigDigest: gatesDigest,
-        candidateSha: candidate, headBefore: candidate, cleanBefore,
-        dispatchedAt: infra.now(),
-      } });
-      const [executable, ...argv] = configured.argv;
-      const result = infra.runCommand(executable!, argv, {
-        timeoutMs: configured.timeout_seconds * 1_000, cwd: status.worktree!, maxBuffer: options.config.runtime.max_output_bytes,
-        env: gateEnvironment,
-      });
-      rawCommandOutput = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
-      exit = result.status ?? -1;
-      durationMs = Date.now() - started;
-      try {
-        credentialSafeText(rawCommandOutput, "configured gate output");
-      } catch (error) {
-        // The command already ran. Without a result record this occurrence would
-        // hold an intent forever and every later recovery would refuse citing an
-        // unknown effect, when the actual cause is that the bytes were refused.
-        const withheldPins = observePins(status.worktree!);
-        await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
-          schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
-          exitCode: exit, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
-          headAfter: withheldPins.head ?? candidate, cleanAfter: withheldPins.clean && withheldPins.head !== null,
-          descendantQuiescence: "unproved", settledAt: infra.now(),
+        const intentId = randomUUID();
+        await persist("attempt.updated", {}, { type: "command-dispatch-intent", intent: {
+          schema: "awsf.command-dispatch-intent/v1", intentId, dispatcherId: REWORK_DISPATCHER,
+          occurrenceKey, gateId, origin: "phase-dispatch", phaseKey, phaseOrdinal: 0, round: 0,
+          attempt: status.attempt, sessionId: status.sessionId,
+          argv: [...configured.argv], argvDigest: argvDigest(configured.argv),
+          cwd: status.worktree!, worktreeRealPath, timeoutMs: configured.timeout_seconds * 1_000,
+          maxOutputBytes: options.config.runtime.max_output_bytes,
+          gateConfigDigest: gateConfigDigest(configured), gatesConfigDigest: gatesDigest,
+          candidateSha: candidate, headBefore: candidate, cleanBefore,
+          dispatchedAt: infra.now(),
         } });
-        throw error;
-      }
-      // The COMPLETE output is retained, not the bounded rendering: a bounded
-      // file cannot answer a restore, so an intent recorded against one could
-      // never be settled from its own evidence.
-      const outputAbsolute = join(options.attemptDir, outputRelative);
-      await writeDurableFile(outputAbsolute, rawCommandOutput);
-      const pins = observePins(status.worktree!);
-      await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
-        schema: "awsf.command-dispatch-result/v1", intentId,
-        outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
-        exitCode: exit, durationMs, outputRef: outputRelative,
-        outputBytes: Buffer.byteLength(rawCommandOutput), outputDigest: retainedOutputDigest(rawCommandOutput),
-        headAfter: pins.head ?? candidate,
-        cleanAfter: pins.clean && pins.head !== null, descendantQuiescence: "unproved", settledAt: infra.now(),
-      } });
+        const [executable, ...argv] = configured.argv;
+        const result = infra.runCommand(executable!, argv, {
+          timeoutMs: configured.timeout_seconds * 1_000, cwd: status.worktree!, maxBuffer: options.config.runtime.max_output_bytes,
+          env: gateEnvironment,
+        });
+        rawCommandOutput = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+        exit = result.status ?? -1;
+        durationMs = Date.now() - started;
+        try {
+          credentialSafeText(rawCommandOutput, "configured gate output");
+        } catch (error) {
+          // The command already ran. Without a result record this occurrence would
+          // hold an intent forever and every later recovery would refuse citing an
+          // unknown effect, when the actual cause is that the bytes were refused.
+          const withheldPins = observePins(status.worktree!);
+          await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+            schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
+            exitCode: exit, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
+            headAfter: withheldPins.head ?? candidate, cleanAfter: withheldPins.clean && withheldPins.head !== null,
+            descendantQuiescence: "unproved", settledAt: infra.now(),
+          } });
+          throw error;
+        }
+        // The COMPLETE output is retained, not the bounded rendering: a bounded
+        // file cannot answer a restore, so an intent recorded against one could
+        // never be settled from its own evidence.
+        const outputAbsolute = join(options.attemptDir, outputRelative);
+        await writeDurableFile(outputAbsolute, rawCommandOutput);
+        const pins = observePins(status.worktree!);
+        await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+          schema: "awsf.command-dispatch-result/v1", intentId,
+          outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
+          exitCode: exit, durationMs, outputRef: outputRelative,
+          outputBytes: Buffer.byteLength(rawCommandOutput), outputDigest: retainedOutputDigest(rawCommandOutput),
+          headAfter: pins.head ?? candidate,
+          cleanAfter: pins.clean && pins.head !== null, descendantQuiescence: "unproved", settledAt: infra.now(),
+        } });
       }
       const commandOutput = safeTail(rawCommandOutput, TEST_OUTPUT_TAIL_MAX_CHARS);
       commands.push({ gateId, argv: [...configured.argv], exitCode: exit, durationMs, outputRef: outputRelative });

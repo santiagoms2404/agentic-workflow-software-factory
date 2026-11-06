@@ -161,6 +161,7 @@ import {
   type VisualDelivery,
 } from "../../workflow/visual-references.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
+import { scrubCredentialString } from "../../policy/redaction.ts";
 import { grantSandbox, openPermissionSession, osSandboxAvailable, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, SEALED_STATES, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { CallCeilingExceeded } from "../../state/errors.ts";
@@ -915,6 +916,18 @@ export function productionPhaseRegistration(input: {
 function strictlyWithin(root: string, path: string): boolean {
   const fromRoot = relative(root, path);
   return fromRoot !== "" && fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
+}
+
+export class ConfiguredCommandOutputRejected extends Error {
+  constructor() {
+    super("configured command output contained credential-shaped data and was withheld");
+    this.name = "ConfiguredCommandOutputRejected";
+  }
+}
+
+export function credentialSafeCommandOutput(output: string): string {
+  if (scrubCredentialString(output) !== output) throw new ConfiguredCommandOutputRejected();
+  return output;
 }
 
 /**
@@ -2340,7 +2353,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       if (planned.action === "restore") {
         // The command body never runs again. Everything the measurement needs is
         // rebuilt from the bytes the digest check just verified.
-        output = await readFile(join(options.attemptDir, planned.result.outputRef!), "utf8");
+        output = credentialSafeCommandOutput(await readFile(join(options.attemptDir, planned.result.outputRef!), "utf8"));
         exitCode = planned.result.exitCode;
         durationMs = planned.result.durationMs;
         commandPins.set(gateId, { cleanBefore: planned.intent.cleanBefore, cleanAfter: planned.result.cleanAfter });
@@ -2368,11 +2381,23 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         // needed to fix the failure had already been discarded before anything
         // asked for it.
         output = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+        exitCode = result.status ?? -1;
+        durationMs = Date.now() - started;
+        try {
+          output = credentialSafeCommandOutput(output);
+        } catch (error) {
+          const pins = observePins(status.worktree!);
+          await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+            schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
+            exitCode, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
+            headAfter: pins.head ?? candidateSha, cleanAfter: pins.clean && pins.head !== null,
+            descendantQuiescence: "unproved", settledAt: infra.now(),
+          } });
+          throw error;
+        }
         await mkdir(dirname(outputAbsolute), { recursive: true });
         // Persist bytes and mode before the result record cites the output.
         await writeDurableFile(outputAbsolute, output);
-        exitCode = result.status ?? -1;
-        durationMs = Date.now() - started;
 
         // Observe, record, THEN abort. The two checks below used to throw
         // outright, which left an intent with no result for a command whose

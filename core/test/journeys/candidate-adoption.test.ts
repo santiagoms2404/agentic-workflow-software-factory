@@ -147,6 +147,16 @@ function fakeBroker(options: BrokerOptions): TransportBroker {
   };
 }
 
+function cancelFailureBroker(options: BrokerOptions): TransportBroker {
+  const delegate = fakeBroker(options);
+  return {
+    async startProcess(registration, spec, signal) {
+      const transport = await delegate.startProcess(registration, spec, signal);
+      return { ...transport, cancel: async () => { throw new Error("termination could not be inspected"); } };
+    },
+  };
+}
+
 function terminal(lines: string[]): OwnerTerminal {
   return { interactive: true, write: (line) => { lines.push(line); }, confirm: async () => true };
 }
@@ -781,4 +791,89 @@ test("B8-26: a settlement write that faults after commit still lets a failed ado
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("an answered adoption review stays at REVIEWING when advancement is refused", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-answered-hold-"));
+  try {
+    const fixture = await sourceFixture(root);
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = {
+      ...loaded,
+      runtime: { ...loaded.runtime, seed_paths: [] },
+      gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } },
+    };
+    const adapters = new Map<string, SuccessfulReviewAdapter>();
+    const adopted = await adoptCommand({
+      sourceAttemptDir: fixture.sourceDir,
+      stateRoot: fixture.stateRoot,
+      targetTaskId: "answered-hold",
+      request: k1Request("hold the answered candidate review", "core/src/**"),
+      worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]),
+      config,
+      configPath: resolve("awsf.config.yaml"),
+      assertAdvancement: () => { throw new Error("observability projection is behind"); },
+      infrastructure: {
+        adapterFor: (_entry, id) => {
+          const existing = adapters.get(id);
+          if (existing !== undefined) return existing;
+          const created = new SuccessfulReviewAdapter(id, id === "claude" ? "anthropic" : "openai-codex", fixture.candidate);
+          adapters.set(id, created);
+          return created;
+        },
+        createBroker: fakeBroker,
+        sandboxProbe: () => false,
+        now: () => AT,
+        sessionId: () => "answered-hold-session",
+        pidIsLive: () => false,
+        runCommand: () => ({ status: 0, stdout: "fresh gate passed\n", stderr: "", error: null }),
+      },
+    });
+    assert.equal(adopted.status?.lifecycleState, "REVIEWING");
+    assert.equal(adopted.status?.blocker?.code, "sqlite-projection-failed");
+    assert.match(adopted.status?.lastActivity ?? "", /held at REVIEWING/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("an adoption failure records when process termination could not be verified", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-termination-unknown-"));
+  try {
+    const fixture = await sourceFixture(root);
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = {
+      ...loaded,
+      runtime: { ...loaded.runtime, seed_paths: [] },
+      gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } },
+    };
+    const adapters = new Map<string, FailingReviewAdapter>();
+    const adopted = await adoptCommand({
+      sourceAttemptDir: fixture.sourceDir,
+      stateRoot: fixture.stateRoot,
+      targetTaskId: "termination-unknown",
+      request: k1Request("retain uncertain process termination evidence", "core/src/**"),
+      worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]),
+      config,
+      configPath: resolve("awsf.config.yaml"),
+      infrastructure: {
+        adapterFor: (_entry, id) => {
+          const existing = adapters.get(id);
+          if (existing !== undefined) return existing;
+          const created = new FailingReviewAdapter(id, id === "claude" ? "anthropic" : "openai-codex");
+          adapters.set(id, created);
+          return created;
+        },
+        createBroker: cancelFailureBroker,
+        sandboxProbe: () => false,
+        now: () => AT,
+        sessionId: () => "termination-unknown-session",
+        pidIsLive: () => false,
+        runCommand: () => ({ status: 0, stdout: "fresh gate passed\n", stderr: "", error: null }),
+      },
+    });
+    assert.equal(adopted.status?.lifecycleState, "BLOCKED");
+    assert.match(adopted.status?.blocker?.detail ?? "", /registered process termination could not be verified/);
+    assert.doesNotMatch(adopted.status?.blocker?.detail ?? "", /termination could not be inspected/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

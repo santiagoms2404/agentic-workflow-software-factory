@@ -42,7 +42,6 @@ import { renderHeadroomAdvice, renderOwnerAlternatives, type AdviceSelector } fr
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
-import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { CallBudget } from "../../execution/call-budget.ts";
 import type { BarrierRecord, TerminationReport } from "../../execution/launcher-barrier.ts";
 import { ProcessTransportBroker } from "../../execution/transport-broker.ts";
@@ -68,7 +67,7 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 import {
-  ProductionConfigSnapshotMismatch,
+  assertProductionConfigSnapshot,
   ProductionRouteUnavailable,
   ProductionWorkflowUnsupported,
   requestOutput,
@@ -371,7 +370,7 @@ function validateAttempt(status: AttemptStatus, config: AwsfConfig): WorkflowRec
     throw new ProductionWorkflowUnsupported(status.workflow, `recipe is tier ${recipe.tier} but the attempt is tier ${status.tier}`);
   }
   if (config.project.slug !== status.project) throw new Error("attempt and config project do not match");
-  if (toConfigSnapshotJson(config) !== status.configSnapshotJson) throw new ProductionConfigSnapshotMismatch();
+  assertProductionConfigSnapshot(config, status.configSnapshotJson);
   return recipe;
 }
 
