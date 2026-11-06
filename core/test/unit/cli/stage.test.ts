@@ -55,10 +55,25 @@ plans:
 test("stage readout renders a canned projection without an absolute path", async () => {
   const fixture = await cannedProjection();
   try {
+    const db = openDatabase(join(fixture.stateRoot, "awsf.db"));
+    try {
+      db.prepare(`INSERT INTO phases (phase_id, session_id, ordinal, phase_key, name, kind, owner, description, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run("stage-phase", "canned-stage-session", 1, "design", "Design", "agent", "designer", "Design", "SUCCEEDED",
+          "2026-01-01T00:00:01.000Z");
+      db.prepare(`INSERT INTO envelopes (envelope_id, session_id, phase_id, agent, schema_id, correction_round, valid,
+        producer_status, payload_json, violations_json, file_path, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run("stage-envelope", "canned-stage-session", "stage-phase", "designer", "awsf.document-output/v1", 0, 1,
+          "success", "{}", "[]", "private-envelope", "2026-01-01T00:00:02.000Z");
+    } finally {
+      db.close();
+    }
     const output = await stageCommand({ catalogPath: fixture.catalogPath, stateRoot: fixture.stateRoot });
     const rendered = output.join("\n");
 
     assert.match(rendered, /at: design-to-plan/);
+    assert.match(rendered, /evidence: awsf\.document-output\/v1 validated/);
     assert.match(rendered, /owner types: awsf new --workflow plan-build-test/);
     assert.doesNotMatch(rendered, new RegExp(fixture.root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.doesNotMatch(rendered, /(?:^|\s)(?:\/|[A-Za-z]:[\\/]|\\\\|~\/|file:)/);

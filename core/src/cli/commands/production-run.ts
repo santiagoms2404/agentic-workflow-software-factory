@@ -2965,7 +2965,14 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         const watchSilence = (transport: ProcessTransport): ProcessTransport => {
           if (launchWindow !== null) HOST.clearTimeout(launchWindow);
           launchWindow = null;
-          if (controller.signal.aborted) return transport;
+          if (controller.signal.aborted) {
+            // The launch window can expire while startProcess is still resolving,
+            // before turnLaunch.transport is assigned. The timer then had nothing
+            // to cancel; once this transport exists, its termination report is
+            // still required before the turn can settle.
+            silence.cancelled = cancelOrRecord(transport, PHASE_SILENCE_TIMEOUT_REASON, (failure) => { silence.failure = failure; });
+            return transport;
+          }
           const groupCpu = groupCpuReader(broker);
           const monitor = new LivenessMonitor({
             supervisor: {

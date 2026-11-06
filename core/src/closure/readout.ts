@@ -7,7 +7,7 @@ import { journalFilePath, statusFilePath } from "../persistence/platform-paths.t
 import { streamProjectClosureJournalRecords } from "../persistence/project-closure-journal.ts";
 import { scanJournal } from "../persistence/replay.ts";
 import { listDirectories } from "../persistence/directories.ts";
-import { tryReadStatus } from "../persistence/status-store.ts";
+import { readStatus } from "../persistence/status-store.ts";
 import { deriveAttemptStatus, withLegacyDefaults, type AttemptEvent, type AttemptStatus } from "../cli/commands/attempt.ts";
 import { LANDED_STATES } from "../state/task-machine.ts";
 
@@ -46,9 +46,12 @@ const isLanded = (status: AttemptStatus): boolean => (LANDED_STATES as readonly 
 /** status.json, or why it could not be read. Never throws: a projection is not the truth (B4-01). */
 async function readProjection(dir: string): Promise<{ status: AttemptStatus | null; problem: string | null }> {
   try {
-    const status = await tryReadStatus<AttemptStatus>(statusFilePath(dir));
-    return status === null ? { status: null, problem: "status.json is missing" } : { status: withLegacyDefaults(status), problem: null };
+    const status = await readStatus<AttemptStatus>(statusFilePath(dir));
+    return { status: withLegacyDefaults(status), problem: null };
   } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { status: null, problem: "status.json is missing" };
+    }
     return { status: null, problem: `status.json is unreadable (${(error as Error).message})` };
   }
 }

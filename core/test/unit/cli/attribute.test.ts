@@ -297,6 +297,7 @@ test("a driver attribution of a CANCELLED attempt writes one record and event, a
     assert.equal(live[0]!.session_id, "cancelled-task-session");
     assert.equal(JSON.parse(live[0]!.payload_json).cause, "driver");
     assert.deepEqual(JSON.parse(live[0]!.payload_json).trap, { kind: "trap", id: "TR-01" });
+    projection.close();
     const report = await rebuildCommand(box.stateRoot);
     assert.equal(report.ok, true, report.ok ? undefined : report.reason);
     assert.deepEqual(rows(), live);

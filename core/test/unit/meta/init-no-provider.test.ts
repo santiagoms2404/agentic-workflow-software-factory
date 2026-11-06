@@ -25,8 +25,6 @@ const ALLOWED_LOCAL_MODULES = [
   "core/src/execution/transport-broker.ts",
   "core/src/git/changes.ts",
   "core/src/git/commit.ts",
-  "core/src/state/errors.ts",
-  "core/src/state/tiers.ts",
 ] as const;
 
 // The broker is the approved host-process boundary. It is deliberately isolated
@@ -42,6 +40,7 @@ const TERMINAL_LOCAL_MODULES = new Set([
 const ALLOWED_EXTERNAL_MODULES = [
   "@sinclair/typebox",
   "@sinclair/typebox/value",
+  "node:crypto",
   "node:fs/promises",
   "node:path",
   "yaml",

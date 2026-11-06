@@ -25,12 +25,12 @@ const IDENTITY: ProcessIdentity = {
   startIdentitySource: "fixture",
 };
 
-function unresolvedProcess(expectedGraceMs: number) {
+function unresolvedProcess(expectedGraceMs: number, delayTransportUntilAbort = false) {
   const createBroker = (options: BrokerOptions): TransportBroker & { controller: { groupCpu: () => number } } => {
     assert.equal(options.terminate?.graceMs, expectedGraceMs);
     return {
       controller: { groupCpu: () => 0 },
-      async startProcess(registration, spec) {
+      async startProcess(registration, spec, signal) {
         const record = {
           identity: IDENTITY,
           runId: registration.runId,
@@ -51,6 +51,17 @@ function unresolvedProcess(expectedGraceMs: number) {
         await options.register(record);
         const reservation = options.ledger.spendOnGo(reservationIdOf(registration));
         await options.onSpent?.(record, reservation);
+        if (delayTransportUntilAbort && !signal.aborted) {
+          await new Promise<void>((resolve) => {
+            const keepAlive = setInterval(() => {}, 10);
+            const onAbort = (): void => {
+              clearInterval(keepAlive);
+              resolve();
+            };
+            signal.addEventListener("abort", onAbort, { once: true });
+            if (signal.aborted) onAbort();
+          });
+        }
         let closed = false;
         const stdout = (async function* () {
           while (!closed) {
@@ -92,7 +103,7 @@ class SilentUntilAborted extends ReplayStub {
   }
 }
 
-test("B1-23: survivors from silence cancellation block the run without journaling the process as FAILED", async () => {
+async function assertSilenceSurvivorBlocksRun(delayTransportUntilAbort: boolean): Promise<void> {
   const b = box((config) => {
     config.runtime.silence_timeout_seconds = 1;
     config.runtime.process_grace_seconds = 17;
@@ -103,7 +114,7 @@ test("B1-23: survivors from silence cancellation block the run without journalin
     await start(b, created.attemptDir);
     const status = await run(b, created.attemptDir, {
       ...b.infrastructure,
-      createBroker: unresolvedProcess(17_000),
+      createBroker: unresolvedProcess(17_000, delayTransportUntilAbort),
       adapterFor: (_entry: unknown, id: string) => new SilentUntilAborted(id),
     });
     const evidence = await readAttemptEvidence(created.attemptDir);
@@ -120,4 +131,12 @@ test("B1-23: survivors from silence cancellation block the run without journalin
   } finally {
     b.close();
   }
+}
+
+test("B1-23: survivors from silence cancellation block the run without journaling the process as FAILED", async () => {
+  await assertSilenceSurvivorBlocksRun(false);
+});
+
+test("B1-23: survivors reported after the launch window block the run without journaling a terminal process state", async () => {
+  await assertSilenceSurvivorBlocksRun(true);
 });
