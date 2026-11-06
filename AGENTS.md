@@ -40,11 +40,23 @@ not a judgement call. Several are mechanically enforced by meta-tests under
    Publication is a separate, human-initiated act on an already-landed revision: 
    it is authorized by the pure ordered truth table in `core/src/publish/authorize.ts`, 
    and the push argv it authorizes is constructed in `core/src/publish/argv.ts` and nowhere else. 
-   The force and auto-delete halves remain unconditional absences and now also cover 
-   the argv-array spellings the previous scan never saw — a `+`-prefixed refspec
-   source, and an empty or all-zeros refspec source, which is how Git spells a
-   remote branch deletion. Enforced by the no-destructive-paths, publish-fence,
-   and no-land-route meta-tests.
+   Force remains unconditionally prohibited. Deletion remains prohibited except
+   for the previously authorized lock-release cleanup and the bounded
+   operation-owned temporary/failed-admission rollback cleanup recorded in the
+   dated owner amendment below. Neither exception authorizes push or deletion of
+   user refs or work. The fences also cover argv-array spellings —
+   a `+`-prefixed refspec source, and an empty or all-zeros refspec source,
+   which is how Git spells a remote branch deletion. Enforced by the
+   no-destructive-paths, publish-fence, and no-land-route meta-tests.
+
+   Owner amendment (2026-11-06, D1): invariant 8 permits only the six existing
+   operation-owned cleanup callsites in `core/src/execution/continuity-store.ts`
+   and `core/src/registry/plan-admission.ts`: removal of private temporary files
+   created exclusively by the operation, and rollback of files and empty
+   directories created exclusively during failed plan admission. These narrow
+   rollback actions do not permit general cleanup or deletion of user work or
+   refs, and do not permit force or push paths. The two publish argv deny-list
+   and validation lines are validation-only fence exceptions, not delete authorizations.
 9. **No credential-shaped value is committed, in fixtures or anywhere else.**
    Enforced by the credential-pattern meta-test.
 10. **No runtime artifact, receipt, or manifest file is committed.** Git and the
