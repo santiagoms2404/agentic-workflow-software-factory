@@ -57,6 +57,21 @@ not a judgement call. Several are mechanically enforced by meta-tests under
    rollback actions do not permit general cleanup or deletion of user work or
    refs, and do not permit force or push paths. The two publish argv deny-list
    and validation lines are validation-only fence exceptions, not delete authorizations.
+
+   Owner amendment (2026-11-06, owner-resolution cleanup approval): the same
+   narrow permission additionally covers exactly one private-temp cleanup site
+   in `core/src/persistence/status-store.ts` and one in
+   `core/src/cli/commands/metrics-export.ts`. Status cleanup may remove only the
+   exclusive-created temporary for that atomic write after checking its inode,
+   regular-file/link state and exact bytes; an EEXIST path is never owned.
+   Metrics export cleanup may remove only its exclusive-created temporary after
+   checking the same properties; publication is a complete-file hard link that
+   never overwrites an existing output. `core/src/registry/plan-admission.ts`
+   may roll back only its exact exclusively-created file objects whose bytes and
+   uncommitted state remain unchanged; committed, staged, modified, linked,
+   symlinked or uncertain paths are retained. Empty-directory rollback remains
+   restricted to the exact created directory identities. These are not general
+   cleanup permissions and authorize no deletion of user work or refs.
 9. **No credential-shaped value is committed, in fixtures or anywhere else.**
    Enforced by the credential-pattern meta-test.
 10. **No runtime artifact, receipt, or manifest file is committed.** Git and the
