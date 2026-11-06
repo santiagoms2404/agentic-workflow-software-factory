@@ -7,6 +7,11 @@ import { newCommand } from "../../../src/cli/commands/new.ts";
 import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import {
   isReviewTransportFailure,
+  matchesAuthorizedInput,
+  memoizedChangeSet,
+  productionReviewBlocker,
+  reviewFailureCodeFromGates,
+  transitionIdentity,
   type ProductionInfrastructure,
   prepareResumeInstruction,
   protectedSandboxAvailable,
@@ -22,6 +27,9 @@ import { proveCommand } from "../../../src/cli/commands/prove.ts";
 import type { BuildOutput } from "../../../src/contracts/build-output.ts";
 import type { ReviewOutput } from "../../../src/contracts/review-output.ts";
 import type { NormalizedEvent } from "../../../src/contracts/normalized-events.ts";
+import { GateReport } from "../../../src/gates/interface.ts";
+import { ReviewEvidenceUnfit, sha256 } from "../../../src/workflow/review-evidence.ts";
+import { PhaseGateFailure } from "../../../src/workflow/engine.ts";
 import { sealPlanTicketSelection } from "../../../src/cli/commands/ticket-selection.ts";
 import { PROVING_GROUND_DIR } from "../../../src/workflow/prove/bind.ts";
 import { AT, box, commit, draft, git, OWNER, prepare, ReplayStub, start } from "../../fixtures/trap-world.ts";
@@ -121,6 +129,46 @@ test("B7-11: slugifyPlanStem normalizes task id to valid plan stem", () => {
   assert.equal(slugifyPlanStem("   "), "plan");
   assert.equal(slugifyPlanStem("---"), "plan");
   assert.equal(slugifyPlanStem("@#$%"), "plan");
+});
+
+test("B7-46: one gate round shares each worktree observation by base revision", () => {
+  const reads: string[] = [];
+  const read = memoizedChangeSet((baseSha) => { reads.push(baseSha); return [baseSha]; });
+  const first = read("base-a");
+  assert.strictEqual(read("base-a"), first);
+  assert.deepEqual(read("base-b"), ["base-b"]);
+  assert.deepEqual(reads, ["base-a", "base-b"]);
+});
+
+test("B7-38: live and recovered review failures use the same gate precedence", () => {
+  const cold = new GateReport("envelope_valid").check("valid", false, "invalid");
+  const inconsistent = new GateReport("verdict_consistent").check("same candidate", false, "different candidate");
+  const failure = new PhaseGateFailure("reviewer", [cold, inconsistent]);
+  assert.equal(productionReviewBlocker(failure).code, "review-inconsistent");
+  assert.equal(reviewFailureCodeFromGates(["artifacts_exist", "verdict_consistent"]), "review-inconsistent");
+
+  const evidenceFailure = new ReviewEvidenceUnfit(
+    new GateReport("review_evidence_present").check("evidence", false, "unfit"),
+  );
+  assert.equal(productionReviewBlocker(evidenceFailure).code, "review-evidence-invalid");
+});
+
+test("B7-39: transition identities advance with durable attempt revision across invocations", () => {
+  const beforePause = transitionIdentity("session", 14);
+  const afterResume = transitionIdentity("session", 39);
+  assert.deepEqual(beforePause, { id: "session:transition:15", seq: 15 });
+  assert.deepEqual(afterResume, { id: "session:transition:40", seq: 40 });
+  assert.notEqual(beforePause.id, afterResume.id);
+  assert.notEqual(beforePause.seq, afterResume.seq);
+});
+
+test("B7-56: authorized input must match the rendered text and its digest", () => {
+  const prompt = "the exact authorized prompt";
+  const digest = sha256(prompt);
+  assert.equal(matchesAuthorizedInput(prompt, prompt, prompt, digest), true);
+  assert.equal(matchesAuthorizedInput(prompt, prompt, `${prompt}!`, digest), false);
+  assert.equal(matchesAuthorizedInput(`${prompt}!`, prompt, prompt, digest), false);
+  assert.equal(matchesAuthorizedInput(prompt, prompt, prompt, "0".repeat(64)), false);
 });
 
 test("B7-13: isReviewTransportFailure treats ProductionRouteUnavailable as not a transport retry", () => {
@@ -426,13 +474,29 @@ test("B7-30 & B7-35: persistEnvelope refuses before writing raw bytes, and makes
   const body = source.slice(start, end);
 
   const refusal = body.indexOf("immutable envelope already exists");
-  const rawWrite = body.indexOf("writeFile(rawAbsolute");
+  const rawWrite = body.indexOf("writeDurableFile(rawAbsolute, rawOutput)");
   assert.ok(refusal >= 0 && rawWrite >= 0 && refusal < rawWrite, "B7-30: the refusal precedes the raw write that would replace an earlier reply's bytes");
 
   const journal = body.indexOf('persist("attempt.updated"');
-  for (const target of ["fsyncPath(rawAbsolute)", "fsyncPath(dirname(rawAbsolute))", "fsyncPath(envelopePath)", "fsyncPath(dirname(envelopePath))"]) {
+  for (const target of ["writeDurableFile(rawAbsolute, rawOutput)", "writeDurableFile(envelopePath, JSON.stringify(stored))"]) {
     const at = body.indexOf(target);
-    assert.ok(at >= 0 && at < journal, `B7-35: ${target} runs before the envelope journal record cites its digest`);
+    assert.ok(at >= 0 && at < journal, `B7-35: ${target} completes before the envelope journal record cites its digest`);
+  }
+});
+
+test("B7-43: production, adoption, and rework share the durable-file ordering", () => {
+  const helper = readFileSync(resolve("core/src/cli/commands/durable-file.ts"), "utf8");
+  const write = helper.indexOf("await writeFile(path, data, { mode: 0o600 })");
+  const chmod = helper.indexOf("await chmod(path, 0o600)");
+  const fileSync = helper.indexOf("await fsyncPath(path)");
+  const directorySync = helper.indexOf("await fsyncPath(dirname(path))");
+  assert.ok(write >= 0 && write < chmod && chmod < fileSync && fileSync < directorySync,
+    "private bytes and mode precede file fsync, which precedes directory fsync");
+
+  for (const command of ["production-run", "adopt", "rework"]) {
+    const source = readFileSync(resolve(`core/src/cli/commands/${command}.ts`), "utf8");
+    assert.match(source, /writeDurableFile\(/u, `${command} uses the shared durability boundary`);
+    assert.doesNotMatch(source, /async function fsyncPath\(/u, `${command} has no divergent private copy`);
   }
 });
 

@@ -107,6 +107,11 @@ function hostProbe(executable: string): boolean {
   return result.status === 0;
 }
 
+/** The one platform and probe decision shared by broker grants and host preconditions. */
+export function osSandboxAvailable(platform: NodeJS.Platform, probe: SandboxProbe = hostProbe): boolean {
+  return platform === "linux" && probe("bwrap");
+}
+
 function physical(path: string): string {
   return existsSync(path) ? realpathSync.native(path) : resolve(path);
 }
@@ -440,7 +445,7 @@ export function grantSandbox(
   assertSandboxRoots(request);
   const platform = request.platform ?? process.platform;
   const confined = request.confinement === "worktree";
-  if (platform === "linux" && probe("bwrap")) {
+  if (osSandboxAvailable(platform, probe)) {
     return Object.freeze({
       badge: "os-enforced",
       mechanism: "linux-bwrap",
@@ -508,7 +513,7 @@ export class PermissionSession {
     }
     this.#initialHead = initialHead;
     const linux = request.platform === "linux" || (request.platform === undefined && process.platform === "linux");
-    this.#osEnforced = linux && (request.sandboxProbe ?? hostProbe)("bwrap");
+    this.#osEnforced = osSandboxAvailable(request.platform ?? process.platform, request.sandboxProbe ?? hostProbe);
     this.sandboxBadge = linux ? (this.#osEnforced ? "os-enforced" : "tool-policy") : "unavailable";
     if (request.confinement === "worktree" && !this.#osEnforced) {
       throw new WorktreeConfinementUnavailable(request.platform ?? process.platform);

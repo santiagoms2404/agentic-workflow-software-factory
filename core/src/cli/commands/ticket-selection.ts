@@ -5,6 +5,7 @@ import { lightTicketAgreement } from "../../registry/plan-agreement.ts";
 import { sealTicketSelection, type TicketSelection } from "../../contracts/ticket-selection-record.ts";
 import { ticketFileDigest } from "../../persistence/plan-ticket-body.ts";
 import { parsePlanTicketData } from "../../persistence/plan-tickets.ts";
+import { ticketStoreFor } from "./ticket.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
 import { readPlacement } from "../../registry/placement.ts";
 import { resolvePlanSources } from "../../registry/plan-source.ts";
@@ -22,7 +23,13 @@ export function parseTicketSelection(values: readonly string[]): readonly string
 
 /** The flat store is directly below the catalog's plans root, never a paired directory. */
 export async function lightTicketStore(repository: string): Promise<TicketStore> {
-  const catalog = loadCatalog(await readFile(resolve(repository, "awsf.project.yaml"), "utf8"));
+  let source: string;
+  try { source = await readFile(resolve(repository, "awsf.project.yaml"), "utf8"); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return ticketStoreFor(repository);
+  }
+  const catalog = loadCatalog(source);
   const root = catalog.plans.root;
   if (root.startsWith("/") || root.includes("\\") || root.split("/").some(part => part === "." || part === "..")) {
     throw new Error("light tickets require a plans root inside the repository");

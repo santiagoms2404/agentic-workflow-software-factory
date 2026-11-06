@@ -51,7 +51,7 @@ import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
-import { GateReport, type GateId } from "../../gates/interface.ts";
+import { GateReport, gateKindFor } from "../../gates/interface.ts";
 import { assertClean, captureChangeSet, changedPaths, isWorktreeClean, runGit, systemGitRunner, worktreeStatus } from "../../git/changes.ts";
 import { commitAsHost, HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
@@ -66,6 +66,8 @@ import { openPermissionSession, type SandboxProbe } from "../../policy/sandbox-b
 import { refuseUndeliveredVisualPhases } from "../../workflow/visual-references.ts";
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
+import { PHASE_SILENCE_TIMEOUT_REASON, PhaseSilenceTimeout, phaseBlocker } from "./phase-blocker.ts";
+import { writeDurableFile } from "./durable-file.ts";
 import type { WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import { PhaseGateFailure } from "../../workflow/engine.ts";
@@ -118,7 +120,7 @@ import {
   type RecordedRoute,
 } from "./review-record.ts";
 
-const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
+const { chmod, mkdir, readFile, realpath, writeFile } = fs;
 
 /**
  * Observe the worktree pins without throwing; see the note on the twin in
@@ -138,12 +140,6 @@ function observePins(worktree: string): { clean: boolean; head: string | null } 
 
 /** This dispatch site's ledger identity. */
 const REWORK_DISPATCHER = "rework/owner-gates" as const;
-
-/** Make one path's bytes durable before any journal record cites their digest. */
-async function fsyncPath(path: string): Promise<void> {
-  const handle = await open(path, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
-}
 
 /** A configured command whose recovery the ledger refuses to decide. Never an ordinary gate failure. */
 class CommandLedgerRefusal extends Error {
@@ -184,7 +180,6 @@ const HOST = globalThis as unknown as {
 };
 
 /** The abort and cancel reason the builder's silence timer gives; `blocker` reads it as `silence`. */
-const SILENCE_ELAPSED = "configured silence timeout elapsed";
 
 export class OwnerReworkDefectRequired extends Error {
   constructor() {
@@ -578,13 +573,6 @@ function contextTokens(usage: TokenUsage): number | null {
   return usage.inputTokens === null && usage.outputTokens === null ? null : (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
 }
 
-function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
-  if (gateId === "commands_pass") return "subprocess";
-  if (["head_advanced", "diff_matches_claims", "candidate_hygiene"].includes(gateId)) return "git";
-  if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
-  return gateId === "journey_passes" ? "journey" : "pure";
-}
-
 function reportWith(report: GateReport, prefix: string, other: GateReport): GateReport {
   for (const check of other.checks) report.check(`${prefix}:${check.item}`, check.ok, check.note);
   return report;
@@ -608,9 +596,7 @@ function blocker(error: unknown): { code: string; detail: string } {
   const detail = `${failure.name}: ${failure.message}`;
   if (failure instanceof PermissionBreach) return { code: "permission-breach", detail };
   if (failure instanceof AdapterError && failure.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail };
-  if (/ceiling|budget|allowance/i.test(detail)) return { code: "budget-exhausted", detail };
-  if (/silence|timeout/i.test(detail)) return { code: "silence", detail };
-  return { code: "phase-abort", detail };
+  return phaseBlocker(error, detail) ?? phaseBlocker(failure, detail) ?? { code: "phase-abort", detail };
 }
 
 /** Owner-facing production implementation of the literal L19 spawn edge. */
@@ -877,7 +863,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const at = infra.now();
     await persist("attempt.updated", {}, {
       type: "gate", id: `${phaseId}:${report.gateId}`, phaseId, round: 0,
-      gateId: report.gateId, kind: gateKind(report.gateId), candidateSha,
+      gateId: report.gateId, kind: gateKindFor(report.gateId), candidateSha,
       passed: report.passed, exitCode, checks: report.checks,
       violations: report.checks.filter((check) => !check.ok).map((check) => `${check.item}: ${check.note}`),
       outputPath, startedAt: at, endedAt: at,
@@ -989,15 +975,15 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const silence: { elapsed: boolean; cancelled: Promise<void>; failure: Error | null } = {
       elapsed: false, cancelled: Promise.resolve(), failure: null,
     };
-    const silenceFailure = (): Error => silence.failure ??
-      new Error(`${SILENCE_ELAPSED}: no provider event for ${String(options.config.runtime.silence_timeout_seconds)} s`);
+    const silenceFailure = (): Error => new PhaseSilenceTimeout(silence.failure?.message ??
+      `${PHASE_SILENCE_TIMEOUT_REASON}: no provider event for ${String(options.config.runtime.silence_timeout_seconds)} s`);
     let idle: unknown | null = null;
     const arm = (): void => {
       if (idle !== null) HOST.clearTimeout(idle);
       idle = HOST.setTimeout(() => {
         silence.elapsed = true;
-        controller.abort(new Error(SILENCE_ELAPSED));
-        silence.cancelled = cancelOrRecord(activeTransport.current ?? undefined, SILENCE_ELAPSED, (failure) => { silence.failure = failure; });
+        controller.abort(new PhaseSilenceTimeout());
+        silence.cancelled = cancelOrRecord(activeTransport.current ?? undefined, PHASE_SILENCE_TIMEOUT_REASON, (failure) => { silence.failure = failure; });
       }, options.config.runtime.silence_timeout_seconds * 1_000);
       (idle as { unref?: () => void }).unref?.();
     };
@@ -1234,10 +1220,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       // file cannot answer a restore, so an intent recorded against one could
       // never be settled from its own evidence.
       const outputAbsolute = join(options.attemptDir, outputRelative);
-      await writeFile(outputAbsolute, rawCommandOutput, { mode: 0o600 });
-      await chmod(outputAbsolute, 0o600);
-      await fsyncPath(outputAbsolute);
-      await fsyncPath(dirname(outputAbsolute));
+      await writeDurableFile(outputAbsolute, rawCommandOutput);
       const pins = observePins(status.worktree!);
       await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
         schema: "awsf.command-dispatch-result/v1", intentId,

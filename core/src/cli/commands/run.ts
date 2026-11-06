@@ -3,6 +3,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { commitAsHost } from "../../git/commit.ts";
+import { gateKindFor } from "../../gates/interface.ts";
+import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import { transition } from "../../state/task-machine.ts";
 import {
   nextRevision,
@@ -12,6 +14,7 @@ import {
   type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
+import { CANDIDATE_GATE_IDS, candidateGateEvidence, readAttemptEvidence } from "./review-record.ts";
 
 export interface StubRunOptions {
   readonly liveMs?: number;
@@ -65,6 +68,50 @@ async function advance(
   );
 }
 
+async function recordStubGateRows(
+  attemptDir: string,
+  status: AttemptStatus,
+  candidateSha: string,
+  options: StubRunOptions,
+): Promise<AttemptStatus> {
+  const phaseId = `${status.sessionId}:stub-gating`;
+  const at = new Date().toISOString();
+  status = await persistAttempt(attemptDir, status.revision, {
+    kind: "attempt.updated",
+    next: nextRevision(status, {}),
+    evidence: { type: "phase", phase: {
+      phaseId, ordinal: 1, key: "stub-gating", name: "Stub fixture gates", kind: "code", owner: "host",
+      description: "Synthetic current-candidate evidence for the deterministic fixture", status: "SUCCEEDED",
+      correctionCount: 0, maxCorrections: 0, errorCode: null, errorMessage: null,
+      startedAt: at, endedAt: at, createdAt: at,
+    } },
+  }, options.projectRecord);
+  for (const gateId of CANDIDATE_GATE_IDS) {
+    const evidence: Extract<AttemptEvidence, { type: "gate" }> = {
+      type: "gate",
+      id: `${status.sessionId}:stub-gate:${gateId}`,
+      phaseId,
+      round: 0,
+      gateId,
+      kind: gateKindFor(gateId),
+      candidateSha,
+      passed: true,
+      exitCode: 0,
+      checks: [{ item: "stub fixture gate", ok: true, note: "synthetic passing row for this fixture candidate" }],
+      violations: [],
+      outputPath: null,
+      startedAt: at,
+      endedAt: at,
+    };
+    status = await persistAttempt(attemptDir, status.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(status, {}),
+      evidence,
+    }, options.projectRecord);
+  }
+  return status;
+}
+
 /**
  * Runs the deterministic fixture SDLC used to feel the owner path end to end.
  * It writes one declared fixture result and makes the same host-owned candidate
@@ -96,13 +143,18 @@ export async function runStubCommand(attemptDir: string, options: StubRunOptions
     // base is an absent one, never the string "null".
     ...(status.baseSha === null ? {} : { baseSha: status.baseSha }),
   }, options);
+  // The fixture runs no gate processes. Record explicit synthetic rows for the
+  // exact candidate so L11/L20 can inspect the same row shape as real runs;
+  // O7 provenance still makes its T2 review and journey unlandable.
+  status = await recordStubGateRows(attemptDir, status, candidateSha, options);
+  const gateEvidence = candidateGateEvidence(await readAttemptEvidence(attemptDir), candidateSha, status.sessionId);
   if (status.tier === 2) {
     status = await advance(
       attemptDir,
       status,
       "REVIEWING",
       "gate",
-      { gatesPass: true, candidateSha },
+      { gatesPass: true, candidateSha, gateEvidence },
       options,
       true,
     );
@@ -115,7 +167,7 @@ export async function runStubCommand(attemptDir: string, options: StubRunOptions
       status,
       "AWAITING_OWNER",
       "gate",
-      { gatesPass: true, candidateSha },
+      { gatesPass: true, candidateSha, gateEvidence },
       options,
     );
   }

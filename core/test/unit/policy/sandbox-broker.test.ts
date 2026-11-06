@@ -9,6 +9,7 @@ import {
   WorktreeConfinementUnavailable,
   assertSandboxRoots,
   grantSandbox,
+  osSandboxAvailable,
 } from "../../../src/policy/sandbox-broker.ts";
 import { ExecutableNotFound } from "../../../src/execution/transport-broker.ts";
 import type { HarnessAdapter } from "../../../src/adapters/interface.ts";
@@ -30,6 +31,16 @@ const SPEC = {
   stdin: "private prompt on stdin",
   shell: false as const,
 };
+
+test("sandbox availability uses the shared Linux-only bwrap probe", () => {
+  const probed: string[] = [];
+  const probe = (executable: string): boolean => { probed.push(executable); return true; };
+  assert.equal(osSandboxAvailable("darwin", probe), false);
+  assert.deepEqual(probed, [], "non-Linux hosts do not probe");
+  assert.equal(osSandboxAvailable("linux", probe), true);
+  assert.deepEqual(probed, ["bwrap"]);
+  assert.equal(osSandboxAvailable("linux", () => false), false);
+});
 
 test("Linux bwrap grants only runtime for writes: [] and wraps argv without a shell", () => {
   const grant = grantSandbox(SPEC, { ...ROOTS, writes: [], platform: "linux" }, () => true);

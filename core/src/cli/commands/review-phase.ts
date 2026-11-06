@@ -75,7 +75,7 @@ import type { BrokerOptions } from "../../execution/transport-broker.ts";
 import { artifactsExist, jsonParses } from "../../gates/artifacts.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
-import { GateReport, type GateId } from "../../gates/interface.ts";
+import { GateReport, gateKindFor } from "../../gates/interface.ts";
 import { reviewEnvelopeComplete, reviewEvidencePresent, verdictConsistent } from "../../gates/review.ts";
 import { captureChangeSet, changedPaths } from "../../git/changes.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
@@ -289,13 +289,6 @@ function sumUsage(events: readonly NormalizedEvent[]): TokenUsage {
 
 function contextTokens(usage: TokenUsage): number | null {
   return usage.inputTokens === null && usage.outputTokens === null ? null : (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
-}
-
-function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
-  if (gateId === "commands_pass") return "subprocess";
-  if (["head_advanced", "diff_matches_claims", "candidate_hygiene"].includes(gateId)) return "git";
-  if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
-  return gateId === "journey_passes" ? "journey" : "pure";
 }
 
 /** Replacement-review seam retained for the three-path prompt-bundle characterization. */
@@ -861,7 +854,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
       const at = infra.now();
       await persist("attempt.updated", {}, {
         type: "gate", id: `${phaseDb}:${String(round)}:${report.gateId}`, phaseId: phaseDb, round,
-        gateId: report.gateId, kind: gateKind(report.gateId), candidateSha: subject.candidateSha,
+        gateId: report.gateId, kind: gateKindFor(report.gateId), candidateSha: subject.candidateSha,
         passed: report.passed, exitCode: null, checks: report.checks,
         violations: report.checks.filter((check) => !check.ok).map((check) => `${check.item}: ${check.note}`),
         outputPath: null, startedAt: at, endedAt: at,

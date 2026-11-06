@@ -86,9 +86,10 @@ import { commitAsHost, hostCommitGitRunner, HOST_AUTHOR } from "../../git/commit
 import { hostCommitContentDigest, reconcileHostCommit } from "../../git/commit-reconcile.ts";
 import type { HostCommitAdoption } from "../../workflow/engine.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
-import { GateReport, type GateId } from "../../gates/interface.ts";
+import { GateReport, gateKindFor, type GateId } from "../../gates/interface.ts";
 import { intakeStateGate } from "../../gates/intake-state.ts";
 import { lightTicketStore } from "./ticket-selection.ts";
+import { writeDurableFile } from "./durable-file.ts";
 import {
   REVIEW_FINDING_COMPLETENESS_ITEMS,
   reviewEnvelopeComplete,
@@ -128,7 +129,6 @@ import { assertPlanAuthorRole, compilePlanAuthor, PLAN_AUTHOR_WORKFLOW_ID } from
 import type { PlanAdmissionRecord } from "../../contracts/plan-admission.ts";
 import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
 import { continuityFilePath } from "../../persistence/platform-paths.ts";
-import { TicketStore } from "../../persistence/ticket-store.ts";
 import {
   DEFAULT_QUOTA_PROBE_TIMEOUTS,
   isBelowQuotaStopThreshold,
@@ -161,9 +161,10 @@ import {
   type VisualDelivery,
 } from "../../workflow/visual-references.ts";
 import { PermissionBreach } from "../../policy/path-policy.ts";
-import { grantSandbox, openPermissionSession, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
+import { grantSandbox, openPermissionSession, osSandboxAvailable, type PermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { transition, SEALED_STATES, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { CallCeilingExceeded } from "../../state/errors.ts";
+import { PHASE_SILENCE_TIMEOUT_REASON, PhaseSilenceTimeout, persistedPhaseBlocker, phaseBlocker } from "./phase-blocker.ts";
 import { createCompiledPhaseLaunchVerifier } from "../../workflow/phase-launch-authorization.ts";
 import { compileWorkflow, compileWorkflowStructure, reviewWorkerProvider, seededReviewProducer, type WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
@@ -203,17 +204,7 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 
-const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
-
-/**
- * Make one path's bytes durable. The file must be fsynced before any journal
- * record cites its digest, and its parent directory after, or the entry naming
- * it can survive without it.
- */
-async function fsyncPath(path: string): Promise<void> {
-  const handle = await open(path, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
-}
+const { chmod, mkdir, readFile, realpath, writeFile } = fs;
 
 /**
  * Observe the worktree pins without throwing.
@@ -273,6 +264,13 @@ async function verifyCandidateLedgerVerdict(
     maxOutputBytes: config.runtime.max_output_bytes,
     candidateSha, attempt: status.attempt, sessionId: status.sessionId,
   })));
+}
+
+async function verifyCheckpointWorktree(
+  attemptDir: string, config: AwsfConfig, status: AttemptStatus, checkpoint: PhaseRecovery,
+): Promise<void> {
+  const verdict = await verifyCandidateLedgerVerdict(attemptDir, config, status, checkpoint);
+  await verifyRecoveryWorktree(status, checkpoint, config.runtime.seed_paths, verdict);
 }
 
 /**
@@ -557,8 +555,9 @@ export const DEFAULT_INFRASTRUCTURE: ProductionInfrastructure = {
  * (B7-29), and the host command runs only when no probe is injected.
  */
 export function protectedSandboxAvailable(infra: Pick<ProductionInfrastructure, "runCommand" | "sandboxProbe">): boolean {
-  if (process.platform !== "linux") return false;
-  return infra.sandboxProbe?.("bwrap") ?? infra.runCommand("bwrap", ["--version"], { timeoutMs: 5000 }).status === 0;
+  const probe: SandboxProbe = (executable) => infra.sandboxProbe?.(executable) ??
+    infra.runCommand(executable, ["--version"], { timeoutMs: 5000 }).status === 0;
+  return osSandboxAvailable(process.platform, probe);
 }
 
 export interface ProductionRunOptions {
@@ -611,6 +610,12 @@ function dbPhaseId(sessionId: string, phaseId: string): string {
   return `${sessionId}:${phaseId}`;
 }
 
+/** Transition sequence numbers share the attempt revision, including across resumes. */
+export function transitionIdentity(sessionId: string, revision: number): { readonly id: string; readonly seq: number } {
+  const seq = revision + 1;
+  return { id: `${sessionId}:transition:${seq}`, seq };
+}
+
 /**
  * Everything the review phase's gates are held against.
  *
@@ -648,6 +653,10 @@ function contextTokens(usage: TokenUsage): number | null {
   // input. Keep a cache-only observation (including zero), but never invent one.
   const counts = [usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.cacheWriteTokens];
   return counts.every(count => count === null) ? null : counts.reduce<number>((total, count) => total + (count ?? 0), 0);
+}
+
+export function matchesAuthorizedInput(prompt: string, renderedPrompt: string, stdin: string, expectedDigest: string): boolean {
+  return prompt === renderedPrompt && stdin === renderedPrompt && sha256(stdin) === expectedDigest;
 }
 
 /** Production seam retained for the three-path prompt-bundle characterization. */
@@ -967,6 +976,19 @@ function reportWith(report: GateReport, checks: readonly { item: string; ok: boo
  * builder's diff and fail its `writes: []` on the very change it was asked to
  * read.
  */
+export function memoizedChangeSet(
+  read: (baseSha: string) => readonly string[],
+): (baseSha: string) => readonly string[] {
+  const byBase = new Map<string, readonly string[]>();
+  return (baseSha) => {
+    const known = byBase.get(baseSha);
+    if (known !== undefined) return known;
+    const paths = read(baseSha);
+    byBase.set(baseSha, paths);
+    return paths;
+  };
+}
+
 function phaseGates(
   phaseId: string,
   profileWrites: readonly string[],
@@ -982,12 +1004,13 @@ function phaseGates(
   protectedCapabilities: () => Promise<readonly (ProtectedFilesCapability | PlanAdmissionCapability)[]> = async () => [],
   reviewObservation: () => { events: readonly NormalizedEvent[]; runId: string } = () => ({ events: [], runId: "" }),
 ): readonly GateDefinition[] {
+  const readChangeSet = memoizedChangeSet((sha) => changesSinceBase(worktree, sha));
   const observe = attributionBaseSha !== null && review === null
-    ? (): readonly string[] => changesSinceBase(worktree, attributionBaseSha)
+    ? (): readonly string[] => readChangeSet(attributionBaseSha)
     : review === null && phaseId !== "documenter"
-      ? (): readonly string[] => changesSinceBase(worktree, baseSha)
+      ? (): readonly string[] => readChangeSet(baseSha)
       : observePhase;
-  const assurance = attributionBaseSha === null ? observe : (): readonly string[] => changesSinceBase(worktree, baseSha);
+  const assurance = attributionBaseSha === null ? observe : (): readonly string[] => readChangeSet(baseSha);
   const read = artifactReader(worktree);
   const common: GateDefinition[] = [
     {
@@ -1064,13 +1087,7 @@ function phaseGates(
       id: "diff_matches_claims",
       run: async ({ envelope }) => {
         const output = envelope as IntakeOutput;
-        let store: TicketStore;
-        try { store = await lightTicketStore(worktree); }
-        catch (error) {
-          // Legacy standalone intake projects have no catalog. Other failures are hard refusals.
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-          store = new TicketStore(join(worktree, "specs", "tickets"));
-        }
+        const store = await lightTicketStore(worktree);
         const expected = relative(worktree, join(store.directory, `${output.ticket.id}.md`)).split(sep).join("/");
         const report = new GateReport("diff_matches_claims");
         report.check("exact ticket path changed", observe().length === 1 && observe()[0] === expected, expected);
@@ -1178,9 +1195,9 @@ export async function cancelOrRecord(
   try {
     const report = await transport.cancel(reason);
     const failure = terminationReportFailure(reason, report);
-    if (failure !== null) record(failure);
+    if (failure !== null) record(typedSilenceFailure(reason, failure));
   } catch (error) {
-    record(cancelFailure(reason, error));
+    record(typedSilenceFailure(reason, cancelFailure(reason, error)));
   }
 }
 
@@ -1203,7 +1220,13 @@ function cancelFailure(reason: string, error: unknown): Error {
   return new Error(`${reason}; the provider process tree could not be cancelled: ${cause}`);
 }
 
-const SILENCE_ELAPSED = "configured silence timeout elapsed";
+function typedSilenceFailure(reason: string, failure: Error): Error {
+  if (reason !== PHASE_SILENCE_TIMEOUT_REASON) return failure;
+  const typed = new PhaseSilenceTimeout(failure.message);
+  typed.name = failure.name;
+  return typed;
+}
+
 
 /**
  * The group-CPU reading of the supervisor a broker cancels through, when it
@@ -1266,30 +1289,29 @@ export function isColdEnvelopeCorrection(reports: readonly GateReport[]): boolea
   return failed.length > 0 && failed.every((report) => COLD_ENVELOPE_GATE_IDS.has(report.gateId));
 }
 
-function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
-  if (gateId === "commands_pass") return "subprocess";
-  if (gateId === "head_advanced" || gateId === "diff_matches_claims" || gateId === "candidate_hygiene") return "git";
-  if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
-  if (gateId === "journey_passes") return "journey";
-  return "pure";
+export function reviewFailureCodeFromGates(
+  failedGateIds: readonly GateId[],
+  lastActivity = "",
+  legacyCompletenessFailure = false,
+): string {
+  if (failedGateIds.includes("review_evidence_present")) return "review-evidence-invalid";
+  if (legacyCompletenessFailure) return "review-malformed";
+  if (failedGateIds.includes("verdict_consistent")) return "review-inconsistent";
+  if ((failedGateIds.length > 0 && failedGateIds.every((gateId) => COLD_ENVELOPE_GATE_IDS.has(gateId)))
+    || lastActivity.includes("EnvelopeValidationFailure")) return "review-malformed";
+  return "phase-abort";
 }
 
-function productionReviewBlocker(error: unknown): { code: string; detail: string } {
+export function productionReviewBlocker(error: unknown): { code: string; detail: string } {
   const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  if (error instanceof MandatoryReviewUnavailable) return { code: "review-unavailable", detail };
   if (error instanceof EnvelopeValidationFailure) return { code: "review-malformed", detail };
+  if (error instanceof ReviewEvidenceUnfit) return { code: "review-evidence-invalid", detail };
   if (error instanceof PhaseGateFailure) {
-    const failed = error.reports.filter((report) => !report.passed);
-    if (failed.some((report) => report.gateId === "review_evidence_present")) {
-      return { code: "review-evidence-invalid", detail };
-    }
-    if (failed.some((report) => report.gateId === "verdict_consistent")) {
-      return { code: "review-inconsistent", detail };
-    }
-    if (failed.length > 0 && failed.every((report) => COLD_ENVELOPE_GATE_IDS.has(report.gateId))) {
-      return { code: "review-malformed", detail };
-    }
+    const failedGateIds = error.reports.filter((report) => !report.passed).map((report) => report.gateId);
+    const code = reviewFailureCodeFromGates(failedGateIds);
+    if (code !== "phase-abort") return { code, detail };
   }
+  if (error instanceof MandatoryReviewUnavailable) return { code: "review-unavailable", detail };
   return closestBlocker(error);
 }
 
@@ -1313,9 +1335,7 @@ export function closestBlocker(error: unknown): { code: string; detail: string }
   if (error instanceof EnvelopeValidationFailure || error instanceof PhaseGateFailure || error instanceof CommandPhaseFailure || error instanceof ReviewEvidenceUnfit) {
     return { code: "phase-abort", detail };
   }
-  if (/ceiling|budget/i.test(detail)) return { code: "budget-exhausted", detail };
-  if (/silence|timeout/i.test(detail)) return { code: "silence", detail };
-  return { code: "phase-abort", detail };
+  return phaseBlocker(error, detail) ?? { code: "phase-abort", detail };
 }
 
 async function settleExitedReview(
@@ -1348,18 +1368,17 @@ async function settleExitedReview(
     const failedChecks = gate.checks.filter((check) => !check.ok);
     return failedChecks.length > 0 && failedChecks.every((check) => completenessItems.has(check.item));
   });
-  let code = "phase-abort";
-  if (failed.some((gate) => gate.gateId === "review_evidence_present")) {
-    code = "review-evidence-invalid";
-  } else if (
-    legacyCompletenessFailure ||
-    failed.some((gate) => COLD_ENVELOPE_GATE_IDS.has(gate.gateId)) ||
-    status.lastActivity.includes("EnvelopeValidationFailure")
-  ) {
-    code = "review-malformed";
-  } else if (failedVerdicts.length > 0) {
-    code = "review-inconsistent";
-  }
+  const phaseFailure = evidence.findLast((record): record is Extract<AttemptEvidence, { type: "phase" }> =>
+    record.type === "phase" && record.phase.phaseId === phaseId && record.phase.status === "FAILED");
+  const recoveredFailure = phaseFailure === undefined ? null : persistedPhaseBlocker(
+    phaseFailure.phase.errorCode,
+    phaseFailure.phase.errorMessage ?? status.lastActivity,
+  );
+  const code = recoveredFailure?.code ?? reviewFailureCodeFromGates(
+    failed.map((gate) => gate.gateId),
+    status.lastActivity,
+    legacyCompletenessFailure,
+  );
   const violations = failed.flatMap((gate) => gate.violations);
   const detail = `recovered an exited ${status.phase.name} phase with no live process: ${violations.join("; ") || status.lastActivity}`;
   const decision = transition({
@@ -1377,7 +1396,7 @@ async function settleExitedReview(
     kind: "attempt.transitioned",
     evidence: {
       type: "transition",
-      id: `${status.sessionId}:recovery:${String(seq)}`,
+      id: transitionIdentity(status.sessionId, status.revision).id,
       seq,
       from: "REVIEWING",
       to: "BLOCKED",
@@ -1592,7 +1611,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   // (none for a K1-exempt workflow), checked against the grants recorded when
   // this run began. Each writing phase owes its planned grant before it
   // reserves a call; the first one's is checked here, before L4.
-  const preflightEvidence = (await readAttemptEvidence(options.attemptDir)).findLast((evidence) => evidence.type === "driver-preflight");
+  const startupEvidence = await readAttemptEvidence(options.attemptDir);
+  const preflightEvidence = startupEvidence.findLast((evidence) => evidence.type === "driver-preflight");
   const preflight = preflightEvidence?.type === "driver-preflight" ? preflightEvidence.record : null;
   const recordedGrants = protectedState.grants.map((grant) => ({ id: grant.id, phase: grant.subject.phaseKey, files: grant.files.map((file) => file.path) }));
   const writers = writingPhases(recipe, options.config.agents).map((writer) => writer.phase);
@@ -1622,8 +1642,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // for the phase it measures, whole, before any adapter is asked anything.
     if (status.workflow === PROVE_WORKFLOW_ID) assertReplayArmRoute(recipe as ProveRecipe, status.routeOverrides);
     if (recovery === undefined) await validatePreparedRepository(status);
-    else await verifyRecoveryWorktree(status, recovery.inspected.checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, recovery.inspected.checkpoint));
-    const boundRecord = (await readAttemptEvidence(options.attemptDir)).findLast((evidence) => evidence.type === "visual-references-bound");
+    else await verifyCheckpointWorktree(options.attemptDir, options.config, status, recovery.inspected.checkpoint);
+    const boundRecord = startupEvidence.findLast((evidence) => evidence.type === "visual-references-bound");
     visualBound = boundRecord?.type === "visual-references-bound" ? boundRecord.bound : null;
     visualBinding = await readVisualBinding(options.attemptDir, visualBound);
     for (const [phaseIndex, phase] of compiled.phases.entries()) {
@@ -1828,7 +1848,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     });
     status = await persistAttempt(options.attemptDir, status.revision, {
       kind: "attempt.transitioned",
-      evidence: { type: "transition", id: `${status.sessionId}:${status.revision + 1}`, seq: status.revision + 1, from: "PREPARED", to: "BLOCKED", actor: "host", edgeId: decision.edge, reasonSource: "process", reasonCode: reason.code, reasonDetail: reason.detail, spawnSite: false, at: now },
+      evidence: { type: "transition", ...transitionIdentity(status.sessionId, status.revision), from: "PREPARED", to: "BLOCKED", actor: "host", edgeId: decision.edge, reasonSource: "process", reasonCode: reason.code, reasonDetail: reason.detail, spawnSite: false, at: now },
       next: nextRevision(status, { lifecycleState: "BLOCKED", blocker: { code: reason.code, detail: reason.detail, ahead: null, behind: null }, lastActivityAt: now, lastActivity: reason.detail }),
     }, options.projectRecord);
     return status;
@@ -1927,8 +1947,6 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   const createdAt = infra.now();
   const phaseRecords = new Map<string, PhaseEvidenceRecord>();
   const launches = new Map<string, LaunchRecord>();
-  let transitionSeq = 0;
-
   let writeQueue: Promise<void> = Promise.resolve();
   const persist = async (kind: AttemptEvent["kind"], update: Partial<AttemptStatus>, evidence?: AttemptEvidence, admission?: PlanAdmissionRecord): Promise<void> => {
     const operation = writeQueue.then(async () => {
@@ -1946,9 +1964,10 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
 
   const persistTransition = async (from: TaskState, to: TaskState, edgeId: EdgeId, source: string, code: string | null, detail: string | null, spawnSite: boolean, update: Partial<AttemptStatus>, protectedConsumption?: import("../../contracts/protected-grant.ts").ProtectedGrantConsumption): Promise<void> => {
     const at = infra.now();
-    transitionSeq += 1;
+    await writeQueue;
+    const identity = transitionIdentity(status.sessionId, status.revision);
     await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, ...update }, {
-      type: "transition", id: `${status.sessionId}:transition:${transitionSeq}`, seq: transitionSeq,
+      type: "transition", ...identity,
       from, to, actor: "host", edgeId, reasonSource: source, reasonCode: code, reasonDetail: detail,
       spawnSite, at, ...(protectedConsumption === undefined ? {} : { protectedConsumption }),
     });
@@ -2024,7 +2043,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   // it must refuse to reopen.
   const continuity = new ContinuityStore({
     path: continuityFilePath(options.attemptDir),
-    ...(infra.now === undefined ? {} : { now: infra.now }),
+    now: infra.now,
   });
   await continuity.load();
 
@@ -2082,6 +2101,17 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
    * id looks like on a route it has not met yet.
    */
   const redactLocators = (record: BarrierRecord): BarrierRecord => redactPhaseProcess(record, continuity);
+  const processEvidence = (
+    launch: LaunchRecord,
+    record: BarrierRecord,
+    processStatus: Extract<AttemptEvidence, { type: "process" }>["status"],
+    timing: { releasedAt?: string | null; endedAt?: string | null; exitCode?: number | null; exitSignal?: string | null } = {},
+  ): Extract<AttemptEvidence, { type: "process" }> => ({
+    type: "process", phaseId: launch.phaseId, adapterId: launch.adapterId, role: launch.role,
+    record: redactLocators(record), status: processStatus, registeredAt: launch.registeredAt,
+    releasedAt: timing.releasedAt === undefined ? launch.releasedAt ?? null : timing.releasedAt,
+    endedAt: timing.endedAt ?? null, exitCode: timing.exitCode ?? null, exitSignal: timing.exitSignal ?? null,
+  });
 
   const brokerOptions = {
     ledger: budget,
@@ -2095,31 +2125,22 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       // That is the point: a reader comparing this row with the `onSpent` row
       // above sees one class of launch that charged a call and one that charged
       // tokens, rather than having to infer which from the absence of a row.
-      await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: launch.releasedAt, lastActivity: `correction round ${String(evidence.correctionRound)} resumed ${evidence.continuityHandle} on the ${evidence.tranche} tranche; no call reserved` }, {
-        type: "process", phaseId: launch.phaseId, adapterId: launch.adapterId, role: launch.role,
-        record: redactLocators(record), status: "RUNNING", registeredAt: launch.registeredAt, releasedAt: launch.releasedAt,
-        endedAt: null, exitCode: null, exitSignal: null,
-      });
+      await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: launch.releasedAt, lastActivity: `correction round ${String(evidence.correctionRound)} resumed ${evidence.continuityHandle} on the ${evidence.tranche} tranche; no call reserved` },
+        processEvidence(launch, record, "RUNNING", { releasedAt: launch.releasedAt }));
     },
     register: async (record) => {
       const launch = launches.get(record.runId);
       if (launch === undefined) throw new Error(`unregistered host launch ${record.runId}`);
       launch.record = record;
-      await persist("attempt.updated", { process: record.identity, budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `process ${record.runId} registered before GO` }, {
-        type: "process", phaseId: launch.phaseId, adapterId: launch.adapterId, role: launch.role,
-        record: redactLocators(record), status: "REGISTERED", registeredAt: launch.registeredAt, releasedAt: null,
-        endedAt: null, exitCode: null, exitSignal: null,
-      });
+      await persist("attempt.updated", { process: record.identity, budget: budget.snapshot(), lastActivityAt: infra.now(), lastActivity: `process ${record.runId} registered before GO` },
+        processEvidence(launch, record, "REGISTERED", { releasedAt: null }));
       options.assertLaunchProjection?.(status.sessionId);
     },
     onSpent: async (record, _reservation) => {
       const launch = launches.get(record.runId)!;
       launch.releasedAt = infra.now();
-      await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: launch.releasedAt, lastActivity: `call ${record.reservationId} spent immediately before GO` }, {
-        type: "process", phaseId: launch.phaseId, adapterId: launch.adapterId, role: launch.role,
-        record: redactLocators(record), status: "RUNNING", registeredAt: launch.registeredAt, releasedAt: launch.releasedAt,
-        endedAt: null, exitCode: null, exitSignal: null,
-      });
+      await persist("attempt.updated", { budget: budget.snapshot(), lastActivityAt: launch.releasedAt, lastActivity: `call ${record.reservationId} spent immediately before GO` },
+        processEvidence(launch, record, "RUNNING", { releasedAt: launch.releasedAt }));
     },
   } as BrokerOptions;
   let broker: TransportBroker | null = null;
@@ -2134,15 +2155,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     // Refuse before any byte is written. The raw file is the one an earlier
     // envelope names, so a refused write must not replace it (B7-30).
     if (existsSync(envelopePath) && storedEnvelopes.get(phaseId)?.correctionRound === envelope.correctionRound) throw new Error(`immutable envelope already exists: ${envelopePath}`);
-    await writeFile(rawAbsolute, rawOutput, { mode: 0o600 });
-    await chmod(rawAbsolute, 0o600);
-    await writeFile(envelopePath, JSON.stringify(stored), { mode: 0o600 });
-    // The bytes are durable before the journal record cites them (B7-35), as
-    // the command-output path already does.
-    await fsyncPath(rawAbsolute);
-    await fsyncPath(dirname(rawAbsolute));
-    await fsyncPath(envelopePath);
-    await fsyncPath(dirname(envelopePath));
+    // The bytes are durable before the journal record cites them (B7-35).
+    await writeDurableFile(rawAbsolute, rawOutput);
+    await writeDurableFile(envelopePath, JSON.stringify(stored));
     await persist("attempt.updated", {}, { type: "envelope", phaseId: dbPhaseId(status.sessionId, phaseId), envelope: stored });
     storedEnvelopes.set(phaseId, stored);
   };
@@ -2152,7 +2167,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     await persist("attempt.updated", {}, {
       type: "gate", id: `${dbPhaseId(status.sessionId, phaseId)}:${round}:${report.gateId}`,
       phaseId: dbPhaseId(status.sessionId, phaseId), round, gateId: report.gateId,
-      kind: gateKind(report.gateId), candidateSha, passed: report.passed, exitCode,
+      kind: gateKindFor(report.gateId), candidateSha, passed: report.passed, exitCode,
       checks: report.checks, violations: report.checks.filter((check) => !check.ok).map((check) => `${check.item}: ${check.note}`),
       outputPath, startedAt: at, endedAt: at,
     });
@@ -2354,12 +2369,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         // asked for it.
         output = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
         await mkdir(dirname(outputAbsolute), { recursive: true });
-        await writeFile(outputAbsolute, output, { mode: 0o600 });
-        await chmod(outputAbsolute, 0o600);
-        // fsync AFTER the chmod, so the mode is durable too, and before the
-        // result record, so no journal line ever cites bytes that are not.
-        await fsyncPath(outputAbsolute);
-        await fsyncPath(dirname(outputAbsolute));
+        // Persist bytes and mode before the result record cites the output.
+        await writeDurableFile(outputAbsolute, output);
         exitCode = result.status ?? -1;
         durationMs = Date.now() - started;
 
@@ -2914,14 +2925,15 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         // here and the turn awaits it below; a failed cancel becomes the turn's
         // error (H15: B1-02).
         const silenceMs = options.config.runtime.silence_timeout_seconds * 1_000;
-        const silence: { cancelled: Promise<void>; failure: Error | null } = { cancelled: Promise.resolve(), failure: null };
+        const silence: { elapsed: boolean; cancelled: Promise<void>; failure: Error | null } = { elapsed: false, cancelled: Promise.resolve(), failure: null };
         let launchWindow: unknown | null = null;
         let liveness: LivenessMonitor | null = null;
         const armLaunchWindow = (): void => {
           launchWindow = HOST.setTimeout(() => {
             launchWindow = null;
-            controller.abort(new Error(SILENCE_ELAPSED));
-            silence.cancelled = cancelOrRecord(turnLaunch.transport, SILENCE_ELAPSED, (failure) => { silence.failure = failure; });
+            silence.elapsed = true;
+            controller.abort(new PhaseSilenceTimeout());
+            silence.cancelled = cancelOrRecord(turnLaunch.transport, PHASE_SILENCE_TIMEOUT_REASON, (failure) => { silence.failure = failure; });
           }, silenceMs);
           (launchWindow as { unref?: () => void }).unref?.();
         };
@@ -2937,8 +2949,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
                 return groupCpu(identity);
               },
               terminateTree: async () => {
-                controller.abort(new Error(SILENCE_ELAPSED));
-                return transport.cancel(SILENCE_ELAPSED);
+                silence.elapsed = true;
+                controller.abort(new PhaseSilenceTimeout());
+                return transport.cancel(PHASE_SILENCE_TIMEOUT_REASON);
               },
             },
             identity: transport.identity,
@@ -2948,9 +2961,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           liveness = monitor;
           silence.cancelled = monitor.finished.then((outcome) => {
             if (outcome.error !== null) {
-              silence.failure = cancelFailure(SILENCE_ELAPSED, outcome.error);
+              silence.failure = cancelFailure(PHASE_SILENCE_TIMEOUT_REASON, outcome.error);
             } else if (outcome.cancellation !== null) {
-              silence.failure = terminationReportFailure(SILENCE_ELAPSED, outcome.cancellation);
+              silence.failure = terminationReportFailure(PHASE_SILENCE_TIMEOUT_REASON, outcome.cancellation);
             }
           });
           // The first CPU reading is only a baseline; take it now so the first
@@ -2973,7 +2986,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           startProcess: async (registered, spec, signal) => {
             let delivery: OwnerAmendmentDelivery | null = null;
             if (instruction !== null && turn === 0) {
-              if (instructionInputBound || prompt !== renderedPrompt || spec.stdin !== renderedPrompt || sha256(spec.stdin) !== instruction.composedDigest) {
+              if (instructionInputBound || !matchesAuthorizedInput(prompt, renderedPrompt, spec.stdin, instruction.composedDigest)) {
                 if (!instructionInputBound) {
                   // This callback has not delegated to the provider broker. No process was launched for this held call.
                   budget.releaseOnRegistrationFailure(reservation.id);
@@ -2991,7 +3004,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             }
             if (amendment !== null && turn === 0) {
               if (amendmentInputBound) throw new Error("owner amendment input was already bound to this turn");
-              if (prompt !== renderedPrompt || spec.stdin !== renderedPrompt || sha256(spec.stdin) !== composedInput.composedDigest) {
+              if (!matchesAuthorizedInput(prompt, renderedPrompt, spec.stdin, composedInput.composedDigest)) {
                 throw new Error("owner amendment differs from the actual adapter input");
               }
               await persist("attempt.updated", {}, {
@@ -3055,11 +3068,13 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           await turnLaunch.transport?.cancel("canonical provider-event persistence or transport failed").catch(() => undefined);
           await stopSilence();
           await silence.cancelled;
+          if (silence.elapsed) throw new PhaseSilenceTimeout(silence.failure?.message ?? PHASE_SILENCE_TIMEOUT_REASON);
           throw silence.failure ?? error;
         } finally {
           await stopSilence();
         }
         await silence.cancelled;
+        if (silence.elapsed) throw new PhaseSilenceTimeout(silence.failure?.message ?? PHASE_SILENCE_TIMEOUT_REASON);
         if (silence.failure !== null) throw silence.failure;
         if (visualDelivery !== null) {
           const observations = matchObservations(visualBound!.frames, observed.images ?? []);
@@ -3074,13 +3089,12 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         const exitCode = terminal?.kind === "run.completed" ? terminal.exitCode
           : terminal?.kind === "run.failed" ? await observedExitCode(turnLaunch.transport) : null;
         if (turnLaunch.record !== undefined) {
-          await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, {
-            type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
-            record: redactLocators(turnLaunch.record), status: terminal?.kind === "run.completed" && exitCode === 0 ? "EXITED" : "FAILED",
-            registeredAt: turnLaunch.registeredAt,
-            releasedAt: turnLaunch.releasedAt ?? turnLaunch.registeredAt,
-            endedAt, exitCode, exitSignal: null,
-          });
+          await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, processEvidence(
+            turnLaunch,
+            turnLaunch.record,
+            terminal?.kind === "run.completed" && exitCode === 0 ? "EXITED" : "FAILED",
+            { releasedAt: turnLaunch.releasedAt ?? turnLaunch.registeredAt, endedAt, exitCode, exitSignal: null },
+          ));
         }
         if (terminal?.kind === "run.failed") throw new AdapterError(route.adapter.id, terminal.errorCode, terminal.message);
         if (terminal?.kind === "run.cancelled") throw new AdapterError(route.adapter.id, "E_CANCELLED", terminal.reason);
@@ -3448,7 +3462,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if (budget.remaining >= initialCalls + 1) return false;
     const checkpoint = await checkpointAt("ceiling-pause", null);
     if (checkpoint === null) throw new Error("ceiling boundary has unsettled execution; no pause permitted");
-    await verifyRecoveryWorktree(status, checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+    await verifyCheckpointWorktree(options.attemptDir, options.config, status, checkpoint);
     const detail = `ceiling stop before ticket ${ticket} (${phase.id}): ${String(budget.committed)} of ${String(budget.ceiling)} calls spent; ` +
       `${ticket}, every ticket after it and the review need ${String(initialCalls)} call(s), and ${ticket}'s declared correction round needs 1 more`;
     await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
@@ -3481,7 +3495,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const checkpoint = await checkpointAt("ticket-block", null);
     if (checkpoint === null) return false;
     try {
-      await verifyRecoveryWorktree(status, checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+      await verifyCheckpointWorktree(options.attemptDir, options.config, status, checkpoint);
     } catch {
       return false;
     }
@@ -3607,7 +3621,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if (!isReviewPhase(next) && agentOrdinal > 0 && selectedQuota !== null && prefix.length === compiled.phases.indexOf(next)) {
       const checkpoint = await checkpointAt("quota-pause", selectedQuota);
       if (checkpoint === null) throw new Error("quota boundary has unsettled execution; no pause or refund permitted");
-      await verifyRecoveryWorktree(status, checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+      await verifyCheckpointWorktree(options.attemptDir, options.config, status, checkpoint);
       await persist("attempt.updated", { recovery: checkpoint, phase: null, process: null, budget: budget.snapshot(),
         lastActivity: detail, lastActivityAt: infra.now() },
         { type: "quota-pause", checkpoint });
@@ -4249,7 +4263,7 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
       throw new Error("ticket block does not name its own ticket's gate phase");
     }
   }
-  await verifyRecoveryWorktree(status, checkpoint, options.config.runtime.seed_paths, await verifyCandidateLedgerVerdict(options.attemptDir, options.config, status, checkpoint));
+  await verifyCheckpointWorktree(options.attemptDir, options.config, status, checkpoint);
   if (checkpoint.pending !== undefined) {
     const phase = recipe.phases[checkpoint.prefix.length];
     if (phase?.id !== checkpoint.pending.phaseKey || phase.schemaId !== inspected.pendingEnvelope?.schemaId) throw new Error("saved reply does not match the compiled phase");

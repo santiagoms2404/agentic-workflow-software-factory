@@ -36,7 +36,7 @@ import { ProcessTransportBroker, runSystemCommand } from "../../execution/transp
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
-import { GateReport, type GateId } from "../../gates/interface.ts";
+import { GateReport, gateKindFor } from "../../gates/interface.ts";
 import { assertClean, isWorktreeClean, runGit, systemGitRunner, type GitResult } from "../../git/changes.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
 import {
@@ -76,6 +76,7 @@ import {
 } from "./attempt.ts";
 import { requestOutput } from "./production-run.ts";
 import { newCommand } from "./new.ts";
+import { writeDurableFile } from "./durable-file.ts";
 import { enforceK1 } from "./start.ts";
 import { candidateGateEvidence, readAttemptEvidence, recordedReviews, recordedRoutes } from "./review-record.ts";
 import {
@@ -93,7 +94,7 @@ import {
 import { candidatePathsBetween } from "../../workflow/review-evidence.ts";
 import { completedShift } from "../../workflow/candidate-seed.ts";
 
-const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
+const { mkdir, readFile, realpath, writeFile } = fs;
 
 /**
  * Observe the candidate pins without throwing; see the note on the twin in
@@ -112,12 +113,6 @@ function observePins(worktree: string, candidateSha: string): { clean: boolean; 
 
 /** This dispatch site's ledger identity. */
 const ADOPT_DISPATCHER = "adopt/adoption-tests" as const;
-
-/** Make one path's bytes durable before any journal record cites their digest. */
-async function fsyncPath(path: string): Promise<void> {
-  const handle = await open(path, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
-}
 
 /**
  * A configured command whose recovery the ledger refuses to decide, or a ledger
@@ -243,13 +238,6 @@ const DEFAULT_INFRASTRUCTURE: AdoptionCommandInfrastructure = {
     try { process.kill(pid, 0); return true; } catch { return false; }
   },
 };
-
-function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
-  if (gateId === "commands_pass") return "subprocess";
-  if (["head_advanced", "diff_matches_claims", "candidate_hygiene"].includes(gateId)) return "git";
-  if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
-  return gateId === "journey_passes" ? "journey" : "pure";
-}
 
 /** Persist target-defining tokens, not a hand-written sentence or the source route. */
 function repeatAdoptionArgv(options: AdoptCommandOptions, source: AttemptStatus): readonly string[] {
@@ -793,7 +781,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       phaseId,
       round: 0,
       gateId: report.gateId,
-      kind: gateKind(report.gateId),
+      kind: gateKindFor(report.gateId),
       candidateSha: pair.candidateSha,
       passed: report.passed,
       exitCode,
@@ -958,10 +946,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
           throw error;
         }
         await mkdir(dirname(absolute), { recursive: true });
-        await writeFile(absolute, output, { mode: 0o600 });
-        await chmod(absolute, 0o600);
-        await fsyncPath(absolute);
-        await fsyncPath(dirname(absolute));
+        await writeDurableFile(absolute, output);
         // Observed, not assumed. Recording `cleanAfter: true` unread is how a
         // command that dirtied the tree becomes a restorable clean measurement.
         const pins = observePins(status.worktree!, pair.candidateSha);

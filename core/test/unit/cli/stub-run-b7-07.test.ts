@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 import { main } from "../../../src/cli/main.ts";
 import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { landCommand } from "../../../src/cli/commands/land.ts";
+import { candidateGateEvidence, readAttemptEvidence } from "../../../src/cli/commands/review-record.ts";
 import { createDashboardProjection } from "../../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { startCommand } from "../../../src/cli/commands/start.ts";
@@ -149,21 +150,27 @@ test("awsf run --stub true refuses an attempt that awsf start --stub true did no
   } finally { b.close(); }
 });
 
-test("a stub T2 run cannot enter review without current candidate gate rows", async () => {
+test("a stub T2 run records synthetic passing rows for its current candidate", async () => {
   const b = box("demo");
   try {
     const attemptDir = await measuredDraft(b, "demo");
     assert.equal(await b.cli(["start", "demo", "--stub", "true"]), 0, b.errors.join("\n"));
-    assert.equal(await b.cli(["run", "demo", "--stub", "true"]), 1);
-    assert.match(b.errors.join("\n"), /no gate rows were attested/u);
+    assert.equal(await b.cli(["run", "demo", "--stub", "true"]), 0, b.errors.join("\n"));
     const status = await readAttempt(attemptDir);
-    assert.equal(status.lifecycleState, "GATING");
+    assert.equal(status.lifecycleState, "AWAITING_OWNER");
     assert.match(status.candidateSha ?? "", /^[0-9a-f]{40}$/u);
     assert.equal(status.budget.callsSpent, 0, "no provider was called");
-    assert.equal(status.journeyApproved, false);
-    assert.equal(status.requiredReviewPresent, false);
-    assert.notEqual(status.attestationProvenance, "stub", "the run could not attest a green without gate rows");
-    assert.ok(!b.lines.some((line) => line.startsWith("AWAITING_OWNER:")), b.lines.join("\n"));
+    assert.equal(status.journeyApproved, true);
+    assert.equal(status.requiredReviewPresent, true);
+    assert.equal(status.attestationProvenance, "stub");
+    assert.deepEqual(candidateGateEvidence(await readAttemptEvidence(attemptDir), status.candidateSha!, status.sessionId), {
+      configured: ["candidate_hygiene", "commands_pass"],
+      rows: [
+        { gateId: "candidate_hygiene", passed: true, candidateSha: status.candidateSha },
+        { gateId: "commands_pass", passed: true, candidateSha: status.candidateSha },
+      ],
+    });
+    assert.ok(b.lines.some((line) => line.startsWith("AWAITING_OWNER:")), b.lines.join("\n"));
   } finally { b.close(); }
 });
 
@@ -184,19 +191,18 @@ test("the T2 land guard refuses journey and review evidence with stub provenance
   });
 });
 
-test("a stub T2 run stops at GATING and cannot reach the landing command", async () => {
+test("stub provenance still refuses real T2 landing after synthetic gate rows pass", async () => {
   const b = box("land");
   try {
     const attemptDir = await measuredDraft(b, "land");
     assert.equal(await b.cli(["start", "land", "--stub", "true"]), 0, b.errors.join("\n"));
-    assert.equal(await b.cli(["run", "land", "--stub", "true"]), 1);
-    assert.match(b.errors.join("\n"), /no gate rows were attested/u);
+    assert.equal(await b.cli(["run", "land", "--stub", "true"]), 0, b.errors.join("\n"));
     const before = git(b.repository, "rev-parse", "HEAD");
     await assert.rejects(
       landCommand({ attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => true } }),
-      /not one of the legal transitions/u,
+      /"stub" provenance/u,
     );
-    assert.equal((await readAttempt(attemptDir)).lifecycleState, "GATING");
+    assert.equal((await readAttempt(attemptDir)).lifecycleState, "AWAITING_OWNER");
     assert.equal(git(b.repository, "rev-parse", "HEAD"), before, "the canonical branch did not move");
   } finally { b.close(); }
 });

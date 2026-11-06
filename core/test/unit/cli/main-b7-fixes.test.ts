@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { test } from "node:test";
 import { newCommand } from "../../../src/cli/commands/new.ts";
 import { defaultWorktreeRoot } from "../../../src/cli/commands/start.ts";
-import { cliWorktreeRoot, main, shadowStop } from "../../../src/cli/main.ts";
+import { cliWorktreeRoot, main, parseArgs, shadowStop, shadowStopEnvironment } from "../../../src/cli/main.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 
 function catalogless(): string {
@@ -55,6 +55,38 @@ async function drive(argv: readonly string[], cwd = process.cwd(), env: NodeJS.P
   });
   return { code, output, errors };
 }
+
+test("B7-62: every owner-act arm shares the same terminal fallback", () => {
+  const source = readFileSync(resolve("core/src/cli/main.ts"), "utf8");
+  assert.doesNotMatch(source, /options\.terminal \?\? processOwnerTerminal\(\)/u);
+  assert.equal([...source.matchAll(/ownerTerminal\(options\.terminal\)/gu)].length, 16);
+});
+
+test("B7-63: grant reuses the config already validated by main", () => {
+  const source = readFileSync(resolve("core/src/cli/main.ts"), "utf8");
+  const start = source.indexOf('case "grant":');
+  const end = source.indexOf('case "raise":', start);
+  assert.ok(start >= 0 && end > start);
+  const grantArm = source.slice(start, end);
+  assert.doesNotMatch(grantArm, /loadConfig|readFile/u);
+  assert.match(grantArm, /grantCommand\(\{ attemptDir: located\.attemptDir, config, configPath, stateRoot/u);
+});
+
+test("B7-65: flag-value spellings share one routing table", () => {
+  const equals = parseArgs(["--where=source", "--read=guide", "--consulted", "session-1", "--ticket=T01"]);
+  const spaced = parseArgs(["--where", "source", "--read", "guide", "--consulted=session-1", "--ticket", "T01"]);
+  assert.deepEqual(equals.where, spaced.where);
+  assert.deepEqual(equals.read, spaced.read);
+  assert.deepEqual(equals.consulted, spaced.consulted);
+  assert.deepEqual(equals.tickets, spaced.tickets);
+});
+
+test("B7-66: a supplied CLI environment cannot re-enable the remote key under tests", () => {
+  const supplied = { OPENROUTER_API_KEY: "not-a-real-value" };
+  assert.equal(shadowStopEnvironment(supplied, true).OPENROUTER_API_KEY, undefined);
+  assert.equal(shadowStopEnvironment({ ...supplied, NODE_TEST_CONTEXT: "1" }, false).OPENROUTER_API_KEY, undefined);
+  assert.equal(shadowStopEnvironment(supplied, false), supplied);
+});
 
 test("B7-18: shadowStop callers in main.ts pass projection.projectDecision", () => {
   const source = readFileSync(resolve("core/src/cli/main.ts"), "utf8");

@@ -24,6 +24,37 @@ export const GATE_IDS = [
 
 export type GateId = (typeof GATE_IDS)[number];
 
+export type GateKind = "pure" | "filesystem" | "git" | "subprocess" | "journey";
+
+/** One canonical classification for every gate, shared by journal producers and readers. */
+export const GATE_KIND_BY_ID: Readonly<Record<GateId, GateKind>> = Object.freeze({
+  envelope_valid: "pure",
+  artifacts_exist: "filesystem",
+  files_non_empty: "filesystem",
+  json_parses: "filesystem",
+  diff_matches_claims: "git",
+  head_advanced: "git",
+  candidate_hygiene: "git",
+  no_protected_paths: "filesystem",
+  risk_tier_sufficient: "pure",
+  writes_within_globs: "filesystem",
+  verdict_consistent: "pure",
+  review_evidence_present: "pure",
+  commands_pass: "subprocess",
+  journey_passes: "journey",
+  contract_digest: "pure",
+  spine_declared: "pure",
+  spine_carried: "pure",
+  design_evidence_present: "pure",
+  architecture_verdict_consistent: "pure",
+  architecture_review_clear: "pure",
+  visual_references_inspected: "pure",
+});
+
+export function gateKindFor(gateId: GateId): GateKind {
+  return GATE_KIND_BY_ID[gateId];
+}
+
 export interface GateCheck {
   readonly item: string;
   readonly ok: boolean;
