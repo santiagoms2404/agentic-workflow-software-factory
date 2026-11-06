@@ -223,34 +223,24 @@ function seedMutations(before: ReadonlyMap<string, string>, after: ReadonlyMap<s
   return changed.sort().map((path) => Object.freeze({ path, reasons: Object.freeze(["protected-path"] as const) }));
 }
 
-function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
+function bwrapCommand(
+  spec: ProcessSpec,
+  request: SandboxRequest,
+  prefix: readonly string[],
+  beforeReadOnlyRoots: readonly string[],
+  writableProviderBinds: readonly string[],
+): ProcessSpec {
   const worktreeBind = request.writes.length === 0 ? "--ro-bind" : "--bind";
   return {
     executable: "bwrap",
     argv: [
-      "--die-with-parent",
-      "--new-session",
-      "--unshare-all",
-      "--share-net",
-      "--ro-bind", "/", "/",
-      // The whole host filesystem is readable above; `writes: []` confines
-      // WRITES and confines reads not at all. A profile carrying a model-driven
-      // `Read` that can name an absolute path therefore reaches every other
-      // attempt's directory and this attempt's own `private/` — including the
-      // continuity locator, whose 0600 is protection against other users, not
-      // against a process running as the owner. bwrap applies binds in argv
-      // ORDER, so an empty tmpfs over the state root here, before the runtime
-      // bind below, hides all of it while leaving this phase's own writable
-      // runtime intact. The order is asserted by the descriptor test.
-      "--tmpfs", request.stateRoot,
-      "--proc", "/proc",
-      "--dev", "/dev",
+      ...prefix,
       worktreeBind, request.worktree, request.worktree,
       "--bind", request.sessionRuntime, request.sessionRuntime,
-      "--ro-bind", request.canonicalRepository, request.canonicalRepository,
+      ...beforeReadOnlyRoots,
       ...(request.readOnlyRoots ?? []).flatMap((root) => ["--ro-bind", root, root]),
       ...seedBinds(request),
-      ...providerRoots(request).flatMap((root) => ["--bind", root, root]),
+      ...writableProviderBinds,
       "--chdir", spec.cwd,
       "--",
       spec.executable,
@@ -263,6 +253,29 @@ function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
     stdin: spec.stdin,
     shell: false,
   };
+}
+
+function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
+  return bwrapCommand(spec, request, [
+    "--die-with-parent",
+    "--new-session",
+    "--unshare-all",
+    "--share-net",
+    "--ro-bind", "/", "/",
+    // The whole host filesystem is readable above; `writes: []` confines
+    // WRITES and confines reads not at all. A profile carrying a model-driven
+    // `Read` that can name an absolute path therefore reaches every other
+    // attempt's directory and this attempt's own `private/` — including the
+    // continuity locator, whose 0600 is protection against other users, not
+    // against a process running as the owner. bwrap applies binds in argv
+    // ORDER, so an empty tmpfs over the state root here, before the runtime
+    // bind below, hides all of it while leaving this phase's own writable
+    // runtime intact. The order is asserted by the descriptor test.
+    "--tmpfs", request.stateRoot,
+    "--proc", "/proc",
+    "--dev", "/dev",
+  ], ["--ro-bind", request.canonicalRepository, request.canonicalRepository],
+  providerRoots(request).flatMap((root) => ["--bind", root, root]));
 }
 
 /** System directories a confined phase reads, in bind order; each only when it exists. */
@@ -398,37 +411,20 @@ function confinedSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
       installs.push(operation, source, destination);
     }
   }
-  const worktreeBind = request.writes.length === 0 ? "--ro-bind" : "--bind";
-  return {
-    executable: "bwrap",
-    argv: [
-      "--die-with-parent",
-      "--new-session",
-      "--unshare-all",
-      "--share-net",
-      ...systemMounts,
-      "--proc", "/proc",
-      "--dev", "/dev",
-      "--tmpfs", "/tmp",
-      ...(home === undefined ? [] : ["--tmpfs", home]),
-      ...linkTargets,
-      ...installs,
-      ...providerFiles(request.providerReadableRoots).flatMap((file) => ["--ro-bind", file, file]),
-      worktreeBind, request.worktree, request.worktree,
-      "--bind", request.sessionRuntime, request.sessionRuntime,
-      ...(request.readOnlyRoots ?? []).flatMap((root) => ["--ro-bind", root, root]),
-      ...seedBinds(request),
-      ...providerFiles(request.providerWritableRoots).flatMap((file) => ["--bind", file, file]),
-      "--chdir", spec.cwd,
-      "--",
-      spec.executable,
-      ...spec.argv,
-    ],
-    cwd: request.worktree,
-    env: { ...spec.env, TMPDIR: request.sessionRuntime },
-    stdin: spec.stdin,
-    shell: false,
-  };
+  return bwrapCommand(spec, request, [
+    "--die-with-parent",
+    "--new-session",
+    "--unshare-all",
+    "--share-net",
+    ...systemMounts,
+    "--proc", "/proc",
+    "--dev", "/dev",
+    "--tmpfs", "/tmp",
+    ...(home === undefined ? [] : ["--tmpfs", home]),
+    ...linkTargets,
+    ...installs,
+    ...providerFiles(request.providerReadableRoots).flatMap((file) => ["--ro-bind", file, file]),
+  ], [], providerFiles(request.providerWritableRoots).flatMap((file) => ["--bind", file, file]));
 }
 
 /**

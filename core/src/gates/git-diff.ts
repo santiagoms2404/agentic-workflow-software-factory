@@ -1,4 +1,4 @@
-import { matchesPathGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
+import { compilePathGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { protectedExemptionAllows, isProtectedCapability, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
 import { isPlanAdmissionCapability, planAdmissionExemptionAllows, type PlanAdmissionCapability } from "../registry/plan-admission.ts";
 import { GateReport } from "./interface.ts";
@@ -32,19 +32,29 @@ export function headAdvanced(evidence: HeadAdvanceEvidence): GateReport {
     .check("HEAD differs from base", evidence.headSha !== null && evidence.headSha !== evidence.baseSha, `base=${evidence.baseSha}; head=${evidence.headSha ?? "none"}`);
 }
 
-function classifyPath(path: string, globs: readonly string[], caseSensitive: boolean): { valid: boolean; matches: boolean } {
+function compilePolicyGlobs(globs: readonly string[], caseSensitive: boolean): readonly RegExp[] | null {
   try {
-    normalizeRepositoryPath(path);
-    let matches = false;
-    // Deliberately inspect every glob: a matching early grant must not hide a
-    // malformed later policy entry.
-    for (const glob of globs) {
-      if (matchesPathGlob(path, glob, caseSensitive)) matches = true;
-    }
-    return { valid: true, matches };
+    return globs.map((glob) => compilePathGlob(glob, caseSensitive));
+  } catch {
+    return null;
+  }
+}
+
+function classifyPath(path: string, matchers: readonly RegExp[] | null): { valid: boolean; matches: boolean } {
+  let normalizedPath: string;
+  try {
+    normalizedPath = normalizeRepositoryPath(path);
   } catch {
     return { valid: false, matches: false };
   }
+  if (matchers === null) return { valid: false, matches: false };
+  let matches = false;
+  // Deliberately inspect every matcher: a matching early grant must not hide
+  // a malformed later policy entry, which was compiled above.
+  for (const matcher of matchers) {
+    if (matcher.test(normalizedPath)) matches = true;
+  }
+  return { valid: true, matches };
 }
 
 export function noProtectedPaths(
@@ -55,8 +65,10 @@ export function noProtectedPaths(
 ): GateReport {
   const report = new GateReport("no_protected_paths");
   if (changedPaths.length === 0) return report.check("change-set", true, "no changed paths");
+  const insensitiveCapability = capabilities.some(capability => isProtectedCapability(capability) || isPlanAdmissionCapability(capability));
+  const matchers = compilePolicyGlobs(protectedPaths, insensitiveCapability ? false : caseSensitive);
   for (const path of uniqueSorted(changedPaths)) {
-    const classification = classifyPath(path, protectedPaths, capabilities.some(capability => isProtectedCapability(capability) || isPlanAdmissionCapability(capability)) ? false : caseSensitive);
+    const classification = classifyPath(path, matchers);
     const ok = classification.valid && (!classification.matches || capabilities.some(capability => protectedExemptionAllows(capability, path) || planAdmissionExemptionAllows(capability, path)));
     report.check(path, ok, !classification.valid ? "invalid path or protected-path policy" : classification.matches ? "matches a protected path" : "not protected");
   }
@@ -70,8 +82,9 @@ export function writesWithinGlobs(
 ): GateReport {
   const report = new GateReport("writes_within_globs");
   if (changedPaths.length === 0) return report.check("change-set", true, "no changed paths");
+  const matchers = compilePolicyGlobs(writes, caseSensitive);
   for (const path of uniqueSorted(changedPaths)) {
-    const classification = classifyPath(path, writes, caseSensitive);
+    const classification = classifyPath(path, matchers);
     report.check(path, classification.valid && classification.matches, classification.matches ? "matches an allowed write glob" : "outside allowed write globs or invalid policy");
   }
   return report;

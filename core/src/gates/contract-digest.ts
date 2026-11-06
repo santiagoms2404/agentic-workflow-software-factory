@@ -1,21 +1,15 @@
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { readContractArtifactDigestSync } from "../contracts/artifact-digest.ts";
 import { loadContractProjection } from "../registry/contracts.ts";
 import { GateReport } from "./interface.ts";
 
-function sha256(bytes: Uint8Array): string {
-  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-}
-
 function readArtifact(path: string): { readonly digest: string } | { readonly error: string } {
-  try {
-    return { digest: sha256(readFileSync(path)) };
-  } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return { error: "missing" };
+  return readContractArtifactDigestSync(path, (error) => {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return "missing";
     const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
-    return { error: code ?? (error instanceof Error ? error.message : String(error)) };
-  }
+    return code ?? (error instanceof Error ? error.message : String(error));
+  });
 }
 
 /** Checks only this worktree's declared contract artifacts against their byte digests. */

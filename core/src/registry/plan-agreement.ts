@@ -1,11 +1,9 @@
 import { Value } from "@sinclair/typebox/value";
-import { TicketSchema, TICKET_TASK_CLASSES, type Ticket } from "../contracts/ticket.ts";
+import { TicketSchema, TICKET_STATES, TICKET_TASK_CLASSES, TICKET_WORKFLOWS, type Ticket } from "../contracts/ticket.ts";
+import { TIERS } from "../state/tiers.ts";
 import type { ParsedAwsfPlan } from "./plan-source.ts";
 import { isPlanIdentifierClaim, spineCoverage, type SpineCoverageRule } from "./plan-spine.ts";
 
-const STATES = ["todo", "wip", "done", "failed"];
-const TIERS = [0, 1, 2];
-const WORKFLOWS = ["scout", "plan", "build", "plan-build-test", "build-review", "simple-sdlc", "intake"];
 const TICKET_ID = /^[TW]\d\d$/;
 
 // Spine dependencies order authoring, but states track build completion. G1
@@ -229,12 +227,12 @@ export function validTaskClass(value: unknown): boolean {
 export function ticketVocabularies(input: PlanAgreementInput): readonly PlanAgreementViolation[] {
   const messages: string[] = [];
   for (const ticket of input.tickets) {
-    if (!STATES.includes(ticket.state)) messages.push(`${input.label}/${ticket.id}: state "${ticket.state}"`);
+    if (!(TICKET_STATES as readonly string[]).includes(ticket.state)) messages.push(`${input.label}/${ticket.id}: state "${ticket.state}"`);
     // Optional fields stay optional; no spine is invented for a legacy plan.
-    if (ticket.tier !== undefined && !TIERS.includes(ticket.tier)) {
+    if (ticket.tier !== undefined && !(TIERS as readonly number[]).includes(ticket.tier)) {
       messages.push(`${input.label}/${ticket.id}: tier "${String(ticket.tier)}"`);
     }
-    if (ticket.workflow !== undefined && !WORKFLOWS.includes(ticket.workflow)) {
+    if (ticket.workflow !== undefined && !(TICKET_WORKFLOWS as readonly string[]).includes(ticket.workflow)) {
       messages.push(`${input.label}/${ticket.id}: workflow "${ticket.workflow}"`);
     }
     if (!validTaskClass(ticket.task_class)) {

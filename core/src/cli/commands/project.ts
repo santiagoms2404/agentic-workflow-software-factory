@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { access, readdir, readFile } from "node:fs/promises";
 import { Value } from "@sinclair/typebox/value";
+import { readContractArtifactDigest } from "../../contracts/artifact-digest.ts";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import { stringify as toYaml } from "yaml";
@@ -196,10 +196,6 @@ export interface ProjectVerificationReport {
   readonly lines: readonly string[];
 }
 
-function sha256(bytes: Uint8Array): string {
-  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-}
-
 async function projectionAt(repositoryPath: string): Promise<ContractProjection | undefined> {
   try {
     return loadContractProjection(await readFile(join(repositoryPath, "awsf.contracts.yaml"), "utf8"));
@@ -210,12 +206,11 @@ async function projectionAt(repositoryPath: string): Promise<ContractProjection 
 }
 
 async function artifactDigest(path: string): Promise<string> {
-  try {
-    return sha256(await readFile(path));
-  } catch (error) {
+  const result = await readContractArtifactDigest(path, (error) => {
     if (error instanceof Error && "code" in error && typeof error.code === "string") return error.code === "ENOENT" ? "missing" : error.code;
     return error instanceof Error ? error.message : String(error);
-  }
+  });
+  return "digest" in result ? result.digest : result.error;
 }
 
 function failureLine(failure: ProjectVerificationFailure): string {

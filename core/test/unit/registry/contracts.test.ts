@@ -302,6 +302,57 @@ test("two committed contract copies reconcile and all three drift modes are dist
   }
 });
 
+test("the gate and project verifier digest arbitrary contract bytes identically", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-contract-binary-bytes-"));
+  try {
+    const fixture = await createContractFixture(root);
+    const bytes = Buffer.from([0x00, 0xff, 0xc3, 0x28, 0xfe]);
+    const digest = sha256(bytes);
+    for (const repository of [fixture.producer, fixture.consumer]) {
+      writeFileSync(join(repository, CONTRACT_PATH), bytes);
+      writeFileSync(join(repository, "awsf.contracts.yaml"), projectionYaml(repository === fixture.producer ? "produces" : "consumes", digest));
+    }
+    writeFileSync(fixture.catalogPath, catalogYaml(digest));
+
+    assert.equal(contractDigest(fixture.producer).passed, true);
+    assert.equal(contractDigest(fixture.consumer).passed, true);
+    assert.equal((await verifyRegisteredProject(fixture.stateRoot, FIXTURE_SLUG)).ok, true);
+    assert.deepEqual(await verifyViaCli(fixture), {
+      exitCode: 0,
+      output: [`project ${FIXTURE_SLUG}: contract verification passed`],
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the gate and project verifier keep missing-artifact refusal text", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-contract-missing-artifact-"));
+  try {
+    const fixture = await createContractFixture(root);
+    rmSync(join(fixture.producer, CONTRACT_PATH));
+
+    const gate = contractDigest(fixture.producer);
+    assert.equal(gate.passed, false);
+    assert.equal(gate.checks[0]?.note, `expected=${fixture.digest}; observed=missing`);
+    const report = await verifyRegisteredProject(fixture.stateRoot, FIXTURE_SLUG);
+    assert.deepEqual(report.failures, [{
+      kind: "artifact-disagrees",
+      contractId: CONTRACT_ID,
+      repositoryId: "producer",
+      path: CONTRACT_PATH,
+      expectedDigest: fixture.digest,
+      observedDigest: "missing",
+    }]);
+    assert.deepEqual(await verifyViaCli(fixture), {
+      exitCode: 1,
+      output: [`artifact disagrees: contract=${CONTRACT_ID}, repository=producer, path=${CONTRACT_PATH}; expected digest=${fixture.digest}; observed digest=missing`],
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("a repository with no contract projection passes with zero checks", () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-contract-fence-empty-"));
   const repository = join(root, "repository");

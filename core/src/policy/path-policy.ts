@@ -1,4 +1,4 @@
-import { protectedExemptionAllows, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
+import { protectedExemptionAllows, protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
 import { posix } from "node:path";
 
 export type PathViolationReason = "invalid-path" | "outside-write-globs" | "protected-path";
@@ -97,10 +97,15 @@ function globSource(glob: string): string {
   return source;
 }
 
+/** Compiles one policy glob for repeated matching within a single classification. */
+export function compilePathGlob(glob: string, caseSensitive = process.platform !== "win32"): RegExp {
+  const normalizedGlob = normalizeGlob(glob);
+  return new RegExp(`^${globSource(normalizedGlob)}$`, caseSensitive ? "" : "i");
+}
+
 export function matchesPathGlob(path: string, glob: string, caseSensitive = process.platform !== "win32"): boolean {
   const normalizedPath = normalizeRepositoryPath(path);
-  const normalizedGlob = normalizeGlob(glob);
-  return new RegExp(`^${globSource(normalizedGlob)}$`, caseSensitive ? "" : "i").test(normalizedPath);
+  return compilePathGlob(glob, caseSensitive).test(normalizedPath);
 }
 
 /** Alias kept intentionally terse for callers classifying many paths. */
@@ -111,8 +116,11 @@ export function validatePathPolicy(policy: PathPolicy): void {
 }
 
 export function evaluatePathPolicy(paths: readonly string[], policy: PathPolicy): readonly PathViolation[] {
-  validatePathPolicy(policy);
   const caseSensitive = policy.caseSensitive ?? process.platform !== "win32";
+  const writeMatchers = policy.writes.map((glob) => compilePathGlob(glob, caseSensitive));
+  const protectedWrite = protectedWriteContext(policy.protectedCapability);
+  const protectedMatchers = policy.protectedPaths.map((glob) =>
+    compilePathGlob(glob, protectedWrite === null ? caseSensitive : false));
   const violations: PathViolation[] = [];
   for (const observed of [...new Set(paths)].sort()) {
     let path: string;
@@ -123,10 +131,10 @@ export function evaluatePathPolicy(paths: readonly string[], policy: PathPolicy)
       continue;
     }
     const reasons: PathViolationReason[] = [];
-    if (!policy.writes.some((glob) => matchesPathGlob(path, glob, caseSensitive))) {
+    if (!writeMatchers.some((matcher) => matcher.test(path))) {
       reasons.push("outside-write-globs");
     }
-    if (policy.protectedPaths.some((glob) => matchesPathGlob(path, glob, caseSensitive)) && !protectedExemptionAllows(policy.protectedCapability, path, "write")) {
+    if (protectedMatchers.some((matcher) => matcher.test(path)) && !protectedExemptionAllows(policy.protectedCapability, path, "write")) {
       reasons.push("protected-path");
     }
     if (reasons.length > 0) violations.push(Object.freeze({ path, reasons: Object.freeze(reasons) }));

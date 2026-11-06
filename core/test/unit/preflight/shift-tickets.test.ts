@@ -78,6 +78,20 @@ test("registered plans.root, selected ids and sealed bytes determine the scan, n
   } finally { b.close(); }
 });
 
+test("a registered plan path must be a readable file, not just an existing directory", async () => {
+  const b = box();
+  try {
+    registerShiftPlan(b.repository, b.config.project.slug, "synthetic");
+    const catalogPath = join(b.repository, "awsf.project.yaml");
+    writeFileSync(catalogPath, readFileSync(catalogPath, "utf8").replace("root: specs", "root: plan-dir"));
+    mkdirSync(join(b.repository, "plan-dir", "synthetic.html"), { recursive: true });
+    const manifest = sealShiftManifest({ plan: "synthetic", milestones: ["M1"], tickets: [
+      { id: "T01", path: "plan-dir/tickets/synthetic/T01.md", digest: "a".repeat(64) },
+    ] });
+    await assert.rejects(readShiftTicketDoBlocks(b.repository, manifest), (error: NodeJS.ErrnoException) => error.code === "EISDIR");
+  } finally { b.close(); }
+});
+
 test("missing registration is never treated as an empty DO scan", async () => {
   const b = box();
   try {

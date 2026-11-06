@@ -1,7 +1,7 @@
-import type { RiskTierName } from "../config/schema.ts";
-import { matchesPathGlob, normalizeRepositoryPath } from "./path-policy.ts";
+import { KNOWN_RISK_TIERS, type RiskTierName } from "../config/schema.ts";
+import { compilePathGlob, normalizeRepositoryPath } from "./path-policy.ts";
 
-export const RISK_TIERS = ["T0", "T1", "T2"] as const;
+export const RISK_TIERS = KNOWN_RISK_TIERS;
 
 export interface RiskPolicy {
   readonly default: RiskTierName;
@@ -44,11 +44,16 @@ export function classifyRisk(
   const uniqueNormalized = [...new Set(normalized)].sort();
   const uniqueInvalid = [...new Set(invalidPaths)].sort();
   const caseSensitive = policy.caseSensitive ?? process.platform !== "win32";
+  const rules = uniqueNormalized.length === 0 ? [] : Object.entries(policy.paths).map(([glob, tier]) => ({
+    glob,
+    tier,
+    matcher: compilePathGlob(glob, caseSensitive),
+  }));
   const matched: { path: string; glob: string; tier: RiskTierName }[] = [];
   let classifiedTier = policy.default;
   for (const path of uniqueNormalized) {
-    for (const [glob, tier] of Object.entries(policy.paths)) {
-      if (!matchesPathGlob(path, glob, caseSensitive)) continue;
+    for (const { glob, tier, matcher } of rules) {
+      if (!matcher.test(path)) continue;
       matched.push({ path, glob, tier });
       if (tierRank(tier) > tierRank(classifiedTier)) classifiedTier = tier;
     }

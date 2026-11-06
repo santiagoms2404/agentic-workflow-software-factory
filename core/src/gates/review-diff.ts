@@ -43,6 +43,9 @@ interface ParsedSection {
   /** Everything before the first hunk: the `diff --git`, index, and ---/+++ lines. */
   readonly header: string;
   readonly hunks: readonly string[];
+  readonly removesLines: readonly boolean[];
+  readonly hunkChars: number;
+  readonly markerChars: number;
   readonly totalChars: number;
 }
 
@@ -88,10 +91,14 @@ function parseSection(section: DiffFileSection): ParsedSection {
     if (hunks.length === 0) header.push(line);
     else hunks[hunks.length - 1]!.push(line);
   }
+  const parsedHunks = Object.freeze(hunks.map((hunk) => `${hunk.join("\n").replace(/\n+$/, "")}\n`));
   return {
     path: section.path,
     header: header.length === 0 ? "" : `${header.join("\n").replace(/\n+$/, "")}\n`,
-    hunks: Object.freeze(hunks.map((hunk) => `${hunk.join("\n").replace(/\n+$/, "")}\n`)),
+    hunks: parsedHunks,
+    removesLines: Object.freeze(parsedHunks.map(diffRemovesLines)),
+    hunkChars: parsedHunks.reduce((sum, hunk) => sum + hunk.length, 0),
+    markerChars: partialMarker(section.path, parsedHunks.length, parsedHunks.length).length,
     totalChars: section.text.length,
   };
 }
@@ -108,15 +115,11 @@ function partialMarker(path: string, omitted: number, total: number): string {
   return `*** awsf: ${String(omitted)} of ${String(total)} hunk(s) omitted from ${path}\n`;
 }
 
-function markerReservation(section: ParsedSection): number {
-  return partialMarker(section.path, section.hunks.length, section.hunks.length).length;
-}
-
 /** Deletion-bearing hunks first, original order preserved inside each group. */
-function selectionOrder(hunks: readonly string[]): readonly number[] {
-  const indices = hunks.map((_, index) => index);
-  const removing = indices.filter((index) => diffRemovesLines(hunks[index]!));
-  const adding = indices.filter((index) => !diffRemovesLines(hunks[index]!));
+function selectionOrder(removesLines: readonly boolean[]): readonly number[] {
+  const indices = removesLines.map((_, index) => index);
+  const removing = indices.filter((index) => removesLines[index]);
+  const adding = indices.filter((index) => !removesLines[index]);
   return Object.freeze([...removing, ...adding]);
 }
 
@@ -138,6 +141,7 @@ export function boundReviewDiff(
     text: section.text.length === 0 || section.text.endsWith("\n") ? section.text : `${section.text}\n`,
   }));
   const parsed = normalized.map(parseSection);
+  const hunkOrder = parsed.map((section) => selectionOrder(section.removesLines));
   const originalChars = parsed.reduce((sum, section) => sum + section.totalChars, 0);
   const whole = normalized.map((section) => section.text).join("");
   if (parsed.length === 0) {
@@ -149,36 +153,50 @@ export function boundReviewDiff(
 
   const kept = parsed.map(() => new Set<number>());
   const admitted = parsed.map(() => false);
+  const keptBodyChars = parsed.map(() => 0);
+  const fileCosts = parsed.map(() => 0);
+  let totalCost = 0;
   const share = Math.floor(budget / parsed.length);
 
-  /**
-   * What file `index` currently costs to render, marker included.
-   *
-   * Every admission decision is made by simulating this against a ceiling, so
-   * there is exactly one place where the arithmetic of "what will this cost"
-   * lives and no running total to fall out of step with it.
-   */
-  const costOf = (index: number, hunks: ReadonlySet<number>): number => {
+  const cost = (index: number): number => admitted[index] ? fileCosts[index]! : 0;
+  const costWith = (index: number, extraHunk: number): number => {
     const section = parsed[index]!;
-    const body = [...hunks].reduce((sum, hunk) => sum + section.hunks[hunk]!.length, 0);
-    const marker = hunks.size < section.hunks.length ? markerReservation(section) : 0;
-    return section.header.length + body + marker;
+    const nextCount = kept[index]!.size + 1;
+    return section.header.length + keptBodyChars[index]! + section.hunks[extraHunk]!.length
+      + (nextCount < section.hunks.length ? section.markerChars : 0);
   };
-  const cost = (index: number): number => admitted[index] ? costOf(index, kept[index]!) : 0;
-  const costWith = (index: number, extraHunk: number): number =>
-    costOf(index, new Set([...kept[index]!, extraHunk]));
-  const total = (): number => parsed.reduce((sum, _section, index) => sum + cost(index), 0);
+  const updateCost = (index: number, nextCost: number): void => {
+    const previous = cost(index);
+    admitted[index] = true;
+    fileCosts[index] = nextCost;
+    totalCost += nextCost - previous;
+  };
   const everything = (index: number): Set<number> =>
     new Set(parsed[index]!.hunks.map((_hunk, position) => position));
+  const admitHunk = (index: number, hunk: number): void => {
+    const section = parsed[index]!;
+    const selected = kept[index]!;
+    const nextBodyChars = keptBodyChars[index]! + section.hunks[hunk]!.length;
+    selected.add(hunk);
+    keptBodyChars[index] = nextBodyChars;
+    updateCost(index, section.header.length + nextBodyChars
+      + (selected.size < section.hunks.length ? section.markerChars : 0));
+  };
 
   const admitAll = (index: number, ceiling: number): boolean => {
+    const section = parsed[index]!;
     // Tried first, and it is not an optimization. A partial file costs a marker
     // line, so there are budgets at which the WHOLE file fits and any single
     // hunk of it does not — a greedy pass that never considered the whole
     // would omit a file it could have shown entirely.
-    if (costOf(index, everything(index)) > ceiling) return false;
-    admitted[index] = true;
+    const fullCost = section.header.length + section.hunkChars;
+    if (fullCost > ceiling) return false;
+    const previous = cost(index);
     kept[index] = everything(index);
+    keptBodyChars[index] = section.hunkChars;
+    admitted[index] = true;
+    fileCosts[index] = fullCost;
+    totalCost += fullCost - previous;
     return true;
   };
 
@@ -187,40 +205,38 @@ export function boundReviewDiff(
   for (const [index, section] of parsed.entries()) {
     if (admitAll(index, share)) continue;
     let removalDropped = false;
-    for (const hunk of selectionOrder(section.hunks)) {
-      const removes = diffRemovesLines(section.hunks[hunk]!);
+    for (const hunk of hunkOrder[index]!) {
+      const removes = section.removesLines[hunk]!;
       if (!removes && removalDropped) break;
       if (costWith(index, hunk) > share) {
         removalDropped ||= removes;
         continue;
       }
-      admitted[index] = true;
-      kept[index]!.add(hunk);
+      admitHunk(index, hunk);
     }
   }
 
   // Pass two: the unspent remainder, in file order, so a small candidate with
   // one large file still shows that file.
   for (const [index, section] of parsed.entries()) {
-    const spare = budget - total() + cost(index);
+    const spare = budget - totalCost + cost(index);
     if (kept[index]!.size < section.hunks.length && admitAll(index, spare)) continue;
     let removalDropped = false;
-    for (const hunk of selectionOrder(section.hunks)) {
-      const removes = diffRemovesLines(section.hunks[hunk]!);
+    for (const hunk of hunkOrder[index]!) {
+      const removes = section.removesLines[hunk]!;
       // The rule, enforced rather than merely preferred: an addition-only hunk
       // is never shown in the place of a deletion this file could not fit. A
       // file whose removals did not fit shows no additions at all, and says so.
       if (!removes && removalDropped) break;
       if (kept[index]!.has(hunk)) continue;
-      if (total() - cost(index) + costWith(index, hunk) > budget) {
+      if (totalCost - cost(index) + costWith(index, hunk) > budget) {
         removalDropped ||= removes;
         continue;
       }
-      admitted[index] = true;
-      kept[index]!.add(hunk);
+      admitHunk(index, hunk);
     }
-    if (!admitted[index] && section.hunks.length === 0 && total() + section.header.length <= budget) {
-      admitted[index] = true;
+    if (!admitted[index] && section.hunks.length === 0 && totalCost + section.header.length <= budget) {
+      updateCost(index, section.header.length);
     }
   }
 

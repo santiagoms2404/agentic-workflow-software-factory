@@ -42,7 +42,7 @@ export const KNOWN_PROTECTED_OPERATIONS = [
 
 const IdentifierString = Type.String({ minLength: 1, pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" });
 const NonEmptyString = Type.String({ minLength: 1 });
-const RiskTier = Type.Union([Type.Literal("T0"), Type.Literal("T1"), Type.Literal("T2")]);
+const RiskTier = Type.Union(KNOWN_RISK_TIERS.map((tier) => Type.Literal(tier)));
 
 /** Owner-selectable reasoning intent; each adapter must represent it or refuse preflight. */
 export const ROUTE_EFFORT_LEVELS = ["none", "low", "medium", "high", "xhigh", "max"] as const;
