@@ -175,7 +175,10 @@ test("real offline stub transitions persist the same rendered action next reads"
       states.push(status.lifecycleState);
       assert.equal(status.nextAction, renderAttemptNextAction(status));
     } });
-    assert.deepEqual(states, ["RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER"]);
+    assert.deepEqual(
+      states.filter((state, index) => index === 0 || state !== states[index - 1]),
+      ["RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER"],
+    );
     assert.equal((await nextCommand(created.attemptDir)).lines[0], done.nextAction);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

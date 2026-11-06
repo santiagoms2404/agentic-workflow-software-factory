@@ -9,13 +9,15 @@ export interface StopJudgeOptions {
   readonly transport: Pick<JevTransport, "ask">;
   readonly taskRoot: string;
   readonly caller: "stop" | "replay";
+  /** Whether unexpected injected-transport failures are operational unavailability or fatal defects. */
+  readonly transportFailure: "unavailable" | "propagate";
   readonly allowedActs: readonly string[];
   readonly projectDecision?: (record: DecisionRecord) => void;
   readonly now?: () => string;
   readonly newId?: () => string;
 }
 
-/** Shared stop-judgment adapter: transport throws become typed unavailable, while validation and persistence errors propagate. */
+/** Shared stop-judgment adapter: preserves typed outcomes and applies the caller's unexpected-error policy. */
 export async function judgeStop(facts: StopFacts, options: StopJudgeOptions): Promise<{
   readonly judgment: JudgmentInput;
   readonly decision: { readonly recordId: string; readonly outcome: JevOutcome["outcome"] };
@@ -25,7 +27,7 @@ export async function judgeStop(facts: StopFacts, options: StopJudgeOptions): Pr
       try {
         return await options.transport.ask(state, questions, askOptions);
       } catch (error) {
-        if (error instanceof QuestionValidationError) throw error;
+        if (error instanceof QuestionValidationError || options.transportFailure === "propagate") throw error;
         return { outcome: "unavailable", reason: "network", detail: "decision transport failed" };
       }
     },

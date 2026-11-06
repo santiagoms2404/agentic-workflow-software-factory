@@ -129,5 +129,5 @@ test("focus follows the reader into an opened node and back to the dot they open
   assert.match(route, /:ref="\(element\) => holdParked\(node\.id, element\)"/u);
   // Awaited, so the panel the focus is going to has been rendered; and lazy,
   // so arriving with `opened` already in the address moves nothing.
-  assert.match(route, /watch\(\(\) => props\.route\.opened, async \(now, before\) => \{\n\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*await nextTick\(\);/u);
+  assert.match(route, /watch\(\(\) => currentRoute\.value\.opened, async \(now, before\) => \{\n\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*await nextTick\(\);/u);
 });

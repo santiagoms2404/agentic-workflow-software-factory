@@ -104,6 +104,7 @@ export async function recordShadowProposal(input: ShadowInput): Promise<ShadowOu
       transport,
       taskRoot,
       caller: "stop",
+      transportFailure: "unavailable",
       allowedActs,
       ...(input.projectDecision === undefined ? {} : { projectDecision: input.projectDecision }),
       ...(input.now === undefined ? {} : { now: input.now }),

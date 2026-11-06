@@ -28,7 +28,7 @@ test("empty health retains zero counts and schema metadata", () => {
   const db = openDatabase(":memory:");
   try {
     assert.deepEqual(projectionHealth(db), {
-      schemaVersion: 8, journalMode: "memory", activeSessions: 0, projectorLag: 0, degradedSessions: 0,
+      schemaVersion: 9, journalMode: "memory", activeSessions: 0, projectorLag: 0, degradedSessions: 0,
     });
   } finally { db.close(); }
 });
@@ -44,7 +44,7 @@ test("mixed health excludes published work but retains lag and degraded terminal
        lifecycle_state, request_text, call_ceiling, started_at, updated_at, config_snapshot_json, journal_path)
       VALUES ('running','p','T2',1,'wf',0,0,'RUNNING','request',3,'t','t','{}','journal')`).run();
     assert.deepEqual(projectionHealth(reader), {
-      schemaVersion: 8, journalMode: "wal", activeSessions: 1, projectorLag: 7, degradedSessions: 1,
+      schemaVersion: 9, journalMode: "wal", activeSessions: 1, projectorLag: 7, degradedSessions: 1,
     });
   } finally { reader.close(); fixture.close(); }
 });

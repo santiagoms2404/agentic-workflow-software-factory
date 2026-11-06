@@ -197,6 +197,7 @@ export async function delegateReplayCommand(options: DelegateReplayOptions): Pro
       transport,
       taskRoot: decisionsDir,
       caller: "replay",
+      transportFailure: "propagate",
       allowedActs,
       now,
       newId,
