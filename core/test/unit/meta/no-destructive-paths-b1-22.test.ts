@@ -40,6 +40,14 @@ test("non-destructive argv-array Git commands remain allowed", () => {
       "core/src/persistence/attempt-lock.ts: await unlink(lockPath);",
       "core/src/persistence/attempt-lock.ts: await unlink(tmpPath).catch(() => {});",
       "core/src/persistence/attempt-lock.ts: await unlink(this.lockPath);",
+      "core/src/execution/continuity-store.ts: await fs.unlink(temporary);",
+      "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+      "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+      "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+      "core/src/registry/plan-admission.ts: try { rmSync(file, { force: true }); } catch { /* best effort */ }",
+      "core/src/registry/plan-admission.ts: rmdirSync(dir);",
+      'core/src/publish/argv.ts: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+      'core/src/publish/argv.ts: if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
     ],
   });
 });

@@ -61,13 +61,15 @@ interface AllowedDelete {
 }
 
 /**
- * The deletes core/src is allowed to perform, each argued here.
- *
- * Owner call O2: invariant 8's auto-delete is about Git refs, worktrees and the
- * user's work, not a process releasing a lock file it created itself. These are
- * exactly those releases, and nothing else. A new delete is an offender until
- * it is argued into this list; it never rides on an existing entry, because an
- * entry names its file and its whole source line and excuses one occurrence.
+ * The only deletes core/src is allowed to perform, each argued here: the
+ * previously authorized lock releases and the six narrow operation-owned
+ * cleanup callsites from invariant 8's dated owner amendment (2026-11-06, D1).
+ * D1 covers private temporaries and failed-admission rollback only, not user
+ * work or refs. Publish deny-list and validation lines are tracked separately
+ * in VALIDATION_ONLY_LINES; they are checks, not delete exceptions. A new delete
+ * is an offender until argued into this list; it never rides on an existing
+ * entry, because an entry names its file and whole source line and excuses one
+ * occurrence.
  */
 const ALLOWED_DELETES: readonly AllowedDelete[] = [
   // Lease takeover: runs under the claim lock, only after
@@ -83,6 +85,35 @@ const ALLOWED_DELETES: readonly AllowedDelete[] = [
   { file: "core/src/persistence/attempt-lock.ts", line: "await unlink(tmpPath).catch(() => {});" },
   // AttemptLock.withLock: the holder releasing the `wx` lock file it created.
   { file: "core/src/persistence/attempt-lock.ts", line: "await unlink(this.lockPath);" },
+  // Immutable checkpoint generation: unlink the exclusive-created private temporary after linking it.
+  { file: "core/src/execution/continuity-store.ts", line: "await fs.unlink(temporary);" },
+  // Immutable checkpoint generation: remove its exclusive-created temporary after EEXIST.
+  { file: "core/src/execution/continuity-store.ts", line: "await fs.unlink(temporary).catch(() => undefined);" },
+  { file: "core/src/execution/continuity-store.ts", line: "await fs.unlink(temporary).catch(() => undefined);" },
+  // Immutable checkpoint generation: best-effort rollback of its exclusive-created temporary.
+  { file: "core/src/execution/continuity-store.ts", line: "await fs.unlink(temporary).catch(() => undefined);" },
+  // Admission rollback: remove only files recorded after successful exclusive creation.
+  { file: "core/src/registry/plan-admission.ts", line: "try { rmSync(file, { force: true }); } catch { /* best effort */ }" },
+  // Admission rollback: remove only operation-created directories that remain empty.
+  { file: "core/src/registry/plan-admission.ts", line: "rmdirSync(dir);" },
+];
+
+interface ValidationOnlyLine {
+  file: string;
+  /** The whole trimmed source line; this excuses validator data, never a delete or argv. */
+  line: string;
+}
+
+/** Deny-list and validation lines are checks, not destructive actions. */
+const VALIDATION_ONLY_LINES: readonly ValidationOnlyLine[] = [
+  {
+    file: "core/src/publish/argv.ts",
+    line: 'const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+  },
+  {
+    file: "core/src/publish/argv.ts",
+    line: 'if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
+  },
 ];
 
 interface Source {
@@ -144,7 +175,8 @@ function destructiveArgvLines(path: string, text: string): number[] {
  * so a lock release that moves or goes away cannot leave a stale excuse behind.
  */
 export function fenceHits(sources: readonly Source[]): { offenders: string[]; unused: string[] } {
-  const used = new Set<AllowedDelete>();
+  const usedDeletes = new Set<AllowedDelete>();
+  const usedValidationLines = new Set<ValidationOnlyLine>();
   const offenders: string[] = [];
   for (const { path, text } of sources) {
     const hitLines = new Set<number>();
@@ -159,12 +191,22 @@ export function fenceHits(sources: readonly Source[]): { offenders: string[]; un
     const lines = text.split("\n");
     for (const index of [...hitLines].sort((a, b) => a - b)) {
       const line = (lines[index] ?? "").trim();
-      const excuse = ALLOWED_DELETES.find((entry) => !used.has(entry) && entry.file === path && entry.line === line);
-      if (excuse === undefined) offenders.push(`${path}:${String(index + 1)}: ${line}`);
-      else used.add(excuse);
+      const deleteException = ALLOWED_DELETES.find((entry) =>
+        !usedDeletes.has(entry) && entry.file === path && entry.line === line);
+      if (deleteException !== undefined) {
+        usedDeletes.add(deleteException);
+        continue;
+      }
+      const validationLine = VALIDATION_ONLY_LINES.find((entry) =>
+        !usedValidationLines.has(entry) && entry.file === path && entry.line === line);
+      if (validationLine !== undefined) usedValidationLines.add(validationLine);
+      else offenders.push(`${path}:${String(index + 1)}: ${line}`);
     }
   }
-  const unused = ALLOWED_DELETES.filter((entry) => !used.has(entry)).map((entry) => `${entry.file}: ${entry.line}`);
+  const unused = [
+    ...ALLOWED_DELETES.filter((entry) => !usedDeletes.has(entry)).map((entry) => `${entry.file}: ${entry.line}`),
+    ...VALIDATION_ONLY_LINES.filter((entry) => !usedValidationLines.has(entry)).map((entry) => `${entry.file}: ${entry.line}`),
+  ];
   return { offenders, unused };
 }
 
@@ -231,7 +273,17 @@ test("the lock releases pass, wherever their lines sit", () => {
   const leasePath = "core/src/execution/operation-lease.ts";
   const lockPath = "core/src/persistence/attempt-lock.ts";
   const real = [leasePath, lockPath].map((path) => ({ path, text: readFileSync(join(repoRoot(), path), "utf8") }));
-  assert.deepEqual(fenceHits(real), { offenders: [], unused: [] });
+  const d1Unused = [
+    "core/src/execution/continuity-store.ts: await fs.unlink(temporary);",
+    "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+    "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+    "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+    "core/src/registry/plan-admission.ts: try { rmSync(file, { force: true }); } catch { /* best effort */ }",
+    "core/src/registry/plan-admission.ts: rmdirSync(dir);",
+    'core/src/publish/argv.ts: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+    'core/src/publish/argv.ts: if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
+  ];
+  assert.deepEqual(fenceHits(real), { offenders: [], unused: d1Unused });
 
   // The same calls at other line numbers: the allowlist is keyed by line text, not position.
   const moved = [
@@ -241,7 +293,106 @@ test("the lock releases pass, wherever their lines sit", () => {
       text: "\n  await unlink(lockPath);\n  await unlink(lockPath);\n  await unlink(tmpPath).catch(() => {});\n\n\n\n        await unlink(this.lockPath);",
     },
   ];
-  assert.deepEqual(fenceHits(moved), { offenders: [], unused: [] });
+  assert.deepEqual(fenceHits(moved), { offenders: [], unused: d1Unused });
+});
+
+test("operation-owned cleanup and validator exceptions are exact and position-independent", () => {
+  const unusedLocks = [
+    "core/src/execution/operation-lease.ts: if (old !== null) await unlink(pathFor(directory));",
+    "core/src/execution/operation-lease.ts: await unlink(pathFor(directory));",
+    "core/src/persistence/attempt-lock.ts: await unlink(lockPath);",
+    "core/src/persistence/attempt-lock.ts: await unlink(lockPath);",
+    "core/src/persistence/attempt-lock.ts: await unlink(tmpPath).catch(() => {});",
+    "core/src/persistence/attempt-lock.ts: await unlink(this.lockPath);",
+  ];
+  const continuity = {
+    path: "core/src/execution/continuity-store.ts",
+    text: ["", "await fs.unlink(temporary);", "", "await fs.unlink(temporary).catch(() => undefined);",
+      "await fs.unlink(temporary).catch(() => undefined);", "await fs.unlink(temporary).catch(() => undefined);"].join("\n"),
+  };
+  const admission = {
+    path: "core/src/registry/plan-admission.ts",
+    text: ["", "try { rmSync(file, { force: true }); } catch { /* best effort */ }", "", "rmdirSync(dir);"].join("\n"),
+  };
+  const publish = {
+    path: "core/src/publish/argv.ts",
+    text: ["", 'const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+      "", 'if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {'].join("\n"),
+  };
+  assert.deepEqual(fenceHits([continuity, admission, publish]), { offenders: [], unused: unusedLocks });
+});
+
+test("cleanup exceptions reject copied paths, excess occurrences and changed calls", () => {
+  const wrongPath = { path: "core/src/other/cleanup.ts", text: "await fs.unlink(temporary);" };
+  const duplicate = {
+    path: "core/src/execution/continuity-store.ts",
+    text: Array.from({ length: 4 }, () => "await fs.unlink(temporary).catch(() => undefined);").join("\n"),
+  };
+  const changed = { path: "core/src/registry/plan-admission.ts", text: "try { rmSync(userFile, { force: true }); } catch { /* best effort */ }" };
+  assert.deepEqual(fenceHits([wrongPath, duplicate, changed]).offenders, [
+    "core/src/other/cleanup.ts:1: await fs.unlink(temporary);",
+    "core/src/execution/continuity-store.ts:4: await fs.unlink(temporary).catch(() => undefined);",
+    "core/src/registry/plan-admission.ts:1: try { rmSync(userFile, { force: true }); } catch { /* best effort */ }",
+  ]);
+});
+
+test("forbidden cleanup and force-push argv remain rejected in exception-bearing files", () => {
+  const continuity = {
+    path: "core/src/execution/continuity-store.ts",
+    text: ["await fs.unlink(temporary);", "await fs.unlink(temporary).catch(() => undefined);",
+      "await fs.unlink(temporary).catch(() => undefined);", "await fs.unlink(temporary).catch(() => undefined);",
+      "await fs.unlink(userPath);"].join("\n"),
+  };
+  const admission = {
+    path: "core/src/registry/plan-admission.ts",
+    text: ["try { rmSync(file, { force: true }); } catch { /* best effort */ }", "rmdirSync(dir);",
+      "rmSync(userFile, { recursive: true, force: true });"].join("\n"),
+  };
+  const publish = {
+    path: "core/src/publish/argv.ts",
+    text: ['const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+      'if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
+      'runGit(runner, ["push", "--force", remote, "main"]);', "await unlink(userPath);"].join("\n"),
+  };
+  assert.deepEqual(fenceHits([continuity, admission, publish]).offenders, [
+    "core/src/execution/continuity-store.ts:5: await fs.unlink(userPath);",
+    "core/src/registry/plan-admission.ts:3: rmSync(userFile, { recursive: true, force: true });",
+    'core/src/publish/argv.ts:3: runGit(runner, ["push", "--force", remote, "main"]);',
+    "core/src/publish/argv.ts:4: await unlink(userPath);",
+  ]);
+});
+
+test("a disappeared cleanup or validation exception is reported stale", () => {
+  const stale = fenceHits([
+    { path: "core/src/execution/continuity-store.ts", text: "" },
+    { path: "core/src/registry/plan-admission.ts", text: "" },
+    { path: "core/src/publish/argv.ts", text: "" },
+  ]).unused;
+  assert.equal(stale.filter((entry) => entry.startsWith("core/src/execution/continuity-store.ts:")).length, 4);
+  assert.equal(stale.filter((entry) => entry.startsWith("core/src/registry/plan-admission.ts:")).length, 2);
+  assert.equal(stale.filter((entry) => entry.startsWith("core/src/publish/argv.ts:")).length, 2);
+});
+
+test("a copied or modified validation line is not a validation-only exception", () => {
+  const copiedAndChanged = {
+    path: "core/src/publish/argv.ts",
+    text: [
+      'const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+      'if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
+      'const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+      'const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d", "--no-verify"]);',
+    ].join("\n"),
+  };
+  const copiedElsewhere = {
+    path: "core/src/publish/other.ts",
+    text: 'const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+  };
+  const offenders = fenceHits([copiedAndChanged, copiedElsewhere]).offenders;
+  assert.deepEqual(offenders, [
+    'core/src/publish/argv.ts:3: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+    'core/src/publish/argv.ts:4: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d", "--no-verify"]);',
+    'core/src/publish/other.ts:1: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+  ]);
 });
 
 test("an unauthorized delete is flagged, even when it copies an allowed line", () => {
@@ -256,7 +407,16 @@ test("an unauthorized delete is flagged, even when it copies an allowed line", (
   };
   assert.deepEqual(fenceHits([relate, lock, lease]), {
     offenders: ["core/src/workflow/relate.ts:2: await unlink(lockPath);", "core/src/persistence/attempt-lock.ts:5: await unlink(lockPath);"],
-    unused: [],
+    unused: [
+      "core/src/execution/continuity-store.ts: await fs.unlink(temporary);",
+      "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+      "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+      "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+      "core/src/registry/plan-admission.ts: try { rmSync(file, { force: true }); } catch { /* best effort */ }",
+      "core/src/registry/plan-admission.ts: rmdirSync(dir);",
+      'core/src/publish/argv.ts: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+      'core/src/publish/argv.ts: if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
+    ],
   });
 });
 
@@ -268,6 +428,14 @@ test("an allowlisted release that disappears leaves a stale entry, not a silent 
     "core/src/persistence/attempt-lock.ts: await unlink(lockPath);",
     "core/src/persistence/attempt-lock.ts: await unlink(tmpPath).catch(() => {});",
     "core/src/persistence/attempt-lock.ts: await unlink(this.lockPath);",
+    "core/src/execution/continuity-store.ts: await fs.unlink(temporary);",
+    "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+    "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+    "core/src/execution/continuity-store.ts: await fs.unlink(temporary).catch(() => undefined);",
+    "core/src/registry/plan-admission.ts: try { rmSync(file, { force: true }); } catch { /* best effort */ }",
+    "core/src/registry/plan-admission.ts: rmdirSync(dir);",
+    'core/src/publish/argv.ts: const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);',
+    'core/src/publish/argv.ts: if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {',
   ]);
 });
 
