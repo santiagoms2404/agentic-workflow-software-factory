@@ -13,9 +13,13 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 
 import { IllegalTransition } from "../../../src/state/errors.ts";
-import { LEGAL_EDGES } from "../../../src/state/task-machine.ts";
+import { LANDED_STATES, LEGAL_EDGES } from "../../../src/state/task-machine.ts";
 
 const STATES = 11;
+
+test("the landed lifecycle set is the pair of states after a successful landing (B12-37)", () => {
+  assert.deepEqual(LANDED_STATES, ["LANDED", "PUBLISHED"]);
+});
 
 test("IllegalTransition names no stale edge count (B3-21)", () => {
   const error = new IllegalTransition("DRAFT", "RUNNING");

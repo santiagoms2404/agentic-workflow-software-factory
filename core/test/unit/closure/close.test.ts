@@ -328,7 +328,9 @@ test("close is an owner act: an arm in main that constructs the owner terminal, 
   const start = source.indexOf('case "close": {');
   assert.notEqual(start, -1);
   const arm = source.slice(start, source.indexOf("\n    }\n", start));
-  assert.ok(arm.includes("processOwnerTerminal()") && arm.includes("closeCommand("));
+  const ownerBoundary = source.slice(source.indexOf("function ownerTerminal("), source.indexOf("\n}", source.indexOf("function ownerTerminal(")));
+  assert.ok(ownerBoundary.includes("provided ?? processOwnerTerminal()"));
+  assert.ok(arm.includes("ownerTerminal(options.terminal)") && arm.includes("closeCommand("));
   assert.equal(arm.includes("lease"), false);
 });
 
