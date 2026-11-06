@@ -274,11 +274,6 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
   // Before every other check, and whatever the state: no path from a replay
   // reaches LANDING, so no replay's candidate can become canonical (Q7).
   if (current.workflow === PROVE_WORKFLOW_ID) throw new ReplayNotDeliverable(current, "land");
-  if (current.lifecycleState === "LANDING") {
-    // Approval is already durable. Re-prompting would create two human gates;
-    // recovery instead proves the one approved SHA or blocks.
-    return { status: await finish(options, current, true), confirmed: true };
-  }
   const actor = options.actor ?? "human";
   const noInspection: LandingInspection = {
     headSha: "",
@@ -289,6 +284,17 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
     behind: 0,
     summary: "candidate unavailable",
   };
+  if (current.lifecycleState === "LANDING") {
+    if (actor !== "human") {
+      // Durable owner approval permits recovery without a second prompt, not a
+      // different actor. Refuse before finish() can perform the local fast-forward.
+      authorizeLanding(current, actor, options.terminal.interactive, noInspection, false);
+      throw new Error("unreachable landing authorization");
+    }
+    // Approval is already durable. Re-prompting would create two human gates;
+    // recovery instead proves the one approved SHA or blocks.
+    return { status: await finish(options, current, true), confirmed: true };
+  }
   if (current.lifecycleState !== "AWAITING_OWNER" || current.candidateSha === null) {
     // Pair, actor, and TTY rejections must outrank missing candidate evidence.
     authorizeLanding(current, actor, options.terminal.interactive, noInspection, false);

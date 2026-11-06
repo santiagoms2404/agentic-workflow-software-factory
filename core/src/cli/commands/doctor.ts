@@ -9,6 +9,7 @@ import { openDatabase, closeDatabase } from "../../observability/sqlite.ts";
 import { listSessions } from "../../observability/queries.ts";
 import { diagnoseRecovery, formatRecoveryDiagnostic } from "../../observability/recovery-diagnostics.ts";
 import { readLockHolder } from "../../persistence/attempt-lock.ts";
+import { processAlive } from "./preview.ts";
 import { lockFilePath } from "../../persistence/platform-paths.ts";
 import { LEGAL_EDGES, TASK_STATES } from "../../state/task-machine.ts";
 import { readAttempt } from "./attempt.ts";
@@ -21,10 +22,6 @@ export interface DoctorReport {
 
 async function exists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
-}
-
-function pidIsLive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
 /** Inspect durable state only; it never takes a lock, opens a writer, or repairs. */
@@ -40,14 +37,14 @@ export async function doctorCommand(stateRoot: string): Promise<DoctorReport> {
       const holder = await readLockHolder(lockPath);
       const detail = holder === null ? "unnamed or malformed holder" : `pid ${holder.pid} since ${holder.acquiredAt}`;
       lines.push(`lock: ${label}: ${detail}`);
-      if (holder === null || !pidIsLive(holder.pid)) findings.push(`stale lock: ${label}: ${detail}`);
+      if (holder === null || !processAlive(holder.pid)) findings.push(`stale lock: ${label}: ${detail}`);
     }
     try {
       const status = await readAttempt(attemptDir);
-      const diagnostic = diagnoseRecovery(status, await readAttemptEvidence(attemptDir), pidIsLive);
+      const diagnostic = diagnoseRecovery(status, await readAttemptEvidence(attemptDir), processAlive);
       for (const line of formatRecoveryDiagnostic(diagnostic)) lines.push(`${label}: ${line}`);
       if (status.process !== null) {
-        const live = pidIsLive(status.process.pid);
+        const live = processAlive(status.process.pid);
         lines.push(`pid: ${label}: ${status.process.pid} is ${live ? "live" : "absent"}`);
         if (status.lifecycleState === "LANDED" || status.lifecycleState === "BLOCKED" || status.lifecycleState === "CANCELLED") {
           if (live) findings.push(`orphan pid ${status.process.pid}: terminal ${label} still records a live process`);
@@ -100,7 +97,9 @@ export function withJevRow(report: DoctorReport, row: { readonly line: string; r
   const summary = lines.findIndex((line) => line.startsWith("matrix: "));
   lines.splice(summary === -1 ? lines.length : summary, 0, row.line);
   if (row.finding === null) return { healthy: report.healthy, lines: Object.freeze(lines) };
-  const kept = lines.filter((line) => !line.startsWith("healthy: "));
-  kept.push(`finding: ${row.finding}`);
-  return { healthy: false, lines: Object.freeze(kept) };
+  // doctorCommand appends its healthy line last; the boolean, not the rendered
+  // wording, decides whether that presentation-only row is present.
+  if (report.healthy) lines.pop();
+  lines.push(`finding: ${row.finding}`);
+  return { healthy: false, lines: Object.freeze(lines) };
 }

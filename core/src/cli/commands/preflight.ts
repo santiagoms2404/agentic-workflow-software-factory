@@ -111,7 +111,7 @@ export function preflightConfigDigest(config: AwsfConfig): string {
 }
 
 /** The recipe `awsf start` would compile for this attempt, resolved the same way and with the same refusals. */
-async function attemptRecipe(status: AttemptStatus, config: AwsfConfig): Promise<WorkflowRecipe> {
+export async function resolveAttemptRecipe(status: AttemptStatus, config: AwsfConfig): Promise<WorkflowRecipe> {
   const shipped = workflowRecipe(status.workflow);
   if (shipped !== null) return shipped;
   const compiled = compiledWorkflow(status.workflow);
@@ -131,9 +131,17 @@ async function attemptRecipe(status: AttemptStatus, config: AwsfConfig): Promise
 }
 
 /** The base L1 would pin, exactly as `awsf start` resolves it: a replay's, a seed's integration base, or HEAD. */
+export function pinnedBaseSha(
+  status: AttemptStatus,
+  seed: { readonly integrationBaseSha: string } | null,
+  head: () => string,
+): string {
+  return status.replay?.baseSha ?? seed?.integrationBaseSha ?? head();
+}
+
 export async function pinnedBase(attemptDir: string, status: AttemptStatus): Promise<string> {
   const seed = await verifiedTargetSeed(attemptDir, status);
-  return status.replay?.baseSha ?? seed?.integrationBaseSha ?? runGit(systemGitRunner(status.repository), ["rev-parse", "HEAD"]).trim();
+  return pinnedBaseSha(status, seed, () => runGit(systemGitRunner(status.repository), ["rev-parse", "HEAD"]).trim());
 }
 
 /** The Git common directory's HEAD and config, and the worktree root. Nothing is written to measure them. */
@@ -300,8 +308,12 @@ async function journalFacts(
 }
 
 /** This attempt's request-confirmation records, oldest first, as its journal holds them. */
+function requestConfirmations(evidence: readonly AttemptEvidence[]): RequestConfirmationRecord[] {
+  return evidence.flatMap((entry) => entry.type === "request-confirmation" ? [entry.record] : []);
+}
+
 async function attemptConfirmations(attemptDir: string): Promise<RequestConfirmationRecord[]> {
-  return (await readAttemptEvidence(attemptDir)).flatMap((evidence) => evidence.type === "request-confirmation" ? [evidence.record] : []);
+  return requestConfirmations(await readAttemptEvidence(attemptDir));
 }
 
 /**
@@ -382,14 +394,25 @@ export async function preflightCommand(options: PreflightCommandOptions): Promis
   if (config.project.slug !== current.project) {
     throw new Error(`config project ${config.project.slug} does not match attempt project ${current.project}`);
   }
-  const recipe = await attemptRecipe(current, config);
+  const recipe = await resolveAttemptRecipe(current, config);
   const writers = writingPhases(recipe, config.agents);
   const shift = current.workflow === SHIFT_WORKFLOW_ID ? {
     builderWrites: config.agents.find(agent => agent.name === "builder")?.writes ?? [],
     tickets: await readShiftTicketDoBlocks(current.repository, current.shift!),
   } : null;
   const baseSha = await pinnedBase(options.attemptDir, current);
-  const journal = await journalFacts(options.stateRoot, current, baseSha, options.readEvidence ?? readAttemptEvidence);
+  const evidenceReader = options.readEvidence ?? readAttemptEvidence;
+  const evidenceByAttempt = new Map<string, Promise<readonly AttemptEvidence[]>>();
+  const readEvidenceOnce = (attemptDir: string): Promise<readonly AttemptEvidence[]> => {
+    const key = resolve(attemptDir);
+    let evidence = evidenceByAttempt.get(key);
+    if (evidence === undefined) {
+      evidence = evidenceReader(attemptDir);
+      evidenceByAttempt.set(key, evidence);
+    }
+    return evidence;
+  };
+  const journal = await journalFacts(options.stateRoot, current, baseSha, readEvidenceOnce);
   const suite = await gatherSuite(journal.landed, journal.earlier, {
     repository: current.repository, worktreeRoot: resolve(options.worktreeRoot), project: current.project, baseSha, config,
     outputDir: join(options.attemptDir, "raw"), ...(options.runCommand === undefined ? {} : { runCommand: options.runCommand }),
@@ -411,7 +434,9 @@ export async function preflightCommand(options: PreflightCommandOptions): Promis
     // rather than trusting this result.
     confirmation: {
       project: current.project, taskId: current.taskId, attempt: current.attempt, requestDigest,
-      pathsDigest: requestPathsDigest(options.where, options.read), confirmations: await attemptConfirmations(options.attemptDir),
+      pathsDigest: requestPathsDigest(options.where, options.read), confirmations: options.readEvidence === undefined
+        ? requestConfirmations(await readEvidenceOnce(options.attemptDir))
+        : await attemptConfirmations(options.attemptDir),
     },
   });
   const at = (options.now ?? ((): string => new Date().toISOString()))();

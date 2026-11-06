@@ -11,14 +11,14 @@ import {
   type PreflightRefusedRecord,
 } from "../../contracts/driver-preflight.ts";
 import { evaluateClosure, evaluateFreshness, type FreshnessFailure } from "../../preflight/fields.ts";
-import { gatherFreshness, K1_EXEMPT_WORKFLOWS } from "./preflight.ts";
+import { gatherFreshness, K1_EXEMPT_WORKFLOWS, pinnedBaseSha, resolveAttemptRecipe } from "./preflight.ts";
+export { resolveAttemptRecipe } from "./preflight.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { createWorktree, seedWorktreePaths, type ManagedWorktree } from "../../git/worktrees.ts";
 import { transition } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
 import {
   compiledWorkflow,
-  CompiledWorkflowUnbound,
   correctionsFundableFor,
   minimumCallsFor,
   workflowRecipe,
@@ -27,10 +27,6 @@ import type { WorkflowRecipe } from "../../workflow/compiler.ts";
 import { InvalidPhaseRouteSelection, requestedPhaseRoute } from "../../workflow/phase-routing.ts";
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
 import { readPlacement } from "../../registry/placement.ts";
-import { bindProveRecipe } from "../../workflow/prove/bind.ts";
-import { assertPlanAuthorRole, compilePlanAuthor, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
-import { PROVE_WORKFLOW_ID } from "../../workflow/prove/compile.ts";
-import { bindShiftRecipe } from "../../workflow/shift/bind.ts";
 import { correctionHeadroom } from "./workflows.ts";
 import { verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
 import { parseVisualBinding, recordVisualBinding, verifyVisualReferences, type VerifiedVisualReferences } from "../../workflow/visual-references.ts";
@@ -73,28 +69,6 @@ export interface StartCommandOptions {
    * refused by the T2 land guard.
    */
   readonly stub?: boolean;
-}
-
-export async function resolveAttemptRecipe(
-  status: AttemptStatus,
-  config: ReturnType<typeof loadConfig>,
-): Promise<WorkflowRecipe> {
-  const recipe = workflowRecipe(status.workflow);
-  if (recipe !== null) return recipe;
-  const compiled = compiledWorkflow(status.workflow);
-  if (compiled === null) throw new Error(`workflow ${JSON.stringify(status.workflow)} has no shipped recipe`);
-  const prompts = { builder: "", reviewer: "" };
-  if (compiled.id === PLAN_AUTHOR_WORKFLOW_ID) {
-    assertPlanAuthorRole(config);
-    if (status.reviewDegradation !== null) throw new Error("plan-author cannot use degraded same-provider review");
-    return compilePlanAuthor(status);
-  } else if (compiled.id === PROVE_WORKFLOW_ID) {
-    if (status.replay == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${status.taskId}`);
-    return bindProveRecipe(status, { prompts, gates: Object.keys(config.gates) });
-  } else {
-    if (status.shift == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${status.taskId}`);
-    return bindShiftRecipe(status.repository, status.shift, { prompts });
-  }
 }
 
 // B9-20: defaultPreflight must check the effective routed adapter for the first phase (including routeOverrides), not just default_worker.
@@ -370,8 +344,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   // A replay starts at its item's pinned base, through the same seam a seed's
   // integration base uses: a new detached worktree at that commit, and nothing
   // that moves or discards any other tree or ref.
-  const baseSha = current.replay?.baseSha ?? seed?.integrationBaseSha ??
-    runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim();
+  const baseSha = pinnedBaseSha(current, seed, () => runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim());
 
   // B9-22: Probing adapter preflight before creating the worktree ensures that a refused
   // preflight leaves the attempt DRAFT with no worktree left on disk.

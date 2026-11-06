@@ -7,9 +7,7 @@ import { ticketFileDigest } from "../../persistence/plan-ticket-body.ts";
 import { parsePlanTicketData } from "../../persistence/plan-tickets.ts";
 import { ticketStoreFor } from "./ticket.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
-import { readPlacement } from "../../registry/placement.ts";
-import { resolvePlanSources } from "../../registry/plan-source.ts";
-import type { ResolvePlanRefOptions } from "./plan-ref.ts";
+import { registeredPlanSources, type ResolvePlanRefOptions } from "./plan-ref.ts";
 
 /** Comma-separated and repeatable, preserving the owner's order and refusing empty ids. */
 export function parseTicketSelection(values: readonly string[]): readonly string[] {
@@ -63,8 +61,7 @@ export async function sealPlanTicketSelection(options: ResolvePlanRefOptions, va
   const ids = parseTicketSelection(values);
   const catalogPath = resolve(options.repository, "awsf.project.yaml");
   const catalog = loadCatalog(await readFile(catalogPath, "utf8"));
-  let sources = resolvePlanSources(catalogPath, catalog);
-  if (sources.length === 0) sources = resolvePlanSources(catalogPath, catalog, await readPlacement(options.stateRoot, options.project));
+  const sources = await registeredPlanSources(catalogPath, catalog, options.stateRoot, options.project);
   const source = sources.find(source => basename(source.planPath, ".html") === options.stem);
   if (source === undefined) throw new Error(`--ticket: no registered ticket set for ${options.stem}`);
   const tickets = [];

@@ -4,8 +4,8 @@ import { loadCatalog } from "../../registry/catalog.ts";
 import { readPlacement } from "../../registry/placement.ts";
 import { resolveProject } from "../../registry/resolve.ts";
 import {
-  envelopesForPhase,
   phasesForSession,
+  stageEnvelopesForProject,
   sessionsForStage,
   transitionsForSession,
 } from "../../observability/queries.ts";
@@ -52,12 +52,7 @@ export async function stageCommand(input: StageCommandInput): Promise<readonly s
     const rows: StageJournalRows = {
       sessions,
       phases,
-      envelopes: phases.flatMap((phase) =>
-        envelopesForPhase(db, phase.session_id, phase.phase_id).map((envelope) => ({
-          ...envelope,
-          session_id: phase.session_id,
-          phase_id: phase.phase_id,
-        }))),
+      envelopes: stageEnvelopesForProject(db, project.slug),
       transitions: sessions.flatMap((session) =>
         transitionsForSession(db, session.session_id).map((transition) => ({
           ...transition,

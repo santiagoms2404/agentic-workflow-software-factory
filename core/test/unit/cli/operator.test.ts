@@ -78,6 +78,56 @@ test("doctor only reads a stale recorded PID, while gc only lists terminal candi
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("a non-human actor cannot resume a pending landing", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-operator-land-actor-"));
+  try {
+    const created = await newCommand({
+      stateRoot: join(root, "state"), project: "project", taskId: "T24", repository: root,
+      request: "operator landing authorization test", workflow: "simple-sdlc", tier: 1,
+    });
+    const landing = nextRevision(created.status, {
+      lifecycleState: "LANDING", baseSha: "a".repeat(40), candidateSha: "b".repeat(40),
+    });
+    await persistAttempt(created.attemptDir, created.status.revision, { kind: "attempt.updated", next: landing });
+
+    await assert.rejects(landCommand({
+      attemptDir: created.attemptDir,
+      terminal: { interactive: false, write: () => {}, confirm: async () => false },
+      actor: "delegate" as unknown as "host" | "owner" | "human",
+    }));
+    assert.equal((await readAttempt(created.attemptDir)).lifecycleState, "LANDING");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("doctor treats EPERM as a live recorded process", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-operator-eperm-"));
+  try {
+    const stateRoot = join(root, "state");
+    const created = await newCommand({
+      stateRoot, project: "project", taskId: "T23", repository: root,
+      request: "operator process liveness test", workflow: "simple-sdlc", tier: 1,
+      sessionId: () => "operator-eperm-session",
+    });
+    const terminal = nextRevision(created.status, {
+      lifecycleState: "CANCELLED",
+      process: { pid: 42, pgid: 42, startIdentity: null, startIdentitySource: "test" },
+    });
+    await persistAttempt(created.attemptDir, created.status.revision, { kind: "attempt.updated", next: terminal });
+
+    const originalKill = process.kill;
+    process.kill = (() => { throw Object.assign(new Error("permission denied"), { code: "EPERM" }); }) as typeof process.kill;
+    let report: Awaited<ReturnType<typeof doctorCommand>>;
+    try {
+      report = await doctorCommand(stateRoot);
+    } finally {
+      process.kill = originalKill;
+    }
+    assert.equal(report.healthy, false);
+    assert.ok(report.lines.some((line) => line.includes("42 is live")));
+    assert.ok(report.lines.some((line) => line.includes("orphan pid 42")));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("dash gives a clear message rather than building or serving a missing dashboard", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-dash-"));
   try {

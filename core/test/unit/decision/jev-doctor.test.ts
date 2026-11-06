@@ -166,7 +166,7 @@ test("symlinked TypeScript files are detected and checked by jevFenceStatus", as
 test("withJevRow puts the row before the summary, and a Jev finding makes the report unhealthy", () => {
   const healthy: DoctorReport = {
     healthy: true,
-    lines: ["matrix: 1 legal edges across 2 states", "attempts: 0; database: not built", "healthy: no controller orphan"],
+    lines: ["matrix: 1 legal edges across 2 states", "attempts: 0; database: not built", "all checks clear"],
   };
   const merged = withJevRow(healthy, { line: "jev: row", finding: null });
   assert.deepEqual(merged, { healthy: true, lines: ["jev: row", ...healthy.lines] });

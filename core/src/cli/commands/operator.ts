@@ -6,7 +6,6 @@ import { createApiRouter, type ApiRouter } from "../../api/routes.ts";
 import { forwardApiRequest } from "../../api/server.ts";
 import { sendResponse } from "../../api/responses.ts";
 import { SECURITY_HEADERS, validateAuthority } from "../../api/security.ts";
-import { ceilingFor } from "../../state/tiers.ts";
 import { discoverAttempts, rebuildDatabase, type RebuildReport, type RebuildSource } from "../../observability/rebuild.ts";
 import { prepareDatabaseForReadonly } from "../../observability/sqlite.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
@@ -51,23 +50,9 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
         // the ones that actually have journals.
         return relation === null ? projection : { ...projection, continuesTask: relation.continuesTask };
       },
-      session: {
-        sessionId: status.sessionId,
-        projectSlug: status.project,
-        taskId: status.taskId,
-        continuesTask: relation?.continuesTask ?? status.continuesTask,
-        groupId: status.groupId,
-        planRef: status.planRef,
-        attempt: status.attempt,
-        workflowId: status.workflow,
-        riskTier: status.tier,
-        isProtected: (status as { isProtected?: boolean }).isProtected ?? false,
-        requestText: status.request,
-        callCeiling: ceilingFor(status.tier, status.budget.ceiling),
-        configSnapshotJson: status.configSnapshotJson,
-        journalPath: journalFilePath(dir),
-        startedAt: status.lastActivityAt,
-      },
+      session: relation === null
+        ? toAttemptStatusProjection(stateRoot, status)
+        : { ...toAttemptStatusProjection(stateRoot, status), continuesTask: relation.continuesTask },
     };
   }));
   // `awsf attribute` writes no attempt record either: the override is about a

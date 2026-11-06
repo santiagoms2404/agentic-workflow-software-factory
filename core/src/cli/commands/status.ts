@@ -10,6 +10,7 @@ import { locateRunReport, runReportRevision } from "../../observability/run-repo
 import { readAttemptEvidence } from "./review-record.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
 import { shiftReadout } from "./shift-readout.ts";
+import { processAlive } from "./preview.ts";
 import { declaredContinuation, type TaskRelation } from "../../persistence/task-relations.ts";
 
 function phaseLine(status: AttemptStatus): string {
@@ -183,10 +184,6 @@ export function formatStatusEvidence(evidence: readonly AttemptEvidence[]): read
   return Object.freeze(lines);
 }
 
-function pidIsLive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
-}
-
 /**
  * What the OWNER chose for this attempt, as distinct from what ran.
  *
@@ -260,7 +257,7 @@ export async function statusCommand(
     lines.push(`Run report: ${report.absolutePath} — human-readable projection of the retained attempt evidence${stale}`);
   }
   if (options.evidence === true) {
-    lines.push(...formatRecoveryDiagnostic(diagnoseRecovery(status, records, pidIsLive)));
+    lines.push(...formatRecoveryDiagnostic(diagnoseRecovery(status, records, processAlive)));
     lines.push(...formatStatusEvidence(records));
   }
   return Object.freeze(lines);

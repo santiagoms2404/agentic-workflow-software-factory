@@ -5,17 +5,13 @@
 // transition, and never goes and looks.
 
 import type {
-  EnvelopeRow,
   PhaseRow,
   SessionRow,
+  StageEnvelopeProjectionRow,
   TransitionRow,
 } from "../observability/queries.ts";
+export type { StageEnvelopeRow } from "../observability/queries.ts";
 import { STAGES, type StageId, type StageRecord } from "./contract.ts";
-
-export interface StageEnvelopeRow extends EnvelopeRow {
-  readonly session_id: string;
-  readonly phase_id: string;
-}
 
 export interface StageTransitionRow extends TransitionRow {
   readonly session_id: string;
@@ -63,7 +59,7 @@ export interface StageJournalRows {
   readonly sessions: readonly SessionRow[];
   readonly phases: readonly PhaseRow[];
   /** Rows from envelopesForPhase, annotated by the caller with that query's keys. */
-  readonly envelopes: readonly StageEnvelopeRow[];
+  readonly envelopes: readonly StageEnvelopeProjectionRow[];
   /** Rows from transitionsForSession, annotated by the caller with that query's session key. */
   readonly transitions: readonly StageTransitionRow[];
 }
@@ -94,7 +90,7 @@ function stageIndexForWorkflow(workflowId: string): number {
   );
 }
 
-function compareEvidence(left: StageEnvelopeRow, right: StageEnvelopeRow, phases: ReadonlyMap<string, PhaseRow>): number {
+function compareEvidence(left: StageEnvelopeProjectionRow, right: StageEnvelopeProjectionRow, phases: ReadonlyMap<string, PhaseRow>): number {
   const leftOrdinal = phases.get(left.phase_id)?.ordinal ?? -1;
   const rightOrdinal = phases.get(right.phase_id)?.ordinal ?? -1;
   // A phase ordinal is unique only within its session, so time orders evidence across sessions and the ordinal only breaks ties.
@@ -104,8 +100,8 @@ function compareEvidence(left: StageEnvelopeRow, right: StageEnvelopeRow, phases
     || left.envelope_id.localeCompare(right.envelope_id);
 }
 
-function latestEvidence(envelopes: readonly StageEnvelopeRow[], phases: ReadonlyMap<string, PhaseRow>,
-  accepts: (envelope: StageEnvelopeRow) => boolean): StageEnvelopeRow | undefined {
+function latestEvidence(envelopes: readonly StageEnvelopeProjectionRow[], phases: ReadonlyMap<string, PhaseRow>,
+  accepts: (envelope: StageEnvelopeProjectionRow) => boolean): StageEnvelopeProjectionRow | undefined {
   return envelopes.filter(accepts).sort((left, right) => compareEvidence(left, right, phases)).at(-1);
 }
 

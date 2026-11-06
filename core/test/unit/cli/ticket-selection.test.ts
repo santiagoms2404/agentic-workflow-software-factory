@@ -79,6 +79,14 @@ test("repeatable selection seals registered paths and exact bytes, journals and 
   assert.deepEqual((await readAttempt(dir)).ticketSelection, selection, "journal remains the sealed authority");
 });
 
+test("plan selection treats a missing placement as no registered sources", async t => {
+  const w = world(t);
+  await assert.rejects(
+    sealPlanTicketSelection({ ...w.options, stateRoot: join(w.root, "unplaced-state") }, ["T01"]),
+    /no registered ticket set for selected-plan/u,
+  );
+});
+
 test("host record is closed, disjoint from envelopes, and newCommand refuses invalid or misbound selections", async t => {
   const w = world(t);
   assert.equal(RECORD_SCHEMAS[TICKET_SELECTION_SCHEMA_ID], TicketSelectionSchema);

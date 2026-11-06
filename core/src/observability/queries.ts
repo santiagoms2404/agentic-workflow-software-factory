@@ -450,6 +450,31 @@ export function envelopesForPhase(db: DatabaseSync, sessionId: string, phaseId: 
     .all(sessionId, phaseId) as unknown as EnvelopeRow[];
 }
 
+export interface StageEnvelopeRow extends EnvelopeRow {
+  readonly session_id: string;
+  readonly phase_id: string;
+}
+
+/** The selected stage-query projection, excluding envelope payload bodies. */
+export interface StageEnvelopeProjectionRow {
+  envelope_id: string;
+  schema_id: string;
+  correction_round: number;
+  valid: number;
+  created_at: string;
+  session_id: string;
+  phase_id: string;
+}
+
+/** Stage resolution needs envelope identity and ordering, never the private payload bodies. */
+export function stageEnvelopesForProject(db: DatabaseSync, projectSlug: string): StageEnvelopeProjectionRow[] {
+  return db.prepare(`SELECT e.envelope_id, e.schema_id, e.correction_round, e.valid, e.created_at,
+      e.session_id, e.phase_id
+    FROM envelopes e JOIN sessions s ON s.session_id = e.session_id
+    WHERE s.project_slug = ? ORDER BY e.session_id, e.phase_id, e.correction_round, e.created_at`)
+    .all(projectSlug) as unknown as StageEnvelopeProjectionRow[];
+}
+
 export interface CandidateDiffStat {
   readonly baseSha: string;
   readonly candidateSha: string;

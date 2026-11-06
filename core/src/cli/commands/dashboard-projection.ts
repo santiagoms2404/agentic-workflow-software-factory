@@ -48,6 +48,18 @@ export function createDashboardProjection(
     return db;
   };
 
+  const isSessionDegraded = (sessionId: string): boolean => {
+    if (degraded.has(sessionId)) return true;
+    try {
+      const writer = database();
+      if (observabilityDegraded(writer, sessionId)) return true;
+      const row = writer.prepare("SELECT journal_path FROM sessions WHERE session_id = ?").get(sessionId) as { journal_path: string } | undefined;
+      return row?.journal_path ? hasDegradedMarker(row.journal_path) : false;
+    } catch {
+      return true;
+    }
+  };
+
   const reportUnavailable = (sessionId: string): void => {
     degraded.add(sessionId);
     notice(`sqlite-projection-failed: session ${sessionId} is journaled but its dashboard projection is unavailable; ${renderProjectionAdvice()}.`);
@@ -105,37 +117,10 @@ export function createDashboardProjection(
       }
     },
     assertAdvancement(sessionId, to): void {
-      let isDegraded = degraded.has(sessionId);
-      if (!isDegraded) {
-        try {
-          isDegraded = observabilityDegraded(database(), sessionId);
-          if (!isDegraded) {
-            const row = database().prepare("SELECT journal_path FROM sessions WHERE session_id = ?").get(sessionId) as { journal_path: string } | undefined;
-            if (row?.journal_path) {
-              isDegraded = hasDegradedMarker(row.journal_path);
-            }
-          }
-        } catch {
-          isDegraded = true;
-        }
-      }
-      assertAdvancementPermitted({ sessionId, to, degraded: isDegraded });
+      assertAdvancementPermitted({ sessionId, to, degraded: isSessionDegraded(sessionId) });
     },
     assertLaunchPermitted(sessionId): void {
-      let isDegraded = degraded.has(sessionId);
-      if (!isDegraded) {
-        try {
-          isDegraded = observabilityDegraded(database(), sessionId);
-          if (!isDegraded) {
-            const row = database().prepare("SELECT journal_path FROM sessions WHERE session_id = ?").get(sessionId) as { journal_path: string } | undefined;
-            if (row?.journal_path) {
-              isDegraded = hasDegradedMarker(row.journal_path);
-            }
-          }
-        }
-        catch { isDegraded = true; }
-      }
-      if (isDegraded) throw new Error(`session ${sessionId} process registration was not acknowledged by SQLite before GO`);
+      if (isSessionDegraded(sessionId)) throw new Error(`session ${sessionId} process registration was not acknowledged by SQLite before GO`);
     },
     close(): void {
       if (db === null) return;

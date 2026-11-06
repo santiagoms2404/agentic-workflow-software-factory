@@ -18,7 +18,8 @@ import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { loadCatalog } from "../../registry/catalog.ts";
 import { readPlacement } from "../../registry/placement.ts";
-import { resolvePlanSources } from "../../registry/plan-source.ts";
+import type { ProjectCatalog } from "../../registry/catalog-schema.ts";
+import { resolvePlanSources, type ResolvedPlanSource } from "../../registry/plan-source.ts";
 
 export class PlanRefNoCatalog extends Error {
   constructor(catalogPath: string) {
@@ -42,6 +43,23 @@ export class PlanRefUnknown extends Error {
     this.name = "PlanRefUnknown";
     this.candidates = candidates;
   }
+}
+
+export async function registeredPlanSources(
+  catalogPath: string,
+  catalog: ProjectCatalog,
+  stateRoot: string,
+  project: string,
+): Promise<readonly ResolvedPlanSource[]> {
+  let sources = resolvePlanSources(catalogPath, catalog);
+  if (sources.length === 0) {
+    try {
+      sources = resolvePlanSources(catalogPath, catalog, await readPlacement(stateRoot, project));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  return sources;
 }
 
 export interface ResolvePlanRefOptions {
@@ -72,16 +90,8 @@ export async function resolvePlanRef(options: ResolvePlanRefOptions): Promise<st
   const catalog = loadCatalog(source);
   // Self-placement first, then the recorded placement — the same order the
   // planning join uses, so a foreign checkout resolves the same way here.
-  let sources = resolvePlanSources(catalogPath, catalog);
-  if (sources.length === 0) {
-    // No placement recorded is "nothing registered here", not a crash: the
-    // refusal below then names an empty candidate list, which is the truth.
-    try {
-      sources = resolvePlanSources(catalogPath, catalog, await readPlacement(options.stateRoot, options.project));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-  }
+  // A missing placement means no registered sources, not a raw ENOENT.
+  const sources = await registeredPlanSources(catalogPath, catalog, options.stateRoot, options.project);
   const candidates = sources.map((plan) => basename(plan.planPath, ".html"));
   if (!candidates.includes(options.stem)) throw new PlanRefUnknown(options.stem, candidates);
   return options.stem;

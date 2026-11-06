@@ -163,10 +163,16 @@ export async function delegateReplayCommand(options: DelegateReplayOptions): Pro
       }
     }
   }
-  const pending = attempts.reduce((total, source) => total + historicalStopIndices(source.records).filter((index) => {
-    const status = source.records[index]!.event.next;
-    return !skipByTask.get(dirname(source.dir))!.has(stopKey(status.sessionId, status.revision));
-  }).length, 0);
+  let pending = 0;
+  let skipped = 0;
+  for (const source of attempts) {
+    const skip = skipByTask.get(dirname(source.dir))!;
+    for (const index of historicalStopIndices(source.records)) {
+      const status = source.records[index]!.event.next;
+      if (skip.has(stopKey(status.sessionId, status.revision))) skipped += 1;
+      else pending += 1;
+    }
+  }
 
   let judge: ReplayJudge = NUMBERS_ONLY_JUDGE;
   if (mode === "live") {
@@ -200,15 +206,10 @@ export async function delegateReplayCommand(options: DelegateReplayOptions): Pro
   const replayId = newId();
   const replayedAt = now();
   const recorded: DelegateReplayRecord[] = [];
-  let skipped = 0;
   for (const source of attempts) {
     const status = source.records.at(-1)?.event.next;
     if (status === undefined) continue;
     const skip = skipByTask.get(dirname(source.dir))!;
-    skipped += historicalStopIndices(source.records).filter((index) => {
-      const next = source.records[index]!.event.next;
-      return skip.has(stopKey(next.sessionId, next.revision));
-    }).length;
     const phases = options.phasesFor === undefined ? journalPhases(source.records) : await options.phasesFor(status, source.records);
     recorded.push(...await replayAttempt({
       project: source.project, records: source.records, phases, mode, judge, skip, replayId, replayedAt, newId,
