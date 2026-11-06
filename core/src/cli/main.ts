@@ -859,14 +859,12 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           attemptDir: located.attemptDir,
           worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
           configPath,
-          // --stub injects the fixture preflight seam (the adapter probe, and with
-          // it the start-time prompt check; the run composes prompts again before
-          // any provider). K1 runs before it inside startCommand, and no flag of
-          // this arm reaches past K1. It also marks the attempt as a stub for good
-          // (owner call O7): only a marked attempt takes `run --stub true`, and
-          // nothing that run attests can satisfy the T2 land guard.
+          // --stub replaces only adapter availability. K1 and configured prompt
+          // path/containment checks remain production checks before any worktree.
+          // The attempt mark is persistent (owner call O7): only a marked attempt
+          // takes `run --stub true`, and its attestations cannot satisfy T2 land.
           ...(parsed.flags.stub === "true"
-            ? { preflight: () => ({ adapter: true, sandbox: true, observability: true }), stub: true }
+            ? { adapterAvailability: () => true, stub: true }
             : {}),
           ...(parsed.flags["visual-references"] === undefined ? {} : { visualReferences: parsed.flags["visual-references"] }),
           projectRecord: projection.project,
@@ -920,6 +918,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
             projectRecord: projection.project,
             assertAdvancement: projection.assertAdvancement,
             assertLaunchProjection: projection.assertLaunchPermitted,
+            terminal: ownerTerminal(options.terminal),
           });
         } catch (error) {
           // A run that seals the attempt and then reports it by throwing still stopped.

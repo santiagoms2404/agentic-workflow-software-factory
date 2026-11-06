@@ -558,6 +558,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
     }
     case "phase-validation-started":
     case "phase-result-unsaved":
+    case "owner-correction-authorization":
       return;
     case "resume-instruction-delivery":
     case "rework-instruction-delivery":

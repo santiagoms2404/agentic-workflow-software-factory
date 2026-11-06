@@ -126,6 +126,17 @@ export type AttemptEvidence =
   | { readonly type: "protected-landing"; readonly authorization: import("../contracts/protected-grant.ts").ProtectedCandidateAuthorization }
   | { readonly type: "phase-result-ready"; readonly phase: PhaseEvidenceRecord; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "phase-validation-started"; readonly phaseId: string; readonly checkpointId: string }
+  /** An affirmative terminal answer bound to one exact phase correction, journaled before its tranche is charged. */
+  | {
+      readonly type: "owner-correction-authorization";
+      readonly sessionId: string;
+      readonly attempt: number;
+      readonly phaseId: string;
+      readonly correctionRound: number;
+      readonly cause: "schema-violation" | "gate-violation";
+      readonly transport: "same-session";
+      readonly authorizedAt: string;
+    }
   /**
    * A valid reply whose result-ready checkpoint was NOT written, because its
    * worktree could not be snapshotted; `reason` is the refusal's message. The

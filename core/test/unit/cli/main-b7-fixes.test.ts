@@ -59,7 +59,7 @@ async function drive(argv: readonly string[], cwd = process.cwd(), env: NodeJS.P
 test("B7-62: every owner-act arm shares the same terminal fallback", () => {
   const source = readFileSync(resolve("core/src/cli/main.ts"), "utf8");
   assert.doesNotMatch(source, /options\.terminal \?\? processOwnerTerminal\(\)/u);
-  assert.equal([...source.matchAll(/ownerTerminal\(options\.terminal\)/gu)].length, 16);
+  assert.equal([...source.matchAll(/ownerTerminal\(options\.terminal\)/gu)].length, 17);
 });
 
 test("B7-63: grant reuses the config already validated by main", () => {

@@ -166,6 +166,7 @@ export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
   readonly onGateReport?: (report: GateReport, correctionRound: number) => Promise<void> | void;
   /** Called after the phase budget authorizes a correction and before its transport launches. */
   readonly onCorrectionAuthorized?: (input: {
+    readonly actor: CorrectionActor;
     readonly correctionRound: number;
     readonly transport: CorrectionTransport;
   }) => Promise<void> | void;
@@ -174,7 +175,7 @@ export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
     cause: "schema-violation" | "gate-violation";
     correctionRound: number;
     reports: readonly GateReport[];
-  }) => CorrectionDecision;
+  }) => CorrectionDecision | Promise<CorrectionDecision>;
   /**
    * Runs the host's deterministic gates against the exact candidate this phase
    * just committed. Absent means the phase ends at its commit, which is the
@@ -382,7 +383,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     const nextRound = correctionRound + 1;
     const decision: CorrectionDecision = options.authorizeCorrection === undefined
       ? "host"
-      : options.authorizeCorrection({ cause, correctionRound: nextRound, reports });
+      : await options.authorizeCorrection({ cause, correctionRound: nextRound, reports });
     if (decision === null || (typeof decision === "object" && decision.actor === null)) {
       const reason = decision === null
         ? "the caller exposed no correction transport"
@@ -408,7 +409,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       actor: authorization.actor,
       correctionTransport: authorization.transport,
     });
-    await options.onCorrectionAuthorized?.({ correctionRound: nextRound, transport: authorization.transport });
+    await options.onCorrectionAuthorized?.({ actor: authorization.actor, correctionRound: nextRound, transport: authorization.transport });
     execution.correcting();
     const request = createCorrectionRequest({
       phase: options.phase.id,

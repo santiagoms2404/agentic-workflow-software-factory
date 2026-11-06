@@ -127,6 +127,7 @@ export async function draft(b: Box, request = k1Request("replay a sealed seed", 
   }
   return newCommand({ stateRoot: b.stateRoot, project: b.config.project.slug, taskId: "synthetic-seed", repository: b.repository,
     request, workflow, tier: workflow === "build" ? 1 : 2, configSnapshotJson: toConfigSnapshotJson(b.config),
+    allowance: b.config.risk.correction_allowance,
     projectRecord: b.projection.project, ...(selection === undefined ? {} : { shift: selection }) });
 }
 export async function prepare(b: Box, attemptDir: string, options: Partial<Parameters<typeof prepareK1>[0]> = {}) {

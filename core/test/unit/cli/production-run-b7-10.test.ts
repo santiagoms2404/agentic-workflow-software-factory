@@ -30,7 +30,10 @@ for (const [name, fields, expected] of [
 ] satisfies [string, Partial<TokenUsage>, number | null][]) {
   test(`B7-10: ${name} in production agent evidence`, async () => {
     const usage = { ...UNREPORTED_TOKEN_USAGE, ...fields };
-    const b = box(config => { config.risk.correction_allowance.auto = 0; });
+    const b = box(config => {
+      config.risk.correction_allowance.auto = 1;
+      config.risk.correction_allowance.owner = 0;
+    });
     try {
       const created = await draft(b);
       await prepare(b, created.attemptDir);

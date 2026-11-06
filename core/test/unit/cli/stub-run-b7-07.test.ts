@@ -10,10 +10,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { main } from "../../../src/cli/main.ts";
+import { loadConfig } from "../../../src/config/load.ts";
 import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { landCommand } from "../../../src/cli/commands/land.ts";
 import { candidateGateEvidence, readAttemptEvidence } from "../../../src/cli/commands/review-record.ts";
@@ -28,7 +29,14 @@ const PROJECT = "agentic-workflow-software-factory";
 const AUTHOR = ["-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com"];
 const STUB_PREFLIGHT = () => ({ adapter: true, sandbox: true, observability: true });
 
+function managedWorktrees(b: Pick<Box, "worktreeRoot">): string[] {
+  return existsSync(b.worktreeRoot)
+    ? readdirSync(b.worktreeRoot).filter(name => !name.startsWith("awsf-baseline-"))
+    : [];
+}
+
 interface Box {
+  readonly root: string;
   readonly repository: string;
   readonly stateRoot: string;
   readonly worktreeRoot: string;
@@ -56,17 +64,27 @@ function box(label: string): Box {
   assert.notEqual(configText, source);
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText);
+  const config = loadConfig(configText);
+  for (const agent of config.agents) {
+    for (const promptPath of [agent.prompt.system, agent.prompt.user]) {
+      const destination = join(root, promptPath);
+      mkdirSync(join(destination, ".."), { recursive: true });
+      writeFileSync(destination, readFileSync(resolve(promptPath), "utf8"));
+    }
+  }
+  mkdirSync(join(root, "prompts", "shared"), { recursive: true });
+  writeFileSync(join(root, "prompts", "shared", "headless-role.md"), readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   const stateRoot = join(root, "state");
   const worktreeRoot = join(root, "worktrees");
   const lines: string[] = [];
   const errors: string[] = [];
   const common = ["--state-root", stateRoot, "--project", PROJECT, "--config", configPath, "--worktree-root", worktreeRoot];
   return {
-    repository, stateRoot, worktreeRoot, configPath, lines, errors,
+    root, repository, stateRoot, worktreeRoot, configPath, lines, errors,
     cli: (argv) => main({
       argv: [...argv, ...common], cwd: repository, env: {},
       writeOut: (line) => lines.push(line), writeError: (line) => errors.push(line),
-      get terminal(): never { throw new Error("start and run take no owner terminal"); },
+      terminal: { interactive: false, write: () => {}, confirm: async () => false },
     }),
     close: () => rmSync(root, { recursive: true, force: true }),
   };
@@ -131,6 +149,36 @@ test("awsf start --stub true writes a persistent stub mark; a start without --st
     const unmarked = await readAttempt(await measuredDraft(b, "real", true));
     assert.equal(unmarked.lifecycleState, "PREPARED");
     assert.equal(unmarked.stub ?? null, null, "only the stub start marks an attempt");
+  } finally { b.close(); }
+});
+
+test("stub start keeps missing and escaping prompt refusals ahead of worktree creation", async () => {
+  const b = box("prompt-validation");
+  try {
+    for (const [taskId, configuredPath, refusal, symlinkEscape] of [
+      ["stub-missing-prompt", "prompts/builder/missing-system.md", /missing-system\.md/u, false],
+      ["stub-escaping-prompt", "../outside-system.md", /prompt path escapes the config context/u, false],
+      ["stub-symlink-prompt", "prompts/builder/escape-system.md", /prompt symlink escapes the config context/u, true],
+    ] as const) {
+      const attemptDir = await measuredDraft(b, taskId);
+      if (symlinkEscape) symlinkSync(resolve("README.md"), join(b.root, configuredPath));
+      const source = readFileSync(b.configPath, "utf8");
+      const config = source.replace("system: prompts/builder/system.md", `system: ${configuredPath}`);
+      assert.notEqual(config, source);
+      writeFileSync(b.configPath, config);
+      await prepareK1({ attemptDir, configPath: b.configPath, worktreeRoot: b.worktreeRoot });
+      b.errors.length = 0;
+      assert.equal(await b.cli(["start", taskId, "--stub", "true"]), 1);
+      assert.match(b.errors.join("\n"), refusal);
+      const refused = await readAttempt(attemptDir);
+      assert.equal(refused.lifecycleState, "BLOCKED");
+      assert.equal(refused.worktree, null);
+      assert.equal(refused.budget.callsSpent, 0);
+      assert.equal(refused.budget.callsReserved, 0);
+      assert.deepEqual(managedWorktrees(b), [], "prompt refusal creates no managed worktree");
+      // Restore the genuine prompt before creating the next fixture.
+      writeFileSync(b.configPath, source);
+    }
   } finally { b.close(); }
 });
 

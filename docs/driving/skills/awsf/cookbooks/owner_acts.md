@@ -1,7 +1,7 @@
 # Owner acts
 
-Fourteen commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`, `confirm`, `close`. This document
+Fifteen commands are owner acts and not yours: `journey`, `land`, `cancel`,
+`rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `run`, `grant`, `confirm`, `close`. This document
 is about **which one the evidence supports** and **what to hand the owner before
 they decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
@@ -11,24 +11,24 @@ of what each one costs, and the reason is at the bottom.
 Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
-This is not merely a convention you could talk yourself out of — the lifecycle
-refuses a non-interactive invocation. Every one of the fourteen requires an
-interactive owner terminal, and a piped or redirected standard input is
-refused by its CLI guard or the normative machine *before* any process can receive a signal and
-before any call is reserved. That refusal is a terminal-shape check, not the
-authorisation boundary: it stops an accidental non-interactive invocation, and
-the boundary a driving session actually operates under is the per-invocation
-tool-surface denial marimba's guard performs.
+This is not merely a convention you could talk yourself out of. The other
+fourteen acts require an interactive owner terminal before their effects. `run`
+can proceed automatically while it uses only the automatic correction tranche,
+but if a correction reaches the owner tranche it requires an interactive owner
+terminal and a separate confirmation. A driving session is denied `run` at the
+tool surface regardless, because it must never answer that owner prompt. The
+terminal-shape check stops accidental non-interactive owner confirmations; the
+per-invocation tool-surface denial is the boundary marimba operates under.
 
 The evidence each edge demands is in `core/src/state/guards.ts`, and the edges
 themselves in `core/src/state/task-machine.ts`. Read them there when it matters.
 
 ## Read the confirmation prompt; it is the source of truth
 
-Each of these commands displays what it is about to do and then asks. **The
-prompt is the authority on the cost and the consequences of that act, at that
-moment, for that attempt** — not this document, not your memory, and not a
-summary you wrote earlier in the session.
+When a command asks for confirmation, its prompt is the authority on the cost
+and consequences of that act, at that moment, for that attempt — not this
+document, not your memory, and not a summary you wrote earlier in the session.
+`run` asks only when it reaches a correction that requires owner approval.
 
 The prompts are not advisory copy. `awsf review`'s is asserted line by line by a
 test: it must carry the candidate, the superseded verdict and the evidence defect
@@ -183,6 +183,12 @@ then asks to land the candidate. A grant does not approve its own implementation
 the initial verifier is installed through separately authorized external edits,
 and the running verifier refuses to grant writes to its own execution worktree.
 
+**`run`** is normally automatic, but a correction beyond the automatic tranche
+requires an explicit owner decision at the confirmation prompt. Do not invoke it
+from a driving session: it could reach that owner-only prompt, which the session
+must never answer. The command records consent and charges the owner correction
+allowance before launching the correction.
+
 **`resume`** continues an unstarted phase from a journal-backed quota pause, or
 finishes a phase result that the host already validated and durably accepted.
 It preserves the original request, accepted phases, candidate and debit. It does
@@ -198,7 +204,7 @@ The same shape every time, and it is short:
 - the handle — task, attempt, lifecycle state, calls spent against the ceiling;
 - what the evidence says, with the phase's claim and the host's measurement kept
   distinct;
-- which of the fourteen the evidence supports, which it does not, and why;
+- which of the fifteen the evidence supports, which it does not, and why;
 - what remains — calls, correction rounds, and the attempt-scoped owner re-entry
   allowance, which is what several of these draw on and which does not refresh
   within an attempt.

@@ -32,13 +32,14 @@ test("seed, group apply and retry --adopt-as are guarded", () => {
   assert.equal(ownerActViolation("awsf seed T02 --from T01 --source-attempt 1"), "seed");
   assert.equal(ownerActViolation("awsf group apply --id e1 --expected 3 --proposal p1"), "group apply");
   assert.equal(ownerActViolation("awsf retry T01 --adopt-as T02 --request again"), "retry --adopt-as");
+  assert.equal(ownerActViolation("awsf run T01"), "run", "driving sessions cannot answer a runtime owner-correction prompt");
 });
 
 test("the three are listed by where main.ts builds their terminal, and the arm acts are unchanged", () => {
   assert.deepEqual(OUTSIDE_ARM.map((entry) => [ownerActName(entry), entry.reach]), [
     ["seed", "if-block"], ["group apply", "module"], ["retry --adopt-as", "helper"],
   ]);
-  assert.equal(OWNER_ACT_LIST.filter((entry) => entry.reach === "case-arm").length, 14);
+  assert.equal(OWNER_ACT_LIST.filter((entry) => entry.reach === "case-arm").length, 15);
   assert.equal(new Set(OWNER_ACT_LIST.map(ownerActName)).size, OWNER_ACT_LIST.length, "an act is listed once");
 });
 

@@ -73,6 +73,15 @@ function box(label: string): Box {
   assert.notEqual(configText, source);
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText);
+  for (const agent of loadConfig(configText).agents) {
+    for (const promptPath of [agent.prompt.system, agent.prompt.user]) {
+      const destination = join(root, promptPath);
+      mkdirSync(join(destination, ".."), { recursive: true });
+      writeFileSync(destination, readFileSync(resolve(promptPath), "utf8"));
+    }
+  }
+  mkdirSync(join(root, "prompts", "shared"), { recursive: true });
+  writeFileSync(join(root, "prompts", "shared", "headless-role.md"), readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   return {
     root, repository, stateRoot: join(root, "state"), worktreeRoot: join(root, "worktrees"), configPath,
     close: () => rmSync(root, { recursive: true, force: true }),

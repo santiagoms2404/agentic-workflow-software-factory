@@ -461,6 +461,38 @@ test("an owner re-entry survives beginPhase — it is per attempt, not per phase
   refusal(() => budget.authorize(OWNER_GATING_TO_RUNNING), CorrectionAllowanceExhausted);
 });
 
+test("owner correction spending survives rehydration and exhaustion does not consume auto or re-entry allowances", () => {
+  const first = new CallBudget({ taskId: "T19", tier: 1, allowance: { auto: 1, owner: 1 } });
+  first.recordPhaseTransition({
+    phase: "build", from: "VALIDATING", to: "CORRECTING", session: SESSION,
+    cause: "schema-violation", actor: "owner",
+  });
+  const persisted = first.snapshot();
+  assert.equal(persisted.correctionsOwner, 1);
+  assert.equal(persisted.correctionsAuto, 0);
+  assert.equal(persisted.ownerReentries, 0);
+
+  const restored = new CallBudget({
+    taskId: "T19", tier: 1, allowance: { auto: 1, owner: 1 },
+    carried: {
+      correctionsAuto: persisted.correctionsAuto,
+      correctionsOwner: persisted.correctionsOwner,
+      ownerReentries: persisted.ownerReentries,
+    },
+  });
+  refusal(() => restored.recordPhaseTransition({
+    phase: "build", from: "VALIDATING", to: "CORRECTING", session: SESSION,
+    cause: "schema-violation", actor: "owner",
+  }), CorrectionAllowanceExhausted);
+  restored.recordPhaseTransition({
+    phase: "build", from: "VALIDATING", to: "CORRECTING", session: SESSION,
+    cause: "schema-violation", actor: "host",
+  });
+  assert.equal(restored.snapshot().correctionsOwner, 1);
+  assert.equal(restored.snapshot().correctionsAuto, 1);
+  assert.equal(restored.snapshot().ownerReentries, 0);
+});
+
 test("an intra-phase correction still refreshes per phase, exactly as before", () => {
   // The other half of the split: nothing about rungs 2–3 changed. Suppressing
   // the reset would have converted every per-phase allowance into a

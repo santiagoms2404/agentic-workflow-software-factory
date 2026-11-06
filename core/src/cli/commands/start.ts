@@ -54,6 +54,8 @@ export interface StartCommandOptions {
   readonly worktreeRoot: string;
   readonly configPath?: string;
   readonly preflight?: (status: AttemptStatus) => Promise<StartPreflight> | StartPreflight;
+  /** Test/demo seam that substitutes only the selected adapter's availability result. */
+  readonly adapterAvailability?: (adapterId: string) => Promise<boolean> | boolean;
   readonly now?: () => string;
   readonly projectRecord?: AttemptProjector;
   /**
@@ -76,6 +78,7 @@ export async function defaultPreflight(
   status: AttemptStatus,
   configPath: string,
   recipe?: WorkflowRecipe,
+  adapterAvailability?: (adapterId: string) => Promise<boolean> | boolean,
 ): Promise<StartPreflight> {
   const config = loadConfig(await readFile(configPath, "utf8"));
   let adapterId = config.routing.default_worker;
@@ -99,7 +102,9 @@ export async function defaultPreflight(
   // A fixture route deliberately cannot be manufactured from committed config:
   // its executable is a test-owned absolute path. Tests inject that preflight;
   // production refuses rather than calling an unbound fixture "available".
-  const adapter = selected !== null && (await selected.isAvailable()).status === "available";
+  const adapter = adapterAvailability === undefined
+    ? selected !== null && (await selected.isAvailable()).status === "available"
+    : selected !== null && await adapterAvailability(adapterId);
   // The policy layer may truthfully expose tool-policy when an OS sandbox is
   // absent. Native Windows write-capable runs remain blocked by the later
   // permission broker; preparation itself does not invent an OS guarantee.
@@ -348,7 +353,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
 
   // B9-22: Probing adapter preflight before creating the worktree ensures that a refused
   // preflight leaves the attempt DRAFT with no worktree left on disk.
-  const preflight = await (options.preflight ?? ((status) => defaultPreflight(status, configPath, recipe)))(current);
+  const preflight = await (options.preflight ?? ((status) => defaultPreflight(status, configPath, recipe, options.adapterAvailability)))(current);
   const decision = transition({
     from: current.lifecycleState,
     to: "PREPARED",

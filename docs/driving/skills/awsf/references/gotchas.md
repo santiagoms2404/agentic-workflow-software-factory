@@ -148,24 +148,27 @@ named backlog in the plan's Amendments. Until it lands, confirm your working
 directory before `awsf new` and treat that as a real step rather than a
 formality.
 
-### 8. Piped standard input refuses every owner act
+### 8. Owner correction needs an explicit interactive terminal
 
 **Trap link.** none — `not-a-stop`. Piped standard input creates no BLOCKED or CANCELLED attempt.
 
 **Symptom.** `awsf land`, `cancel`, `journey`, `rework`, `review`,
-`degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`, `confirm` or `close` refuses when run from a script,
-a pipe, or any non-terminal context.
+`degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `run`, `grant`, `confirm` or `close` refuses when run from a script,
+a pipe, or any non-terminal context. `awsf run` can execute automatic work, but
+it refuses to use the owner correction tranche without an interactive owner
+terminal and explicit approval.
 
-**Cause.** All fourteen — `land`, `cancel`, `journey`, `rework`, `review`,
-`degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`, `confirm`, `close` — require an interactive owner
-terminal, and the refusal comes from the
-normative machine *before* any process can receive a signal and before any
-call is reserved. The check is a terminal-shape test (`process.stdin.isTTY`),
+**Cause.** Fourteen explicit owner actions require an interactive terminal
+before their effects. `run` is included in the owner-act set because it may
+solicit a correction decision: it uses only automatic corrections without an
+owner prompt, and refuses a correction that needs owner authority without an
+interactive owner terminal. The terminal-shape check (`process.stdin.isTTY`) is
 not the authorisation boundary itself.
 
-**Guard.** No flag bypasses it, but a PTY makes the check pass — `script -qec`
-supplies one and clears it. The fence that actually holds the line is the
-per-invocation tool-surface denial marimba's hook performs.
+**Guard.** No flag bypasses an owner confirmation, but a PTY makes the terminal
+shape check pass — `script -qec` supplies one and clears it. A driving session is
+still denied every listed owner act, including `run`, by the per-invocation
+tool-surface denial marimba's hook.
 
 ### 9. The two provider routes fail in opposite directions on an unknown session
 

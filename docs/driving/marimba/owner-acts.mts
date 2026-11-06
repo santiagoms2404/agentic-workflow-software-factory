@@ -56,6 +56,9 @@ export const OWNER_ACT_LIST: readonly OwnerActEntry[] = [
   { verb: "raise", reach: "case-arm" },
   { verb: "publish", reach: "case-arm" },
   { verb: "resume", reach: "case-arm" },
+  // run is normally automatic, but its production path can ask for a durable
+  // owner correction authorization; driving sessions may not answer that prompt.
+  { verb: "run", reach: "case-arm" },
   { verb: "grant", reach: "case-arm" },
   { verb: "confirm", reach: "case-arm" },
   { verb: "close", reach: "case-arm" },

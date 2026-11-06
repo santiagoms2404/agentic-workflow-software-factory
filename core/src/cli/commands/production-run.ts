@@ -184,6 +184,7 @@ import {
   createHostPhaseGit,
   runAgentPhase,
   type CandidateVerification,
+  type CorrectionDecision,
   type HostPhaseGit,
 } from "../../workflow/engine.ts";
 import type { GateDefinition } from "../../workflow/phase.ts";
@@ -577,6 +578,8 @@ export interface ProductionRunOptions {
   readonly assertAdvancement?: AttemptAdvancementGuard;
   /** The barrier calls this after process registration and before GO. */
   readonly assertLaunchProjection?: (sessionId: string) => void;
+  /** Present only for an interactive owner invocation; never inferred from the host actor. */
+  readonly terminal?: OwnerTerminal;
   readonly infrastructure?: Partial<ProductionInfrastructure>;
 }
 
@@ -2552,9 +2555,16 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const phaseGrant = protectedState.grants.find(grant => grant.subject.phaseKey === phase.id) ?? null;
     const protectedCapability = phaseGrant === null ? undefined : await verifyProtectedWrite({ attemptDir: options.attemptDir,
       subject: await protectedGrantSubject(options, status, phase.id), operationId, reservationId: reservation.id });
+    // The recipe's maxCorrections caps automatic retries. On a same-session
+    // route the owner tranche adds separately confirmed, call-neutral rounds;
+    // cold routes remain automatic-only and bounded by paid-call headroom. A
+    // phase explicitly marked non-correctable remains at zero.
+    const automaticCorrectionLimit = Math.min(phase.maxCorrections, budget.allowance.auto);
+    const ownerCorrectionLimit = route.continuity ? budget.allowance.owner : 0;
+    const correctionLimit = phase.maxCorrections === 0 ? 0 : automaticCorrectionLimit + ownerCorrectionLimit;
     const routeMaximumCorrections = phaseGrant !== null ? 0 : route.continuity
-      ? phase.maxCorrections
-      : Math.min(phase.maxCorrections, coldCorrectionHeadroom());
+      ? correctionLimit
+      : Math.min(correctionLimit, coldCorrectionHeadroom());
     const configuredRecord = phaseRecords.get(phase.id)!;
     phaseRecords.set(phase.id, { ...configuredRecord, maxCorrections: routeMaximumCorrections });
     // A retried review is a distinct process and a distinct spent call, so it
@@ -2752,7 +2762,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     }
     const gatedPhase = {
       ...phase,
-      ...(phaseGrant === null ? {} : { maxCorrections: 0 }),
+      maxCorrections: phaseGrant === null ? routeMaximumCorrections : 0,
       // The engine renders once more at launch. Pin it to the exact prompt
       // persisted above, including architecture review's repository envelope.
       renderPrompt: () => renderedPrompt,
@@ -2869,6 +2879,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       : null;
 
     let turnIndex = 0;
+    const correctionTrancheByRound = new Map<number, "auto" | "owner">();
     let amendmentInputBound = false;
     let instructionInputBound = false;
     /** What the FIRST turn's stream said. Every later turn is compared to it. */
@@ -2910,8 +2921,8 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             { providerSessionId: record.providerSessionId, storeDir: record.storeDir },
             { cwd: status.worktree! },
           );
-          const snapshot = budget.snapshot();
-          const tranche: "auto" | "owner" = snapshot.correctionsAuto > 0 ? "auto" : "owner";
+          const tranche = correctionTrancheByRound.get(turn);
+          if (tranche === undefined) throw new Error(`correction round ${String(turn)} has no durable tranche authorization`);
           registration = correctionRegistrationFor(phase, ordinal, route, reservation, turnRunId, turn, tranche);
           await persist("attempt.updated", { lastActivityAt: infra.now(), lastActivity: `${phase.id}: resuming ${handle} for correction round ${String(turn)} (${evidence.proof})` });
         } else if (turn > 0) {
@@ -3272,44 +3283,77 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             await persistGate(phase.id, report, reviewContext?.candidateSha ?? null, round);
           }
         },
-        onCorrectionAuthorized: async ({ correctionRound, transport }) => {
+        onCorrectionAuthorized: async ({ actor, correctionRound, transport }) => {
+          const tranche = actor === "host" ? "auto" : "owner";
+          correctionTrancheByRound.set(correctionRound, tranche);
           const current = phaseRecords.get(phase.id)!;
           phaseRecords.set(phase.id, { ...current, correctionCount: correctionRound });
           await persist("attempt.updated", {
             budget: budget.snapshot(),
             lastActivityAt: infra.now(),
-            lastActivity: `${phase.id}: authorized ${transport} correction round ${String(correctionRound)}`,
+            lastActivity: `${phase.id}: authorized ${tranche}-tranche ${transport} correction round ${String(correctionRound)}`,
           });
         },
         /**
-         * `awsf run` draws only the automatic tranche. Same-session routes are
-         * token-only. A `continuity: none` route may spend one ordinary provider
-         * call only for envelope-form failures, and only when that call fits the
-         * task ceiling after every later required phase has retained headroom.
+         * Automatic correction uses only the automatic tranche. Once it is
+         * spent, the owner may approve a separately counted correction at this
+         * exact TTY; noninteractive hosts never inherit that authority.
          */
-        authorizeCorrection: ({ cause, correctionRound, reports }) => {
+        authorizeCorrection: async ({ cause, correctionRound, reports }): Promise<CorrectionDecision> => {
           if (phaseGrant !== null) return { actor: null, reason: "protected generation is one-use; corrections require separate authorization" };
           if (restored !== null) return { actor: null, reason: "saved reply validation cannot authorize another model call" };
           const snapshot = budget.snapshot();
-          if (snapshot.correctionsAuto >= snapshot.allowance.auto) {
-            return { actor: null, reason: `automatic correction allowance is spent (${String(snapshot.correctionsAuto)}/${String(snapshot.allowance.auto)})` };
+          if (correctionRound > routeMaximumCorrections) {
+            return { actor: null, reason: `round ${String(correctionRound)} exceeds the phase limit ${String(routeMaximumCorrections)}` };
           }
-          if (correctionRound > phase.maxCorrections) {
-            return { actor: null, reason: `round ${String(correctionRound)} exceeds the phase limit ${String(phase.maxCorrections)}` };
+          let transport: "same-session" | "cold";
+          if (route.continuity) {
+            transport = "same-session";
+          } else {
+            if (cause === "gate-violation" && !isColdEnvelopeCorrection(reports)) {
+              const failed = reports.filter((report) => !report.passed).map((report) => report.gateId).join(", ");
+              return { actor: null, reason: `cold correction is limited to envelope-form gates; failed gates: ${failed}` };
+            }
+            const headroom = coldCorrectionHeadroom();
+            if (headroom < 1) {
+              return {
+                actor: null,
+                reason: `route continuity is none and a cold correction needs one provider call, but 0 remain after reserving ${String(futureInitialCalls)} later required call(s)`,
+              };
+            }
+            transport = "cold";
           }
-          if (route.continuity) return { actor: "host", transport: "same-session" };
-          if (cause === "gate-violation" && !isColdEnvelopeCorrection(reports)) {
-            const failed = reports.filter((report) => !report.passed).map((report) => report.gateId).join(", ");
-            return { actor: null, reason: `cold correction is limited to envelope-form gates; failed gates: ${failed}` };
+          if (snapshot.correctionsAuto < snapshot.allowance.auto) return { actor: "host", transport };
+          if (transport !== "same-session") {
+            return { actor: null, reason: "owner correction is limited to a route with same-session continuity" };
           }
-          const headroom = coldCorrectionHeadroom();
-          if (headroom < 1) {
-            return {
-              actor: null,
-              reason: `route continuity is none and a cold correction needs one provider call, but 0 remain after reserving ${String(futureInitialCalls)} later required call(s)`,
-            };
+          if (snapshot.correctionsOwner >= snapshot.allowance.owner) {
+            return { actor: null, reason: `owner correction allowance is spent (${String(snapshot.correctionsOwner)}/${String(snapshot.allowance.owner)})` };
           }
-          return { actor: "host", transport: "cold" };
+          const terminal = options.terminal;
+          if (terminal?.interactive !== true) {
+            return { actor: null, reason: "owner correction requires an interactive owner terminal" };
+          }
+          const confirmed = await terminal.confirm(
+            `Authorize owner correction ${String(correctionRound)} for ${status.project}/${status.taskId} phase ${phase.id} ` +
+            `(${cause}, same-session); this spends one owner-tranche correction and no additional provider call?`,
+          );
+          if (!confirmed) return { actor: null, reason: "owner declined the correction" };
+          const authorizedAt = infra.now();
+          await persist("attempt.updated", {
+            lastActivityAt: authorizedAt,
+            lastActivity: `${phase.id}: owner authorized ${transport} correction round ${String(correctionRound)}`,
+          }, {
+            type: "owner-correction-authorization",
+            sessionId: status.sessionId,
+            attempt: status.attempt,
+            phaseId: phase.id,
+            correctionRound,
+            cause,
+            transport,
+            authorizedAt,
+          });
+          return { actor: "owner", transport };
         },
         ...(verifyCandidate === null ? {} : { verifyCandidate }),
       });
