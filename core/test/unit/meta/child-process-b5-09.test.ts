@@ -6,10 +6,13 @@ import { dirname, join } from "node:path";
 import { offenders } from "./child-process-fence.test.ts";
 
 const MODULE = "child" + "_process";
+const ROOTS = ["core/src", "dashboard/src", "docs/driving"];
 
 function scan(files: Record<string, string>): string[] {
   const base = mkdtempSync(join(tmpdir(), "awsf-cp-b5-09-"));
   try {
+    // The shipped-code scan is fail-closed: every declared walk root must exist, even when empty.
+    for (const root of ROOTS) mkdirSync(join(base, root), { recursive: true });
     for (const [path, source] of Object.entries(files)) {
       const target = join(base, path);
       mkdirSync(dirname(target), { recursive: true });

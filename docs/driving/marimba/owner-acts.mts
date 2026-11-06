@@ -6,9 +6,9 @@
  * `core/src/cli/main.ts` that build one, read out of the source text, and three
  * acts that build theirs elsewhere were in neither the list nor either guard:
  * `seed` (an `if (command === "seed")` block), `group apply` (built inside
- * `commands/group.ts`) and `retry --adopt-as` (built by the `adoptionTerminal`
- * helper, and only when the flag is given). So the list is now written here and
- * everything else derives from it:
+ * `commands/group.ts`) and `retry --adopt-as` (the shared `ownerTerminal`
+ * fallback is called only inside the flag's branch). So the list is now written
+ * here and everything else derives from it:
  *
  *   - `marimba-guard-rules.mts` builds both harnesses' owner-act fence from it,
  *     and `delegation-guard.sh` is held to the same entries by the meta-tests;

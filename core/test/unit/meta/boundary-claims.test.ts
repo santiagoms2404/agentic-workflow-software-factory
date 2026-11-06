@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { repoRoot, relRepo, walkFiles } from "./_walk.ts";
 import { DRIVING_REL, drivingDocs } from "./_driving.ts";
 import { OWNER_ACT_LIST, ownerActName, type OwnerActReach } from "../../../../docs/driving/marimba/owner-acts.mts";
+import { hasOwnerTerminalFallback, ownerActsIn, ownerHelperFlagIsGuarded } from "./_owner-terminal.ts";
 
 // ---------------------------------------------------------------------------
 // Two fences over the driving tree, both about the same failure: a document
@@ -200,8 +201,6 @@ const MAIN_TS_REL = "core/src/cli/main.ts";
 const MAIN_TS = readFileSync(join(ROOT, ...MAIN_TS_REL.split("/")), "utf8");
 const CLI_DIR_REL = "core/src/cli/";
 
-/** `case "x": {` … up to the next arm or the `default:` that closes the switch. */
-const CASE_ARM = /\bcase "([a-z][\w-]*)":|\bdefault:/g;
 const OWNER_TERMINAL = "processOwnerTerminal()";
 
 /** The case-arm part of the list: what documents enumerate and the shell `for verb` loop names. */
@@ -236,23 +235,35 @@ function armBody(source: string, start: number): string {
  * flagged entry needs its arm to read the flag, which is what separates
  * `retry --adopt-as` from the plain `retry` that builds no terminal.
  */
-function actFor(verb: string, reach: OwnerActReach, body: string): string {
+function actFor(verb: string, reach: OwnerActReach, body: string, callIndex = body.length): string {
   const entry = OWNER_ACT_LIST.find((candidate) =>
     candidate.verb === verb && candidate.reach === reach &&
-    (candidate.flag === undefined || body.includes(`flags["${candidate.flag.replace(/^--/u, "")}"]`)));
+    (candidate.flag === undefined || ownerHelperFlagIsGuarded(body, candidate.flag, callIndex)));
   return entry === undefined ? `unlisted: ${verb} (${reach})` : ownerActName(entry);
 }
 
 /** The acts a `processOwnerTerminal()` at `index` of main.ts-shaped `source` is built for. */
-function mainSiteActs(source: string, index: number, viaHelper = false, depth = 0): string[] {
+function mainSiteActs(source: string, index: number, viaHelper = false, depth = 0, helperName?: string): string[] {
   const anchor = anchorBefore(source, index);
-  if (anchor?.[1] !== undefined) return [actFor(anchor[1], viaHelper ? "helper" : "case-arm", armBody(source, anchor.index))];
-  if (anchor?.[2] !== undefined) return [actFor(anchor[2], viaHelper ? "helper" : "if-block", "")];
+  if (anchor?.[1] !== undefined) {
+    const body = armBody(source, anchor.index);
+    const callIndex = index - anchor.index;
+    if (viaHelper && helperName !== "ownerTerminal") {
+      return [actFor(anchor[1], "helper", body, callIndex)];
+    }
+    const caseAct = actFor(anchor[1], "case-arm", body, callIndex);
+    return viaHelper && helperName === "ownerTerminal" && caseAct.startsWith("unlisted:")
+      ? [actFor(anchor[1], "helper", body, callIndex)]
+      : [caseAct];
+  }
+  if (anchor?.[2] !== undefined) {
+    return [actFor(anchor[2], viaHelper && helperName !== "ownerTerminal" ? "helper" : "if-block", "")];
+  }
   const helper = anchor?.[3];
   if (helper !== undefined && depth < 3) {
     const callers = [...source.matchAll(new RegExp(String.raw`(?<!function )\b${helper}\(`, "g"))];
     if (callers.length === 0) return [`unattributed: helper ${helper} has no caller`];
-    return callers.flatMap((call) => mainSiteActs(source, call.index, true, depth + 1));
+    return callers.flatMap((call) => mainSiteActs(source, call.index, true, depth + 1, helper));
   }
   return ["unattributed: no case arm, command block or helper encloses it"];
 }
@@ -302,23 +313,6 @@ function siteOffenders(sites: readonly OwnerTerminalSite[]): { unmapped: string[
   const unmapped = sites.flatMap((site) => site.acts.filter((act) => !LISTED_ACTS.has(act)).map((act) => `${site.where} → ${act}`));
   const built = new Set(sites.flatMap((site) => site.acts));
   return { unmapped, unbuilt: [...LISTED_ACTS].filter((act) => !built.has(act)) };
-}
-
-/**
- * The case arms that construct an owner terminal. The count is NOT written
- * down here: if another arm ever takes one, it has to be listed, and a
- * hardcoded count would fail on the code rather than on the drift.
- */
-function ownerActsIn(source: string): string[] {
-  const arms = [...source.matchAll(CASE_ARM)];
-  const acts: string[] = [];
-  for (const [index, arm] of arms.entries()) {
-    const name = arm[1];
-    if (name === undefined) continue; // the `default:` sentinel, which only ends the arm before it
-    const body = source.slice(arm.index, arms[index + 1]?.index ?? source.length);
-    if (body.includes(OWNER_TERMINAL)) acts.push(name);
-  }
-  return acts;
 }
 
 /**
@@ -389,9 +383,12 @@ test(`the list's case-arm acts are exactly the ${MAIN_TS_REL} arms that construc
 });
 
 test(`every ${OWNER_TERMINAL} call site in core/src maps to a listed act, and every listed act has one`, () => {
+  assert.equal(hasOwnerTerminalFallback(MAIN_TS), true, "the shared CLI helper must default to processOwnerTerminal()");
   const sites = ownerTerminalSites();
-  assert.ok(sites.length >= OWNER_ACT_LIST.length, "the call-site sweep must reach the CLI, or this checks nothing");
+  const derivedActs = sites.flatMap((site) => site.acts);
+  assert.equal(derivedActs.length, OWNER_ACT_LIST.length, "every owner act must have exactly one terminal site after following helper callers");
   assert.deepEqual(siteOffenders(sites), { unmapped: [], unbuilt: [] });
+  assert.deepEqual(derivedActs.sort(), [...LISTED_ACTS].sort());
   // `retry` is a case arm and plain `retry` is not an owner act: only its
   // `--adopt-as` path builds a terminal, through a helper. It is asserted here
   // because it separates "the sweep found the owner acts" from "the sweep
@@ -418,6 +415,32 @@ test("the executable driving guard denies every listed owner act", () => {
     assert.ok(guard.includes(`*" ${entry.flag} "*`) && guard.includes(`*"awsf ${entry.verb}"*`),
       `delegation-guard.sh must deny ${ownerActName(entry)}`);
   }
+});
+
+test("the call-site sweep follows the shared fallback and every caller", () => {
+  const source = [
+    "function ownerTerminal(provided) { return provided ?? processOwnerTerminal(); }",
+    "switch (command) {",
+    '  case "land": { await landCommand({ terminal: ownerTerminal(provided) }); }',
+    '  case "retry": {',
+    '    const targetTaskId = parsed.flags["adopt-as"];',
+    '    if (targetTaskId !== undefined) { await adoptCommand({ terminal: ownerTerminal(provided) }); }',
+    "  }",
+    '  case "invented": { await otherCommand({ terminal: ownerTerminal(provided) }); }',
+    "  default:",
+    "    break;",
+    "}",
+  ].join("\n");
+  assert.equal(hasOwnerTerminalFallback(source), true);
+  const fallbackAt = source.indexOf(OWNER_TERMINAL);
+  assert.deepEqual(mainSiteActs(source, fallbackAt), ["land", "retry --adopt-as", "unlisted: invented (helper)"]);
+  assert.deepEqual(ownerActsIn(source), ["land", "invented"]);
+
+  const brokenFallback = source.replace("provided ?? processOwnerTerminal()", "provided ?? inertTerminal()");
+  assert.equal(hasOwnerTerminalFallback(brokenFallback), false);
+  assert.deepEqual(ownerActsIn(brokenFallback), []);
+  const unguardedRetry = source.replace("targetTaskId !== undefined", "targetTaskId === undefined");
+  assert.deepEqual(ownerActsIn(unguardedRetry), ["land", "retry", "invented"]);
 });
 
 test("the call-site sweep attributes arms, command blocks and helpers, and reports what is unlisted", () => {

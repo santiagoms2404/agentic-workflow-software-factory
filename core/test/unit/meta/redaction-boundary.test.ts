@@ -10,7 +10,7 @@ const BOUNDARIES = [
   "core/src/observability/projector.ts",
   "core/src/config/effective-config.ts",
   "core/src/api/responses.ts",
-  "core/src/adapters/env.ts",
+  "core/src/execution/process-environment.ts",
   "core/src/cli/commands/rework.ts",
   "core/src/decision/jev-transport.ts",
   "core/src/git/publish.ts",
@@ -32,6 +32,15 @@ test("every current persistence/display/provider boundary uses the shared creden
     return !usesSharedCredentialScrubber(source);
   });
   assert.deepEqual(offenders, []);
+});
+
+test("the adapter gate boundary delegates to the shared process-environment refusal", () => {
+  const adapterEnv = readFileSync(join(repoRoot(), "core/src/adapters/env.ts"), "utf8");
+  const processEnvironment = readFileSync(join(repoRoot(), "core/src/execution/process-environment.ts"), "utf8");
+  assert.match(adapterEnv, /import \{ admitEnvironmentEntry, filterEnv \} from "\.\.\/execution\/process-environment\.ts"/u);
+  assert.match(adapterEnv, /filterEnv\(GATE_ENV_LABEL, source\)/u);
+  assert.match(adapterEnv, /admitEnvironmentEntry\(GATE_ENV_LABEL, key, value\)/u);
+  assert.equal(usesSharedCredentialScrubber(processEnvironment), true);
 });
 
 test("boundary check rejects comments or imports without active scrubber calls", () => {

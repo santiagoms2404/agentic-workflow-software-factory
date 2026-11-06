@@ -10,17 +10,11 @@ import { EDGE_INVOCATIONS, NON_TRANSITION_ACTS, OWNER_ACT_COMMANDS, nextSteps, t
 import { renderGrantRefusalAdvice, renderNextAction } from "../../src/lifecycle/renderer.ts";
 import { LEGAL_EDGES, TASK_STATES, type TaskState } from "../../src/state/task-machine.ts";
 import { repoRoot } from "./meta/_walk.ts";
+import { ownerActsIn } from "./meta/_owner-terminal.ts";
 
 const inputFor = (state: TaskState): NextStepsInput => ({ project: "fixture-project", taskId: "fixture-task", attempt: 2, revision: 14, state });
 
-// Same derivation as boundary-claims, whose helper is deliberately local.
 // No second expected list: the arms that construct the terminal are authority.
-function ownerActsIn(source: string): string[] {
-  const arms = [...source.matchAll(/\bcase "([a-z][\w-]*)":|\bdefault:/g)];
-  return arms.flatMap((arm, index) => arm[1] !== undefined &&
-    source.slice(arm.index, arms[index + 1]?.index ?? source.length).includes("processOwnerTerminal()") ? [arm[1]] : []);
-}
-
 // Used unchanged for real outputs and planted defects: a mutation must fail the
 // same property that protects production, not a separate assertion about the mutant.
 function assertInventory(output: NextSteps): void {
@@ -129,8 +123,19 @@ function assertOwnerParity(commands: readonly string[], main: string, guard: rea
 test("the current owner-act table equals the main.ts owner-terminal arms and guard", () => {
   const main = readFileSync(join(repoRoot(), "core/src/cli/main.ts"), "utf8");
   assertOwnerParity(OWNER_ACT_COMMANDS, main, OWNER_ACTS);
-  // Prove the derivation reads the terminal, not a remembered list or a verb name.
+  // Prove the derivation follows the shared fallback and the caller's guarded act.
   assert.deepEqual(ownerActsIn('case "invented": { terminal: processOwnerTerminal() } default:'), ["invented"]);
+  assert.deepEqual(ownerActsIn([
+    "function ownerTerminal(provided) { return provided ?? processOwnerTerminal(); }",
+    'case "land": { terminal: ownerTerminal(provided); }',
+    'case "retry": { const targetTaskId = parsed.flags["adopt-as"]; if (targetTaskId !== undefined) { ownerTerminal(provided); } }',
+    "default:",
+  ].join("\n")), ["land"]);
+  assert.deepEqual(ownerActsIn([
+    "function ownerTerminal(provided) { return provided ?? inertTerminal(); }",
+    'case "land": { terminal: ownerTerminal(provided); }',
+    "default:",
+  ].join("\n")), []);
   assert.deepEqual(ownerActsIn('case "land": { readOnly() } default:'), []);
 });
 

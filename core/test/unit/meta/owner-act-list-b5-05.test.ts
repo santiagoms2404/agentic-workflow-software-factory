@@ -7,6 +7,7 @@ import { ownerActViolation } from "../../../../docs/driving/marimba/marimba-guar
 import { OWNER_ACT_LIST, ownerActName } from "../../../../docs/driving/marimba/owner-acts.mts";
 import { OWNER_ACT_LIST_ROWS } from "./_owner-act-spellings.ts";
 import { repoRoot } from "./_walk.ts";
+import { hasOwnerTerminalFallback, ownerHelperFlagIsGuarded } from "./_owner-terminal.ts";
 
 // B5-05 B5-45 B9-07 B9-08: three owner acts build their owner terminal outside a
 // `case` arm of cli/main.ts, so a list derived from the arms never named them
@@ -43,12 +44,16 @@ test("the three are listed by where main.ts builds their terminal, and the arm a
 
 test("the call sites B9-07 and B9-08 name still build the terminal where the list says", () => {
   const main = readFileSync(join(ROOT, "core", "src", "cli", "main.ts"), "utf8");
+  assert.equal(hasOwnerTerminalFallback(main), true, "the shared helper must preserve the real terminal fallback");
   const seedBlock = main.slice(main.indexOf('if (command === "seed")'), main.indexOf('if (command === "new")'));
-  assert.ok(seedBlock.includes("processOwnerTerminal()"), "seed builds its terminal inside its command block");
-  assert.match(main, /function adoptionTerminal\([^)]*\)[^{]*\{\s*return provided \?\? processOwnerTerminal\(\);/u);
+  assert.ok(seedBlock.includes("ownerTerminal(options.terminal)"), "seed reaches the shared terminal helper inside its command block");
   const retryArm = main.slice(main.indexOf('case "retry":'));
-  assert.ok(retryArm.indexOf('flags["adopt-as"]') < retryArm.indexOf("adoptionTerminal("),
-    "retry reaches the adoption terminal only under --adopt-as");
+  const flagIndex = retryArm.indexOf('const targetTaskId = parsed.flags["adopt-as"]');
+  const guardIndex = retryArm.indexOf("if (targetTaskId !== undefined)");
+  const terminalIndex = retryArm.indexOf("ownerTerminal(options.terminal)");
+  assert.ok(flagIndex >= 0 && flagIndex < guardIndex && guardIndex < terminalIndex,
+    "retry reaches the shared terminal fallback only in the --adopt-as branch");
+  assert.equal(ownerHelperFlagIsGuarded(retryArm, "--adopt-as", terminalIndex), true);
   const group = readFileSync(join(ROOT, "core", "src", "cli", "commands", "group.ts"), "utf8");
   assert.match(group, /await apply\([^\n]*processOwnerTerminal\(\)\)/u, "group apply builds its terminal in the group module");
 });
