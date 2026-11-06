@@ -195,11 +195,16 @@ test("invariant 8's scans sweep candidate-ref.ts with no exemption added", () =>
     assert.doesNotMatch(fenceText(fence), /candidate[-_]ref|refs\/awsf/iu, `${fence} names no exemption for this module`);
   }
   assert.doesNotMatch(fenceText("no-land-route.test.ts"), /exempt|allow(?:ed|list)/iu, "no-land-route.test.ts names no exemption");
-  // Owner call O2 gave the destructive-paths fence one argued allowlist: the four
-  // lock-release lines of operation-lease.ts and attempt-lock.ts. It may name those
-  // two modules and nothing else, so it can never excuse a ref write here.
+  // O2 permits lock releases; the 2026-11-06 D1 amendment also permits the
+  // existing private-temp and failed-admission cleanup. These exact four
+  // cleanup modules exclude candidate refs, so no ref write is excused here.
   const excused = [...fenceText("no-destructive-paths.test.ts").matchAll(/\{ file: "([^"]+)", line: /gu)].map((m) => m[1]);
-  assert.deepEqual([...new Set(excused)].sort(), ["core/src/execution/operation-lease.ts", "core/src/persistence/attempt-lock.ts"]);
+  assert.deepEqual([...new Set(excused)].sort(), [
+    "core/src/execution/continuity-store.ts",
+    "core/src/execution/operation-lease.ts",
+    "core/src/persistence/attempt-lock.ts",
+    "core/src/registry/plan-admission.ts",
+  ]);
   // The write's own shape: no delete flag, no batch that could carry one, and
   // every update-ref names the value it expects to replace.
   const source = readFileSync(join(repoRoot(), module), "utf8");
