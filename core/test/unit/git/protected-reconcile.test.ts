@@ -44,7 +44,7 @@ test("a consumption that never reached the transport has no exact outcome to com
 
 test("an orphaned consumption suppresses reconciliation even beside a complete one", () => {
   assert.equal(unfinishedProtectedEffect(state({
-    consumptions: [consumption("c1"), consumption("c2")], intents: [intent("c1")],
+    consumptions: [consumption("c1"), consumption("c2")], intents: [intent("c1")], bindings: [binding("c1")],
   })), null);
 });
 

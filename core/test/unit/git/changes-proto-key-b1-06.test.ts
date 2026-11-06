@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,6 +32,11 @@ function repository(t: { after(fn: () => void): void }, tracked: readonly string
   runGit(git, ["add", "--", ...tracked]);
   runGit(git, [...OWNER, "commit", "--quiet", "--no-gpg-sign", "-m", "base"]);
   return root;
+}
+
+function trackedFingerprint(root: string, path: string, numstat: string): string {
+  const diff = runGit(systemGitRunner(root), ["diff", "HEAD", "--", path]);
+  return `${numstat}:${createHash("sha256").update(diff).digest("hex").slice(0, 16)}`;
 }
 
 function session(root: string): PermissionSession {
@@ -76,7 +82,7 @@ test("a tracked root file named __proto__ that is edited reaches the policy thro
 
   const snapshot = captureChangeSet(root);
   assert.deepEqual(Object.keys(snapshot), ["__proto__"]);
-  assert.equal(snapshot["__proto__"], "1,1");
+  assert.equal(snapshot["__proto__"], trackedFingerprint(root, "__proto__", "1,1"));
   assert.deepEqual(offending(() => permission.enforce()), ["__proto__"]);
 });
 
@@ -112,6 +118,6 @@ test("ordinary paths are unchanged: a plain snapshot, and an allowed write passe
   assert.deepEqual(permission.enforce(), { changedPaths: ["allowed/a.ts"], sandboxBadge: "unavailable" });
 
   writeFileSync(join(root, "tracked.txt"), "edited\n");
-  assert.deepEqual(captureChangeSet(root), { "allowed/a.ts": "untracked", "tracked.txt": "1,1" });
+  assert.deepEqual(captureChangeSet(root), { "allowed/a.ts": "untracked", "tracked.txt": trackedFingerprint(root, "tracked.txt", "1,1") });
   assert.deepEqual(offending(() => permission.enforce()), ["tracked.txt"]);
 });
