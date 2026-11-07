@@ -233,6 +233,14 @@ test("an unknown phase route is refused instead of silently ignored", () => {
   assert.throws(() => loadConfig(toYaml(config)), ConfigInvalidPhaseRouteError);
 });
 
+test("the compiled plan-author role accepts a durable phase route", () => {
+  const config = deepClone(validConfig());
+  config.routing.phase_routes = {
+    "plan-author": { adapter: "claude", provider: "anthropic", model: "claude:opus", effort: "high" },
+  };
+  assert.deepEqual(loadConfig(toYaml(config)).routing.phase_routes?.["plan-author"], config.routing.phase_routes["plan-author"]);
+});
+
 test("same-provider degraded review requires the explicit review-mode literal", () => {
   const config = deepClone(validConfig());
   config.routing.review = "same-provider-degraded";

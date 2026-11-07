@@ -222,7 +222,7 @@ test("with no verifier installed there are no corrections at all", async () => {
   // one that should be available by default.
   const w = world({ installVerifier: false });
   try {
-    await assert.rejects(() => launch(w), /trusted correction verifier is not installed/);
+    await assert.rejects(() => launch(w), /trusted correction verifier or durable evidence callback is not installed/);
     assert.equal(existsSync(w.sideEffect), false);
   } finally { w.close(); }
 });

@@ -426,10 +426,66 @@ export async function deliverVisualReferences(verified: VerifiedVisualReferences
       await writeFile(frame.path, verified.images.get(frame.id)!, { flag: "wx", mode: 0o444 });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      await completeInterruptedFrame(frame.path, verified.images.get(frame.id)!);
     }
   }
   await revalidateDelivery(delivery);
   return delivery;
+}
+
+/**
+ * A frame write interrupted after exclusive creation can leave a strict prefix
+ * at its final name. Complete only that recognizable partial copy; an unrelated
+ * file at the same name is preserved and refused. No-follow opens and the
+ * single-link check keep a replacement from redirecting the repair elsewhere.
+ */
+async function completeInterruptedFrame(path: string, expected: Buffer): Promise<void> {
+  const source = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  let sourceIdentity: { readonly dev: number; readonly ino: number } | null = null;
+  try {
+    const info = await source.stat();
+    if (!info.isFile() || info.nlink !== 1) refuse("delivery-changed", "an existing delivered frame is not a single-link regular file");
+    const current = await source.readFile();
+    if (current.equals(expected)) {
+      await source.chmod(0o444);
+      return;
+    }
+    if (current.length >= expected.length || !expected.subarray(0, current.length).equals(current)) {
+      refuse("delivery-changed", "an existing delivered frame is not an interrupted prefix of its verified bytes");
+    }
+    sourceIdentity = { dev: info.dev, ino: info.ino };
+    await source.chmod(0o600);
+  } finally {
+    await source.close();
+  }
+  if (sourceIdentity === null) throw new Error("interrupted frame identity was not captured");
+
+  const destination = await open(path, constants.O_RDWR | constants.O_NOFOLLOW);
+  try {
+    const info = await destination.stat();
+    if (!info.isFile() || info.nlink !== 1 || info.dev !== sourceIdentity.dev || info.ino !== sourceIdentity.ino) {
+      refuse("delivery-changed", "the interrupted frame changed identity before it could be completed");
+    }
+    const current = await destination.readFile();
+    if (current.equals(expected)) {
+      await destination.chmod(0o444);
+      return;
+    }
+    if (current.length >= expected.length || !expected.subarray(0, current.length).equals(current)) {
+      await destination.chmod(0o444);
+      refuse("delivery-changed", "an existing delivered frame is not an interrupted prefix of its verified bytes");
+    }
+    let offset = 0;
+    while (offset < expected.length) {
+      const { bytesWritten } = await destination.write(expected, offset, expected.length - offset, offset);
+      if (bytesWritten === 0) throw new Error("could not complete the interrupted visual frame write");
+      offset += bytesWritten;
+    }
+    await destination.truncate(expected.length);
+    await destination.chmod(0o444);
+  } finally {
+    await destination.close();
+  }
 }
 
 /** Re-hashes every delivered file; a missing or changed one ends the phase. */

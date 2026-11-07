@@ -23,4 +23,5 @@ export const AGENT_PHASE_IDS = [
   "design",
   "architecture-review",
   "plan",
+  "plan-author",
 ] as const;

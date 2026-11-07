@@ -159,6 +159,23 @@ test("V1 delivery writes only the verified bytes, read-only, outside any worktre
     await refusedWith("delivery-changed", () => deliverVisualReferences(verified, directory));
     rmSync(join(directory, "stray.png"));
 
+    // A crashed writer may leave a strict prefix at the expected frame path.
+    // Re-entry completes a verified-byte prefix, but refuses unrelated bytes.
+    const interrupted = delivery.frames[1]!;
+    const expected = library.images[interrupted.id]!;
+    chmodSync(interrupted.path, 0o600);
+    writeFileSync(interrupted.path, expected.subarray(0, 40));
+    chmodSync(interrupted.path, 0o444);
+    assert.deepEqual(await deliverVisualReferences(verified, directory), delivery);
+    assert.deepEqual(readFileSync(interrupted.path), expected);
+
+    chmodSync(interrupted.path, 0o600);
+    writeFileSync(interrupted.path, expected.subarray(0, 20).map((byte) => byte ^ 0xff));
+    chmodSync(interrupted.path, 0o444);
+    await refusedWith("delivery-changed", () => deliverVisualReferences(verified, directory));
+    assert.deepEqual(readFileSync(interrupted.path), expected.subarray(0, 20).map((byte) => byte ^ 0xff),
+      "unrelated existing bytes are preserved rather than overwritten");
+
     // A worker running as the same user can defeat mode bits; it cannot defeat the digest.
     chmodSync(delivery.frames[0]!.path, 0o644);
     writeFileSync(delivery.frames[0]!.path, discPng(77));
