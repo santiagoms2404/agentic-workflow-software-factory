@@ -14,7 +14,7 @@ import { evaluateClosure, evaluateFreshness, type FreshnessFailure } from "../..
 import { gatherFreshness, K1_EXEMPT_WORKFLOWS, pinnedBaseSha, resolveAttemptRecipe } from "./preflight.ts";
 export { resolveAttemptRecipe } from "./preflight.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
-import { createWorktree, seedWorktreePaths, type ManagedWorktree } from "../../git/worktrees.ts";
+import { assertWorktreeAvailable, AttemptWorktreeExists, createWorktree, seedWorktreePaths, type ManagedWorktree } from "../../git/worktrees.ts";
 import { transition } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
 import {
@@ -272,8 +272,15 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   if (!config.workflows.enabled.includes(current.workflow)) {
     throw new Error(`workflow ${current.workflow} is not enabled by ${configPath}`);
   }
-  // K1, before the recipe is bound, before any L2, worktree or adapter. Every
-  // caller passes here: no option of this command reaches past it.
+  // These are read-only identity checks, but they must precede K1: K1 can
+  // append refusal evidence, while a withdrawn seed or interrupted exclusive
+  // worktree setup must refuse without changing the attempt at all.
+  const seed = await verifiedTargetSeed(options.attemptDir, current);
+  if (seed !== null) await validateSeedStartup(seed, current, config, configPath, options.attemptDir);
+  assertWorktreeAvailable({ repository: current.repository, root: resolve(options.worktreeRoot), attemptId: current.sessionId });
+  // K1 precedes normal start-recipe resolution, L2, worktree creation and
+  // adapter contact. Seed prompt binding above is read-only provenance validation.
+  // Every caller passes here: no option of this command reaches past it.
   await enforceK1(options, current, config);
   const recipe = await resolveAttemptRecipe(current, config);
   // trap-refusal-begin TR-17
@@ -344,8 +351,6 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     visual = { binding, verified };
   }
 
-  const seed = await verifiedTargetSeed(options.attemptDir, current);
-  if (seed !== null) await validateSeedStartup(seed, current, config, configPath, options.attemptDir);
   // A replay starts at its item's pinned base, through the same seam a seed's
   // integration base uses: a new detached worktree at that commit, and nothing
   // that moves or discards any other tree or ref.
@@ -385,6 +390,9 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
       protectedPaths: config.policy.protected_paths,
     });
   } catch (error) {
+    // Another start may have won the exclusive path after the read-only check.
+    // Keep the interrupted setup recoverable and leave its DRAFT evidence byte-stable.
+    if (error instanceof AttemptWorktreeExists) throw error;
     const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     const blockedDecision = transition({
       from: current.lifecycleState,

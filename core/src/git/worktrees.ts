@@ -253,13 +253,15 @@ export class AttemptWorktreeExists extends Error {
   }
 }
 
-/** Create exactly the attempt's detached execution tree. No removal operation is exposed. */
-export function createWorktree(request: WorktreeRequest, runner = systemGitRunner(request.repository)): ManagedWorktree {
+/** Refuse an existing attempt path before any caller performs stateful startup preflight. */
+export function assertWorktreeAvailable(
+  request: Pick<WorktreeRequest, "repository" | "root" | "attemptId">,
+  runner = systemGitRunner(request.repository),
+): string {
   if (!isAbsolute(request.root)) throw new Error("worktree root must be an absolute machine-local path");
   const path = attemptPath(request.root, request.attemptId);
-  const head = runGit(runner, ["rev-parse", request.baseSha]).trim();
-  // Diagnose before asking Git, so the failure names the condition rather than
-  // repeating git's message about a path.
+  // Diagnose before asking Git to create anything, so the failure names the
+  // interrupted setup rather than repeating git's message about a path.
   // trap-refusal-begin TR-12
   if (existsSync(path)) {
     const tracked = listWorktrees(request.repository, request.root, runner)
@@ -267,6 +269,15 @@ export function createWorktree(request: WorktreeRequest, runner = systemGitRunne
     throw new AttemptWorktreeExists(path, tracked);
   }
   // trap-refusal-end TR-12
+  return path;
+}
+
+/** Create exactly the attempt's detached execution tree. No removal operation is exposed. */
+export function createWorktree(request: WorktreeRequest, runner = systemGitRunner(request.repository)): ManagedWorktree {
+  if (!isAbsolute(request.root)) throw new Error("worktree root must be an absolute machine-local path");
+  const path = attemptPath(request.root, request.attemptId);
+  const head = runGit(runner, ["rev-parse", request.baseSha]).trim();
+  assertWorktreeAvailable(request, runner);
   runGit(runner, ["worktree", "add", "--detach", path, head]);
   return Object.freeze({ attemptId: request.attemptId, path, head });
 }

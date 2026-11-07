@@ -1,11 +1,11 @@
 // `awsf start` under K1 (specs/awsf-v3-w01-driver-checks.html, task 11): after
-// the DRAFT check and before any recipe, L2, worktree or adapter, start applies
-// the freshness rule to the attempt's latest driver-preflight record and its own
-// confirmations, with `git-storage` and `duplicate` re-measured. Each refusal
-// leaves the attempt DRAFT with zero calls reserved, appends exactly one
-// preflight-refused record naming the field or the stale binding, requests no
-// transition, and throws an error naming the command that clears it. The stub
-// adapter does not skip any of it; prove and intake are exempt by workflow id.
+// read-only seed-provenance and exclusive-worktree checks, and before normal
+// recipe resolution, L2, worktree creation or adapter contact, start applies
+// freshness to the latest driver-preflight record and its own confirmations, re-measuring
+// `git-storage` and `duplicate`. Each K1 refusal leaves DRAFT with zero reserved
+// calls, appends one preflight-refused record naming the field or stale binding,
+// requests no transition, and names the command that clears it. The stub does
+// not skip K1; prove and intake are exempt by workflow id.
 
 import assert from "node:assert/strict";
 import { selectedLanding } from "../../fixtures/closure-readers.ts";
@@ -21,6 +21,8 @@ import { newCommand } from "../../../src/cli/commands/new.ts";
 import { nextCommand } from "../../../src/cli/commands/next.ts";
 import { readAttemptEvidence } from "../../../src/cli/commands/review-record.ts";
 import { StartPreflightRefused, startCommand, type StartCommandOptions } from "../../../src/cli/commands/start.ts";
+import { AttemptWorktreeExists } from "../../../src/git/worktrees.ts";
+import { journalFilePath } from "../../../src/persistence/platform-paths.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import {
   assertPreflightRefusedRecord,
@@ -176,6 +178,34 @@ test("a fresh preflight and the owner's confirmation let start prepare the attem
     assert.equal(prepared.lifecycleState, "PREPARED");
     assert.equal(prepared.baseSha, git(b.repository, "rev-parse", "HEAD").trim());
     assert.deepEqual(await refusals(created.attemptDir), []);
+  } finally { b.close(); }
+});
+
+test("an interrupted exclusive worktree refuses without writing K1 refusal state", async () => {
+  const b = box("interrupted-worktree");
+  try {
+    const created = await draft(b, "interrupted-worktree");
+    const tree = join(b.worktreeRoot, created.status.sessionId);
+    mkdirSync(b.worktreeRoot, { recursive: true });
+    git(b.repository, "worktree", "add", "--detach", tree, git(b.repository, "rev-parse", "HEAD").trim());
+
+    const before = await readAttempt(created.attemptDir);
+    const journal = readFileSync(journalFilePath(created.attemptDir));
+    let preflightCalled = false;
+    await assert.rejects(startCommand({ ...startOptions(b, created.attemptDir),
+      preflight: () => { preflightCalled = true; return { adapter: true, sandbox: true, observability: true }; },
+    }), (error: unknown) => {
+      assert.ok(error instanceof AttemptWorktreeExists);
+      assert.equal(error.path, tree);
+      assert.equal(error.registered, true);
+      return true;
+    });
+
+    assert.equal(preflightCalled, false, "adapter availability is not probed after the retained tree refusal");
+    assert.deepEqual(await readAttempt(created.attemptDir), before);
+    assert.deepEqual(readFileSync(journalFilePath(created.attemptDir)), journal);
+    assert.deepEqual(await refusals(created.attemptDir), []);
+    assert.equal(existsSync(tree), true, "the interrupted tree remains available for owner recovery");
   } finally { b.close(); }
 });
 
