@@ -74,7 +74,7 @@ function box(label: string): Box {
   writeFileSync(join(repository, ".gitignore"), "node_modules/\n");
   const source = readFileSync(resolve("awsf.config.yaml"), "utf8");
   const configText = source.replace(/\ngates:\n(?: {2}.*\n)+/u,
-    "\ngates:\n  test: { argv: [node, -e, process.exit(0)], timeout_seconds: 10 }\n  lint: { argv: [node, -e, process.exit(0)], timeout_seconds: 10 }\n");
+    "\ngates:\n  test: { argv: [node, -e, process.exit(0), test], timeout_seconds: 10 }\n  lint: { argv: [node, -e, process.exit(0), lint], timeout_seconds: 10 }\n");
   assert.notEqual(configText, source);
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText);
