@@ -5,6 +5,10 @@ import { test } from "node:test";
 import { seedCommand } from "../../src/cli/commands/seed.ts";
 import { startCommand } from "../../src/cli/commands/start.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
+import { deriveAttemptStatus, readAttempt, type AttemptEvent, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
+import { statusFilePath } from "../../src/persistence/platform-paths.ts";
+import { recoverAttempt } from "../../src/persistence/replay.ts";
+import { writeStatus } from "../../src/persistence/status-store.ts";
 import { seedFixture } from "../fixtures/seeded-continuation.ts";
 import { prepareK1 } from "../fixtures/k1-preflight.ts";
 import { AttemptWorktreeExists } from "../../src/git/worktrees.ts";
@@ -19,6 +23,26 @@ test("seed creation journal survives a missing status projection without becomin
   unlinkSync(join(dir, "status.json"));
   await assert.rejects(startCommand({ attemptDir: dir, configPath: world.configPath, worktreeRoot: join(world.root, "targets"),
     preflight: () => ({ adapter: true, sandbox: true, observability: true }) }), /no attempt status/);
+
+  // Recovery is the only legitimate way past a missing projection: derive the
+  // exact status from the append-only journal and write that reconstruction.
+  // Do not weaken source_seq validation or let `new` append over the lost row.
+  const recovery = await recoverAttempt<AttemptEvent, AttemptStatus>({
+    attemptDir: dir,
+    derive: deriveAttemptStatus,
+    lifecycleStateOf: (status) => status.lifecycleState,
+    lifecycleKey: "lifecycleState",
+  });
+  if (recovery.outcome !== "recovered") assert.fail(`journal recovery refused: ${recovery.detail}`);
+  assert.equal(recovery.reconstructions[0]?.kind, "status-missing");
+  const recoveredStatus = recovery.status;
+  assert.ok(recoveredStatus, "the journal contains the seed creation row");
+  assert.equal(recoveredStatus.seed?.ownerAmendment?.text, "Retain the inherited behavior.");
+  assert.equal(recoveredStatus.lifecycleState, "DRAFT");
+  assert.equal(recoveredStatus.worktree, null);
+  await writeStatus(statusFilePath(dir), recoveredStatus);
+  assert.equal((await readAttempt(dir)).seed?.seedCandidateSha, world.candidateSha);
+
   await assert.rejects(newCommand({ stateRoot: world.stateRoot, project: world.config.project.slug, taskId: "target", repository: world.repository,
     request: "cannot overwrite seed", workflow: "build-review", tier: 2 }), /already has attempt/);
   assert.deepEqual(readFileSync(join(dir, "journal.jsonl")), before);

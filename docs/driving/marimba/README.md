@@ -8,7 +8,7 @@ performed by the two scripts in this directory.
 
 | File | What it is |
 | --- | --- |
-| `delegation-guard.sh` | The `PreToolUse` hook. Two fences: a delegation-shaped tool name, and a shell command invoking one of the eight acts the lifecycle reserves for the owner. |
+| `delegation-guard.sh` | The `PreToolUse` hook. Two fences: a delegation-shaped tool name, and a shell command invoking one of the eighteen owner acts declared in the shared rule list. |
 | `session-banner.sh` | The `SessionStart` hook. Prints what it was able to confirm about the guard's presence, and names what it could not. |
 | `settings.example.json` | The settings marimba is launched with, as a template. Two absolute paths are left as placeholders. |
 | `marimba-guard-rules.mts` | All three fences as pure rules, importing nothing. The one place either harness's lists are written. |

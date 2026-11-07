@@ -536,10 +536,12 @@ export class ProcessTransportBroker implements TransportBroker {
     // before launch, never after" check meaningful on all three classes.
     const reservationId = reservationIdOf(registration);
     assertSpecSafe(registration, spec, reservationId);
-    // Apply the allowlist at the process boundary, regardless of which adapter
-    // assembled the descriptor.
-    spec = { ...spec, env: filterEnv(registration.adapterId, spec.env) };
-    const executable = resolveExecutable(spec.executable, spec.env);
+    // Keep the reconnect descriptor immutable and byte-for-byte equal to the
+    // preflight input across every authorization frontier. Environment
+    // filtering is a broker-owned launch transformation, not a change to the
+    // descriptor whose exact digest the host authorized.
+    const launchSpec: ProcessSpec = { ...spec, env: filterEnv(registration.adapterId, spec.env) };
+    const executable = resolveExecutable(launchSpec.executable, launchSpec.env);
     if (edge !== null) {
       this.#assertTaskEdgeLaunch(registration as ProcessRegistration);
     }
@@ -573,7 +575,7 @@ export class ProcessTransportBroker implements TransportBroker {
     let reattachedProof: VerifiedReconnectAuthorization | null = null;
     const outcome = await runLauncherBarrier({
       start: async () => {
-        const started = await this.#spawnGated(executable, spec, registration.runId);
+        const started = await this.#spawnGated(executable, launchSpec, registration.runId);
         held.child = started.child;
         return started.launch;
       },
@@ -609,7 +611,7 @@ export class ProcessTransportBroker implements TransportBroker {
     });
     // Non-null by construction: the barrier only returns after `start` resolved.
     if (held.child === null) throw new SpawnRegistrationInvalid(registration.runId, "the barrier released a launch that never started");
-    return this.#transportFor(held.child, registration.runId, outcome.identity, spec);
+    return this.#transportFor(held.child, registration.runId, outcome.identity, launchSpec);
   }
 
   #assertReconnectLaunch(

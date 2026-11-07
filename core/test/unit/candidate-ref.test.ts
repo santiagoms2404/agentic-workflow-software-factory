@@ -195,14 +195,18 @@ test("invariant 8's scans sweep candidate-ref.ts with no exemption added", () =>
     assert.doesNotMatch(fenceText(fence), /candidate[-_]ref|refs\/awsf/iu, `${fence} names no exemption for this module`);
   }
   assert.doesNotMatch(fenceText("no-land-route.test.ts"), /exempt|allow(?:ed|list)/iu, "no-land-route.test.ts names no exemption");
-  // O2 permits lock releases; the 2026-11-06 D1 amendment also permits the
-  // existing private-temp and failed-admission cleanup. These exact four
-  // cleanup modules exclude candidate refs, so no ref write is excused here.
+  // O2 permits lock releases; the 2026-11-06 D1 amendment permits the
+  // existing private-temp and failed-admission cleanup, and its owner-resolution
+  // amendment adds the two exact atomic-writer temp sites. None authorizes a
+  // candidate-ref write, so the inventory must account for all six cleanup
+  // modules without adding an exemption for this one.
   const excused = [...fenceText("no-destructive-paths.test.ts").matchAll(/\{ file: "([^"]+)", line: /gu)].map((m) => m[1]);
   assert.deepEqual([...new Set(excused)].sort(), [
+    "core/src/cli/commands/metrics-export.ts",
     "core/src/execution/continuity-store.ts",
     "core/src/execution/operation-lease.ts",
     "core/src/persistence/attempt-lock.ts",
+    "core/src/persistence/status-store.ts",
     "core/src/registry/plan-admission.ts",
   ]);
   // The write's own shape: no delete flag, no batch that could carry one, and

@@ -132,12 +132,6 @@ const GUARD_ROWS: readonly GuardRow[] = [
     expect: "allow",
   },
   {
-    id: "bash · awsf run",
-    why: "the spend the phase's tier has already authorised; the guard is not a budget",
-    payload: bash("awsf run T01"),
-    expect: "allow",
-  },
-  {
     id: "bash · awsf retry",
     why: "retry builds no owner terminal, so it is not an owner act and the guard correctly omits it",
     payload: bash("awsf retry T01"),

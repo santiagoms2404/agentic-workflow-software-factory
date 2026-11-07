@@ -13,9 +13,11 @@
 #    against a fixed list, so a tool name that does not exist yet is denied on
 #    arrival rather than missed.
 #
-# 2. OWNER ACTS. Denies a shell command that invokes one of the eight acts the
-#    lifecycle reserves for the owner. This exists because the lifecycle's own
-#    barrier is weaker than it reads: `processOwnerTerminal()` checks
+# 2. OWNER ACTS. Denies a shell command that invokes any of the eighteen acts
+#    the lifecycle reserves for the owner. Fifteen use the direct verb loop;
+#    seed, group apply and retry --adopt-as have dedicated special-case paths.
+#    This exists because the lifecycle's own barrier is weaker than it reads:
+#    `processOwnerTerminal()` checks
 #    `process.stdin.isTTY`, which is a terminal-SHAPE check, and a same-user
 #    agent with shell access can allocate a PTY (`script -qec`) and answer the
 #    confirmation. Captured 2026-08-20. The TTY requirement stops an accidental

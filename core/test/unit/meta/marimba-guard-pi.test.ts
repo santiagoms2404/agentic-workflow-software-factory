@@ -121,12 +121,12 @@ test("quiet Pi startup keeps the named status and both fences", async () => {
   assert.equal(denied?.block, true);
 });
 
-test("the actual guard binding denies delegation and admits read-only planning", async () => {
+test("the actual guard binding denies delegation and owner acts, and admits read-only planning", async () => {
   const handler = bindingHandlers().get("tool_call")!;
   assert.equal((await handler({ toolName: "Workflow_Dispatch", input: {} }, { ui: {} }))?.block, true);
   assert.equal((await handler({ toolName: "bash", input: { command: "npm run awsf --silent -- group checklist" } }, { ui: {} }))?.block, false);
   assert.equal((await handler({ toolName: "bash", input: { command: "awsf run T01", timeout: 1 } }, { ui: {} }))?.block, true);
-  assert.equal((await handler({ toolName: "bash", input: { command: "awsf run T01" } }, { ui: {} }))?.block, false);
+  assert.equal((await handler({ toolName: "bash", input: { command: "awsf run T01" } }, { ui: {} }))?.block, true);
 });
 
 // ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ test("fence 2 denies through a wrapper, padded, or under a PTY", () => {
 });
 
 test("fence 2 is a targeted refusal, not a blanket one", () => {
-  for (const command of ["echo hello", "awsf status", "awsf run T01", "awsf retry T01"]) {
+  for (const command of ["echo hello", "awsf status", "awsf retry T01"]) {
     assert.equal(ownerActViolation(command), null, command);
   }
 });
