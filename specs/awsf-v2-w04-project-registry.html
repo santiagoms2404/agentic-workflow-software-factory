@@ -147,7 +147,7 @@ figcaption { color:var(--muted); font-size:12px; margin-top:10px; font-style:ita
       <summary>Metadata</summary>
       <dl>
         <dt>created</dt>      <dd>2026-08-21</dd>
-        <dt>modified</dt>     <dd>2026-08-21, 2026-08-22</dd>
+        <dt>modified</dt>     <dd>2026-08-21, 2026-08-22, 2026-11-06</dd>
         <dt>commits</dt>      <dd>none yet — this plan is authored and reviewed, and not yet committed</dd>
         <dt>agent name</dt>   <dd>claude-opus-5, claude-opus-5</dd>
         <dt>session id</dt>   <dd>not recorded — AGENTS.md invariant 1 keeps live session state out of every committed file in this repository</dd>
@@ -247,7 +247,7 @@ flowchart TD
   <!-- ===== SOLUTION ===== -->
   <section id="solution">
     <h2>Solution</h2>
-    <p>Two documents with two loaders, each rejecting what the other must hold; one join with four named rejections; a content-addressed contract that lets a child repository check its own agreement without reading anyone else's tree; and invariant 12's relation resolved through the registry instead of through a directory listing.</p>
+    <p>Two documents with two loaders, each rejecting what the other must hold; one join with four named rejections; an optional content-addressed contract projection checked in production against a trusted, pinned catalog baseline; and invariant 12's relation resolved through the registry instead of through a directory listing.</p>
 
     <h3>The catalog — <code>awsf.project.yaml</code>, at the plan repository's root</h3>
     <p>Durable project intent, versioned <code>awsf.project/v1</code>, and <strong>narrow by Q2's decision</strong>: project identity, one entry per repository carrying its role, default branch, gate commands and delivery posture, and the declared contracts between them. It is a <em>separate document with its own schema and its own loader</em>, never an extension of <code>AwsfConfig</code> — Q2 refused config loading outright, and the refusal is structural: a precedence rule between a project's config and the protected <code>awsf.config.yaml</code> is a route around <code>path-policy</code> that needs no amendment to take.</p>
@@ -292,13 +292,13 @@ flowchart LR
     <h3>Recorded, not resolved — what Q2's consequence means in code</h3>
     <p>The catalog's gate entries carry the <strong>same shape</strong> <code>awsf.config.yaml</code>'s already do — <code>argv</code> as an array with at least one element, plus <code>timeout_seconds</code> — keyed by an id in <code>KNOWN_GATE_IDS</code>. Resolution stays exactly where it is: <code>commandsPass(output, configured, context)</code> in <code>core/src/gates/commands.ts</code> joins on <code>gateId</code> and asserts <strong>argv exact</strong> against host-generated evidence. The catalog becomes a second <em>source</em> for the same triple; it gains no resolver, runs nothing, and interprets nothing. An <code>argv</code> array rather than a command string is also invariant 4 holding: executable plus argv, never <code>shell: true</code>.</p>
 
-    <h3>Q1 as decided — the contract is content-addressed and committed in each child</h3>
-    <p>The catalog's parent coordination record names, per contract, the producing repository, each consuming repository, the repository-relative path in each, and one <code>sha256:</code> digest. <strong>Each participating repository also commits <code>awsf.contracts.yaml</code></strong>, a small projection naming only the contracts that repository participates in and the digest each is expected to hash to.</p>
+    <h3>Q1 as decided — content-addressed contracts with optional local projections</h3>
+    <p>The catalog's optional <code>contracts</code> list names, per declared contract, the producing repository, each consuming repository, the repository-relative path in each, and one <code>sha256:</code> digest. A repository named as a participant in a declared contract needs <code>awsf.contracts.yaml</code>, a small projection of those relationships. The file is not required when the trusted catalog declares no contract requirements for that repository.</p>
     <div class="card rule">
       <h5>Why the projection exists, and why it is forced rather than chosen</h5>
-      Q1 requires two things at once: <strong>the parent record names the digest</strong>, and <strong>a child's gate reads its contract from inside its own worktree</strong>. A gate that had to read the parent record would have to reach into the plan repository — across exactly the boundary <code>path-policy</code> exists to hold, which is the hole the parent-owned option was rejected for opening. The only shape satisfying both is a copy of the digest inside each child. <strong>It cannot live in that child's <code>awsf.config.yaml</code></strong>, because that file is a <code>protected-path</code> no agent can write and a contract revision must be committable as ordinary work. So it is a separate file, and the cost — the digest now has N+1 copies, not just the artifact — is paid by the second fence below.
+      The participant projection keeps a repository-local copy for review and central reconciliation, but it is <strong>not the authority used to choose the expected digest in production</strong>. The production host resolves requirements from the trusted catalog — from the attempt-base catalog for an unregistered repository, or from the registered plan repository's catalog at the captured source commit — and pins that source identity and requirement list in the attempt journal. It passes those pinned requirements into the one-repository gate; the gate checks the candidate projection and artifact bytes against them without resolving placement or reading another worktree. A candidate that rewrites its projection cannot rewrite the expected digest. <strong>The projection remains unprotected</strong> so a coordinated contract revision can be ordinary work; it is required to exist and match when the trusted catalog declares requirements for that repository, and otherwise remains optional.
     </div>
-    <p>Two fences, and the division of labour is the point. <strong>The local fence</strong> runs inside one repository, reads only that repository's <code>awsf.contracts.yaml</code> and the files it names, and asserts each hashes to its recorded digest. It needs no registry, no placement, and no second tree — it is the gate a child's worker phase runs. <strong>The central reconciliation</strong>, <code>awsf project verify</code>, runs over a resolved project and asserts every child's projection agrees with the parent record and every artifact agrees with both. It is driver-side, it is allowed to use placement, and it is what makes the N+1 copies safe.</p>
+    <p>Two checks, and the division of labour is the point. <strong>The production gate</strong> receives trusted, pinned contract requirements from the host; it reads candidate bytes only inside the one repository, verifies a required projection against those requirements, and hashes each required artifact against the same trusted digest. When the trusted catalog yields no requirements, the projection is optional and the gate reports zero checks. <strong>The central reconciliation</strong>, <code>awsf project verify</code>, runs over a resolved project and checks each declared participant projection and artifact against the parent catalog. It is driver-side and may use placement; the candidate projection never replaces the parent record as authority.</p>
 
     <h3>Invariant 12, redefined per registered plan source</h3>
     <p>The catalog declares which repository holds the plans and where inside it they live. A <strong>plan source</strong> is <code>{project, repository-id, plans-root, plan format}</code>, and it resolves to a machine path only through placement. The fence pairs each ticket set with its plan through that record instead of through <code>readdirSync</code> on a fixed directory, and the store's <code>ticketStoreFor(repository)</code> is joined by <code>ticketStoreForPlan(resolved, planStem)</code>, which resolves into the plan repository rather than the working one.</p>
@@ -619,28 +619,35 @@ flowchart TD
     <!-- ================= M4 ================= -->
     <div class="phase">
       <h3><code class="status">[x]</code> Milestone M4: Q1 as decided — the content-addressed contract and its two fences</h3>
-      <p><strong>Questionable Q1 is decided and is a constraint, not an assignment.</strong> The shape is settled: an immutable, content-addressed artifact committed in each child, with the parent naming <code>{child repository, contract digest}</code> and a meta-test asserting each child's copy hashes to what the parent names. This phase owns the mechanism, and the mechanism is two fences with a deliberate division of labour.</p>
+      <p><strong>Questionable Q1 is decided and is a constraint, not an assignment.</strong> When the optional catalog <code>contracts</code> list declares a relationship, its content-addressed artifact and participant projections are checked against the parent digest; a repository with no declared requirement need not carry <code>awsf.contracts.yaml</code>. Production enforcement uses the host's pinned catalog-derived requirements, not candidate-authored digests. This phase owns the original registry mechanism, while the later owner-approved production interpretation below makes that trust boundary explicit.</p>
 
       <figure>
 <pre class="mermaid">
 flowchart LR
   subgraph PROD["producer repository"]
     PA["contract artifact"]
-    PP["awsf.contracts.yaml<br/>digest"]
+    PP["optional projection<br/>when required"]
+    GP["production gate"]
+    GP --> PA
+    GP --> PP
   end
   subgraph CONS["consumer repository"]
     CA["contract artifact<br/>its own copy"]
-    CP["awsf.contracts.yaml<br/>digest"]
+    CP["optional projection<br/>when required"]
+    GC["production gate"]
+    GC --> CA
+    GC --> CP
   end
-  PP -. local fence .-> PA
-  CP -. local fence .-> CA
-  CAT["catalog<br/>parent record<br/>one digest"] ==>|"awsf project verify"| PP
+  CAT["trusted catalog<br/>parent record<br/>one digest"] --> PIN["attempt journal<br/>pinned source + requirements"]
+  PIN -.-> GP
+  PIN -.-> GC
+  CAT ==>|"awsf project verify"| PP
   CAT ==>|"awsf project verify"| CP
-  style PP stroke:#22C55E
-  style CP stroke:#22C55E
+  style GP stroke:#22C55E,stroke-width:2px
+  style GC stroke:#22C55E,stroke-width:2px
   style CAT stroke:#A78BFA,stroke-width:2px
 </pre>
-        <figcaption>Dotted edges never leave a repository — that is the local fence, and it is the gate a child's worker phase runs. Solid edges cross repositories and belong to the driver, which has already resolved placement. No dotted edge crosses a boundary; that is the entire reason Q1 was decided this way.</figcaption>
+        <figcaption>The host pins expected requirements from the trusted catalog before a worker runs; each repository-local production gate compares only its own candidate projection and artifact bytes to that baseline. A projection is optional when the catalog declares no requirement. Central verification reconciles declared participant copies across repositories; the worker never trusts a candidate-rewritten digest or resolves placement itself.</figcaption>
       </figure>
 
       <h4>12. The parent record, and its projection into each participating repository</h4>
@@ -654,8 +661,8 @@ flowchart LR
       <h4>13. The local fence — a gate that reads only inside one worktree</h4>
       <ul class="checklist">
         <li><code class="status">[x]</code> <code>core/src/gates/contract-digest.ts</code> returns a <code>GateReport</code> in the shape the existing structural gates use, with one check per contract entry</li>
-        <li><code class="status">[x]</code> It takes <strong>one repository root</strong> and reads <code>&lt;root&gt;/awsf.contracts.yaml</code> plus the paths that file names. It accepts no catalog, no placement, no state root and no second root — the signature is what makes the boundary claim checkable by reading the function</li>
-        <li><code class="status">[x]</code> A missing <code>awsf.contracts.yaml</code> is a <strong>pass with no checks</strong>, not a failure: most repositories participate in no contract, and a gate that failed on absence would make the mechanism unadoptable</li>
+        <li><code class="status">[x]</code> It takes one candidate repository root plus host-derived contract requirements. It reads the candidate projection and required artifact paths only inside that root; it does not resolve a catalog, placement, state root or second repository itself</li>
+        <li><code class="status">[x]</code> With no trusted requirements, a missing <code>awsf.contracts.yaml</code> is a <strong>pass with no checks</strong>, so repositories without declared contracts do not need the optional file. When requirements exist, a missing, malformed or mismatching projection fails rather than passing vacuously</li>
         <li><code class="status">[x]</code> A named artifact that does not exist, or exists and hashes differently, is a failed check naming the contract id, the path, the expected digest and the observed one</li>
         <li><code class="status">[x]</code> Hashing uses <code>node:crypto</code> over the raw bytes — no normalisation, no re-serialisation, no encoding assumption. Byte identity, the same bar the sync fence and the measured project's own producer-side check both hold</li>
       </ul>
@@ -674,7 +681,7 @@ flowchart LR
         <li><code class="status">[x]</code> <code>node --experimental-strip-types --test core/test/unit/registry/contracts.test.ts</code> — a two-repository temporary fixture with a JSON contract committed in both, a catalog naming one digest, projections in each: <code>awsf project verify</code> green and both local fences green</li>
         <li><code class="status">[x]</code> <strong>Proven to bite, three ways:</strong> mutate <em>one byte</em> of the consumer's artifact → the consumer's local fence goes red <em>and</em> verify goes red; revert, then change only the consumer's projection digest → verify goes red while the producer's local fence stays green; revert, then change only the catalog's digest → verify goes red against <strong>both</strong> participants. Each failure is asserted to be the distinct one task 14 names</li>
         <li><code class="status">[x]</code> The local fence is asserted to read <strong>no path outside its given root</strong> — exercised by running it in a fixture whose sibling directory holds a contradicting artifact, and asserting the verdict is unaffected by it</li>
-        <li><code class="status">[x]</code> A repository with no <code>awsf.contracts.yaml</code> passes the local fence with zero checks recorded, not a skipped or errored gate</li>
+        <li><code class="status">[x]</code> A repository with no catalog contract requirements and no <code>awsf.contracts.yaml</code> passes the local fence with zero checks recorded, not a skipped or errored gate</li>
         <li><code class="status">[x]</code> Every temporary repository is removed in a cleanup (invariant 10)</li>
       </ul>
       <div class="card warn">
@@ -835,8 +842,8 @@ flowchart TD
     <details>
       <summary><span class="qdecided">DECIDED — APPLIED</span> Q-A — Spine Questionable Q1: how this plan implements the content-addressed cross-repository contract, and what that costs</summary>
       <p class="qa-answer"><strong>The decision, restated so it is not re-litigated here:</strong> the contract is an <em>immutable, content-addressed artifact committed in each child repository</em>; the parent coordination record names <code>{child repository, contract digest}</code>; a meta-test asserts each child's copy hashes to what the parent names. Taken by the owner on 2026-08-21. <strong>W04 owns the mechanism; the shape is settled.</strong></p>
-      <p class="qa-answer"><strong>How this plan implements it.</strong> The parent record is a <code>contracts</code> list in the committed catalog — durable, path-free, and the natural home for what Q2's own floor calls "the relationships between them". Each participating repository additionally commits <code>awsf.contracts.yaml</code>, a projection naming only the contracts it takes part in and the digest each must hash to. Two fences follow from that: a <strong>local</strong> one taking exactly one repository root, reading only that repository's projection and the files it names — the gate a child's worker phase runs — and a <strong>central</strong> one, <code>awsf project verify</code>, running over a resolved project and reconciling every projection against the parent record. M4's testing strategy watches all three drift modes go red.</p>
-      <p class="qa-answer"><strong>Why the projection is forced rather than chosen — the part worth defending.</strong> Q1 requires two things simultaneously: the parent names the digest, <em>and</em> a child's gate reads its contract from inside its own worktree. A gate that fetched the digest from the parent record would have to reach into the plan repository — across exactly the boundary <code>path-policy</code> exists to hold, and the hole the parent-owned option was rejected for opening. A copy of the digest inside each child is the only shape satisfying both. It cannot live in that child's <code>awsf.config.yaml</code>, which is a <code>protected-path</code> no agent can write while a contract revision must be committable as ordinary work.</p>
+      <p class="qa-answer"><strong>How this plan implements it.</strong> The optional parent <code>contracts</code> list in the committed catalog is durable and path-free. A participant with a declared requirement carries an <code>awsf.contracts.yaml</code> projection of that relationship; the projection is a consistency check, not the production authority. Before a worker runs, the host resolves requirements from the trusted attempt-base catalog or registered plan catalog, pins the source commit and requirements in attempt evidence, and supplies that baseline to the one-repository production gate. The gate compares candidate-local projection and artifact bytes to the pin. <code>awsf project verify</code> remains the central cross-repository reconciliation over a resolved project. A missing projection passes with zero checks only when the trusted catalog supplies no requirement for that repository.</p>
+      <p class="qa-answer"><strong>Why the projection remains useful without becoming an authority.</strong> The local copy lets a repository show which declared agreements it participates in and gives central verification a concrete consistency check. The worker gate does not fetch the expected digest from a sibling plan repository or trust its own candidate projection: the host carries the trusted baseline into the gate. This keeps worker reads inside the candidate repository while preventing a candidate from changing both its artifact and the digest it claims. The projection cannot live in <code>awsf.config.yaml</code>, which is protected while a contract revision must remain committable as ordinary work; it is required only for catalog-declared participants.</p>
       <p class="qa-answer"><strong>What it costs, stated plainly.</strong> <em>The digest now has N+1 copies, not just the artifact.</em> Q1 accepted N copies of the artifact and priced them at a meta-test; this implementation adds one copy of the <em>digest</em> per participant and pays for it with the central reconciliation, which is the only reason the extra copies are safe. Concretely: a contract revision now costs a new digest, an edit to the catalog, and a coordinated commit in every participating repository — one more file per repository than the decision's own description implies. That is the honest price and it is visible in M4's task 12. <strong>One alternative was considered and rejected:</strong> encoding the digest in the artifact's own filename, which removes the projection entirely and is content-addressing in the most literal sense. It was refused because every contract revision would then rename a file, changing every consumer's import path — churn on each revision in exchange for removing one small file, and an unstable path for tooling that has to find the artifact.</p>
     </details>
 
@@ -1011,6 +1018,10 @@ flowchart TD
       <summary>2026-08-22 — W04 landed: project registry v1</summary>
       <p><strong>Landing commit:</strong> <code>feat(registry): close project registry workstream</code>. T21 closes M6 and flips the W04 spine marker in the same commit. The owner-run provider validation remains <code>[f]</code> pending the owner's real <code>awsf start</code>.</p>
       <p>Evidence: <code>npm run test:unit</code> passed <strong>1132/1132</strong>, exit 0; <code>npm run typecheck</code> passed; <code>npm run lint</code> reported zero errors; <code>no-destructive-paths.test.ts</code> passed 1/1; <code>ticket-plan-sync.test.ts</code> passed 10/10; and the layer-separation, contracts, plan-source, and project-command suites passed 2/2, 11/11, 6/6, and 6/6 respectively.</p>
+    </details>
+    <details id="owner-resolution-d6a-2026-11-06">
+      <summary>2026-11-06 — D6a: optional projections and trusted pinned production requirements</summary>
+      <p>The owner-approved production interpretation is now explicit. The catalog's <code>contracts</code> list is optional; with no requirement for a repository, <code>awsf.contracts.yaml</code> is optional and the production gate records zero checks. When requirements are declared, the host derives expected ids, roles, paths and digests from the trusted attempt-base catalog or the registered plan catalog, captures the source commit and requirements in durable attempt evidence, and revalidates that pin on resume. The production gate compares candidate projection and artifact bytes against this pinned baseline; candidate content never supplies or changes the expected digest. <code>awsf project verify</code> remains the cross-repository reconciliation path. The completed M4 markers and ticket prompts are unchanged; the already-completed checklist now describes the conditional behavior without changing status.</p>
     </details>
   </section>
 
