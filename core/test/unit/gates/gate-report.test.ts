@@ -18,7 +18,7 @@ test("every gate has its canonical evidence kind", () => {
     ["review_evidence_present", "pure"],
     ["commands_pass", "subprocess"],
     ["journey_passes", "journey"],
-    ["contract_digest", "pure"],
+    ["contract_digest", "filesystem"],
     ["spine_declared", "pure"],
     ["spine_carried", "pure"],
     ["design_evidence_present", "pure"],

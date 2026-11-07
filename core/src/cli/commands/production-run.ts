@@ -87,6 +87,7 @@ import { hostCommitContentDigest, reconcileHostCommit } from "../../git/commit-r
 import type { HostCommitAdoption } from "../../workflow/engine.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
 import { GateReport, gateKindFor, type GateId } from "../../gates/interface.ts";
+import { contractDigest } from "../../gates/contract-digest.ts";
 import { intakeStateGate } from "../../gates/intake-state.ts";
 import { lightTicketStore } from "./ticket-selection.ts";
 import { writeDurableFile } from "./durable-file.ts";
@@ -122,13 +123,16 @@ import { buildPhaseRequest, openRetainedColdTurn, phasePersistenceMode, phasePer
 import { loadCatalog } from "../../registry/catalog.ts";
 import { readPlacement } from "../../registry/placement.ts";
 import { renderPlanDocument } from "../../registry/plan-render.ts";
-import { admitPlanSet, verifyPlanAdmission, type PlanAdmissionCapability, type PlanAdmissionInput } from "../../registry/plan-admission.ts";
+import { admitPlanSet, PlanAdmissionMaterializationError, rollbackPlanAdmission, verifyPlanAdmission, type PlanAdmissionCapability, type PlanAdmissionInput, type PlanAdmissionRollbackResult } from "../../registry/plan-admission.ts";
+import { trustedContractBaselineForAttempt, type TrustedContractBaseline } from "../../registry/production-contracts.ts";
+import type { ContractGateRequirement } from "../../registry/contracts.ts";
+import { scanJournal } from "../../persistence/replay.ts";
 import { PLAN_AUTHOR_OUTPUT_SCHEMA_ID, type PlanAuthorOutput } from "../../contracts/plan-author-output.ts";
 import { readPlanAuthorInput } from "../../workflow/plan-author-input.ts";
 import { assertPlanAuthorRole, compilePlanAuthor, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
 import type { PlanAdmissionRecord } from "../../contracts/plan-admission.ts";
 import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
-import { continuityFilePath } from "../../persistence/platform-paths.ts";
+import { continuityFilePath, journalFilePath } from "../../persistence/platform-paths.ts";
 import {
   DEFAULT_QUOTA_PROBE_TIMEOUTS,
   isBelowQuotaStopThreshold,
@@ -785,6 +789,66 @@ export function slugifyPlanStem(taskId: string): string {
   return normalized || "plan";
 }
 
+export type AdmissionJournalState = "present" | "absent" | "unknown";
+
+/** An admission effect whose files or durable journal outcome need owner recovery. */
+export class ProductionPlanAdmissionRecoveryRequired extends Error {
+  readonly stage: string;
+  readonly journalState: AdmissionJournalState;
+  readonly paths: readonly string[];
+  readonly admission: PlanAdmissionRecord | null;
+
+  constructor(stage: string, journalState: AdmissionJournalState, paths: readonly string[], admission: PlanAdmissionRecord | null, cause?: unknown) {
+    const journal = journalState === "present" ? "admission evidence is durable"
+      : journalState === "absent" ? "the journal proves no admission evidence exists"
+        : "the journal outcome is ambiguous";
+    super(`production plan admission requires recovery after ${stage}: ${journal}; retained path(s): ${paths.join(", ") || "none"}. Inspect the attempt journal and worktree before retrying.`,
+      cause === undefined ? undefined : { cause });
+    this.name = "ProductionPlanAdmissionRecoveryRequired";
+    this.stage = stage;
+    this.journalState = journalState;
+    this.paths = Object.freeze([...paths]);
+    this.admission = admission;
+  }
+}
+
+export function rethrowPlanAdmissionFailure(error: unknown): never {
+  if (error instanceof PlanAdmissionMaterializationError) {
+    throw new ProductionPlanAdmissionRecoveryRequired("partial materialization", "absent", error.retainedPaths, null, error);
+  }
+  throw error;
+}
+
+function rollbackAdmissionOrRequireRecovery(
+  rollback: unknown,
+  admission: PlanAdmissionRecord,
+  stage: string,
+  journalState: AdmissionJournalState,
+  cause?: unknown,
+): PlanAdmissionRollbackResult {
+  const result = rollbackPlanAdmission(rollback);
+  if (result === null || result.retained.length > 0) {
+    throw new ProductionPlanAdmissionRecoveryRequired(stage, journalState,
+      result?.retained ?? admission.files.map((file) => file.path), admission, cause);
+  }
+  return result;
+}
+
+export async function inspectAdmissionJournal(attemptDir: string, expected: PlanAdmissionRecord): Promise<AdmissionJournalState> {
+  try {
+    const scan = await scanJournal<AttemptEvent>(journalFilePath(attemptDir));
+    if (!scan.ok || scan.tornTail !== null) return "unknown";
+    const expectedPaths = new Set(expected.files.map((file) => file.path));
+    const overlaps = scan.records.some(({ event }) => {
+      const record = event.admission;
+      return record !== undefined && (record.stem === expected.stem || record.files.some((file) => expectedPaths.has(file.path)));
+    });
+    return overlaps ? "present" : "absent";
+  } catch {
+    return "unknown";
+  }
+}
+
 /** Writes and commits one rendered plan set inside the managed worktree only. */
 export async function renderProductionPlanIntoWorktree(input: {
   readonly worktree: string;
@@ -794,8 +858,10 @@ export async function renderProductionPlanIntoWorktree(input: {
   readonly protectedPaths: readonly string[];
   readonly baseSha?: string;
   readonly at?: string;
-  /** Persist the host admission before creating its candidate commit. */
+  /** Persist the host admission after local validation and before its candidate commit. */
   readonly journalAdmission?: (record: PlanAdmissionRecord) => Promise<void>;
+  /** Proves absence after a failed journal callback; unknown always preserves files. */
+  readonly admissionJournalState?: (record: PlanAdmissionRecord) => Promise<AdmissionJournalState>;
 }): Promise<ProductionPlanRenderResult> {
   const rendered = renderPlanDocument({ stem: input.stem, plan: input.plan, identifierSet: input.identifierSet });
   return admitProductionPlanIntoWorktree({ ...input, summary: input.plan.summary, admissionInput: {
@@ -816,6 +882,7 @@ export async function admitProductionPlanIntoWorktree(input: {
   readonly baseSha?: string;
   readonly at?: string;
   readonly journalAdmission?: (record: PlanAdmissionRecord) => Promise<void>;
+  readonly admissionJournalState?: (record: PlanAdmissionRecord) => Promise<AdmissionJournalState>;
 }): Promise<ProductionPlanRenderResult> {
   const stem = input.admissionInput.stem;
   const git = systemGitRunner(input.worktree);
@@ -825,47 +892,84 @@ export async function admitProductionPlanIntoWorktree(input: {
     repository: input.worktree,
     commitMessage: (output) => output.proposedCommitMessage,
   });
-  const admitted = admitPlanSet({
-    ...input.admissionInput, worktree: input.worktree, baseSha: input.baseSha ?? phaseBase,
-    at: input.at ?? new Date().toISOString(),
-  });
+  let admitted: ReturnType<typeof admitPlanSet>;
+  try {
+    admitted = admitPlanSet({
+      ...input.admissionInput, worktree: input.worktree, baseSha: input.baseSha ?? phaseBase,
+      at: input.at ?? new Date().toISOString(),
+    });
+  } catch (error) {
+    rethrowPlanAdmissionFailure(error);
+  }
   const { documents, capability, record: admission } = admitted;
-  await input.journalAdmission?.(admission);
-
-  const observed = hostGit.captureDiff();
-  const output: DocumentOutput = {
-    schema: DOCUMENT_OUTPUT_SCHEMA_ID,
-    producerStatus: "success",
-    summary: `Rendered ${input.summary}`,
-    artifacts: [...documents.keys()].map((path) => ({
-      path,
-      kind: path.endsWith(".html") ? "plan" as const : "documentation" as const,
-      description: `Rendered design-to-plan document ${path}`,
-    })),
-    notesForNextPhase: "Inspect and land the host-rendered plan set.",
-    changedFiles: [...documents.keys()].sort(),
-    documentedAreas: [...documents.keys()].map((path) => ({ subject: input.summary, documentPath: path })),
-    proposedCommitMessage: `docs: render ${stem} plan`,
-    runReport: {
-      path: "reports/design-to-plan.md",
-      markdown: `The host rendered the validated ${stem} plan and ticket set.`,
-    },
-  };
-  const parsed = parseEnvelope(JSON.stringify(output), DOCUMENT_OUTPUT_SCHEMA_ID);
-  if (!parsed.valid) {
-    throw new Error(`host composed an invalid plan-render envelope: ${parsed.violations.map((violation) => violation.message).join("; ")}`);
+  let observed: readonly string[];
+  let output: DocumentOutput;
+  let beforeCommit: readonly GateReport[];
+  try {
+    observed = hostGit.captureDiff();
+    output = {
+      schema: DOCUMENT_OUTPUT_SCHEMA_ID,
+      producerStatus: "success",
+      summary: `Rendered ${input.summary}`,
+      artifacts: [...documents.keys()].map((path) => ({
+        path,
+        kind: path.endsWith(".html") ? "plan" as const : "documentation" as const,
+        description: `Rendered design-to-plan document ${path}`,
+      })),
+      notesForNextPhase: "Inspect and land the host-rendered plan set.",
+      changedFiles: [...documents.keys()].sort(),
+      documentedAreas: [...documents.keys()].map((path) => ({ subject: input.summary, documentPath: path })),
+      proposedCommitMessage: `docs: render ${stem} plan`,
+      runReport: {
+        path: "reports/design-to-plan.md",
+        markdown: `The host rendered the validated ${stem} plan and ticket set.`,
+      },
+    };
+    const parsed = parseEnvelope(JSON.stringify(output), DOCUMENT_OUTPUT_SCHEMA_ID);
+    if (!parsed.valid) {
+      throw new Error(`host composed an invalid plan-render envelope: ${parsed.violations.map((violation) => violation.message).join("; ")}`);
+    }
+    beforeCommit = [
+      noProtectedPaths(observed, input.protectedPaths, true, [capability]),
+      diffMatchesClaims(observed, output.changedFiles),
+    ];
+  } catch (error) {
+    rollbackAdmissionOrRequireRecovery(admitted.rollback, admission, "local validation", "absent", error);
+    throw error;
   }
 
-  const beforeCommit = [
-    noProtectedPaths(observed, input.protectedPaths, true, [capability]),
-    diffMatchesClaims(observed, output.changedFiles),
-  ] as const;
   if (!beforeCommit.every((report) => report.passed)) {
+    rollbackAdmissionOrRequireRecovery(admitted.rollback, admission, "rejected local validation", "absent");
     return Object.freeze({ output, candidateSha: null, reports: Object.freeze(beforeCommit), admission });
   }
 
-  const candidateSha = hostGit.commit(output, observed);
-  if (candidateSha === null) throw new Error("plan-render produced no candidate commit");
+  if (input.journalAdmission !== undefined) {
+    try {
+      await input.journalAdmission(admission);
+    } catch (error) {
+      let state: AdmissionJournalState = "unknown";
+      try { state = await input.admissionJournalState?.(admission) ?? "unknown"; } catch { state = "unknown"; }
+      if (state === "absent") {
+        rollbackAdmissionOrRequireRecovery(admitted.rollback, admission, "journal admission", state, error);
+        throw error;
+      }
+      throw new ProductionPlanAdmissionRecoveryRequired("journal admission", state,
+        admission.files.map((file) => file.path), admission, error);
+    }
+  }
+
+  let candidateSha: string | null;
+  try {
+    candidateSha = hostGit.commit(output, observed);
+    if (candidateSha === null) throw new Error("plan-render produced no candidate commit");
+  } catch (error) {
+    if (input.journalAdmission !== undefined) {
+      throw new ProductionPlanAdmissionRecoveryRequired("candidate commit", "present",
+        admission.files.map((file) => file.path), admission, error);
+    }
+    rollbackAdmissionOrRequireRecovery(admitted.rollback, admission, "candidate commit", "absent", error);
+    throw error;
+  }
   const committedPaths = changesSinceBase(input.worktree, phaseBase);
   const reports = Object.freeze([
     noProtectedPaths(committedPaths, input.protectedPaths, true, [capability]),
@@ -1005,7 +1109,7 @@ export function memoizedChangeSet(
   };
 }
 
-function phaseGates(
+export function phaseGates(
   phaseId: string,
   profileWrites: readonly string[],
   worktree: string,
@@ -1019,6 +1123,7 @@ function phaseGates(
   attributionBaseSha: string | null = null,
   protectedCapabilities: () => Promise<readonly (ProtectedFilesCapability | PlanAdmissionCapability)[]> = async () => [],
   reviewObservation: () => { events: readonly NormalizedEvent[]; runId: string } = () => ({ events: [], runId: "" }),
+  contractRequirements: readonly ContractGateRequirement[] = [],
 ): readonly GateDefinition[] {
   const readChangeSet = memoizedChangeSet((sha) => changesSinceBase(worktree, sha));
   const observe = attributionBaseSha !== null && review === null
@@ -1053,6 +1158,7 @@ function phaseGates(
     { id: "artifacts_exist", run: ({ envelope }) => artifactsExist(envelope.artifacts, read) },
     { id: "json_parses", run: ({ envelope }) => jsonParses(envelope.artifacts, read) },
     { id: "no_protected_paths", run: async () => noProtectedPaths(assurance(), config.policy.protected_paths, true, await protectedCapabilities()) },
+    { id: "contract_digest", run: () => contractDigest(worktree, contractRequirements) },
   ];
   if (phaseId === "planner") {
     common.push(
@@ -1529,10 +1635,14 @@ export async function protectedGrantSubject(options: Pick<ProductionRunOptions, 
 }
 
 async function executeProductionCommand(options: ProductionRunOptions, operationId: string,
-  recovery?: { inspected: RecoveryInspection; reason: string; quotaReadings: BoundaryQuota[]; instruction?: ResumeInstruction | null }, preflightOnly = false): Promise<AttemptStatus> {
+  recovery?: { inspected: RecoveryInspection; reason: string; quotaReadings: BoundaryQuota[]; instruction?: ResumeInstruction | null; ownerApprovalId?: string | null }, preflightOnly = false): Promise<AttemptStatus> {
   const infra: ProductionInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   let status = recovery?.inspected.status ?? await readAttempt(options.attemptDir);
   const protectedState = readProtectedState(options.attemptDir);
+  if (recovery?.instruction != null && (typeof recovery.ownerApprovalId !== "string" ||
+      recovery.ownerApprovalId !== recovery.instruction.amendment.binding.authorizationId)) {
+    throw new Error("resume instruction is missing its independently recorded owner approval");
+  }
   /**
    * The crash window inside `commitProtectedAsHost`, between its durable intent
    * and its durable binding.
@@ -1653,12 +1763,32 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     }
   }
   // trap-refusal-end TR-09
+  let contractRequirements: readonly ContractGateRequirement[] = [];
+  let contractBaseline: TrustedContractBaseline | null = null;
   try {
+    if (recovery === undefined) await validatePreparedRepository(status);
+    else await verifyCheckpointWorktree(options.attemptDir, options.config, status, recovery.inspected.checkpoint);
+    const baselineRows = startupEvidence.filter((evidence) => evidence.type === "trusted-contract-baseline");
+    if (baselineRows.length > 1) throw new Error("attempt has duplicate trusted contract baselines");
+    const baselineEvidence = baselineRows[0];
+    if (baselineEvidence?.type === "trusted-contract-baseline") {
+      contractBaseline = await trustedContractBaselineForAttempt({
+        repository: status.repository, baseSha: status.baseSha, projectSlug: status.project, stateRoot: options.stateRoot,
+      }, baselineEvidence.baseline);
+    } else {
+      if (recovery !== undefined) throw new Error("resume refused: trusted contract baseline is missing from the attempt journal");
+      contractBaseline = await trustedContractBaselineForAttempt({
+        repository: status.repository, baseSha: status.baseSha, projectSlug: status.project, stateRoot: options.stateRoot,
+      });
+      status = await persistAttempt(options.attemptDir, status.revision, {
+        kind: "attempt.updated", next: nextRevision(status, {}),
+        evidence: { type: "trusted-contract-baseline", baseline: contractBaseline },
+      }, options.projectRecord);
+    }
+    contractRequirements = contractBaseline.requirements;
     // A replay measures its arm, so the arm must be the attempt's own route
     // for the phase it measures, whole, before any adapter is asked anything.
     if (status.workflow === PROVE_WORKFLOW_ID) assertReplayArmRoute(recipe as ProveRecipe, status.routeOverrides);
-    if (recovery === undefined) await validatePreparedRepository(status);
-    else await verifyCheckpointWorktree(options.attemptDir, options.config, status, recovery.inspected.checkpoint);
     const boundRecord = startupEvidence.findLast((evidence) => evidence.type === "visual-references-bound");
     visualBound = boundRecord?.type === "visual-references-bound" ? boundRecord.bound : null;
     visualBinding = await readVisualBinding(options.attemptDir, visualBound);
@@ -1703,7 +1833,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       // per-phase override, and before any call is reserved.
       if (visualBinding?.phases.includes(phase.id) === true) {
         assertVisualRoute({ phaseId: phase.id, adapterId: adapter.id, model, profile: agent.tools.profile, tools: agent.tools.allow });
-        await assertRouteDeliversImages(adapter.id, { home: imageSettingsHome, cwd: status.worktree });
+        await assertRouteDeliversImages(adapter.id, { home: imageSettingsHome, cwd: status.worktree! });
       }
       const effective = effectivePhaseRoute(selection.requested, adapter.id, model);
       const provenance = routeSelectionProvenance({
@@ -1750,7 +1880,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       const preflightRequest: ModelRequest = {
         model: agent.model,
         prompt: "preflight",
-        cwd: status.worktree,
+        cwd: status.worktree!,
         env: HOST.process.env,
         effort: agent.thinking,
         profile: agent.tools.profile,
@@ -1763,7 +1893,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       if (confinement === "worktree") {
         try {
           grantSandbox(adapter.buildSpec(preflightRequest), {
-            canonicalRepository: status.repository, worktree: status.worktree, stateRoot: options.stateRoot,
+            canonicalRepository: status.repository, worktree: status.worktree!, stateRoot: options.stateRoot,
             sessionRuntime: join(options.attemptDir, "private", phase.id), writes: agent.writes, confinement,
             providerReadableRoots: adapter.providerReadableRoots?.(HOST.process.env) ?? [],
             providerWritableRoots: adapter.providerWritableRoots?.(HOST.process.env, confinement) ?? [],
@@ -1896,7 +2026,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             (configuredStop?.by_adapter?.[route.adapterId] ?? configuredStop?.default)?.probe_timeout_ms
               ?? DEFAULT_QUOTA_PROBE_TIMEOUTS.phaseBoundaryMs)),
         },
-        options: { cwd: status.worktree, env: HOST.process.env, maxBuffer: options.config.runtime.max_output_bytes },
+        options: { cwd: status.worktree!, env: HOST.process.env, maxBuffer: options.config.runtime.max_output_bytes },
         now: observedAt, journalFailure: failure => { reportedFailure = failure.reasonCode; probeFailure = failure; },
         retainFailureBytes: retainQuotaFailureInAttempt(options.attemptDir, "before-l4"),
       });
@@ -2805,6 +2935,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             return capabilities;
           },
           () => reviewObservation,
+          contractRequirements,
         )),
         ...(visualPhase ? [{
           id: "visual_references_inspected",
@@ -3810,6 +3941,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     if (recovery !== undefined && (savedResult !== undefined || remainingCalls === 0 || compiled.phases[restartIndex]?.kind !== "agent" || isReviewPhase(compiled.phases[restartIndex]!))) {
       await persist("attempt.updated", { activeOperation: operationId, blocker: null }, { type: "resume-activation", operationId, quotaReadings: recovery.quotaReadings,
         ...(recovery.instruction == null ? {} : { ownerInstruction: recovery.instruction }),
+        ...(recovery.ownerApprovalId == null ? {} : { ownerApprovalId: recovery.ownerApprovalId }),
         checkpointId: recovery.inspected.checkpoint.id, reason: recovery.reason, reservationId: null, phase: null });
       activationPending = false;
     }
@@ -3874,7 +4006,9 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
           await persist("attempt.updated", { recovery: null, activeOperation: operationId, budget: budget.snapshot(),
             phase: { name: phase.id, state: "RUNNING", round: 0, maximumRounds: phase.maxCorrections } },
             { type: "resume-activation", operationId, quotaReadings: recovery!.quotaReadings,
-              ...(recovery!.instruction == null ? {} : { ownerInstruction: recovery!.instruction }), checkpointId: recovery!.inspected.checkpoint.id,
+              ...(recovery!.instruction == null ? {} : { ownerInstruction: recovery!.instruction }),
+              ...(recovery!.ownerApprovalId == null ? {} : { ownerApprovalId: recovery!.ownerApprovalId }),
+              checkpointId: recovery!.inspected.checkpoint.id,
               reason: recovery!.reason, reservationId: reservation.id, phase: started,
               ...(protectedConsumption === null ? {} : { protectedConsumption }) });
           phaseRecords.set(phase.id, started);
@@ -3970,6 +4104,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             protectedPaths: options.config.policy.protected_paths,
             baseSha: status.baseSha!, at: infra.now(),
             journalAdmission: admission => persist("attempt.updated", {}, undefined, admission),
+            admissionJournalState: admission => inspectAdmissionJournal(options.attemptDir, admission),
           }) : await renderProductionPlanIntoWorktree({
             worktree: status.worktree!,
             stem: slugifyPlanStem(status.taskId),
@@ -3979,13 +4114,14 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
             baseSha: status.baseSha!,
             at: infra.now(),
             journalAdmission: admission => persist("attempt.updated", {}, undefined, admission),
+            admissionJournalState: admission => inspectAdmissionJournal(options.attemptDir, admission),
           });
-          previous = rendered.output;
-          await persistHostEnvelope(phase.id, rendered.output);
           for (const report of rendered.reports) await persistGate(phase.id, report, rendered.candidateSha);
           if (rendered.candidateSha === null || !rendered.reports.every((report) => report.passed)) {
             throw new PhaseGateFailure(phase.id, rendered.reports);
           }
+          previous = rendered.output;
+          await persistHostEnvelope(phase.id, rendered.output);
           candidateSha = rendered.candidateSha;
           await persist("attempt.updated", {
             candidateSha,
@@ -4617,10 +4753,11 @@ export async function resumeProductionCommand(options: ProductionRunOptions & { 
     if (secondQuota !== null) quotaReadings.push(secondQuota);
   }, async operationId => {
     let instruction: ResumeInstruction | null = null;
-    if (instructionPlan !== null && instructionText !== null) {
+    const ownerApprovalId = instructionPlan === null || instructionText === null ? null : randomUUID();
+    if (instructionPlan !== null && instructionText !== null && ownerApprovalId !== null) {
       const binding: ResumeInstruction["amendment"]["binding"] = { entry: "resume", project: validated.status.project,
         taskId: validated.status.taskId, attempt: validated.status.attempt, sessionId: validated.status.sessionId,
-        authorizationId: randomUUID(), operationId, phaseKey: instructionPlan.phaseKey, phaseOrdinal: instructionPlan.ordinal,
+        authorizationId: ownerApprovalId, operationId, phaseKey: instructionPlan.phaseKey, phaseOrdinal: instructionPlan.ordinal,
         anchorId: validated.checkpoint.id, anchorRevision: validated.status.revision, logicalTurnId: null, correctionRound: 0,
         originalRequestDigest: sha256(validated.status.request), originalPromptBundleDigest: instructionPlan.bundleDigest,
         priorAmendmentDigest: instructionPlan.seedAmendment?.digest ?? null, deliveryFrontier: "next-phase-input" };
@@ -4632,7 +4769,7 @@ export async function resumeProductionCommand(options: ProductionRunOptions & { 
     await reconcileRecoveryStatus(options.attemptDir, validated);
     // Replay the missed projection before any new authorization or provider GO.
     for (const record of validated.records.slice(validated.disk.revision)) await options.projectRecord?.(record, record.event.next);
-    const status = await executeProductionCommand(options, operationId, { inspected: validated, reason, quotaReadings, instruction });
+    const status = await executeProductionCommand(options, operationId, { inspected: validated, reason, quotaReadings, instruction, ownerApprovalId });
     return { confirmed: true, status: await persistReadableRunReport(options, status) };
   });
 }

@@ -213,9 +213,13 @@ function mutateOneByte(path: string): void {
   writeFileSync(path, changed);
 }
 
+function requirement(fixture: ContractFixture, role: "produces" | "consumes", digest = fixture.digest) {
+  return [{ id: CONTRACT_ID, role, path: CONTRACT_PATH, digest }] as const;
+}
+
 async function assertFixtureGreen(fixture: ContractFixture): Promise<void> {
-  assert.equal(contractDigest(fixture.producer).passed, true);
-  assert.equal(contractDigest(fixture.consumer).passed, true);
+  assert.equal(contractDigest(fixture.producer, requirement(fixture, "produces")).passed, true);
+  assert.equal(contractDigest(fixture.consumer, requirement(fixture, "consumes")).passed, true);
   const report = await verifyRegisteredProject(fixture.stateRoot, FIXTURE_SLUG);
   assert.equal(report.ok, true);
   assert.deepEqual(report.failures, []);
@@ -239,16 +243,16 @@ test("two committed contract copies reconcile and all three drift modes are dist
 
     // A contradictory artifact at the same relative path in the sibling root
     // cannot affect the consumer's single-root local fence.
-    const consumerBeforeSiblingDrift = contractDigest(fixture.consumer);
+    const consumerBeforeSiblingDrift = contractDigest(fixture.consumer, requirement(fixture, "consumes"));
     mutateOneByte(join(fixture.producer, CONTRACT_PATH));
-    assert.equal(contractDigest(fixture.producer).passed, false);
-    assert.deepEqual(contractDigest(fixture.consumer), consumerBeforeSiblingDrift);
+    assert.equal(contractDigest(fixture.producer, requirement(fixture, "produces")).passed, false);
+    assert.deepEqual(contractDigest(fixture.consumer, requirement(fixture, "consumes")), consumerBeforeSiblingDrift);
     git(fixture.producer, "restore", "--", CONTRACT_PATH);
     await assertFixtureGreen(fixture);
 
     // Drift 1: only the consumer artifact moves by one byte.
     mutateOneByte(join(fixture.consumer, CONTRACT_PATH));
-    const consumerArtifactFence = contractDigest(fixture.consumer);
+    const consumerArtifactFence = contractDigest(fixture.consumer, requirement(fixture, "consumes"));
     assert.equal(consumerArtifactFence.passed, false);
     assert.equal(consumerArtifactFence.checks.length, 1);
     assert.equal(consumerArtifactFence.checks[0]?.item, `contract ${CONTRACT_ID}: ${CONTRACT_PATH}`);
@@ -267,7 +271,7 @@ test("two committed contract copies reconcile and all three drift modes are dist
     const otherDigest = sha256(Buffer.from("a different contract"));
     assert.notEqual(otherDigest, fixture.digest);
     writeFileSync(join(fixture.consumer, "awsf.contracts.yaml"), projectionYaml("consumes", otherDigest));
-    assert.equal(contractDigest(fixture.producer).passed, true);
+    assert.equal(contractDigest(fixture.producer, requirement(fixture, "produces")).passed, true);
     const projectionDrift = await verifyRegisteredProject(fixture.stateRoot, FIXTURE_SLUG);
     assert.equal(projectionDrift.ok, false);
     assert.deepEqual(failureKeys(projectionDrift.failures), [
@@ -284,8 +288,8 @@ test("two committed contract copies reconcile and all three drift modes are dist
     // Drift 3: only the parent catalog's digest moves. Both unchanged child
     // projections disagree with it, while both local artifact fences stay green.
     writeFileSync(fixture.catalogPath, catalogYaml(otherDigest));
-    assert.equal(contractDigest(fixture.producer).passed, true);
-    assert.equal(contractDigest(fixture.consumer).passed, true);
+    assert.equal(contractDigest(fixture.producer, requirement(fixture, "produces")).passed, true);
+    assert.equal(contractDigest(fixture.consumer, requirement(fixture, "consumes")).passed, true);
     const catalogDrift = await verifyRegisteredProject(fixture.stateRoot, FIXTURE_SLUG);
     assert.equal(catalogDrift.ok, false);
     assert.deepEqual(failureKeys(catalogDrift.failures), [
@@ -314,8 +318,8 @@ test("the gate and project verifier digest arbitrary contract bytes identically"
     }
     writeFileSync(fixture.catalogPath, catalogYaml(digest));
 
-    assert.equal(contractDigest(fixture.producer).passed, true);
-    assert.equal(contractDigest(fixture.consumer).passed, true);
+    assert.equal(contractDigest(fixture.producer, requirement(fixture, "produces", digest)).passed, true);
+    assert.equal(contractDigest(fixture.consumer, requirement(fixture, "consumes", digest)).passed, true);
     assert.equal((await verifyRegisteredProject(fixture.stateRoot, FIXTURE_SLUG)).ok, true);
     assert.deepEqual(await verifyViaCli(fixture), {
       exitCode: 0,
@@ -332,9 +336,9 @@ test("the gate and project verifier keep missing-artifact refusal text", async (
     const fixture = await createContractFixture(root);
     rmSync(join(fixture.producer, CONTRACT_PATH));
 
-    const gate = contractDigest(fixture.producer);
+    const gate = contractDigest(fixture.producer, requirement(fixture, "produces"));
     assert.equal(gate.passed, false);
-    assert.equal(gate.checks[0]?.note, `expected=${fixture.digest}; observed=missing`);
+    assert.match(gate.checks[0]?.note ?? "", new RegExp(`expected=${fixture.digest}; .*artifact=ENOENT`, "u"));
     const report = await verifyRegisteredProject(fixture.stateRoot, FIXTURE_SLUG);
     assert.deepEqual(report.failures, [{
       kind: "artifact-disagrees",

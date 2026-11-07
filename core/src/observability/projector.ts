@@ -942,6 +942,7 @@ function applyAttemptEvidence(db: DatabaseSync, sessionId: string, sourceSeq: nu
     case "protected-candidate":
     case "protected-landing":
     case "quota-snapshot":
+    case "trusted-contract-baseline":
       return;
     default: {
       const _exhaustive: never = evidence;

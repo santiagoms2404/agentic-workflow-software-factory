@@ -22,6 +22,18 @@ export class PlanAdmissionRefused extends Error {
   readonly code = "E_PLAN_ADMISSION";
   constructor(detail: string) { super(`plan admission refused: ${detail}`); this.name = "PlanAdmissionRefused"; }
 }
+
+/** A failed materialization whose exclusive rollback retained uncertain paths. */
+export class PlanAdmissionMaterializationError extends Error {
+  readonly retainedPaths: readonly string[];
+
+  constructor(cause: unknown, retainedPaths: readonly string[]) {
+    super(`plan admission materialization failed; rollback retained path(s): ${retainedPaths.join(", ")}`, { cause });
+    this.name = "PlanAdmissionMaterializationError";
+    this.retainedPaths = Object.freeze([...retainedPaths]);
+  }
+}
+
 function refuse(detail: string): never { throw new PlanAdmissionRefused(detail); }
 function digest(content: string): string { return createHash("sha256").update(content).digest("hex"); }
 
@@ -102,6 +114,7 @@ interface AdmissionRollbackProof {
   readonly worktree: string;
   readonly headSha: string;
   readonly files: Map<string, CreatedFile>;
+  readonly unverifiedPaths: string[];
   readonly directories: CreatedDirectory[];
   consumed: boolean;
 }
@@ -227,7 +240,7 @@ function unchangedCreatedFile(entry: CreatedFile, worktree: string): boolean {
 }
 
 function rollbackUncommittedAdmission(proof: AdmissionRollbackProof): PlanAdmissionRollbackResult {
-  const allPaths = [...proof.files.keys()];
+  const allPaths = [...proof.files.keys(), ...proof.unverifiedPaths];
   if (proof.consumed) return { removed: [], retained: allPaths };
   proof.consumed = true;
   try {
@@ -242,7 +255,7 @@ function rollbackUncommittedAdmission(proof: AdmissionRollbackProof): PlanAdmiss
   } catch { return { removed: [], retained: allPaths }; }
 
   const removed: string[] = [];
-  const retained: string[] = [];
+  const retained: string[] = [...proof.unverifiedPaths];
   for (const entry of [...proof.files.values()].reverse()) {
     const file = entry.path;
     try {
@@ -347,19 +360,24 @@ export function admitPlanSet(input: PlanAdmissionInput & { readonly worktree: st
     parents(worktree, path, false);
     if (statIfPresent(join(worktree, path)) !== null) refuse(`${path}: admission target already exists`);
   }
-  const rollbackProof: AdmissionRollbackProof = { worktree, headSha, files: new Map(), directories: [], consumed: false };
+  const rollbackProof: AdmissionRollbackProof = { worktree, headSha, files: new Map(), unverifiedPaths: [], directories: [], consumed: false };
   try {
     for (const [path, content] of documents) {
       parents(worktree, path, true, rollbackProof.directories);
       const target = join(worktree, path);
       const fd = openSync(target, "wx", 0o644);
       try {
-        const stat = fstatSync(fd);
-        if (!stat.isFile() || stat.nlink !== 1) refuse(`${path}: admission target is not an exclusive regular file`);
-        const bytes = Buffer.from(content, "utf8");
+        let stat: Stats;
+        try { stat = fstatSync(fd); }
+        catch (error) { rollbackProof.unverifiedPaths.push(path); throw error; }
+        if (!stat.isFile() || stat.nlink !== 1) {
+          rollbackProof.unverifiedPaths.push(path);
+          refuse(`${path}: admission target is not an exclusive regular file`);
+        }
         const owned: CreatedFile = { relativePath: path, path: target, dev: stat.dev, ino: stat.ino,
           mode: stat.mode & 0o777, expected: Buffer.alloc(0) };
         rollbackProof.files.set(path, owned);
+        const bytes = Buffer.from(content, "utf8");
         let offset = 0;
         while (offset < bytes.length) {
           const written = writeSync(fd, bytes, offset, bytes.length - offset, null);
@@ -377,7 +395,8 @@ export function admitPlanSet(input: PlanAdmissionInput & { readonly worktree: st
     issuedRollbacks.set(rollback, rollbackProof);
     return Object.freeze({ documents, capability, rollback, record });
   } catch (error) {
-    rollbackUncommittedAdmission(rollbackProof);
+    const rollback = rollbackUncommittedAdmission(rollbackProof);
+    if (rollback.retained.length > 0) throw new PlanAdmissionMaterializationError(error, rollback.retained);
     throw error;
   }
 }
