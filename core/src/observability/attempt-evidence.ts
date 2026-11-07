@@ -123,7 +123,7 @@ export type AttemptEvidence =
   | { readonly type: "protected-grant"; readonly grant: import("../contracts/protected-grant.ts").ProtectedGrant }
   | { readonly type: "protected-activation"; readonly consumption: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly phase: PhaseEvidenceRecord }
   | { readonly type: "protected-candidate"; readonly binding: import("../contracts/protected-grant.ts").ProtectedCandidateBinding }
-  | { readonly type: "protected-landing"; readonly authorization: import("../contracts/protected-grant.ts").ProtectedCandidateAuthorization }
+  | { readonly type: "protected-landing"; readonly protectedApproval: import("../contracts/protected-grant.ts").ProtectedCandidateAuthorization }
   | { readonly type: "phase-result-ready"; readonly phase: PhaseEvidenceRecord; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "phase-validation-started"; readonly phaseId: string; readonly checkpointId: string }
   /** An affirmative terminal answer bound to one exact phase correction, journaled before its tranche is charged. */

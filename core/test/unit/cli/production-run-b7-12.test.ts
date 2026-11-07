@@ -50,7 +50,7 @@ for (const [name, authority, costs, expected] of [
       original.call(this, turn);
       totals.push(this.snapshot().costUsd);
     });
-    const b = box(config => { config.risk.correction_allowance.auto = 0; });
+    const b = box(config => { config.risk.correction_allowance.auto = 1; });
     try {
       const created = await draft(b);
       await prepare(b, created.attemptDir);

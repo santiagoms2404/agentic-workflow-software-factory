@@ -204,11 +204,16 @@ class ScriptedT2Adapter implements HarnessAdapter {
     const runId = registration.runId;
     yield { kind: "run.started", seq: 1, runId, hostAt: AT, providerAt: null, adapter: this.id, requestedModel: request.model };
     yield { kind: "model.resolved", seq: 2, runId, hostAt: AT, providerAt: null, adapter: this.id, provider: this.#provider(), requestedModel: request.model, resolvedModel: `${request.model}-resolved`, provenance: "route-attributed" };
-    for (const [index, path] of observedReads.entries()) yield { kind: "tool.requested", seq: index + 3, runId,
-      hostAt: AT, providerAt: null, toolCallId: `t${index + 1}`, name: "Read", inputSummary: JSON.stringify({ file_path: path }) };
-    yield { kind: "text.delta", seq: 3 + observedReads.length, runId, hostAt: AT, providerAt: null, text: JSON.stringify(payload) };
-    yield { kind: "usage", seq: 4 + observedReads.length, runId, hostAt: AT, providerAt: null, usage: { inputTokens: 10, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" } };
-    yield { kind: "run.completed", seq: 5 + observedReads.length, runId, hostAt: AT, providerAt: null, exitCode: 0 };
+    for (const [index, path] of observedReads.entries()) {
+      const toolCallId = `t${index + 1}`;
+      yield { kind: "tool.requested", seq: index * 2 + 3, runId,
+        hostAt: AT, providerAt: null, toolCallId, name: "Read", inputSummary: JSON.stringify({ file_path: path }) };
+      yield { kind: "tool.completed", seq: index * 2 + 4, runId,
+        hostAt: AT, providerAt: null, toolCallId, outcome: "ok", durationMs: 0, resultSnippet: "fixture read completed" };
+    }
+    yield { kind: "text.delta", seq: 3 + observedReads.length * 2, runId, hostAt: AT, providerAt: null, text: JSON.stringify(payload) };
+    yield { kind: "usage", seq: 4 + observedReads.length * 2, runId, hostAt: AT, providerAt: null, usage: { inputTokens: 10, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" } };
+    yield { kind: "run.completed", seq: 5 + observedReads.length * 2, runId, hostAt: AT, providerAt: null, exitCode: 0 };
   }
 }
 

@@ -15,6 +15,8 @@ import {
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { main } from "../../src/cli/main.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
+import { journeyCommand } from "../../src/cli/commands/journey.ts";
+import { recordCandidateGateEvidence } from "../fixtures/candidate-gate-evidence.ts";
 
 const PROJECT = "agentic-workflow-software-factory";
 const TASK = "T21-fixture";
@@ -23,7 +25,7 @@ function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
 }
 
-function makeCandidate(root: string): { repository: string; base: string; candidate: string } {
+function makeCandidate(root: string): { repository: string; worktree: string; base: string; candidate: string } {
   const repository = join(root, "canonical");
   execFileSync("git", ["init", "-b", "main", repository], { stdio: "ignore" });
   writeFileSync(join(repository, "README.md"), "base\n");
@@ -36,10 +38,12 @@ function makeCandidate(root: string): { repository: string; base: string; candid
   git(repository, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "feat: exact landing candidate");
   const candidate = git(repository, "rev-parse", "HEAD");
   git(repository, "checkout", "main");
-  return { repository, base, candidate };
+  const worktree = join(root, "candidate-worktree");
+  git(repository, "worktree", "add", "--detach", worktree, candidate);
+  return { repository, worktree, base, candidate };
 }
 
-function awaiting(repository: string, candidate: string): AttemptStatus {
+function awaiting(fixture: ReturnType<typeof makeCandidate>): AttemptStatus {
   return {
     schema: "awsf/attempt-status/v1",
     sessionId: "owner-gate-session",
@@ -49,15 +53,15 @@ function awaiting(repository: string, candidate: string): AttemptStatus {
   groupId: null,
   planRef: null,
     attempt: 1,
-    repository,
-    worktree: join(repository, "candidate-worktree"),
+    repository: fixture.repository,
+    worktree: fixture.worktree,
     workflow: "build-review",
     tier: 2,
     request: "land the exact tested candidate",
     configSnapshotJson: "{}",
     lifecycleState: "AWAITING_OWNER",
-    baseSha: git(repository, "rev-parse", "HEAD"),
-    candidateSha: candidate,
+    baseSha: git(fixture.repository, "rev-parse", "HEAD"),
+    candidateSha: fixture.candidate,
     phase: { name: "reviewer", state: "SUCCEEDED", round: 1, maximumRounds: 1 },
     budget: {
       attempt: 1,
@@ -78,7 +82,7 @@ function awaiting(repository: string, candidate: string): AttemptStatus {
     nextAction: `run \`awsf land ${TASK}\``,
     gatesPass: true,
     requiredReviewPresent: true,
-    journeyApproved: true,
+    journeyApproved: false,
     protectedApprovalsValid: true,
     process: null,
     landingApproval: null,
@@ -104,21 +108,25 @@ async function seed(
   const stateRoot = join(root, "state");
   const attemptDir = join(stateRoot, "projects", PROJECT, "tasks", TASK, "1");
   const projection = createDashboardProjection(stateRoot);
-  const initial = awaiting(fixture.repository, fixture.candidate);
+  const initial = awaiting(fixture);
   await persistAttempt(
     attemptDir,
     null,
     { kind: "attempt.created", next: initial },
     projection.project,
   );
+  await recordCandidateGateEvidence(attemptDir, projection.project, "2026-08-07T00:00:00.000Z");
+  await journeyCommand({ attemptDir, terminal: terminal(true, true), journeyId: "human-gate-fixture",
+    observedSha: fixture.candidate, now: () => "2026-08-07T00:00:00.000Z", projectRecord: projection.project });
   if (observability === "degraded") {
     // Reproduce a real projection lifecycle gap: revision 2 is durable in the
     // journal/status but not projected, so revision 3 cannot be projected
     // contiguously and the writer marks this session degraded without throwing.
-    const skipped = nextRevision(initial, {
+    const current = await readAttempt(attemptDir);
+    const skipped = nextRevision(current, {
       lastActivity: "durable fixture update intentionally skipped by projection",
     });
-    await persistAttempt(attemptDir, initial.revision, { kind: "attempt.updated", next: skipped });
+    await persistAttempt(attemptDir, current.revision, { kind: "attempt.updated", next: skipped });
     const failed = nextRevision(skipped, {
       lastActivity: "projection receives a non-contiguous source sequence",
     });

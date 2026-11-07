@@ -214,7 +214,7 @@ async function finish(
       const approvals = protectedState.records.filter(record => record.event.evidence?.type === "protected-landing");
       const record = approvals[0];
       if (approvals.length !== 1 || record?.event.evidence?.type !== "protected-landing" || record.event.next.lifecycleState !== "LANDING" || record.event.next.landingApproval?.candidateSha !== candidate) throw new Error("protected landing lacks its unique atomic final owner approval");
-      assertProtectedCandidateAuthorization(record.event.evidence.authorization, { sessionId: status.sessionId, attempt: status.attempt, candidateSha: candidate,
+      assertProtectedCandidateAuthorization(record.event.evidence.protectedApproval, { sessionId: status.sessionId, attempt: status.attempt, candidateSha: candidate,
         integrationBaseSha: status.baseSha!, bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest });
     }
     const seed = await verifiedTargetSeed(options.attemptDir, status);
@@ -379,7 +379,7 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
   const persisted = await persistAttempt(
     options.attemptDir,
     current.revision,
-    { kind: "attempt.transitioned", next: landing, ...(protectedAuthorization === null ? {} : { evidence: { type: "protected-landing" as const, authorization: protectedAuthorization } }) },
+    { kind: "attempt.transitioned", next: landing, ...(protectedAuthorization === null ? {} : { evidence: { type: "protected-landing" as const, protectedApproval: protectedAuthorization } }) },
     options.projectRecord,
   );
   await options.afterLandingPersisted?.(persisted);

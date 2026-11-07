@@ -43,6 +43,7 @@ import { raiseCommand } from "../../src/cli/commands/raise.ts";
 import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
 import { WORKFLOW_RECIPES, workflowRecipe } from "../../src/workflow/catalog.ts";
 import { writePlacement } from "../../src/registry/placement.ts";
+import { trustedContractBaselineForAttempt } from "../../src/registry/production-contracts.ts";
 import { k1Request, k1RequestFor, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { nextCommand } from "../../src/cli/commands/next.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
@@ -58,6 +59,21 @@ import { TicketStore } from "../../src/persistence/ticket-store.ts";
 
 function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
+}
+
+function assertJournalBytesEqual(actual: Buffer | string, expected: Buffer | string, label: string): void {
+  const text = (value: Buffer | string): string => value.toString();
+  const summary = (value: Buffer | string) => {
+    const records = text(value).trim().split("\n").filter(Boolean).map(line => {
+      const record = JSON.parse(line);
+      return { seq: record.source_seq, kind: record.event.kind, evidence: record.event.evidence?.type, digest: recoveryDigest(record.event) };
+    });
+    return { count: records.length, tail: records.slice(-4) };
+  };
+  const equal = Buffer.isBuffer(actual) || Buffer.isBuffer(expected)
+    ? Buffer.isBuffer(actual) && Buffer.isBuffer(expected) && actual.equals(expected)
+    : actual === expected;
+  assert.ok(equal, `${label}: expected ${JSON.stringify(summary(expected))}; actual ${JSON.stringify(summary(actual))}`);
 }
 
 const RESUME_INSTRUCTION = '  Report this café instruction verbatim in implementationNotes.\n"Keep existing write limits."  ';
@@ -138,14 +154,18 @@ test(`O1 ${granted ? "A2 grant " : ""}${routed ? "selected-route " : ""}${scenar
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /quota.*below/);
     mode = "unknown";
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /quota.*unknown/);
+    const failedQuotaProbes = (await readAttemptEvidence(options.attemptDir)).filter(evidence =>
+      evidence.type === "quota-snapshot" && evidence.completedPhaseKey === "recovery-preflight");
+    assert.equal(failedQuotaProbes.length, 1, "an unavailable resume quota probe remains durable evidence");
     mode = "healthy";
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal: { ...terminal, interactive: false } }), /TTY/);
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal: {
       ...terminal, confirm: async () => { mode = "low"; return true; } } }), /quota.*below/);
     mode = "healthy";
+    const beforeDecline = readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8");
     const declined = await resumeProductionCommand({ ...options, reason: "quota recovered", terminal: { ...terminal, confirm: async () => false } });
     assert.equal(declined.confirmed, false);
-    assert.equal(readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8"), original);
+    assertJournalBytesEqual(readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8"), beforeDecline, "declined resume changed the journal");
     writeFileSync(join(prepared.worktree!, "unapproved.txt"), "retain this\n");
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /not clean/);
     assert.equal(readFileSync(join(prepared.worktree!, "unapproved.txt"), "utf8"), "retain this\n");
@@ -999,7 +1019,30 @@ for (const workflow of ["build", "plan-build-test", "simple-sdlc"] as const) {
       assert.equal(declined.confirmed, false); assert.deepEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), journal);
       let confirmations = 0;
       const landed = await landCommand({ attemptDir: world.created.attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => { confirmations++; await assert.rejects(() => assertNoExecutionController(world.created.attemptDir), /controller/); return true; } }, projectRecord: world.projection.project });
-      assert.equal(landed.status.lifecycleState, "LANDED", JSON.stringify(landed.status.blocker));
+      const approval = readProtectedState(world.created.attemptDir).records.findLast(record => record.event.evidence?.type === "protected-landing")?.event.evidence;
+      const proof = inspectProtectedCandidate(world.created.attemptDir, status.candidateSha!);
+      const authorizationSummary = approval?.type === "protected-landing" ? {
+        approvedKeys: Object.keys(approval.protectedApproval),
+        matches: {
+          session: approval.protectedApproval.sessionId === status.sessionId,
+          attempt: approval.protectedApproval.attempt === status.attempt,
+          candidate: approval.protectedApproval.candidateSha === status.candidateSha,
+          base: approval.protectedApproval.integrationBaseSha === status.baseSha,
+          chain: approval.protectedApproval.bindingChainDigest === proof.bindingChainDigest,
+          delta: approval.protectedApproval.protectedDeltaDigest === proof.protectedDeltaDigest,
+        },
+      } : { approval: null };
+      assert.ok(approval?.type === "protected-landing", "journal must retain the protected approval object");
+      assert.deepEqual(Object.keys(approval.protectedApproval).sort(), ["schema", "id", "sessionId", "attempt", "candidateSha", "integrationBaseSha", "bindingChainDigest", "protectedDeltaDigest", "confirmedAt", "digest"].sort());
+      assert.deepEqual({
+        session: approval.protectedApproval.sessionId === status.sessionId,
+        attempt: approval.protectedApproval.attempt === status.attempt,
+        candidate: approval.protectedApproval.candidateSha === status.candidateSha,
+        base: approval.protectedApproval.integrationBaseSha === status.baseSha,
+        chain: approval.protectedApproval.bindingChainDigest === proof.bindingChainDigest,
+        delta: approval.protectedApproval.protectedDeltaDigest === proof.protectedDeltaDigest,
+      }, { session: true, attempt: true, candidate: true, base: true, chain: true, delta: true });
+      assert.equal(landed.status.lifecycleState, "LANDED", JSON.stringify({ blocker: landed.status.blocker, ...authorizationSummary }));
       assert.equal(confirmations, 2); assert.equal(git(world.canonical, "rev-parse", "HEAD"), status.candidateSha);
     } finally { rmSync(world.root, { recursive: true, force: true }); }
   });
@@ -1203,8 +1246,16 @@ for (const cut of ["ungranted", "bad-envelope", "binding-drift", "intent-crash",
         phase: "builder", files: ["core/src/generated.ts"], reason: "One bounded generation.", sandboxProbe: () => true,
         terminal: { interactive: true, write: () => {}, confirm: async () => true } });
       let calls = 0; let injected = false;
+      if (cut === "binding-drift") {
+        assert.ok(prepared.baseSha !== null);
+        const baseline = await trustedContractBaselineForAttempt({ repository: prepared.repository, baseSha: prepared.baseSha,
+          projectSlug: prepared.project, stateRoot: world.stateRoot });
+        const current = await readAttempt(world.created.attemptDir);
+        await persistAttempt(world.created.attemptDir, current.revision, { kind: "attempt.updated", next: nextRevision(current, {}),
+          evidence: { type: "trusted-contract-baseline", baseline } }, world.projection.project);
+        writeFileSync(join(world.root, "prompts/builder/system.md"), "changed runtime prompt\n");
+      }
       const before = readFileSync(join(world.created.attemptDir, "journal.jsonl"));
-      if (cut === "binding-drift") writeFileSync(join(world.root, "prompts/builder/system.md"), "changed runtime prompt\n");
       const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
         projectRecord: async (record: Parameters<AttemptProjector>[0], status: Parameters<AttemptProjector>[1]) => {
           await world.projection.project(record, status);
@@ -1221,7 +1272,7 @@ for (const cut of ["ungranted", "bad-envelope", "binding-drift", "intent-crash",
         assert.ok(cut === "binding-drift" || cut === "intent-crash" || cut === "head-crash" || cut === "publication-crash", String(error));
       }
       assert.equal(calls, cut === "binding-drift" ? 0 : 1);
-      if (cut === "binding-drift") assert.deepEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), before);
+      if (cut === "binding-drift") assertJournalBytesEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), before, "binding-drift refusal changed the journal");
       if (cut === "landing-drift") {
         assert.equal(result?.lifecycleState, "AWAITING_OWNER");
         writeFileSync(join(prepared.worktree!, "core/src/generated.ts"), "changed after candidate binding\n");
@@ -2382,7 +2433,9 @@ test("unavailable configured adapter refuses PREPARED before provider launch", a
       infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new UnavailableAdapter(id, prepared.worktree!, () => { launches += 1; }) },
     }), { name: "ProductionExecutableUnavailable" });
     const status = await readAttempt(world.created.attemptDir);
-    assert.deepEqual(status, prepared);
+    assert.deepEqual({ ...status, revision: prepared.revision, lastSourceSeq: prepared.lastSourceSeq }, prepared,
+      "the trusted host baseline is the only durable preflight evidence; PREPARED authority is unchanged");
+    assert.equal((await readAttemptEvidence(world.created.attemptDir)).filter(evidence => evidence.type === "trusted-contract-baseline").length, 1);
     assert.equal(status.lifecycleState, "PREPARED");
     assert.equal(status.budget.callsSpent, 0);
     assert.equal(status.budget.callsReserved, 0);

@@ -143,7 +143,7 @@ test("B4-11: all remaining unhandled variants are handled cleanly without throwi
       },
       {
         type: "protected-landing",
-        authorization: {
+        protectedApproval: {
           authorizedSha: "c".repeat(40),
           at: "2026-08-06T00:02:08.000Z",
         } as unknown as import("../../../src/contracts/protected-grant.ts").ProtectedCandidateAuthorization,

@@ -131,6 +131,8 @@ export function protectedEffectContext(state: ProtectedState, intent: ProtectedC
   if (runGit(git, ["rev-parse", "--absolute-git-dir"]).trim() !== grant.subject.worktreeGitDir) throw new Error("the worktree Git directory is not the one this grant was issued against");
   if (runGit(git, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() !== grant.subject.commonGitDir) throw new Error("the common Git directory is not the one this grant was issued against");
   const indexPath = join(grant.subject.worktreeGitDir, "index");
+  const inheritedIndex = process.env["GIT_INDEX_FILE"];
+  if (inheritedIndex !== undefined && inheritedIndex !== indexPath) throw new Error("the Git index path is redirected away from the granted worktree Git directory");
   if (runGit(git, ["rev-parse", "--path-format=absolute", "--git-path", "index"]).trim() !== indexPath) throw new Error("the Git index path is redirected away from the granted worktree Git directory");
   assertOwnedRegular(lstatSync(indexPath), "the Git index", "inherited");
   return Object.freeze({ grant, consumption, binding: intent.binding, root, indexPath });

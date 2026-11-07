@@ -4219,6 +4219,24 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       await persistPhase(phase.id, "SUCCEEDED");
     }
 
+    // Every candidate-consuming edge must see both host gates on this exact
+    // candidate. Most workflows measure in their `tests` phase; candidate
+    // producers such as intake and rendered plans have no such phase, so fill
+    // only the missing evidence here instead of letting a status flag stand in
+    // for a gate row. This remains a real hygiene/command measurement on stub
+    // adapter routes.
+    if (candidateSha !== null) {
+      const finalPhaseId = compiled.phases.at(-1)?.id;
+      const current = candidateGateEvidence(await readAttemptEvidence(options.attemptDir), candidateSha, status.sessionId);
+      const missing = current.configured.filter(gateId => !current.rows.some(row => row.gateId === gateId));
+      if (missing.length > 0) {
+        if (finalPhaseId === undefined) throw new Error("candidate has no phase to bind its host gate evidence");
+        const measured = await measureCandidate(finalPhaseId, candidateSha, 0);
+        if (!measured.hygiene.passed) throw new PhaseGateFailure(finalPhaseId, [measured.hygiene]);
+        if (!measured.aggregate.passed || !measured.testOutput.passed) throw new CommandPhaseFailure(measured.testOutput);
+      }
+    }
+
     const readOnlySchema = READ_ONLY_RESULT_SCHEMA_BY_WORKFLOW.get(compiled.id);
     const readOnlyResult = readOnlySchema === undefined
       ? null

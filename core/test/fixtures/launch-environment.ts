@@ -3,7 +3,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ClaudeCodeAdapter } from "../../src/adapters/claude-code.ts";
 import { PiCodexAdapter } from "../../src/adapters/pi-codex.ts";
-import { readAttempt } from "../../src/cli/commands/attempt.ts";
+import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
+import { trustedContractBaselineForAttempt } from "../../src/registry/production-contracts.ts";
 import { ProductionExecutableUnavailable } from "../../src/cli/commands/production-run.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import { assertRefusedBeforeSpend, refusalAssertion } from "../traps/_harness.ts";
@@ -27,7 +28,14 @@ export async function launchEnvironmentRefusal(workflow = "simple-sdlc", missing
     const asked: string[] = [];
     const created = await draft(world, k1Request("replay the launch environment", "core/src/example.ts"), workflow);
     await prepare(world, created.attemptDir);
-    const prepared = await start(world, created.attemptDir);
+    await start(world, created.attemptDir);
+    let prepared = await readAttempt(created.attemptDir);
+    if (prepared.baseSha === null) throw new Error("launch-environment fixture requires the prepared base SHA");
+    const baseline = await trustedContractBaselineForAttempt({ repository: prepared.repository, baseSha: prepared.baseSha,
+      projectSlug: prepared.project, stateRoot: world.stateRoot });
+    await persistAttempt(created.attemptDir, prepared.revision, { kind: "attempt.updated", next: nextRevision(prepared, {}),
+      evidence: { type: "trusted-contract-baseline", baseline } }, world.projection.project);
+    prepared = await readAttempt(created.attemptDir);
     let failure: unknown;
     try {
       await run(world, created.attemptDir, { ...world.infrastructure,
