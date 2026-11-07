@@ -1,5 +1,6 @@
 import type { AttemptStatus } from "../cli/commands/attempt.ts";
 import { SEALED_STATES, TERMINAL_STATES } from "../state/task-machine.ts";
+import type { ProcessIdentity } from "../execution/launcher-barrier.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "./attempt-evidence.ts";
 
 export type RecoveryControllerState =
@@ -58,14 +59,14 @@ function completedCandidate(status: AttemptStatus, evidence: readonly AttemptEvi
 export function diagnoseRecovery(
   status: AttemptStatus,
   evidence: readonly AttemptEvidence[],
-  pidIsLive: (pid: number) => boolean,
+  pidIsLive: (pid: number, expected?: ProcessIdentity) => boolean,
 ): RecoveryDiagnostic {
   const phases = latestPhases(evidence);
   const processes = latestProcesses(evidence);
   const activePhases = phases.filter((phase) => ACTIVE_PHASE_STATES.has(phase.status));
   const activeProcesses = processes.filter((record) => ACTIVE_PROCESS_STATES.has(record.status));
-  const liveProcess = activeProcesses.find((record) => pidIsLive(record.record.identity.pid)) ?? null;
-  const liveStatusPid = status.process !== null && pidIsLive(status.process.pid) ? status.process.pid : null;
+  const liveProcess = activeProcesses.find((record) => pidIsLive(record.record.identity.pid, record.record.identity)) ?? null;
+  const liveStatusPid = status.process !== null && pidIsLive(status.process.pid, status.process) ? status.process.pid : null;
   const candidateSha = completedCandidate(status, evidence);
   const currentLivePid = liveProcess?.record.identity.pid ?? liveStatusPid;
   const staleRunningPhases = Object.freeze(activePhases.map((phase) => phase.phaseId));

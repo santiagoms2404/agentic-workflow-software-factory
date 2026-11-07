@@ -21,6 +21,8 @@ import type {
   TransportBroker,
 } from "../../adapters/interface.ts";
 import { AdapterError, reservationIdOf } from "../../adapters/interface.ts";
+import { ExecutableNotFound, SpawnRegistrationInvalid } from "../../execution/transport-broker.ts";
+import { IllegalSpawnSite } from "../../state/errors.ts";
 import { renderHeadroomAdvice, renderOwnerAlternatives, type AdviceSelector } from "../../lifecycle/renderer.ts";
 import { gateEnv } from "../../adapters/env.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
@@ -63,6 +65,7 @@ import {
 } from "../../policy/redaction.ts";
 import { openPermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { refuseUndeliveredVisualPhases } from "../../workflow/visual-references.ts";
+import { assertReworkOwnerAmendmentActivation } from "../../workflow/resume-instruction.ts";
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
 import { PHASE_SILENCE_TIMEOUT_REASON, PhaseSilenceTimeout, phaseBlocker } from "./phase-blocker.ts";
@@ -606,15 +609,21 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   credentialSafeValue(options.config, "configured owner rework data");
   const configuredInfra: ReworkInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   const delegatedReservations = new Set<string>();
+  const uncertainReservations = new Set<string>();
   const infra: ReworkInfrastructure = { ...configuredInfra, createBroker: brokerOptions => {
     const delegate = configuredInfra.createBroker(brokerOptions);
     return { startProcess: async (registration, spec, signal) => {
+      const reservationId = reservationIdOf(registration);
       try {
         const transport = await delegate.startProcess(registration, spec, signal);
-        delegatedReservations.add(reservationIdOf(registration));
+        delegatedReservations.add(reservationId);
         return transport;
       } catch (error) {
-        // No returned transport means the caller cannot prove whether a child exists. Do not retry it.
+        // These typed broker refusals all happen before the launcher barrier creates a child.
+        // Every other rejection has an unknown effect: keep any held liability and never retry.
+        if (!(error instanceof SpawnRegistrationInvalid || error instanceof ExecutableNotFound || error instanceof IllegalSpawnSite)) {
+          uncertainReservations.add(reservationId);
+        }
         throw new ReworkRouteMismatch(`broker launch outcome is uncertain: ${error instanceof Error ? error.message : String(error)}`);
       }
     } };
@@ -842,7 +851,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const at = infra.now();
     const seq = transitionOrdinal++;
     await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, ...update }, {
-      type: "transition", ...(amendment === undefined ? {} : { ownerAmendment: amendment }), id: `${status.sessionId}:${edgeId}:${seq}`, seq,
+      type: "transition", ...(amendment === undefined ? {} : {
+        ownerAmendment: amendment,
+        ownerApprovalId: amendment.binding.authorizationId,
+        ownerOperationId: operationId,
+      }), id: `${status.sessionId}:${edgeId}:${seq}`, seq,
       from, to, actor, edgeId, reasonSource: source, reasonCode: code, reasonDetail: detail, spawnSite, at,
     });
   };
@@ -877,6 +890,23 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     journeyApproved: false, protectedApprovalsValid: false, blocker: null, phase: null,
     lastActivity: `L19 human rework request accepted; call ${reservation.id} held before launch`,
   }, ownerAmendment ?? undefined);
+  if (ownerAmendment !== null) {
+    const activation = (await readAttemptEvidence(options.attemptDir)).findLast((record) =>
+      record.type === "transition" && record.edgeId === "L19" && record.ownerAmendment?.id === ownerAmendment.id);
+    const expected: ReworkOwnerAmendment["binding"] = {
+      entry: "rework", project: status.project, taskId: status.taskId, attempt: status.attempt, sessionId: status.sessionId,
+      authorizationId: ownerAmendment.binding.authorizationId, operationId, phaseKey, phaseOrdinal: builderOrdinal,
+      anchorId: `${status.sessionId}:candidate:${firstInspection.candidate}`, anchorRevision: displayedRevision,
+      candidateSha: firstInspection.candidate, defectDigest: sha256(defect), ownerReentry: status.budget.ownerReentries,
+      logicalTurnId: runId, correctionRound: 0, priorAmendmentDigest: null,
+      originalRequestDigest: sha256(status.request), originalPromptBundleDigest: sha256(canonicalJson(originalBundle)),
+      deliveryFrontier: "rework-input",
+    };
+    const activated = assertReworkOwnerAmendmentActivation(activation, expected, defect);
+    if (activated.digest !== ownerAmendment.digest || composeOwnerAmendment(originalInput, activated).composedText !== prompt) {
+      throw new Error("rework owner supplement differs from its persisted activation input");
+    }
+  }
   await persist("attempt.updated", {}, { type: "phase", phase });
   await persist("attempt.updated", {}, {
     type: "compiled-prompt", phaseId, name: "system", text: route.systemPrompt,
@@ -1474,9 +1504,13 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       try { survivorReport = await failedTransport.cancel("owner rework failed closed"); }
       catch { survivorReport = null; }
     }
-    // Only positive non-delegation permits releasing an unused reservation, for either phase.
+    // An unused reservation is released only when the broker was never asked or
+    // returned a typed preflight refusal. A rejected launch with unknown effect
+    // remains held; a settled launch is already spent/released in the ledger.
     for (const held of budget.outstanding()) {
-      if (!delegatedReservations.has(held.id)) budget.releaseOnRegistrationFailure(held.id);
+      if (!delegatedReservations.has(held.id) && !uncertainReservations.has(held.id)) {
+        budget.releaseOnRegistrationFailure(held.id);
+      }
     }
 
     // persistAttempt may throw after journal+status are already durable (the

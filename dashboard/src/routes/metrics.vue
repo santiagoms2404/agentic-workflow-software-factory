@@ -177,6 +177,13 @@ function openRun(sessionId: string): void {
 function runHref(sessionId: string): string {
   return metricsRouteHash(withRun(props.route, sessionId));
 }
+function warningKey(warning: MetricsResponse["diagnostics"][number]): string {
+  return `${warning.sessionId}:${warning.code}:${warning.ticketId}:${warning.path}`;
+}
+function warningTicket(warning: MetricsResponse["diagnostics"][number]): string {
+  return warning.ticketId === null ? "sealed shift metadata" :
+    `ticket ${warning.ticketId}${warning.path === null ? "" : ` (${warning.path})`}`;
+}
 /** The slot hands back the ladder's own entry; these are the rail's, with their dot or glyph. */
 function option(entry: SessionFilterEntry): RailOption {
   return entry as RailOption;
@@ -249,6 +256,13 @@ function option(entry: SessionFilterEntry): RailOption {
         <span v-if="focusNote" class="metrics-focus-note">{{ focusNote }}</span>
         <button type="button" class="metrics-pill" @click="go(resetLens(route))">Reset lens</button>
       </nav>
+
+      <section v-if="payload?.diagnostics.length" class="metrics-summary" aria-label="Metrics data warnings" role="status">
+        <p v-for="warning in payload.diagnostics" :key="warningKey(warning)" class="metrics-note">
+          Warning: {{ warning.project }}/{{ warning.taskId }} attempt {{ warning.attempt }}: {{ warningTicket(warning) }}:
+          {{ warning.message }}.
+        </p>
+      </section>
 
       <section class="metrics-summary" aria-label="Lens summary">
         <div v-for="stat in summary" :key="stat.id" class="metrics-stat">

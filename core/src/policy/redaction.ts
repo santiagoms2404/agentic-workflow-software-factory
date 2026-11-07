@@ -12,6 +12,9 @@ const CREDENTIAL_KEY =
 export { REDACTED_VALUE };
 
 export function credentialKey(key: string): boolean {
+  // An opaque authorization reference is an identifier, not an access token;
+  // redacting it would corrupt the digest-bound owner amendment in the journal.
+  if (key === "authorizationId") return false;
   return CREDENTIAL_KEY.test(key);
 }
 

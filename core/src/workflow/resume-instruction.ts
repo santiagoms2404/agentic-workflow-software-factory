@@ -1,10 +1,29 @@
 import { assertResumeInstruction, type ResumeInstruction } from "../contracts/resume-instruction.ts";
-import { assertOwnerAmendment, assertOwnerAmendmentDelivery, composeOwnerAmendmentChain, sha256, type OwnerAmendment } from "../contracts/owner-amendment.ts";
+import { assertOwnerAmendment, assertOwnerAmendmentBinding, assertOwnerAmendmentDelivery, composeOwnerAmendmentChain, sha256, type OwnerAmendment, type ReworkOwnerAmendment } from "../contracts/owner-amendment.ts";
 import type { AttemptEvent, AttemptStatus } from "../cli/commands/attempt.ts";
 import type { SavedPhaseResult } from "../contracts/saved-phase-result.ts";
 import type { AcceptedPhase } from "../contracts/phase-recovery.ts";
 import type { JournalRecord } from "../persistence/journal.ts";
 import type { AttemptEvidence } from "../observability/attempt-evidence.ts";
+
+/** Validate a rework supplement at its persisted L19 activation, not against today's candidate during historical display. */
+export function assertReworkOwnerAmendmentActivation(
+  activation: AttemptEvidence | undefined,
+  expected: ReworkOwnerAmendment["binding"],
+  defect: string,
+): ReworkOwnerAmendment {
+  if (activation?.type !== "transition" || activation.edgeId !== "L19" || activation.actor !== "human" ||
+      activation.reasonSource !== "human" || activation.reasonDetail !== defect ||
+      activation.ownerApprovalId !== expected.authorizationId || activation.ownerOperationId !== expected.operationId ||
+      activation.ownerAmendment === undefined) {
+    throw new Error("rework owner supplement lost its recorded L19 authorization");
+  }
+  assertOwnerAmendmentBinding(activation.ownerAmendment, expected);
+  if (activation.ownerAmendment.binding.defectDigest !== sha256(defect)) {
+    throw new Error("rework owner supplement differs from the L19 defect");
+  }
+  return activation.ownerAmendment;
+}
 
 export function resumeInstructionLines(evidence: readonly AttemptEvidence[]): string[] {
   return evidence.flatMap(record => {
@@ -50,7 +69,8 @@ export function acceptedResumeInstructions(records: readonly JournalRecord<Attem
     const { amendment } = instruction;
     const binding = amendment.binding;
     const anchor = records[binding.anchorRevision - 1]?.event.next;
-    if (ids.has(amendment.id) || phases.has(binding.phaseKey) || binding.operationId !== activation.operationId ||
+    if (ids.has(amendment.id) || phases.has(binding.phaseKey) || typeof activation.ownerApprovalId !== "string" ||
+        activation.ownerApprovalId !== binding.authorizationId || binding.operationId !== activation.operationId ||
         binding.anchorId !== activation.checkpointId || binding.anchorRevision >= record.source_seq ||
         anchor?.recovery?.id !== binding.anchorId || anchor.recovery.prefix.length + 1 !== binding.phaseOrdinal ||
         binding.project !== status.project || binding.taskId !== status.taskId || binding.attempt !== status.attempt ||
@@ -62,6 +82,17 @@ export function acceptedResumeInstructions(records: readonly JournalRecord<Attem
     if (accepted?.ownerAmendmentDigest !== amendment.digest || accepted.ordinal !== binding.phaseOrdinal) {
       throw new Error("resume instruction delivery is unfinished or ambiguous; no resubmission is authorized");
     }
+    const seed = status.seed?.builderPhaseKey === binding.phaseKey ? status.seed.ownerAmendment : null;
+    // `authorizationId` is independently required from resume-activation above;
+    // the launch check separately proves the prompt-bundle digest against files.
+    assertOwnerAmendmentBinding(amendment, {
+      entry: "resume", project: status.project, taskId: status.taskId, attempt: status.attempt, sessionId: status.sessionId,
+      authorizationId: activation.ownerApprovalId, operationId: activation.operationId,
+      phaseKey: accepted.phaseKey, phaseOrdinal: accepted.ordinal, anchorId: activation.checkpointId,
+      anchorRevision: binding.anchorRevision, logicalTurnId: null, correctionRound: 0,
+      priorAmendmentDigest: seed?.digest ?? null, deliveryFrontier: "next-phase-input",
+      originalRequestDigest: sha256(status.request), originalPromptBundleDigest: binding.originalPromptBundleDigest,
+    });
     const phaseId = `${status.sessionId}:${binding.phaseKey}`;
     const intent = records.filter(row => row.event.evidence?.type === "resume-instruction-delivery" &&
       row.event.evidence.delivery.amendmentId === amendment.id);
@@ -83,7 +114,6 @@ export function acceptedResumeInstructions(records: readonly JournalRecord<Attem
     const original = prompts.filter(evidence => evidence.name === "user");
     const composed = prompts.filter(evidence => evidence.name === "user+owner-amendment");
     if (original.length !== 1 || composed.length !== 1) throw new Error("resume instruction compiled input is missing or duplicated");
-    const seed = status.seed?.builderPhaseKey === binding.phaseKey ? status.seed.ownerAmendment : null;
     const reconstructed = composeResumeInstruction(original[0]!.text, seed, instruction);
     if (reconstructed.composedText !== composed[0]!.text) throw new Error("resume instruction compiled input changed");
     ids.add(amendment.id);

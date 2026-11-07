@@ -54,6 +54,12 @@ export type ReworkOwnerAmendment = Static<typeof ReworkOwnerAmendmentSchema>;
 /** These contracts bind owner intent. They do not enable an entry path or native steering. */
 export const OwnerAmendmentSchema = Type.Union([SeedOwnerAmendmentSchema, ResumeOwnerAmendmentSchema, RescueOwnerAmendmentSchema, ReworkOwnerAmendmentSchema]);
 export type OwnerAmendment = Static<typeof OwnerAmendmentSchema>;
+type OwnerAmendmentForBinding<A extends OwnerAmendment, B extends OwnerAmendment["binding"]> =
+  A extends OwnerAmendment
+    ? B extends A["binding"] ? Omit<A, "binding"> & { binding: B } : never
+    : never;
+export type OwnerAmendmentWithBinding<B extends OwnerAmendment["binding"]> =
+  B extends OwnerAmendment["binding"] ? OwnerAmendmentForBinding<OwnerAmendment, B> : never;
 
 /**
  * Sorted-key JSON for digests. Anything it cannot represent faithfully is refused,
@@ -86,12 +92,12 @@ export function ownerText(text: string): string {
 
 export function createOwnerAmendment<B extends OwnerAmendment["binding"]>(
   input: Omit<OwnerAmendment, "schema" | "actor" | "textDigest" | "digest" | "binding"> & { binding: B },
-): OwnerAmendment & { binding: B } {
+): OwnerAmendmentWithBinding<B> {
   const content = { ...input, binding: Object.freeze({ ...input.binding }),
     schema: "awsf.owner-amendment/v1" as const, actor: "owner" as const, textDigest: sha256(ownerText(input.text)) };
   const result = { ...content, digest: sha256(canonicalJson(content)) };
   assertOwnerAmendment(result);
-  return Object.freeze(result) as OwnerAmendment & { binding: B };
+  return Object.freeze(result) as OwnerAmendmentWithBinding<B>;
 }
 
 export function assertOwnerAmendment(value: unknown): asserts value is OwnerAmendment {

@@ -31,7 +31,8 @@ import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import { TEST_OUTPUT_TAIL_MAX_CHARS, type TestOutput } from "../../contracts/test-output.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
 import { CallBudget } from "../../execution/call-budget.ts";
-import type { BarrierRecord, TerminationReport } from "../../execution/launcher-barrier.ts";
+import type { BarrierRecord, ProcessIdentity, TerminationReport } from "../../execution/launcher-barrier.ts";
+import { createHostPort } from "../../execution/process-controller.ts";
 import { ProcessTransportBroker, runSystemCommand } from "../../execution/transport-broker.ts";
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
@@ -165,7 +166,7 @@ export interface AdoptionCommandInfrastructure extends ReviewPhaseInfrastructure
     readonly env: Readonly<Record<string, string>>;
   }): GitResult;
   sessionId(): string;
-  pidIsLive(pid: number): boolean;
+  pidIsLive(pid: number, expected?: ProcessIdentity): boolean;
 }
 
 export interface AdoptCommandOptions {
@@ -227,6 +228,43 @@ interface TargetPair {
   readonly candidateSha: string;
 }
 
+type PidProbe = (pid: number) => void;
+type ProcessIdentityProbe = (pid: number) => ProcessIdentity | null;
+
+function observeHostIdentity(pid: number): ProcessIdentity | null {
+  const port = createHostPort({ command: runSystemCommand });
+  const row = port.census().find((candidate) => candidate.pid === pid && candidate.alive);
+  return row === undefined ? null : {
+    pid, pgid: row.pgid ?? pid, startIdentity: row.startIdentity, startIdentitySource: port.identitySource,
+  };
+}
+
+/** EPERM is uncertain, not dead. A comparable start identity resolves PID reuse; unknown stays fail-closed. */
+export function recordedControllerIsLive(
+  expected: ProcessIdentity,
+  probe: PidProbe = (pid) => { process.kill(pid, 0); },
+  observe: ProcessIdentityProbe = observeHostIdentity,
+): boolean {
+  try {
+    probe(expected.pid);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ESRCH") return false;
+    if (code !== "EPERM") return true;
+  }
+  try {
+    const current = observe(expected.pid);
+    if (current === null) return true;
+    if (expected.startIdentity !== null && current.startIdentity !== null) {
+      return expected.startIdentity === current.startIdentity;
+    }
+    return true;
+  } catch {
+    // A failed identity observation cannot turn a possibly-live controller into a dead one.
+    return true;
+  }
+}
+
 const DEFAULT_INFRASTRUCTURE: AdoptionCommandInfrastructure = {
   adapterFor: (_entry, adapterId, config) => registeredAdapter(config.adapters, adapterId, config.runtime),
   createBroker: (options) => new ProcessTransportBroker(options),
@@ -234,9 +272,9 @@ const DEFAULT_INFRASTRUCTURE: AdoptionCommandInfrastructure = {
   runCommand: (executable, argv, options) => runSystemCommand(executable, argv, options),
   now: () => new Date().toISOString(),
   sessionId: randomUUID,
-  pidIsLive: (pid) => {
-    try { process.kill(pid, 0); return true; } catch { return false; }
-  },
+  pidIsLive: (pid, expected) => expected === undefined
+    ? recordedControllerIsLive({ pid, pgid: pid, startIdentity: null, startIdentitySource: "unknown" })
+    : recordedControllerIsLive(expected),
 };
 
 /** Persist target-defining tokens, not a hand-written sentence or the source route. */

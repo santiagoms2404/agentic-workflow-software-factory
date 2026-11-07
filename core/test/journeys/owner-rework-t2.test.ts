@@ -32,6 +32,7 @@ import type { AwsfConfig } from "../../src/config/schema.ts";
 import { loadConfig } from "../../src/config/load.ts";
 import { toConfigSnapshotJson } from "../../src/config/effective-config.ts";
 import type { BuildOutput } from "../../src/contracts/build-output.ts";
+import { createOwnerAmendment, type ReworkOwnerAmendment } from "../../src/contracts/owner-amendment.ts";
 import type { EnvelopeBase } from "../../src/contracts/envelope-base.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
 import type { PlanOutput } from "../../src/contracts/plan-output.ts";
@@ -585,6 +586,8 @@ test(`a T2 rework ${instruction === undefined ? "without" : "with"} a supplement
       if (activation?.type !== "transition") throw new Error("missing activation");
       assert.equal(activation.ownerAmendment?.text, instruction);
       assert.equal(activation.ownerAmendment?.binding.candidateSha, fixture.candidateA);
+      assert.equal(activation.ownerApprovalId, activation.ownerAmendment?.binding.authorizationId,
+        "the durable L19 authorization reference survives credential redaction and is checked separately at use");
       assert.deepEqual(evidence.filter(value => value.type === "rework-instruction-delivery").map(value => value.delivery.state), ["intent", "submitted"]);
       const phase = evidence.find(value => value.type === "phase" && value.phase.key === "owner-rework-1");
       assert.equal(phase?.type === "phase" ? phase.phase.maxCorrections : null, 0);
@@ -689,6 +692,36 @@ test(`a T2 rework ${instruction === undefined ? "without" : "with"} a supplement
 });
 
 }
+
+test("a rework supplement whose persisted L19 binding disagrees with the live candidate is refused before use", async () => {
+  const fixture = await world();
+  const script = scripted(fixture);
+  const before = await readAttempt(fixture.attemptDir);
+  let tampered = false;
+  const projectRecord: World["projection"]["project"] = (record, status) => {
+    const evidence = record.event.evidence;
+    if (!tampered && evidence?.type === "transition" && evidence.edgeId === "L19" && evidence.ownerAmendment !== undefined) {
+      const path = join(fixture.attemptDir, "journal.jsonl");
+      const lines = readFileSync(path, "utf8").trimEnd().split("\n");
+      const activation = JSON.parse(lines.at(-1)!) as { event: { evidence: { ownerAmendment: ReworkOwnerAmendment } } };
+      const original = activation.event.evidence.ownerAmendment;
+      activation.event.evidence.ownerAmendment = createOwnerAmendment({ id: original.id, text: original.text, confirmedAt: original.confirmedAt,
+        binding: { ...original.binding, candidateSha: "b".repeat(40) } }) as ReworkOwnerAmendment;
+      lines[lines.length - 1] = JSON.stringify(activation);
+      writeFileSync(path, `${lines.join("\n")}\n`);
+      tampered = true;
+    }
+    return fixture.projection.project(record, status);
+  };
+  try {
+    const result = await rework(fixture, script, { instruction: "Preserve the public API.", projectRecord });
+    assert.equal(tampered, true, "the injected mismatch was in the durable activation, not just a helper argument");
+    assert.equal(result.status.lifecycleState, "BLOCKED");
+    assert.equal(result.status.blocker?.code, "phase-abort");
+    assert.equal(result.status.budget.callsSpent, before.budget.callsSpent, "no provider instruction was submitted");
+    assert.deepEqual(script.launches, []);
+  } finally { await cleanup(fixture); }
+});
 
 for (const instruction of ["", "   ", "x".repeat(16_385), "valid supplemental guidance"]) {
   test(`rework supplement refusal is inert: ${instruction.length}`, async () => {
@@ -981,10 +1014,18 @@ test("an uncertain rework review launch keeps liability and cannot take a transp
       } };
     } } }, { instruction: "Preserve the public API while fixing the defect." });
     assert.equal(result.status.lifecycleState, "BLOCKED", result.status.blocker?.detail);
-    assert.equal(result.status.budget.callsSpent, before.budget.callsSpent + 1);
-    assert.equal(result.status.budget.callsReserved, 1);
+    assert.equal(result.status.budget.callsSpent, before.budget.callsSpent + 1,
+      "only the builder reached GO; the review outcome has no durable spend evidence");
+    assert.equal(result.status.budget.callsReserved, 1,
+      "an attempted launch with no returned transport and no durable settlement remains held, not refunded or charged");
+    assert.equal(result.status.process, null);
+    const evidence = await readAttemptEvidence(fixture.attemptDir);
+    assert.equal(evidence.some(record => record.type === "process" && record.phaseId.endsWith(":reviewer-rw1")), false,
+      "there is no durable reviewer registration to prove GO or charge the call");
+    assert.equal(evidence.some(record => record.type === "transition" && record.edgeId === "L11" && record.to === "REVIEWING"), true,
+      "the durable L11 activation contains the held review reservation");
     assert.equal(reviewDelegations, 1);
-    assert.deepEqual(script.launches, ["codex"]);
+    assert.deepEqual(script.launches, ["codex"], "the uncertain reviewer launch is never retried");
     assert.notEqual(result.status.candidateSha, fixture.candidateA);
   } finally { fixture.projection.close(); rmSync(fixture.root, { recursive: true, force: true }); }
 });

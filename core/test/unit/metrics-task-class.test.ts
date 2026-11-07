@@ -10,7 +10,7 @@ import { parsePlanTicketData } from "../../src/persistence/plan-tickets.ts";
 import { ticketFileDigest } from "../../src/persistence/plan-ticket-body.ts";
 import { runGit, systemGitRunner } from "../../src/git/changes.ts";
 import { ShiftTicketUnreadable } from "../../src/workflow/shift/compile.ts";
-import { readShiftTaskClasses, shiftTaskClasses } from "../../src/metrics/task-class.ts";
+import { readShiftTaskClasses, readShiftTaskClassResult, shiftTaskClasses } from "../../src/metrics/task-class.ts";
 import { buildRoleRows, readRunFacts } from "../../src/metrics/role-rows.ts";
 import { buildMetricsPayload } from "../../src/metrics/payload.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
@@ -124,6 +124,31 @@ test("B4-25: a sealed ticket that is not UTF-8 refuses on its own UTF-8 rule, ne
     assert.equal(error.message, "ticket T01 cannot be compiled: its bytes are not valid UTF-8");
     return true;
   });
+});
+
+test("B4-25 residual: metrics warn on an unreadable sealed ticket and never guess its task class", () => {
+  const f = fixture();
+  const db = openDatabase(":memory:");
+  try {
+    const malformed = Buffer.from(ticket("T01", TICKET_TASK_CLASSES[0]).replace("Fixture", "Fixture \x93quoted\x93"), "latin1");
+    writeFileSync(join(f.root, "T01.md"), malformed);
+    const shift = sealShiftManifest({ plan: f.shift.plan, milestones: f.shift.milestones,
+      tickets: f.shift.tickets.map(item => item.id === "T01" ? { ...item, digest: ticketFileDigest(malformed) } : item) });
+    writeFileSync(join(f.root, "attempt/status.json"), JSON.stringify({ repository: f.root, baseSha: null, shift }));
+    const direct = readShiftTaskClassResult(join(f.root, "attempt/journal.jsonl"));
+    assert.equal(direct.classes.size, 0);
+    assert.deepEqual(direct.diagnostics.map(({ code, ticketId, path }) => [code, ticketId, path]), [
+      ["ticket-invalid-utf8", "T01", "T01.md"],
+    ]);
+    run(f.root).project(db);
+    const payload = buildMetricsPayload(db, { extractedAt: AT });
+    assert.equal(payload.diagnostics.length, 1, "one corrupt ticket does not fail the whole metrics read");
+    assert.equal(payload.diagnostics[0]?.ticketId, "T01");
+    assert.deepEqual(payload.roleRows.filter(row => row.role === "builder").map(row => row.taskClass), ["unclassified"],
+      "an unreadable selection cannot borrow either ticket's category");
+    const shown = metricsReadout(payload, metricsFilter({ role: "builder" })).join("\n");
+    assert.match(shown, /Warning: .*ticket T01 \(T01\.md\): sealed ticket bytes are not valid UTF-8/u);
+  } finally { db.close(); rmSync(f.root, { recursive: true, force: true }); }
 });
 
 test("B4-25: a valid non-ASCII ticket at the recorded base still classifies its builder", (t) => {

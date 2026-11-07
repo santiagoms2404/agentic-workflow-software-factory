@@ -339,12 +339,14 @@ class ScriptedReviewAdapter implements HarnessAdapter {
   readonly launches: string[];
   readonly #behaviour: Behaviour;
   readonly #worktree: string;
+  readonly #canonical: string;
   readonly #base: () => string;
   readonly #candidate: string;
 
-  constructor(id: string, worktree: string, candidate: string, base: () => string, behaviour: Behaviour, launches: string[]) {
+  constructor(id: string, worktree: string, canonical: string, candidate: string, base: () => string, behaviour: Behaviour, launches: string[]) {
     this.id = id;
     this.#worktree = worktree;
+    this.#canonical = canonical;
     this.#candidate = candidate;
     this.#base = base;
     this.#behaviour = behaviour;
@@ -417,10 +419,10 @@ class ScriptedReviewAdapter implements HarnessAdapter {
     yield { kind: "text.delta", seq: 4, runId, hostAt: AT, providerAt: null, text: streamed.slice(split) };
     yield { kind: "usage", seq: 5, runId, hostAt: AT, providerAt: null, usage: { inputTokens: 40, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, reasoningRelation: "included-in-output" } };
     yield { kind: "run.completed", seq: 6, runId, hostAt: AT, providerAt: null, exitCode: 0 };
-    // After the answer and after the gates, so only the third revalidation can
-    // see it. The tree is CLEAN at a different commit, which is exactly the
-    // shape `captureChangeSet` and `assertClean` are both blind to.
-    if (this.#behaviour === "move-after-answer") git(this.#worktree, "reset", "--hard", this.#base());
+    // After the answer and after the gates, move the canonical base from outside
+    // the reviewed worktree. No reviewer write occurred, but its recorded diff
+    // context is now stale and only the third host revalidation can see it.
+    if (this.#behaviour === "move-after-answer") git(this.#canonical, "reset", "--hard", this.#candidate);
   }
 }
 
@@ -453,7 +455,7 @@ function infra(
 ): Partial<ReviewInfrastructure> {
   return {
     adapterFor: (_entry, id) => new ScriptedReviewAdapter(
-      id, fixture.status.worktree!, fixture.candidate,
+      id, fixture.status.worktree!, fixture.canonical, fixture.candidate,
       () => fixture.status.baseSha!, behaviour, launches,
     ),
     createBroker,
@@ -502,6 +504,19 @@ test("a replacement review spends exactly one call, runs no builder, and returns
     assert.equal(git(status.worktree!, "rev-parse", "HEAD"), fixture.candidate);
     assert.equal(status.requiredReviewPresent, true);
     assert.equal(status.journeyApproved, false, "the attestation is never touched by a review that changed no tree");
+    const transitionEvidence = (await readAttemptEvidence(fixture.attemptDir)).filter(
+      (record): record is Extract<AttemptEvidence, { type: "transition" }> => record.type === "transition",
+    );
+    const activation = transitionEvidence.find(record => record.edgeId === "L25");
+    assert.equal(activation?.from, "AWAITING_OWNER");
+    assert.equal(activation?.to, "REVIEWING");
+    assert.equal(activation?.reasonSource, "human");
+    assert.equal(activation?.reasonDetail, REASON);
+    const replacementStop = transitionEvidence.find(record => record.edgeId === "L15");
+    assert.equal(replacementStop?.from, "REVIEWING");
+    assert.equal(replacementStop?.to, "AWAITING_OWNER");
+    assert.equal(replacementStop?.reasonSource, "gate");
+    assert.equal(replacementStop?.reasonCode, null);
     const deltas = (await readAttemptEvidence(fixture.attemptDir)).filter(
       (record): record is Extract<AttemptEvidence, { type: "normalized-event" }> =>
         record.type === "normalized-event" && record.phaseId.endsWith(":reviewer-re1") && record.event.kind === "text.delta",
@@ -877,6 +892,12 @@ test("a candidate moved between preflight and GO is refused with the call releas
     // A pre-GO move is a phase abort, not evidence about a review that answered (B8-14).
     assert.equal(result.status.blocker?.code, "phase-abort");
     assert.match(result.status.blocker?.detail ?? "", /moved between preflight and GO/);
+    const stop = (await readAttemptEvidence(fixture.attemptDir)).find(
+      (record): record is Extract<AttemptEvidence, { type: "transition" }> => record.type === "transition" && record.edgeId === "L17",
+    );
+    assert.equal(stop?.reasonCode, "phase-abort");
+    assert.equal(stop?.from, "REVIEWING");
+    assert.equal(stop?.to, "BLOCKED");
     assert.deepEqual(launches, [], "the child was never started");
   } finally { await cleanup(fixture); }
 });
@@ -891,6 +912,14 @@ test("a candidate moved between the review and L15 blocks on L17 rather than lan
     assert.equal(result.status.budget.callsSpent, 3, "the call was genuinely spent");
     assert.equal(result.status.budget.callsReserved, 0);
     assert.equal(result.status.budget.ownerReentries, 1, "a spent call keeps its charge");
+    const l17 = (await readAttemptEvidence(fixture.attemptDir)).find(
+      (record): record is Extract<AttemptEvidence, { type: "transition" }> => record.type === "transition" && record.edgeId === "L17",
+    );
+    assert.equal(l17?.from, "REVIEWING");
+    assert.equal(l17?.to, "BLOCKED");
+    assert.equal(l17?.reasonSource, "process");
+    assert.equal(l17?.reasonCode, "review-evidence-invalid");
+    assert.equal(result.status.lifecycleState, l17?.to, "the failed post-answer review stops at its recorded L17 reason");
   } finally { await cleanup(fixture); }
 });
 
@@ -1018,6 +1047,12 @@ test("a permission breach by the readonly reviewer is classified explicitly rath
     assert.equal(result.status.budget.callsSpent, 3);
     assert.equal(result.status.budget.callsReserved, 0);
     assert.equal(result.status.process, null);
+    const stop = (await readAttemptEvidence(fixture.attemptDir)).find(
+      (record): record is Extract<AttemptEvidence, { type: "transition" }> => record.type === "transition" && record.edgeId === "L17",
+    );
+    assert.equal(stop?.reasonCode, "permission-breach");
+    assert.equal(stop?.from, "REVIEWING");
+    assert.equal(stop?.to, "BLOCKED");
   } finally { await cleanup(fixture); }
 });
 

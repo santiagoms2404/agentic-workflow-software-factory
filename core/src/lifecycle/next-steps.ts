@@ -3,7 +3,7 @@ import { LEGAL_EDGES, TASK_STATES, TERMINAL_STATES, type Actor, type EdgeId, typ
 
 /** Kept equal to main.ts's owner-terminal arms by a source-derived test. */
 export const OWNER_ACT_COMMANDS = [
-  "prove", "resume", "rework", "review", "grant", "raise", "degrade-review",
+  "prove", "resume", "rework", "review", "run", "grant", "raise", "degrade-review",
   "attribute", "journey", "land", "publish", "cancel", "confirm", "close",
 ] as const;
 
@@ -136,7 +136,11 @@ export function nextSteps(input: NextStepsInput): NextSteps {
         output.steps.push({ kind: "edge", edge: edge.id, to: edge.to, verb: invocation.verb,
           argv: argvFor(input, invocation.verb, invocation.args), who: isOwner(invocation.verb) ? "owner" : "driver",
           interactive: isOwner(invocation.verb) || edge.interactive, spendsCalls: edge.spawnSite,
-          requires: edge.id === "L1" ? (input.k1 ?? []).map(entry => ({ check: entry.check, field: entry.field, status: entry.status })) : [] });
+          requires: edge.id === "L1"
+            ? input.k1 === undefined
+              ? [{ check: "K1", field: "measurement", status: "unmeasured" }]
+              : input.k1.map(entry => ({ check: entry.check, field: entry.field, status: entry.status }))
+            : [] });
         break;
       case "host-internal":
         output.waits.push({ edge: edge.id, to: edge.to, who: "host" });

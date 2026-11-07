@@ -11,7 +11,7 @@ import { gatherFreshness, K1_EXEMPT_WORKFLOWS } from "./preflight.ts";
 import { readAttemptEvidence } from "./review-record.ts";
 import { resolveAttemptRecipe } from "./start.ts";
 
-/** What K1's requirements on L1 are measured against. Without it, `requires` stays unmeasured and empty. */
+/** What K1's requirements on L1 are measured against. Without it, `requires` explicitly says unmeasured. */
 export interface NextK1Context {
   readonly stateRoot: string;
   readonly worktreeRoot: string;

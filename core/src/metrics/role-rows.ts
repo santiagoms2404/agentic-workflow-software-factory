@@ -13,7 +13,7 @@
 // quality: a reviewer that misses defects produces the same clean review.
 
 import { assertTrapLink } from "../contracts/attribution-record.ts";
-import { readShiftTaskClasses } from "./task-class.ts";
+import { readShiftTaskClassResult, type ShiftTaskClassDiagnostic } from "./task-class.ts";
 import type { TicketTaskClass } from "../contracts/ticket.ts";
 import type { DatabaseSync } from "../observability/sqlite.ts";
 import type { EffortSource } from "../observability/phase-route.ts";
@@ -90,6 +90,7 @@ export interface RunFacts extends AttributionRun {
   readonly replay: RunReplay | null;
   /** Validated ticket metadata joined through the compiled shift recipe. */
   readonly taskClasses?: ReadonlyMap<string, TicketTaskClass>;
+  readonly taskClassDiagnostics?: readonly ShiftTaskClassDiagnostic[];
 }
 
 export type UsageAuthority = "provider" | "partial" | "none";
@@ -541,7 +542,11 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
   const agentPhases = new Map<string, PhaseFacts[]>();
   for (const fact of readPhaseFacts(db)) append(agentPhases, fact.sessionId, fact);
 
-  return sessions.map((session): RunFacts => ({
+  return sessions.map((session): RunFacts => {
+    const taskClassRead = session.workflow_id === "shift"
+      ? readShiftTaskClassResult(session.journal_path)
+      : { classes: new Map<string, TicketTaskClass>(), diagnostics: [] };
+    return {
     sessionId: session.session_id,
     projectSlug: session.project_slug,
     taskId: session.task_id,
@@ -563,8 +568,10 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
     envelopes: envelopes.get(session.session_id) ?? [],
     ownerAttribution: owners.get(session.session_id) ?? null,
     replay: recorded.get(session.session_id) ?? null,
-    taskClasses: session.workflow_id === "shift" ? readShiftTaskClasses(session.journal_path) : new Map(),
-  }));
+    taskClasses: taskClassRead.classes,
+    taskClassDiagnostics: taskClassRead.diagnostics,
+  };
+  });
 }
 
 /** Every role-row in the projection. */

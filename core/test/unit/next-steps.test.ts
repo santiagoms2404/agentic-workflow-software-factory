@@ -54,7 +54,10 @@ function assertInventory(output: NextSteps): void {
       assert.equal(step.interactive, step.who === "owner");
       assert.equal(step.spendsCalls, false);
     }
-    assert.deepEqual(step.requires, []);
+    const unmeasuredK1 = state === "DRAFT" && step.kind === "edge" && step.edge === "L1"
+      ? [{ check: "K1", field: "measurement", status: "unmeasured" }]
+      : [];
+    assert.deepEqual(step.requires, unmeasuredK1);
     assert.deepEqual(step.argv.slice(0, 7), ["awsf", step.verb, output.taskId, "--project", output.project, "--attempt", String(output.attempt)]);
   }
 }
@@ -270,8 +273,9 @@ test("K1's measured requirements fill only the L1 step's requires, and confirm i
   const draft = nextSteps({ ...inputFor("DRAFT"), k1 });
   const confirm = draft.steps.find(step => step.verb === "confirm")!;
   assert.deepEqual([confirm.kind, confirm.who, confirm.interactive, confirm.spendsCalls], ["act", "owner", true, false]);
-  // Unmeasured is not satisfied, and never invents a requirement.
-  assert.deepEqual(nextSteps(inputFor("DRAFT")).steps.find(step => step.verb === "start")!.requires, []);
+  // Missing facts are explicitly unmeasured, not satisfied or a fabricated pass.
+  assert.deepEqual(nextSteps(inputFor("DRAFT")).steps.find(step => step.verb === "start")!.requires,
+    [{ check: "K1", field: "measurement", status: "unmeasured" }]);
   // The model shares no array with its input.
   draft.steps.find(step => step.verb === "start")!.requires.pop();
   assert.equal(k1.length, 2);

@@ -17,15 +17,26 @@ test("the shared scrubber catches credential shapes without mutating input", () 
     safe: "visible",
     nested: [{ output: `failed with ${shapedAccessId()}` }],
     password: "format-not-yet-known",
+    authorization: "header-value",
+    authorizationId: "owner-approval-reference",
   };
   const scrubbed = scrubCredentials(input);
   assert.deepEqual(scrubbed, {
     safe: "visible",
     nested: [{ output: `failed with ${REDACTED_VALUE}` }],
     password: REDACTED_VALUE,
+    authorization: REDACTED_VALUE,
+    authorizationId: "owner-approval-reference",
   });
   assert.notEqual(scrubbed, input);
   assert.match(input.nested[0]!.output, /failed with/);
+});
+
+test("authorizationId exemption still scrubs credential-shaped values", () => {
+  const credential = shapedAccessId();
+  assert.deepEqual(scrubCredentials({ authorizationId: credential }), { authorizationId: REDACTED_VALUE });
+  assert.equal(scrubCredentials({ authorizationId: "opaque-owner-approval-reference" }).authorizationId,
+    "opaque-owner-approval-reference");
 });
 
 test("bearer, JWT, private-key, URL-auth, and vendor token shapes are recognized", () => {

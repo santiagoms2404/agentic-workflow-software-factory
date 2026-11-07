@@ -491,6 +491,22 @@ test("B12-22: an unresolvable registered plan is named on its row, not reported 
   assert.ok(row.conditions.includes("registered plan refused: registered plan source unresolved"), JSON.stringify(row.conditions));
 });
 
+test("B12-22: a broken registered-plan row is refused without hiding healthy checklist rows", async (t) => {
+  const location = await fixture(t);
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task\n\n${registeredPrompt}\n`;
+  const catalog = await registeredRepository(location, registeredHtml, sectionB, registeredTicket);
+  const healthy = { ...unit("healthy"), plan: { catalog, stem: "sample-plan", task: "T01", sourceSha256: hash(registeredHtml) } };
+  const refused = { ...unit("refused"), plan: { catalog, stem: "missing-plan", task: "T02", sourceSha256: hash(registeredHtml) } };
+  const group = await defined(location, [healthy, refused]);
+  const result = await checklist(group, location.stateRoot, at);
+  assert.deepEqual(result.rows.map((row) => row.id), ["healthy", "refused"]);
+  assert.equal(result.rows[0]?.delivery, "todo");
+  assert.ok(result.rows[0]?.evidence.some((value) => value.endsWith(`#T01@${hash(registeredHtml)}`)));
+  assert.deepEqual(result.rows[0]?.conditions, []);
+  assert.equal(result.rows[1]?.delivery, "unknown");
+  assert.ok(result.rows[1]?.conditions.includes("registered plan refused: registered plan source unresolved"));
+});
+
 test("B12-21: a long first input line is cut on a whole code point, never leaving a lone surrogate", async (t) => {
   const location = await fixture(t);
   const group = await initial(location, `${"a".repeat(178)}\u{1F600}b`);

@@ -14,6 +14,7 @@ import type { DatabaseSync } from "../observability/sqlite.ts";
 import type {
   LifecycleState,
   MetricsAgentPhase,
+  MetricsDiagnostic,
   MetricsResponse,
   MetricsRoleRow,
   MetricsRun,
@@ -127,11 +128,16 @@ export function buildMetricsPayload(db: DatabaseSync, options: MetricsPayloadOpt
   // Assigned, not cast: this compiles only while core's `RoleRow` satisfies the payload's row type.
   const roleRows: readonly MetricsRoleRow[] = buildRoleRows(facts) satisfies readonly RoleRow[];
   const runs = facts.map((item) => run(item, phases.get(item.sessionId) ?? []));
+  const diagnostics: MetricsDiagnostic[] = facts.flatMap((item) => (item.taskClassDiagnostics ?? []).map((warning) => ({
+    sessionId: item.sessionId, project: item.projectSlug, taskId: item.taskId, attempt: item.attempt,
+    code: warning.code, ticketId: warning.ticketId, path: warning.path, message: warning.message,
+  })));
   return {
     schema: METRICS_SCHEMA,
     extractedAt: options.extractedAt,
     runs,
     roleRows,
+    diagnostics,
     causes: summarizeCauses(runs),
     rateCard: RATE_CARD,
     priors: BENCHMARK_PRIORS,
@@ -155,6 +161,7 @@ export function createMetricsPayloadReader(db: DatabaseSync): (options: MetricsP
         schema: built.schema,
         runs: built.runs,
         roleRows: built.roleRows,
+        diagnostics: built.diagnostics,
         causes: built.causes,
         rateCard: built.rateCard,
         priors: built.priors,
@@ -167,6 +174,7 @@ export function createMetricsPayloadReader(db: DatabaseSync): (options: MetricsP
       extractedAt: options.extractedAt,
       runs: payload.runs,
       roleRows: payload.roleRows,
+      diagnostics: payload.diagnostics,
       causes: payload.causes,
       rateCard: payload.rateCard,
       priors: payload.priors,

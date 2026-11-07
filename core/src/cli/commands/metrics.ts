@@ -216,6 +216,12 @@ export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter, 
     `${cover.cells} cells · ${all.refuted} refuted of ${all.claims} claims`);
   lines.push(`Blocked runs by heuristic attribution: ${tallyText(heuristicSplit(runs))}`);
   lines.push(...causeReadout(runs));
+  const visibleSessions = new Set(runs.map((item) => item.sessionId));
+  const diagnostics = payload.diagnostics.filter((item) => visibleSessions.has(item.sessionId));
+  for (const item of diagnostics) {
+    const ticket = item.ticketId === null ? "sealed shift metadata" : `ticket ${item.ticketId}${item.path === null ? "" : ` (${item.path})`}`;
+    lines.push(`Warning: ${item.project}/${item.taskId} attempt ${item.attempt}: ${ticket}: ${item.message}.`);
+  }
   if (cover.unkeyed > 0) lines.push(`${cover.unkeyed} role-row(s) have no route key (route-mixed or unknown) and enter no cell.`);
   if (all.n === 0) {
     lines.push("No role-rows in this scope.");

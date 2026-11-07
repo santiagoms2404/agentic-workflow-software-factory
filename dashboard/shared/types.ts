@@ -715,11 +715,24 @@ export interface MetricsCauseSummary {
   }[];
 }
 
+export interface MetricsDiagnostic {
+  readonly sessionId: string;
+  readonly project: string;
+  readonly taskId: string;
+  readonly attempt: number;
+  readonly code: string;
+  readonly ticketId: string | null;
+  readonly path: string | null;
+  readonly message: string;
+}
+
 export interface MetricsResponse {
   readonly schema: "awsf.route-metrics/v1";
   readonly extractedAt: string;
   readonly runs: readonly MetricsRun[];
   readonly roleRows: readonly MetricsRoleRow[];
+  /** Read-only ticket metadata warnings; unknown classes remain unclassified. */
+  readonly diagnostics: readonly MetricsDiagnostic[];
   /** All projected runs; the CLI's text readout scopes these using the existing table window. */
   readonly causes: MetricsCauseSummary;
   readonly rateCard: RateCard;

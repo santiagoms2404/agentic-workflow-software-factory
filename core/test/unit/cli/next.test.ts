@@ -67,8 +67,11 @@ for (const state of TASK_STATES) {
       output.length = 0;
       assert.equal(await invoke(["--attempt", "1"]), 0, errors.join("\n"));
       assert.deepEqual(output, renderNextSteps(model, status));
-      // The persisted sentence is rendered without K1's measurement; next adds it at DRAFT.
-      if (state === "DRAFT") assert.equal(output[0], `start is refused until K1 clears: preflight-record missing; ${status.nextAction}`);
+      // Persisted advice names the unmeasured K1 state; `next` adds today's read-only measurement.
+      if (state === "DRAFT") {
+        assert.match(status.nextAction, /^K1 is unmeasured; start remains refused until preflight measures/u);
+        assert.match(output[0]!, /^start is refused until K1 clears: preflight-record missing;/);
+      }
       else assert.equal(output[0], status.nextAction);
       assert.deepEqual(bytes(root), before, "next must not create a DB, lock, journal row or status revision");
       for (const id of ["L10", "L16"].filter(id => model.unavailable.some(edge => edge.edge === id))) {
