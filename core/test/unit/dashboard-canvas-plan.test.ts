@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { BacklogTicket, SessionCard } from "../../../dashboard/shared/types.ts";
-import { planBoard, TICKET_STATES, waitingOn } from "../../../dashboard/src/canvas-plan.ts";
+import { planBoard, TICKET_STATES, waitingOn, waitingOnByTicket } from "../../../dashboard/src/canvas-plan.ts";
 
 function source(path: string): string {
   return readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
@@ -58,6 +58,20 @@ test("what a ticket waits on excludes what already finished", () => {
   assert.deepEqual(waitingOn(mine.find((held) => held.id === "W04")!, mine), ["W02"]);
   assert.deepEqual(waitingOn(mine.find((held) => held.id === "W02")!, mine), []);
   assert.deepEqual(waitingOn(mine.find((held) => held.id === "W01")!, mine), []);
+});
+
+test("prepared blockers stay scoped to each ticket's plan", () => {
+  const set: readonly BacklogTicket[] = [
+    ticket("SHARED", "M1", "done", { plan: "plan-one" }),
+    ticket("WAITING", "M1", "todo", { plan: "plan-two", depends_on: ["SHARED"] }),
+  ];
+  const prepared = waitingOnByTicket(set);
+  assert.deepEqual(prepared.get("awsf-v2-plan:WAITING"), ["SHARED"]);
+  assert.equal(prepared.size, set.length);
+
+  const board = source("dashboard/src/components/CanvasPlanBoard.vue");
+  assert.match(board, /computed\(\(\) => waitingOnByTicket\(props\.tickets\)\)/u);
+  assert.doesNotMatch(board, /props\.tickets\.filter/u);
 });
 
 test("runs sit beside the tickets, at the plan, because that is what is recorded", () => {

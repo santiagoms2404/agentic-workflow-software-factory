@@ -12,7 +12,7 @@
 // one, and no operation, event, capture, proposal or approval type is imported:
 // the tree is a projection, and this file can only read it.
 
-import { groupSummary, listGroupIds, readGroupTree, type GroupSummary, type GroupTree } from "../planning/views.ts";
+import { listGroupIds, readGroupSummary, readGroupTree, type GroupSummary, type GroupTree } from "../planning/views.ts";
 
 export interface GroupsResponse {
   readonly groups: readonly GroupSummary[];
@@ -29,15 +29,54 @@ export interface PlanningReadOptions {
   readonly project: string;
 }
 
+function isJournalReplayError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (
+    error instanceof TypeError ||
+    error instanceof ReferenceError ||
+    error instanceof RangeError ||
+    error instanceof SyntaxError ||
+    error.name === "AssertionError"
+  ) {
+    return false;
+  }
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === "ENOENT" || code === "EACCES" || code === "EPERM") return true;
+  const msg = error.message.toLowerCase();
+  return (
+    msg.includes("journal") ||
+    msg.includes("corrupt") ||
+    msg.includes("digest") ||
+    msg.includes("schema") ||
+    msg.includes("revision") ||
+    msg.includes("event") ||
+    msg.includes("proposal") ||
+    msg.includes("prerequisite") ||
+    msg.includes("split") ||
+    msg.includes("unit") ||
+    msg.includes("symlink") ||
+    msg.includes("append")
+  );
+}
+
 export async function listGroupSummaries(options: PlanningReadOptions): Promise<GroupsResponse> {
   const groups: GroupSummary[] = [];
   const unreadable: string[] = [];
   for (const group of await listGroupIds(options.stateRoot, options.project)) {
+    let summary: GroupSummary;
     try {
-      groups.push(groupSummary(await readGroupTree({ ...options, group })));
-    } catch {
-      unreadable.push(group);
+      summary = await readGroupSummary({ ...options, group });
+    } catch (error) {
+      if (isJournalReplayError(error)) {
+        unreadable.push(group);
+        continue;
+      }
+      throw error;
     }
+    // A directory can survive a failed first capture without any journal. The
+    // detail route and CLI both treat revision zero as absent, so the list must
+    // not advertise it as a group that can be opened.
+    if (summary.revision !== 0) groups.push(summary);
   }
   // Newest first: the group a reader is most likely looking for is the one they
   // were just driving. A group with no input has no time and sorts last.

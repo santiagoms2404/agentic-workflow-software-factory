@@ -1,6 +1,15 @@
 # AWSF — Agentic Workflow Software Factory
 ## Fused Architectural Proposal
 
+> **Original design authority, with later amendments.** The proposal and source
+> audit below preserve the starting design. Current policy includes the dated
+> owner amendments in [AGENTS.md](../AGENTS.md) and the owning plans. In particular,
+> the original blanket no-push/no-cleanup statements do not replace the later
+> landed-only publication and exact temporary-cleanup rules. Original counts and
+> source-project findings are historical, not measurements of today's tree.
+> Use the [README](../README.md) and [documentation map](../docs/README.md) for
+> current operation and revision-bound assessments.
+
 *Both source models operated under a read/search/list host policy and wrote no files; this response is deliverable content only. The two canonical artifacts and their paths:*
 
 | Artifact | Canonical path |

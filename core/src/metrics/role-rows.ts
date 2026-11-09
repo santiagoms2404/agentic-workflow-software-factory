@@ -13,7 +13,7 @@
 // quality: a reviewer that misses defects produces the same clean review.
 
 import { assertTrapLink } from "../contracts/attribution-record.ts";
-import { readShiftTaskClasses } from "./task-class.ts";
+import { readShiftTaskClassResult, type ShiftTaskClassDiagnostic } from "./task-class.ts";
 import type { TicketTaskClass } from "../contracts/ticket.ts";
 import type { DatabaseSync } from "../observability/sqlite.ts";
 import type { EffortSource } from "../observability/phase-route.ts";
@@ -90,6 +90,7 @@ export interface RunFacts extends AttributionRun {
   readonly replay: RunReplay | null;
   /** Validated ticket metadata joined through the compiled shift recipe. */
   readonly taskClasses?: ReadonlyMap<string, TicketTaskClass>;
+  readonly taskClassDiagnostics?: readonly ShiftTaskClassDiagnostic[];
 }
 
 export type UsageAuthority = "provider" | "partial" | "none";
@@ -395,7 +396,9 @@ function roleRow(run: RunFacts, role: string, phases: readonly PhaseFacts[], att
     planRef: run.planRef,
     reviewVerdict: run.reviewVerdict,
     ownerReentries: run.ownerReentries,
-    reworkPhases: run.phases.filter((phase) => phase.kind === "agent" && phase.key.startsWith("owner-rework-")).length,
+    // A queued rework that never launched is not a rework the run did (B4-24).
+    reworkPhases: phases.filter((phase) =>
+      phase.phaseKey.startsWith("owner-rework-") && phaseRan(phase)).length,
     observabilityDegraded: run.observabilityDegraded,
     usageAuthority: run.usageAuthority,
     startedAt: run.startedAt,
@@ -459,7 +462,8 @@ function groupBy<T extends { session_id: string }, R>(rows: readonly T[], map: (
 /**
  * The latest owner attribution per session: `attribution` events rows in
  * insertion order, which is the task file's order live and after a rebuild. A
- * row whose cause is outside the vocabulary is skipped, never guessed at.
+ * row whose cause is outside the vocabulary, or whose trap link no longer
+ * validates, is skipped, never guessed at.
  */
 function ownerAttributions(db: DatabaseSync): Map<string, OwnerAttribution> {
   const rows = db.prepare(`SELECT session_id, payload_json FROM events
@@ -468,7 +472,15 @@ function ownerAttributions(db: DatabaseSync): Map<string, OwnerAttribution> {
   for (const row of rows) {
     const payload = JSON.parse(row.payload_json) as { cause?: unknown; reason?: unknown; at?: unknown; trap?: unknown };
     if (!(ATTRIBUTIONS as readonly unknown[]).includes(payload.cause)) continue;
-    if (payload.trap !== undefined) assertTrapLink(payload.trap);
+    // A trap link that no longer validates is skipped like a bad cause. Raising
+    // it aborted every metrics read, not only the affected run's (B4-32).
+    if (payload.trap !== undefined) {
+      try {
+        assertTrapLink(payload.trap);
+      } catch {
+        continue;
+      }
+    }
     latest.set(row.session_id, {
       cause: payload.cause as Attribution,
       reason: typeof payload.reason === "string" ? payload.reason : "",
@@ -505,11 +517,13 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
   const sessions = db.prepare(`SELECT session_id, project_slug, task_id, attempt, workflow_id, risk_tier, plan_ref,
       lifecycle_state, review_verdict, owner_reentries, observability_degraded, usage_authority, started_at, ended_at, journal_path
     FROM sessions ORDER BY started_at, session_id`).all() as unknown as SessionQueryRow[];
-  const phases = groupBy(db.prepare(`SELECT session_id, phase_key, ordinal, kind, owner, status, error_code
+  const phases = groupBy(db.prepare(`SELECT session_id, phase_key, ordinal, kind, owner, status, error_code, started_at
       FROM phases ORDER BY session_id, ordinal`).all() as unknown as Array<{
-    session_id: string; phase_key: string; ordinal: number; kind: string; owner: string; status: string; error_code: string | null;
+    session_id: string; phase_key: string; ordinal: number; kind: string; owner: string; status: string;
+    error_code: string | null; started_at: string | null;
   }>, (row): RunPhase => ({
-    key: row.phase_key, ordinal: row.ordinal, kind: row.kind, owner: row.owner, status: row.status, errorCode: row.error_code,
+    key: row.phase_key, ordinal: row.ordinal, kind: row.kind, owner: row.owner, status: row.status,
+    errorCode: row.error_code, startedAt: row.started_at,
   }));
   const transitions = groupBy(db.prepare(`SELECT session_id, seq, to_state, reason_code
       FROM transitions ORDER BY session_id, seq`).all() as unknown as Array<{
@@ -528,7 +542,11 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
   const agentPhases = new Map<string, PhaseFacts[]>();
   for (const fact of readPhaseFacts(db)) append(agentPhases, fact.sessionId, fact);
 
-  return sessions.map((session): RunFacts => ({
+  return sessions.map((session): RunFacts => {
+    const taskClassRead = session.workflow_id === "shift"
+      ? readShiftTaskClassResult(session.journal_path)
+      : { classes: new Map<string, TicketTaskClass>(), diagnostics: [] };
+    return {
     sessionId: session.session_id,
     projectSlug: session.project_slug,
     taskId: session.task_id,
@@ -550,8 +568,10 @@ export function readRunFacts(db: DatabaseSync): RunFacts[] {
     envelopes: envelopes.get(session.session_id) ?? [],
     ownerAttribution: owners.get(session.session_id) ?? null,
     replay: recorded.get(session.session_id) ?? null,
-    taskClasses: session.workflow_id === "shift" ? readShiftTaskClasses(session.journal_path) : new Map(),
-  }));
+    taskClasses: taskClassRead.classes,
+    taskClassDiagnostics: taskClassRead.diagnostics,
+  };
+  });
 }
 
 /** Every role-row in the projection. */

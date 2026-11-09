@@ -14,6 +14,7 @@ import {
   retainQuotaFailureInAttempt,
 } from "../../../src/quota/probe.ts";
 
+const NOW = "2026-08-24T20:26:39.429Z";
 const PROBE_SOURCE = new URL("../../../src/quota/probe.ts", import.meta.url);
 const CAPTURE_SOURCE = new URL("../../fixtures/quota-axi/capture-probe.ts", import.meta.url);
 const NOMINAL_FIXTURE = new URL("../../fixtures/quota-axi/nominal.json", import.meta.url);
@@ -143,9 +144,12 @@ test("unparseable bytes are retained at 0600 and only their attempt-relative pat
     assert.equal(result.availability, "unavailable");
     assert.equal(result.failure.reasonCode, "unparseable");
     if (result.failure.reasonCode !== "unparseable") assert.fail("wrong failure variant");
+    assert.ok(result.failure.retainedPath, "unparseable bytes must be retained");
     const retained = join(attemptDir, result.failure.retainedPath);
     assert.equal(readFileSync(retained, "utf8"), raw);
-    assert.equal(statSync(retained).mode & 0o777, 0o600);
+    if (process.platform !== "win32") {
+      assert.equal(statSync(retained).mode & 0o777, 0o600);
+    }
     assert.deepEqual(journal, [result.failure]);
     assert.equal(JSON.stringify(journal).includes(raw), false, "journal carries the path, never raw bytes");
   } finally {
@@ -241,6 +245,55 @@ test("exit 1 retains its code while structurally parsing a well-formed payload",
   assert.deepEqual(result.parsed.readout.providers.map((provider) => provider.provider), ["claude", "codex"]);
   assert.deepEqual(retained, [`${nominal}provider reported a partial failure`]);
   assert.deepEqual(journal, [result.failure]);
+});
+
+test("a thrown version probe retains and journals its cause even when retention itself fails", async () => {
+  const journal: unknown[] = [];
+  const retained: string[] = [];
+  const result = await probeQuota({
+    resolveExecutable: () => "/project/bin/quota-axi",
+    runCommand: () => { throw new Error("read-only quota sandbox unavailable"); },
+    routes: [{ provider: "claude" }],
+    purpose: "interactive-preflight",
+    options: { env: { PATH: "/project/bin" } },
+    now: NOW,
+    journalFailure: failure => { journal.push(failure); },
+    retainFailureBytes: async bytes => { retained.push(bytes); throw new Error("simulated EACCES"); },
+  });
+  const failure = result.failure;
+  if (failure === null || failure.reasonCode !== "nonzero-exit") throw new Error("expected a nonzero-exit failure");
+  assert.equal(failure.errorMessage, "read-only quota sandbox unavailable");
+  assert.equal(failure.retainedPath, null);
+  assert.equal(failure.retentionFailed, true);
+  assert.deepEqual(retained, ["read-only quota sandbox unavailable"]);
+  assert.deepEqual(journal, [failure]);
+});
+
+test("a spawn error returned by the command capability reaches the retained diagnostic and failure record", async () => {
+  const journal: unknown[] = [];
+  const retained: string[] = [];
+  let calls = 0;
+  const result = await probeQuota({
+    resolveExecutable: () => "/project/bin/quota-axi",
+    runCommand: () => {
+      calls += 1;
+      return calls === 1
+        ? { status: 0, stdout: "quota-axi 0.1.29\\n", stderr: "", error: null }
+        : { status: null, stdout: "", stderr: "", error: "spawn ENOENT while launching quota-axi" };
+    },
+    routes: [{ provider: "claude" }],
+    purpose: "phase-boundary",
+    options: { env: { PATH: "/project/bin" } },
+    now: NOW,
+    journalFailure: failure => { journal.push(failure); },
+    retainFailureBytes: async bytes => { retained.push(bytes); return "raw/quota-probe.txt"; },
+  });
+  const failure = result.failure;
+  if (failure === null || failure.reasonCode !== "nonzero-exit") throw new Error("expected a nonzero-exit failure");
+  assert.equal(failure.errorMessage, "spawn ENOENT while launching quota-axi");
+  assert.equal(failure.retainedPath, "raw/quota-probe.txt");
+  assert.match(retained[0] ?? "", /spawn ENOENT while launching quota-axi/);
+  assert.deepEqual(journal, [failure]);
 });
 
 test("the closed failure vocabulary and known-minute comparator exclude unavailable figures", () => {

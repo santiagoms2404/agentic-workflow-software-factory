@@ -15,9 +15,9 @@
 // passing suite at the base, or run once in the project's baseline worktree,
 // never in the owner's checkout and never in a tree created for this run alone.
 
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { gatherLandingClosures } from "../../closure/readout.ts";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { loadConfig } from "../../config/load.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
@@ -41,6 +41,7 @@ import {
   type TaskRequestFact,
 } from "../../preflight/fields.ts";
 import { writingPhases } from "../../preflight/grant-plan.ts";
+import { storageMode } from "../../preflight/storage-mode.ts";
 import { readShiftTicketDoBlocks } from "../../preflight/shift-tickets.ts";
 import {
   gatherSuite,
@@ -110,7 +111,7 @@ export function preflightConfigDigest(config: AwsfConfig): string {
 }
 
 /** The recipe `awsf start` would compile for this attempt, resolved the same way and with the same refusals. */
-async function attemptRecipe(status: AttemptStatus, config: AwsfConfig): Promise<WorkflowRecipe> {
+export async function resolveAttemptRecipe(status: AttemptStatus, config: AwsfConfig): Promise<WorkflowRecipe> {
   const shipped = workflowRecipe(status.workflow);
   if (shipped !== null) return shipped;
   const compiled = compiledWorkflow(status.workflow);
@@ -130,29 +131,23 @@ async function attemptRecipe(status: AttemptStatus, config: AwsfConfig): Promise
 }
 
 /** The base L1 would pin, exactly as `awsf start` resolves it: a replay's, a seed's integration base, or HEAD. */
-export async function pinnedBase(attemptDir: string, status: AttemptStatus): Promise<string> {
-  const seed = await verifiedTargetSeed(attemptDir, status);
-  return status.replay?.baseSha ?? seed?.integrationBaseSha ?? runGit(systemGitRunner(status.repository), ["rev-parse", "HEAD"]).trim();
+export function pinnedBaseSha(
+  status: AttemptStatus,
+  seed: { readonly integrationBaseSha: string } | null,
+  head: () => string,
+): string {
+  return status.replay?.baseSha ?? seed?.integrationBaseSha ?? head();
 }
 
-/** Mode bits read with stat and nothing else. A path not yet created is measured at its nearest existing parent. */
-async function modeOf(path: string): Promise<StorageMode> {
-  let cursor = resolve(path);
-  for (;;) {
-    try {
-      return { path: cursor, mode: (await stat(cursor)).mode };
-    } catch (error) {
-      const parent = dirname(cursor);
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT" || parent === cursor) return { path: cursor, mode: null };
-      cursor = parent;
-    }
-  }
+export async function pinnedBase(attemptDir: string, status: AttemptStatus): Promise<string> {
+  const seed = await verifiedTargetSeed(attemptDir, status);
+  return pinnedBaseSha(status, seed, () => runGit(systemGitRunner(status.repository), ["rev-parse", "HEAD"]).trim());
 }
 
 /** The Git common directory's HEAD and config, and the worktree root. Nothing is written to measure them. */
 export async function measureGitStorage(repository: string, worktreeRoot: string): Promise<readonly StorageMode[]> {
   const common = runGit(systemGitRunner(repository), ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
-  return Promise.all([modeOf(join(common, "HEAD")), modeOf(join(common, "config")), modeOf(worktreeRoot)]);
+  return Promise.all([storageMode(resolve(join(common, "HEAD")), true), storageMode(resolve(join(common, "config")), true), storageMode(resolve(worktreeRoot), true)]);
 }
 
 async function taskIds(stateRoot: string, project: string): Promise<string[]> {
@@ -172,8 +167,9 @@ async function ancestors(stateRoot: string, project: string, taskId: string): Pr
   while (chain.length < MAX_CHAIN) {
     try {
       cursor = await declaredContinuation(stateRoot, project, cursor);
-    } catch {
-      break;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") break;
+      throw err;
     }
     if (cursor === null || cursor === taskId || chain.includes(cursor)) break;
     chain.push(cursor);
@@ -188,8 +184,9 @@ async function attemptStatuses(stateRoot: string, project: string, taskId: strin
   for (let attempt = 1; attempt <= (below === undefined ? latest ?? 0 : below - 1); attempt += 1) {
     try {
       statuses.push(await readAttempt(join(root, String(attempt))));
-    } catch {
-      // An attempt directory without a status holds no session to cite.
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw err;
     }
   }
   return statuses;
@@ -219,9 +216,11 @@ interface TaskScan {
   readonly tasks: ReadonlyArray<readonly [string, AttemptStatus[]]>;
 }
 
-/** The ticket ids a shift attempt selected, read from its status; null when it carries no selection. */
+/** The ticket ids an attempt selected, read from status shift or ticketSelection; null when unselected. */
 function selectedTickets(status: AttemptStatus): string[] | null {
-  return status.shift == null ? null : status.shift.tickets.map((ticket) => ticket.id);
+  if (status.shift != null) return status.shift.tickets.map((ticket) => ticket.id);
+  if (status.ticketSelection != null) return status.ticketSelection.tickets.map((ticket) => ticket.id);
+  return null;
 }
 
 /** Every task's status files, never a journal: the chain and the other tasks' requests and plan refs. */
@@ -309,8 +308,12 @@ async function journalFacts(
 }
 
 /** This attempt's request-confirmation records, oldest first, as its journal holds them. */
+function requestConfirmations(evidence: readonly AttemptEvidence[]): RequestConfirmationRecord[] {
+  return evidence.flatMap((entry) => entry.type === "request-confirmation" ? [entry.record] : []);
+}
+
 async function attemptConfirmations(attemptDir: string): Promise<RequestConfirmationRecord[]> {
-  return (await readAttemptEvidence(attemptDir)).flatMap((evidence) => evidence.type === "request-confirmation" ? [evidence.record] : []);
+  return requestConfirmations(await readAttemptEvidence(attemptDir));
 }
 
 /**
@@ -391,14 +394,25 @@ export async function preflightCommand(options: PreflightCommandOptions): Promis
   if (config.project.slug !== current.project) {
     throw new Error(`config project ${config.project.slug} does not match attempt project ${current.project}`);
   }
-  const recipe = await attemptRecipe(current, config);
+  const recipe = await resolveAttemptRecipe(current, config);
   const writers = writingPhases(recipe, config.agents);
   const shift = current.workflow === SHIFT_WORKFLOW_ID ? {
     builderWrites: config.agents.find(agent => agent.name === "builder")?.writes ?? [],
     tickets: await readShiftTicketDoBlocks(current.repository, current.shift!),
   } : null;
   const baseSha = await pinnedBase(options.attemptDir, current);
-  const journal = await journalFacts(options.stateRoot, current, baseSha, options.readEvidence ?? readAttemptEvidence);
+  const evidenceReader = options.readEvidence ?? readAttemptEvidence;
+  const evidenceByAttempt = new Map<string, Promise<readonly AttemptEvidence[]>>();
+  const readEvidenceOnce = (attemptDir: string): Promise<readonly AttemptEvidence[]> => {
+    const key = resolve(attemptDir);
+    let evidence = evidenceByAttempt.get(key);
+    if (evidence === undefined) {
+      evidence = evidenceReader(attemptDir);
+      evidenceByAttempt.set(key, evidence);
+    }
+    return evidence;
+  };
+  const journal = await journalFacts(options.stateRoot, current, baseSha, readEvidenceOnce);
   const suite = await gatherSuite(journal.landed, journal.earlier, {
     repository: current.repository, worktreeRoot: resolve(options.worktreeRoot), project: current.project, baseSha, config,
     outputDir: join(options.attemptDir, "raw"), ...(options.runCommand === undefined ? {} : { runCommand: options.runCommand }),
@@ -420,7 +434,9 @@ export async function preflightCommand(options: PreflightCommandOptions): Promis
     // rather than trusting this result.
     confirmation: {
       project: current.project, taskId: current.taskId, attempt: current.attempt, requestDigest,
-      pathsDigest: requestPathsDigest(options.where, options.read), confirmations: await attemptConfirmations(options.attemptDir),
+      pathsDigest: requestPathsDigest(options.where, options.read), confirmations: options.readEvidence === undefined
+        ? requestConfirmations(await readEvidenceOnce(options.attemptDir))
+        : await attemptConfirmations(options.attemptDir),
     },
   });
   const at = (options.now ?? ((): string => new Date().toISOString()))();

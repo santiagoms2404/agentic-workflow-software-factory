@@ -8,10 +8,11 @@ performed by the two scripts in this directory.
 
 | File | What it is |
 | --- | --- |
-| `delegation-guard.sh` | The `PreToolUse` hook. Two fences: a delegation-shaped tool name, and a shell command invoking one of the eight acts the lifecycle reserves for the owner. |
+| `delegation-guard.sh` | The `PreToolUse` hook. Two fences: a delegation-shaped tool name, and a shell command invoking one of the eighteen owner acts declared in the shared rule list. |
 | `session-banner.sh` | The `SessionStart` hook. Prints what it was able to confirm about the guard's presence, and names what it could not. |
 | `settings.example.json` | The settings marimba is launched with, as a template. Two absolute paths are left as placeholders. |
-| `marimba-guard-rules.mts` | All three fences as pure rules, importing nothing. The one place either harness's lists are written. |
+| `owner-acts.mts` | The canonical owner-act list, including compound and flagged acts. Checked against every CLI owner-terminal call site. |
+| `marimba-guard-rules.mts` | Pure guard rules. Imports the owner-act list and defines the other shared rule data. |
 | `marimba-guard.pi.ts` | The pi port of the guard: the same two shared fences, plus the pi-only lifecycle-timeout floor, bound to `tool_call` and `session_start`. |
 | `aliases.example.sh` | Launch aliases per harness, model and effort, as a template. One absolute path is left as a placeholder. |
 | `compaction/` | marimba's self-compaction profile for pi: thresholds, the summary prompt, the note template, and the re-prime pack read fresh from disk after every compaction. Read by the user-level `self-compact` pi extension when `PI_MARIMBA=1`; see below. |
@@ -102,10 +103,10 @@ step. Treat such a session as read-only.
 ### The second harness: pi
 
 `marimba-guard.pi.ts` is the port. Both harnesses read their rules from
-`marimba-guard-rules.mts`, which imports nothing, and the suite asserts the shell
-script's own `for` loops still name exactly what that module exports — so
-editing one harness's list without the other fails a test rather than silently
-producing two different boundaries.
+`marimba-guard-rules.mts`, which derives owner acts from `owner-acts.mts`.
+The suite checks the shell loops, compound/flagged paths and CLI call sites
+against that shared data. A change to one harness alone must not silently
+produce a different boundary.
 
 Install is an owner act, and it is one step rather than four: the guard is
 passed per launch instead of registered in a settings file.

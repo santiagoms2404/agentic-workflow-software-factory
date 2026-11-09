@@ -31,6 +31,7 @@
 import { join } from "node:path";
 import {
   AdapterError,
+  assertSameProviderSession,
   type Availability,
   type ContinuityCapableAdapter,
   type ContinuityEvidence,
@@ -40,7 +41,6 @@ import {
   type ObservedProviderSession,
   type ObservedToolImage,
   type BrokerProcessRegistration,
-  type ProcessExit,
   type ProcessSpec,
   type ProcessTransport,
   type TransportBroker,
@@ -58,7 +58,12 @@ import { OutputBudget, type OutputBudgetOptions } from "./stream/output-budget.t
 import {
   DEFAULT_EXIT_WAIT_MS,
   awaitExit,
+  awaitStderr,
+  cancellationReason,
+  describeError,
+  describeExit,
   drainStderr,
+  isCancellation,
   stderrSuffix,
 } from "./stream/transport-loop.ts";
 
@@ -279,26 +284,15 @@ export function effortFor(effort: string): ClaudeEffort {
  * continuity the adapter promised, which is `E_BACKEND_FAILURE`.
  */
 export function assertSameSession(first: ClaudeSessionRecord, next: ClaudeSessionRecord): void {
-  if (first.resolvedModel !== next.resolvedModel) {
-    throw new AdapterError(
-      CLAUDE_ADAPTER_ID,
-      "E_MODEL_MISMATCH",
-      `the correction answered on ${JSON.stringify(next.resolvedModel)} but the phase ` +
-        `began on ${JSON.stringify(first.resolvedModel)}; a phase answers on one model`,
-    );
-  }
-  if (first.sessionId === null || next.sessionId === null || first.sessionId !== next.sessionId) {
-    throw new AdapterError(
-      CLAUDE_ADAPTER_ID,
-      "E_BACKEND_FAILURE",
-      `the correction ran in provider session ${JSON.stringify(next.sessionId)} rather than ` +
-        `${JSON.stringify(first.sessionId)}; a correction re-enters the session it corrects`,
-    );
-  }
+  assertSameProviderSession(CLAUDE_ADAPTER_ID, first, next);
 }
 
 export interface ClaudeParseOptions {
-  /** What the host ASKED for. The stream says what answered; the two are different facts. */
+  /**
+   * What the host ASKED for. The stream says what answered; the two are different
+   * facts. Required: `parse` refuses a stream it was not told the request of,
+   * rather than journal a placeholder as the model the host asked for (B11-12).
+   */
   requestedModel?: string;
   /** Filled in as the stream names the session and the model. */
   session?: ClaudeSessionRecord;
@@ -473,12 +467,6 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     };
   }
 
-  /**
-   * Describe, hand to the broker, parse. The adapter never starts anything
-   * itself — and it never starts anything TWICE. There is no retry here, which
-   * is what makes "quota is never a retry" structural rather than a policy
-   * somebody has to remember: a run that ends `E_QUOTA_EXHAUSTED` ends, and the
-   * decision about what happens next belongs to a layer that can see the budget.   */
   /** Delegates to the module-level function so adapter tests and the runner share one rule. */
   assertSameSession(first: ObservedProviderSession, next: ObservedProviderSession): void {
     assertSameSession(
@@ -487,6 +475,13 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     );
   }
 
+  /**
+   * Describe, hand to the broker, parse. The adapter never starts anything
+   * itself — and it never starts anything TWICE. There is no retry here, which
+   * is what makes "quota is never a retry" structural rather than a policy
+   * somebody has to remember: a run that ends `E_QUOTA_EXHAUSTED` ends, and the
+   * decision about what happens next belongs to a layer that can see the budget.
+   */
   async *execute(
     request: ModelRequest,
     broker: TransportBroker,
@@ -551,6 +546,18 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     signal?: AbortSignal,
     options: ClaudeParseOptions = {},
   ): AsyncIterable<NormalizedEvent> {
+    // Refused before a byte is read. Every production caller passes the selector
+    // it launched with; a stream read without one has no request to check its
+    // identity against, and a placeholder would be journaled as the model asked
+    // for. The refusal matches how the descriptor refuses a selector it cannot
+    // honour (B11-12).
+    if (options.requestedModel === undefined) {
+      throw new AdapterError(
+        this.id,
+        "E_INVALID_REQUEST",
+        "parse was given no requested model; a stream is read against the model the host asked for",
+      );
+    }
     const framer = new LineFramer();
     const sequencer = new EventSequencer({
       runId: transport.runId,
@@ -560,7 +567,7 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
     const decoder = new ClaudeStreamDecoder({
       adapter: this.id,
       provider: CLAUDE_PROVIDER,
-      requestedModel: options.requestedModel ?? "unknown-model",
+      requestedModel: options.requestedModel,
       ...(options.session === undefined ? {} : { session: options.session }),
       ...(options.images === undefined ? {} : { images: options.images }),
     });
@@ -595,7 +602,8 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
       // The stream itself failed. A run whose bytes stopped arriving still owes
       // exactly one terminal, a settlement for every tool call it left open,
       // and a report of the tokens it had already spent.
-      await stderr.done;
+      // Bounded: a descendant holding the stderr pipe must not hang it.
+      await awaitStderr(stderr, this.#exitWaitMs);
       // The run may ALREADY have settled — the provider printed its terminal
       // and the pipe broke on the way out. Holding the terminal to measure the
       // exit code made that case lose it entirely: the sequencer is terminal,
@@ -612,12 +620,15 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
         ? sequencer.cancel(cancellationReason(signal, error))
         : sequencer.fail(
             "E_BACKEND_FAILURE",
-            `the provider's output stream failed: ${describe(error)}${stderrSuffix(stderr)}`,
+            `the provider's output stream failed: ${describeError(error)}${stderrSuffix(stderr)}`,
           );
       return;
     }
 
-    await stderr.done;
+    // Bounded like the exit wait. Stderr closes only when every holder closes
+    // it, and a descendant that inherited the pipe can outlive the provider; an
+    // unbounded wait here withheld a terminal the provider had already written.
+    await awaitStderr(stderr, this.#exitWaitMs);
     if (held !== null) {
       yield* this.#settleHeld(transport, held);
       return;
@@ -645,38 +656,4 @@ export class ClaudeCodeAdapter implements ContinuityCapableAdapter {
         stderrSuffix(stderr),
     );
   }
-}
-
-/** How the process ended, as observed — never a guessed code. */
-function describeExit(exit: ProcessExit | null, waitMs: number): string {
-  if (exit === null) {
-    return `neither an exit code nor a signal was observed within ${String(waitMs)} ms`;
-  }
-  if (exit.code !== null) return `the process exited with code ${String(exit.code)}`;
-  if (exit.signal !== null) return `the process was ended by signal ${exit.signal}`;
-  return "the process exited, but reported neither an exit code nor a signal";
-}
-
-/** What the run was cancelled for: the caller's own reason wherever there is one. */
-function cancellationReason(signal: AbortSignal | undefined, error: unknown): string {
-  const reason = signal?.aborted === true ? describe(signal.reason) : describe(error);
-  return `the provider's output stream was cancelled: ${reason}`;
-}
-
-/**
- * Whether a stream failure was a cancellation rather than a fault.
- *
- * Anything unrecognized is a failure: calling an unknown fault a cancellation
- * would let a real defect arrive as an intentional stop.
- */
-function isCancellation(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const code = (error as { code?: unknown }).code;
-  return (
-    error.name === "AbortError" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE"
-  );
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

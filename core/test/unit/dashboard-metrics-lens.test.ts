@@ -235,7 +235,8 @@ test("the shell routes #/metrics, lists it between settings and canvas, and the 
   assert.ok(settings > 0 && settings < metrics && metrics < canvas, "Settings, Metrics, Canvas");
 
   const tab = source("dashboard/src/routes/metrics.vue");
-  assert.deepEqual([...tab.matchAll(/fetch\(([^)]*)\)/g)].map((match) => match[1]), ['"/api/v1/metrics"']);
+  assert.match(tab, /fetch\(\s*["']\/api\/v1\/metrics["']/);
+  assert.equal([...tab.matchAll(/\bfetch\s*\(/g)].length, 1, "the tab's one fetch");
   assert.doesNotMatch(tab, /method:|localStorage|sessionStorage/);
   assert.match(tab, /usePolling\(load,/);
   assert.match(tab, /<SessionFilterRow/);

@@ -6,6 +6,7 @@ import { normalizeRepositoryPath } from "../policy/path-policy.ts";
 import {
   ContractDigestSchema,
   ExplicitIdSchema,
+  type ProjectCatalog,
 } from "./catalog-schema.ts";
 
 export const CONTRACT_PROJECTION_VERSION = "awsf.contracts/v1" as const;
@@ -31,6 +32,33 @@ export const ContractProjectionSchema = Type.Object(
 );
 
 export type ContractProjection = Static<typeof ContractProjectionSchema>;
+
+/** The host-registered expectation a production candidate must satisfy. */
+export interface ContractGateRequirement {
+  readonly id: string;
+  readonly role: "produces" | "consumes";
+  readonly path: string;
+  readonly digest: string;
+}
+
+/** Derives local requirements from the canonical project catalog, never a candidate projection. */
+export function contractRequirementsForRepository(
+  catalog: Pick<ProjectCatalog, "contracts">,
+  repositoryId: string,
+): readonly ContractGateRequirement[] {
+  const requirements: ContractGateRequirement[] = [];
+  for (const contract of catalog.contracts ?? []) {
+    if (contract.producer.repository === repositoryId) {
+      requirements.push(Object.freeze({ id: contract.id, role: "produces", path: contract.producer.path, digest: contract.digest }));
+    }
+    for (const consumer of contract.consumers) {
+      if (consumer.repository === repositoryId) {
+        requirements.push(Object.freeze({ id: contract.id, role: "consumes", path: consumer.path, digest: contract.digest }));
+      }
+    }
+  }
+  return Object.freeze(requirements);
+}
 
 export class ContractProjectionError extends Error {
   readonly code: string;

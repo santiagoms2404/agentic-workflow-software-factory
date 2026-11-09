@@ -22,6 +22,19 @@ import { utf8ByteLength } from "../../contracts/typebox.ts";
 const NO_LINES: readonly string[] = Object.freeze([]);
 
 /**
+ * The most one unterminated line may hold, in UTF-16 code units.
+ *
+ * A provider line is `JSON.parse`d whole, and the framer used to hold it without
+ * limit. A line grown past V8's string ceiling made `push` throw a RangeError,
+ * which surfaced as a backend fault for a stream that was only oversized. Past
+ * this ceiling the line is kept to its head instead. The head is not valid JSON,
+ * so the decoder reports it as an unreadable line and the run goes on. The
+ * ceiling sits far above any real event (a large file read is the usual case)
+ * and far below V8's own limit (B11-20).
+ */
+export const MAX_LINE_LENGTH = 32 * 1024 * 1024;
+
+/**
  * Incremental newline framing.
  *
  * A live child hands over bytes at boundaries it chooses, never at line
@@ -35,11 +48,12 @@ const NO_LINES: readonly string[] = Object.freeze([]);
  * per-framer state and deliberately not a module-level one: two concurrent runs
  * must not share a half-read code point.
  *
- * **Framing bounds nothing.** The framer keeps reading lines past the output
+ * **Framing bounds no run.** The framer keeps reading lines past the output
  * budget so a run that overruns it can still observe its own terminal event
  * instead of being misreported as a truncated, terminal-less stream. The budget
  * lives one stage downstream, in `output-budget.ts`, and it bounds what is
- * *emitted*, never what is *read*.
+ * *emitted*, never what is *read*. The only limit framing applies is on one
+ * line's own size, at `MAX_LINE_LENGTH`.
  */
 export class LineFramer {
   readonly #decoder = new TextDecoder("utf-8");
@@ -75,19 +89,36 @@ export class LineFramer {
       text = this.#decoder.decode(chunk, { stream: true });
     }
     if (text.length === 0) return NO_LINES;
-    this.#pending += text;
-    if (!this.#pending.includes("\n")) return NO_LINES;
-    const parts = this.#pending.split("\n");
-    this.#pending = parts.pop() ?? "";
-    return parts;
+    if (!text.includes("\n")) {
+      this.#hold(text);
+      return NO_LINES;
+    }
+    // Only this chunk is split, never the held line again: the held line was
+    // already searched when it was received, so it is not rescanned here.
+    const parts = text.split("\n");
+    const last = parts.length - 1;
+    const lines: string[] = [];
+    for (let index = 0; index < last; index += 1) {
+      this.#hold(parts[index] ?? "");
+      lines.push(this.#pending);
+      this.#pending = "";
+    }
+    this.#hold(parts[last] ?? "");
+    return lines;
   }
 
   /** End of stream: releases the unterminated tail, and any dangling partial code point. */
   flush(): readonly string[] {
-    this.#pending += this.#decoder.decode();
+    this.#hold(this.#decoder.decode());
     const tail = this.#pending;
     this.#pending = "";
     return tail.length === 0 ? NO_LINES : [tail];
+  }
+
+  /** Appends a segment of the held line, cut at the ceiling. Everything past it is dropped. */
+  #hold(segment: string): void {
+    const room = MAX_LINE_LENGTH - this.#pending.length;
+    this.#pending += segment.length <= room ? segment : segment.slice(0, Math.max(room, 0));
   }
 }
 

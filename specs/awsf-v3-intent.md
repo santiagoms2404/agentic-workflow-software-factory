@@ -1,12 +1,15 @@
 # AWSF v3 — intent
 
-**This file is the `USER_PROMPT` for one `plan-sota` run.** It is the single
-input. It restates no evidence: the measurements, the grade and the reasoning
-live in `specs/awsf-v3-assessment-and-direction.md`, which is the only detail
-document a planning session should read.
+**Authoring input for the v3 spine, retained with later owner amendments.**
+The original measurements, grade and reasoning live in
+`specs/awsf-v3-assessment-and-direction.md` as dated evidence. The authored
+`specs/awsf-v3-plan.html` and its registered deep plans own execution scope and
+completion. New scope still requires the owner's approval.
 
-**Draft for owner review.** Nothing here is authored into a plan until the owner
-edits and approves this file.
+This reconciliation changes no vision, acceptance target or owner amendment.
+For later implementation evidence, use the
+[documentation map](../docs/README.md), not the original assessment's numbers as
+if they were current.
 
 ---
 

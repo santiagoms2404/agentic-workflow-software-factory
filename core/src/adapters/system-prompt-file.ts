@@ -12,26 +12,92 @@
 // INHERIT, and this is about what a file on disk may EXPOSE. They are enforced
 // at different moments and fail with different codes.
 
-import { chmod, mkdtemp, writeFile } from "node:fs/promises";
-import { statSync } from "node:fs";
+import { lstat, mkdtemp, open } from "node:fs/promises";
+import { constants, statSync, type Stats } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { platform } from "node:process";
 import { AdapterError } from "./interface.ts";
 
+/** The one name the prompt is materialized under inside its directory. */
+export const SYSTEM_PROMPT_FILE_NAME = "system-prompt.md";
+
+// Windows has no O_NOFOLLOW; there the lstat refusal below is the guard.
+const O_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
+
+async function lstatOrNull(path: string): Promise<Stats | null> {
+  try {
+    return await lstat(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+/**
+ * Refuses a prompt slot that is anything but absent or a plain file of its own.
+ *
+ * B11-02: the session runtime the prompt is written into is bound WRITABLE
+ * into the provider sandbox, so a write-capable agent can plant
+ * `<runtime>/system-prompt.md` as a symlink (or a hard link) to any host file.
+ * A relaunch into the same runtime then rewrites the prompt there, and a write
+ * that follows the link truncates and chmods the host file as the AWSF user.
+ * This is the containment check, run BEFORE anything is written: the old
+ * realpath check ran after the write had already landed on the target.
+ */
+export async function assertSystemPromptSlot(adapter: string, directory: string): Promise<void> {
+  const path = join(directory, SYSTEM_PROMPT_FILE_NAME);
+  const existing = await lstatOrNull(path);
+  if (existing !== null && (!existing.isFile() || existing.nlink !== 1)) {
+    throw new AdapterError(
+      adapter,
+      "E_REDACTION",
+      `the private system prompt slot ${path} is not a plain file inside its session runtime; refusing to write through it`,
+    );
+  }
+}
+
 /**
  * Writes a system prompt somewhere only this user can read it, and returns the
  * path the adapter will put on argv.
  *
- * The mode is set with an explicit `chmod` after the write rather than left to
- * the open mode: the open mode is masked by `umask`, and a permissive umask
- * would quietly produce a 0644 file that looked deliberate.
+ * The mode is set with an explicit `chmod` rather than left to the open mode:
+ * the open mode is masked by `umask`, and a permissive umask would quietly
+ * produce a 0644 file that looked deliberate.
+ *
+ * Nothing here follows a link (B11-02). A new file is created with
+ * O_CREAT|O_EXCL|O_NOFOLLOW, so a link or file raced into the slot after the
+ * lstat fails the open instead of being written through. A relaunch rewrites
+ * the regular file an earlier launch left: it is opened with O_NOFOLLOW and
+ * WITHOUT O_TRUNC, re-checked on the opened handle (a regular file with one
+ * link), and only then chmodded, truncated and written through that handle.
+ * There is no unlink-and-recreate: the no-destructive-paths fence admits no
+ * new delete path, and none is needed.
  */
 export async function writeSystemPromptFile(text: string, directory?: string): Promise<string> {
   const dir = directory ?? (await mkdtemp(join(tmpdir(), "awsf-system-prompt-")));
-  const path = join(dir, "system-prompt.md");
-  await writeFile(path, text, { mode: 0o600 });
-  await chmod(path, 0o600);
+  const path = join(dir, SYSTEM_PROMPT_FILE_NAME);
+  await assertSystemPromptSlot("system-prompt-file", dir);
+  const fresh = (await lstatOrNull(path)) === null;
+  const flags = fresh
+    ? constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW
+    : constants.O_WRONLY | O_NOFOLLOW;
+  const handle = await open(path, flags, 0o600);
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.nlink !== 1) {
+      throw new AdapterError(
+        "system-prompt-file",
+        "E_REDACTION",
+        `the private system prompt slot ${path} changed under the write; refusing to write through it`,
+      );
+    }
+    await handle.chmod(0o600);
+    await handle.truncate(0);
+    await handle.writeFile(text);
+  } finally {
+    await handle.close();
+  }
   return path;
 }
 

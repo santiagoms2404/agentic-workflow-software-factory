@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { parseDocument } from "yaml";
-import { TICKET_TASK_CLASSES, TICKET_WORKFLOWS, type TicketTaskClass, type TicketState, type TicketWorkflow } from "../contracts/ticket.ts";
+import { TICKET_STATES, TICKET_TASK_CLASSES, TICKET_WORKFLOWS, type TicketTaskClass, type TicketState, type TicketWorkflow } from "../contracts/ticket.ts";
 import { classifyPlans, type PlanIdentity } from "../registry/plan-kind.ts";
 import type { ResolvedPlanSource } from "../registry/plan-source.ts";
 
@@ -38,11 +38,11 @@ interface CacheEntry {
   readonly record: PlanTicketRecord | null;
 }
 
-const STATES = new Set<TicketState>(["todo", "wip", "done", "failed"]);
+const STATES = new Set<TicketState>(TICKET_STATES);
 const WORKFLOWS = new Set<TicketWorkflow>(TICKET_WORKFLOWS);
 
 export function parsePlanTicketData(source: string): PlanTicketData | null {
-  const split = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/u.exec(source);
+  const split = /^---\n([\s\S]*?)\n---\n/u.exec(source);
   if (split === null) return null;
   const document = parseDocument(split[1] ?? "");
   if (document.errors.length > 0) return null;

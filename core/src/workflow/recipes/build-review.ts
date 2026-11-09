@@ -30,7 +30,7 @@ export const buildReviewWorkflow = {
       outputSchema: BuildOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("builder"),
+      get prompt() { return loadUserPrompt("builder"); },
     },
     {
       id: "tests",
@@ -66,7 +66,7 @@ export const buildReviewWorkflow = {
       outputSchema: ReviewOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("reviewer"),
+      get prompt() { return loadUserPrompt("reviewer"); },
     },
   ],
 } as const satisfies WorkflowRecipe;

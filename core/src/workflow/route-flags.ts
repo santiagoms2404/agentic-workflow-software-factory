@@ -86,7 +86,9 @@ export function parseRouteFlag(value: string): ParsedRouteFlag {
   }
 
   const remainder = value.slice(separator + 1);
-  const at = remainder.indexOf("@");
+  // The effort is after the LAST "@", as for a replay arm, so a model holding
+  // "@" reaches the selector check and is refused as unrepresentable (B3-16).
+  const at = remainder.lastIndexOf("@");
   const routePart = at < 0 ? remainder : remainder.slice(0, at);
   const effortPart = at < 0 ? null : remainder.slice(at + 1);
 

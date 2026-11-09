@@ -1,24 +1,37 @@
-import { OWNER_ACTS } from "../../../../docs/driving/marimba/marimba-guard-rules.mts";
+import { OWNER_ACT_LIST, ownerActName } from "../../../../docs/driving/marimba/owner-acts.mts";
 
 /** W01-Q7, decided 2026-10-04. Expectations are pinned, never learned from the guard. */
 export const OWNER_ACT_SPELLINGS = [
-  { id: "direct", prefix: "awsf", knownGapF17: false },
-  { id: "just", prefix: "just awsf", knownGapF17: false },
+  { id: "direct", prefix: "awsf" },
+  { id: "just", prefix: "just awsf" },
   // F17 closed by G01-G: these five spellings are denied in BOTH harnesses.
-  { id: "npm", prefix: "npm run awsf --", knownGapF17: false },
-  { id: "npm-script-silent", prefix: "npm run awsf --silent --", knownGapF17: false },
-  { id: "npm-prefix", prefix: "npm --prefix <dir> run awsf --", knownGapF17: false },
-  { id: "npm-run-silent", prefix: "npm run --silent awsf --", knownGapF17: false },
-  { id: "node", prefix: "node --experimental-strip-types core/src/cli/main.ts", knownGapF17: false },
+  { id: "npm", prefix: "npm run awsf --" },
+  { id: "npm-script-silent", prefix: "npm run awsf --silent --" },
+  { id: "npm-prefix", prefix: "npm --prefix <dir> run awsf --" },
+  { id: "npm-run-silent", prefix: "npm run --silent awsf --" },
+  { id: "node", prefix: "node --experimental-strip-types core/src/cli/main.ts" },
 ] as const;
 
-export const OWNER_ACT_ROWS = OWNER_ACTS.flatMap((act) => OWNER_ACT_SPELLINGS.map((spelling) => ({
-  act,
-  spelling: spelling.id,
-  command: `${spelling.prefix.replace("<dir>", "./fixture-project")} ${act} T01`,
-  expected: spelling.knownGapF17 ? null : act,
-  label: `${act} / ${spelling.id}${spelling.knownGapF17 ? " / KNOWN GAP F17 (G01-G)" : ""}`,
-})));
+/**
+ * Every listed owner act in every decided spelling (B5-05, and X-01: the
+ * `npm run awsf [--silent] -- <act>` spellings of the acts built outside a
+ * main.ts case arm were open until those acts were listed). A flagged act puts
+ * its flag after the task, where the CLI reads it.
+ */
+export const OWNER_ACT_LIST_ROWS = OWNER_ACT_LIST.flatMap((entry) => OWNER_ACT_SPELLINGS.map((spelling) => {
+  const act = ownerActName(entry);
+  return {
+    act,
+    reach: entry.reach,
+    spelling: spelling.id,
+    command: `${spelling.prefix.replace("<dir>", "./fixture-project")} ${entry.verb} T01${entry.flag === undefined ? "" : ` ${entry.flag} T02`}`,
+    expected: act,
+    label: `${act} / ${spelling.id}`,
+  };
+}));
+
+/** The case-arm acts' rows: the matrix the shell guard's `for verb` loop answers. */
+export const OWNER_ACT_ROWS = OWNER_ACT_LIST_ROWS.filter((row) => row.reach === "case-arm");
 
 /** Runnable Markdown fences and HTML pre blocks; explanatory prose is not a shell claim. */
 export function shellFenceLines(source: string): string[] {
@@ -40,7 +53,9 @@ export function shellFenceLines(source: string): string[] {
  * Like doc-reconciliation, this reads written invocations, not shell intent.
  */
 export function invocationPrefixes(line: string): string[] {
-  const invocation = /(?:^|[\s;|&])((?:npm\s+[^\n;|&]*?\bawsf(?:\s+--[^\s]+)*|node\s+[^\n;|&]*?\bcore\/src\/cli\/main\.ts|(?:just|yarn|pnpm|bun|npx)\s+[^\n;|&]*?\bawsf|awsf)(?:\s+--(?=\s|$))?)\s+(?=[a-z][\w-]*\b)/gu;
+  // A launcher may follow a quote or an opening parenthesis (`bash -c 'npx awsf …'`, `$(npx awsf …)`), and a bin
+  // may be path-prefixed (`./node_modules/.bin/awsf`). Each of those is its own prefix, never a bare-awsf suffix.
+  const invocation = /(?:^|[\s;|&'"`(])((?:npm\s+[^\n;|&]*?\bawsf(?:\s+--[^\s]+)*|node\s+[^\n;|&]*?\bcore\/src\/cli\/main\.ts|(?:just|yarn|pnpm|bun|npx)\s+[^\n;|&]*?\bawsf|(?:[^\s;|&'"`()]*\/)?awsf)(?:\s+--(?=\s|$))?)\s+(?=[a-z][\w-]*\b)/gu;
   return [...line.matchAll(invocation)].map((match) => (match[1] ?? "").replace(/\s+/gu, " "));
 }
 

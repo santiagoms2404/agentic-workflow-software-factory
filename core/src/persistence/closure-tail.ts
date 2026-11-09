@@ -1,6 +1,6 @@
 import { open } from "node:fs/promises";
 import { journalFilePath } from "./platform-paths.ts";
-import { TAIL_CHUNK_BYTES, type TailHandle, type JournalRecord } from "./journal.ts";
+import { readFully, TAIL_CHUNK_BYTES, type TailHandle, type JournalRecord } from "./journal.ts";
 import type { AttemptEvent, AttemptStatus } from "../cli/commands/attempt.ts";
 
 export interface ClosureTailOptions {
@@ -39,12 +39,7 @@ export async function landingJournalTail(attemptDir: string, projection: Attempt
       const length = Math.min(chunkBytes, position);
       position -= length;
       const chunk = Buffer.alloc(length);
-      let read = 0;
-      while (read < length) {
-        const { bytesRead } = await handle.read(chunk, read, length - read, position + read);
-        if (bytesRead === 0) throw new Error("closure refuses a torn attempt journal");
-        read += bytesRead;
-      }
+      await readFully(handle, chunk, position);
       if (!endChecked) {
         if (chunk[length - 1] !== 0x0a) throw new Error("closure refuses a torn attempt journal");
         endChecked = true;

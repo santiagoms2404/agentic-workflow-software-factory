@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { canonicalJson } from "./owner-amendment.ts";
+import { sha256 } from "./hash.ts";
 import { stringUnion } from "./typebox.ts";
 import { NO_TRAP_KINDS } from "../traps/catalogue.ts";
 import { REDACTED_VALUE, scrubCredentialString } from "../policy/redaction.ts";
@@ -80,5 +80,5 @@ export function assertAttributionRecord(value: unknown): asserts value is Attrib
  * an id, and the same record projected twice always does.
  */
 export function attributionRecordDigest(record: AttributionRecord): string {
-  return createHash("sha256").update(canonicalJson(record), "utf8").digest("hex");
+  return sha256(canonicalJson(record));
 }

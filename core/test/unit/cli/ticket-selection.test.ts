@@ -79,6 +79,14 @@ test("repeatable selection seals registered paths and exact bytes, journals and 
   assert.deepEqual((await readAttempt(dir)).ticketSelection, selection, "journal remains the sealed authority");
 });
 
+test("plan selection treats a missing placement as no registered sources", async t => {
+  const w = world(t);
+  await assert.rejects(
+    sealPlanTicketSelection({ ...w.options, stateRoot: join(w.root, "unplaced-state") }, ["T01"]),
+    /no registered ticket set for selected-plan/u,
+  );
+});
+
 test("host record is closed, disjoint from envelopes, and newCommand refuses invalid or misbound selections", async t => {
   const w = world(t);
   assert.equal(RECORD_SCHEMAS[TICKET_SELECTION_SCHEMA_ID], TicketSelectionSchema);
@@ -91,6 +99,22 @@ test("host record is closed, disjoint from envelopes, and newCommand refuses inv
   await assert.rejects(newCommand({ stateRoot: w.stateRoot, project: w.options.project, taskId: "misbound", repository: w.repository,
     workflow: "build", tier: 1, request: "request", planRef: "another-plan", ticketSelection: selection }), /requires its registered --plan/);
   assert.equal(existsSync(join(w.stateRoot, "projects", w.options.project, "tasks", "misbound")), false);
+});
+
+test("B7-60: light selection falls back to the catalog-less flat ticket store", async t => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-ticket-selection-legacy-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const repository = join(root, "repository");
+  const ticketPath = join(repository, "specs", "tickets", "T00.md");
+  mkdirSync(join(repository, "specs", "tickets"), { recursive: true });
+  writeFileSync(ticketPath, flatSource(flatTicket));
+
+  const selection = await sealLightTicketSelection(repository, ["T00"]);
+  assert.equal(selection.plan, null);
+  assert.deepEqual(selection.tickets, [{
+    id: "T00", path: "specs/tickets/T00.md", digest: ticketFileDigest(readFileSync(ticketPath)),
+    tier: 1, workflow: "build-review",
+  }]);
 });
 
 test("light selection uses the non-default plans root, seals one exact file and journals plan=null", async t => {

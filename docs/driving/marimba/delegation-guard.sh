@@ -13,9 +13,11 @@
 #    against a fixed list, so a tool name that does not exist yet is denied on
 #    arrival rather than missed.
 #
-# 2. OWNER ACTS. Denies a shell command that invokes one of the eight acts the
-#    lifecycle reserves for the owner. This exists because the lifecycle's own
-#    barrier is weaker than it reads: `processOwnerTerminal()` checks
+# 2. OWNER ACTS. Denies a shell command that invokes any of the eighteen acts
+#    the lifecycle reserves for the owner. Fifteen use the direct verb loop;
+#    seed, group apply and retry --adopt-as have dedicated special-case paths.
+#    This exists because the lifecycle's own barrier is weaker than it reads:
+#    `processOwnerTerminal()` checks
 #    `process.stdin.isTTY`, which is a terminal-SHAPE check, and a same-user
 #    agent with shell access can allocate a PTY (`script -qec`) and answer the
 #    confirmation. Captured 2026-08-20. The TTY requirement stops an accidental
@@ -115,7 +117,7 @@ EOF
 # Checked first: an owner act reached through Bash is the more consequential of
 # the two, and Bash is never delegation-shaped, so the order costs nothing.
 if [ -n "${cmd:-}" ]; then
-  for verb in land cancel rework review degrade-review attribute prove journey raise publish resume grant confirm close; do
+  for verb in land cancel rework review degrade-review attribute prove journey raise publish resume run grant confirm close; do
     case " $cmd " in
       *"awsf $verb"*|*" awsf -- $verb "*|*" awsf --silent -- $verb "*|*"cli/main.ts $verb "*)
         deny "\`awsf $verb\` is an owner act and is denied in a driving session." \
@@ -123,6 +125,29 @@ if [ -n "${cmd:-}" ]; then
         ;;
     esac
   done
+  # The owner acts that build their terminal outside a main.ts case arm
+  # (B5-05), from the same list in owner-acts.mts. `+` stands for the space in
+  # a two-word act, because a `for` list splits on spaces.
+  for phrase in seed group+apply; do
+    act=${phrase//+/ }
+    case " $cmd " in
+      *"awsf $act"*|*" awsf -- $act "*|*" awsf --silent -- $act "*|*"cli/main.ts $act "*)
+        deny "\`awsf $act\` is an owner act and is denied in a driving session." \
+"Prepare it and explain it: the handle, what the evidence supports, and what remains. The owner runs it themselves. The TTY prompt is a terminal-shape check, not an authorization boundary, so this fence is the one that holds."
+        ;;
+    esac
+  done
+  # Plain `retry` builds no owner terminal; adoption does, so the flag decides.
+  case " $cmd " in
+    *" --adopt-as "*|*" --adopt-as="*)
+      case " $cmd " in
+        *"awsf retry"*|*" awsf -- retry "*|*" awsf --silent -- retry "*|*"cli/main.ts retry "*)
+          deny "\`awsf retry --adopt-as\` is an owner act and is denied in a driving session." \
+"Prepare it and explain it: the handle, what the evidence supports, and what remains. The owner runs it themselves. The TTY prompt is a terminal-shape check, not an authorization boundary, so this fence is the one that holds."
+          ;;
+      esac
+      ;;
+  esac
 fi
 
 # --- fence 1: delegation shape ------------------------------------------------

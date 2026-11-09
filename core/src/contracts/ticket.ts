@@ -50,8 +50,8 @@ export type Ticket = Static<typeof TicketSchema>;
 
 /** The JSON Schema emission of TicketSchema; never a hand-maintained copy. */
 export function emitTicketJsonSchema(): Record<string, unknown> {
+  // The schema declares its $id; an option the schema overrides would be dead (B3-20).
   return toJsonSchema(TicketSchema, {
-    $id: "https://awsf.local/schemas/awsf.ticket/v1",
     title: "Ticket",
     description: "A durable AWSF work ticket.",
   });

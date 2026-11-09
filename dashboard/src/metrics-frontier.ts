@@ -1,6 +1,7 @@
 import type { RateCardRow } from "../shared/types.ts";
 import {
   MIN_SETTLED,
+  formatPercent,
   routeCells,
   type Frontier,
   type FrontierX,
@@ -68,10 +69,6 @@ export function zoneLabels(x: FrontierX): { readonly good: string; readonly bad:
 /** A point's x as text, always with its unit; a list-price equivalent always through `formatListEquivalent`. */
 export function formatX(value: number, x: FrontierX): string {
   return x === "list-per-row" ? `${formatListEquivalent(value)} per row` : `${value.toFixed(1)} min per row`;
-}
-
-function pct(value: number | null): string {
-  return value === null ? "–" : `${Math.round(value * 100)}%`;
 }
 
 export interface RouteName {
@@ -150,7 +147,7 @@ export function frontierPlot(front: Frontier, names: ReadonlyMap<string, RouteNa
     const belowFloor = point.x < domain[0];
     const tooltip = [
       name.title,
-      `${yLabel} ${pct(point.interval.p)} · 95% CI ${pct(point.interval.lo)} to ${pct(point.interval.hi)}`,
+      `${yLabel} ${formatPercent(point.interval.p)} · 95% CI ${formatPercent(point.interval.lo)} to ${formatPercent(point.interval.hi)}`,
       `n ${point.n} ${unit}`,
       formatX(point.x, front.x),
       ...(point.hollow ? [`Hollow: fewer than ${MIN_SETTLED}, so it does not shape the line`] : []),

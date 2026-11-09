@@ -13,13 +13,15 @@
 // are the whole of invariant 2: truth is preserved, the display is
 // rebuildable, and invisible completion is impossible.
 
-import { link, mkdir, readdir, rename, stat } from "node:fs/promises";
+import { existsSync, readdirSync, readlinkSync } from "node:fs";
+import { link, mkdir, rename, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { JournalRecord } from "../persistence/journal.ts";
+import { listDirectories } from "../persistence/directories.ts";
 import { scanJournal } from "../persistence/replay.ts";
 import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { TaskState } from "../state/task-machine.ts";
-import { closeDatabase, integrityProblems, openDatabase, type DatabaseSync } from "./sqlite.ts";
+import { closeDatabase, integrityProblems, openDatabase, type CloseOutcome, type DatabaseSync } from "./sqlite.ts";
 import type { AttributionRecord } from "../contracts/attribution-record.ts";
 import type { DecisionRecord } from "../contracts/decision-record.ts";
 import {
@@ -32,6 +34,7 @@ import {
   type SessionInit,
 } from "./projector.ts";
 import { getSession } from "./queries.ts";
+import { scrubCredentialString } from "../policy/redaction.ts";
 
 // ---------------------------------------------------------------------------
 // The degraded hold
@@ -44,8 +47,12 @@ import { getSession } from "./queries.ts";
  * working, and a correction (`GATING → RUNNING`) is not an advance. So are
  * `BLOCKED` and `CANCELLED`: halting must always remain available, or a
  * degraded task could not even be stopped cleanly.
+ *
+ * `PUBLISHED` is held too (B4-02): `awsf publish` asks this gate before a push
+ * that has no rollback, so letting a degraded session through would make the
+ * one irreversible act exactly the invisible completion this hold forbids.
  */
-export const STATES_BEYOND_GATING = ["REVIEWING", "AWAITING_OWNER", "LANDING", "LANDED"] as const;
+export const STATES_BEYOND_GATING = ["REVIEWING", "AWAITING_OWNER", "LANDING", "LANDED", "PUBLISHED"] as const;
 
 /** Thrown when a degraded session tries to advance past `GATING`. */
 export class DegradedObservabilityHold extends Error {
@@ -132,10 +139,13 @@ export interface RebuildOptions {
   attributions?: readonly AttributionRecord[];
   /**
    * Every task's Jev decision records, each task's in file order (W19 DD3).
-   * Task-scoped like attributions, and projected after them.
+   * Task-scoped like attributions, they are replayed in time with the journals
+   * (B4-33), and held until the session they attach to has been replayed.
    */
   decisions?: readonly DecisionRecord[];
   migrationsDir?: string;
+  /** Injectable rename for testing swap failure compensation. */
+  rename?: (from: string, to: string) => Promise<void>;
   /** Injectable so the retained file's name is deterministic in tests. */
   stamp?: () => string;
 }
@@ -169,6 +179,154 @@ function order(primaryA: string, primaryB: string, tieA: string, tieB: string): 
   return tieA < tieB ? -1 : tieA > tieB ? 1 : 0;
 }
 
+/** One thing the rebuild replays: a journal record of one attempt, or a task-level decision. */
+type ReplayItem =
+  | { kind: "record"; source: RebuildSource; sessionId: string; record: JournalRecord<unknown> }
+  | { kind: "decision"; record: DecisionRecord };
+
+function replayTime(item: ReplayItem): string {
+  return item.kind === "record" ? item.record.recorded_at : item.record.at;
+}
+
+function replayKey(item: ReplayItem): string {
+  return item.kind === "record"
+    ? `${item.sessionId}:${item.record.source_seq}`
+    : `decision:${item.record.project}:${item.record.taskId}:${item.record.id}`;
+}
+
+function replayPrecedes(a: ReplayItem, b: ReplayItem): boolean {
+  return order(replayTime(a), replayTime(b), replayKey(a), replayKey(b)) < 0;
+}
+
+/**
+ * Interleaves sorted streams into one sequence by always taking the earliest
+ * next item across the streams' heads. Each stream keeps its own order, so a
+ * same-millisecond tie or a backward clock step inside one journal cannot
+ * reorder that journal (B4-34). A binary heap keeps the merge at O(n log k).
+ */
+function mergeStreams<T>(streams: readonly (readonly T[])[], precedes: (a: T, b: T) => boolean): T[] {
+  const next = streams.map(() => 0);
+  const heap: number[] = [];
+  const head = (stream: number): T => streams[stream]![next[stream]!]!;
+  const before = (i: number, j: number): boolean => precedes(head(heap[i]!), head(heap[j]!));
+  const swap = (i: number, j: number): void => {
+    const held = heap[i]!;
+    heap[i] = heap[j]!;
+    heap[j] = held;
+  };
+  const siftUp = (start: number): void => {
+    let at = start;
+    while (at > 0) {
+      const parent = (at - 1) >> 1;
+      if (!before(at, parent)) return;
+      swap(at, parent);
+      at = parent;
+    }
+  };
+  const siftDown = (start: number): void => {
+    let at = start;
+    for (;;) {
+      const left = 2 * at + 1;
+      const right = left + 1;
+      let least = at;
+      if (left < heap.length && before(left, least)) least = left;
+      if (right < heap.length && before(right, least)) least = right;
+      if (least === at) return;
+      swap(at, least);
+      at = least;
+    }
+  };
+  streams.forEach((items, stream) => {
+    if (items.length === 0) return;
+    heap.push(stream);
+    siftUp(heap.length - 1);
+  });
+  const out: T[] = [];
+  while (heap.length > 0) {
+    const stream = heap[0]!;
+    out.push(head(stream));
+    next[stream] = (next[stream] ?? 0) + 1;
+    if (next[stream]! < streams[stream]!.length) {
+      siftDown(0);
+    } else {
+      heap[0] = heap[heap.length - 1]!;
+      heap.pop();
+      if (heap.length > 0) siftDown(0);
+    }
+  }
+  return out;
+}
+
+/** The key a task's decisions and its replayed records share. */
+function taskKey(project: string, taskId: string): string {
+  return `${project}\u0000${taskId}`;
+}
+
+/**
+ * Each task's decisions as one stream, in file order (B4-33). A decision's
+ * `at` places it in the replay, so it sees the attempts that existed when it
+ * was recorded, exactly as the live projection did.
+ */
+function decisionStreams(decisions: readonly DecisionRecord[]): ReplayItem[][] {
+  const byTask = new Map<string, ReplayItem[]>();
+  for (const record of decisions) {
+    const key = taskKey(record.project, record.taskId);
+    const stream = byTask.get(key) ?? [];
+    stream.push({ kind: "decision", record });
+    byTask.set(key, stream);
+  }
+  return [...byTask.values()];
+}
+
+/**
+ * Whether the session a decision attaches to is in the candidate yet: the
+ * attempt it names, or for a task-level decision any attempt of its task. The
+ * lookup is the one `projectDecision` makes, so "present" means "will attach".
+ */
+function decisionTargetExists(db: DatabaseSync, record: DecisionRecord): boolean {
+  const row = db.prepare(
+    "SELECT 1 AS found FROM sessions WHERE project_slug = ? AND task_id = ? AND (? IS NULL OR attempt = ?) LIMIT 1",
+  ).get(
+    scrubCredentialString(record.project),
+    scrubCredentialString(record.taskId),
+    record.attempt,
+    record.attempt,
+  );
+  return row !== undefined;
+}
+
+/**
+ * Projects every held decision of one task whose session now exists, in file
+ * order, and keeps the rest held. Returns the failure message, or `null`.
+ *
+ * A decision whose session has not been replayed yet waits here, and the first
+ * record of that session releases it. This is what keeps a decision from being
+ * dropped when its `at` precedes its task's first journal record (B4-33 places
+ * it in time, and the time can be earlier than the session it belongs to). A
+ * decision whose session never appears is never projected, which is also what
+ * the live projection does when no session exists to attach it to.
+ */
+function drainHeldDecisions(db: DatabaseSync, held: Map<string, DecisionRecord[]>, key: string): string | null {
+  const queue = held.get(key);
+  if (queue === undefined) return null;
+  const waiting: DecisionRecord[] = [];
+  for (const record of queue) {
+    if (!decisionTargetExists(db, record)) {
+      waiting.push(record);
+      continue;
+    }
+    try {
+      projectDecision(db, record);
+    } catch (error) {
+      return `projection failed replaying decision ${record.id} of ${record.project}/${record.taskId}: ` +
+        `${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  if (waiting.length === 0) held.delete(key);
+  else held.set(key, waiting);
+  return null;
+}
+
 function defaultStamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
@@ -193,25 +351,49 @@ export async function discoverAttempts(stateRoot: string): Promise<string[]> {
   const found: string[] = [];
   const projects = join(stateRoot, "projects");
 
-  const entries = async (dir: string): Promise<string[]> => {
-    try {
-      return (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw err;
-    }
-  };
-
-  for (const project of await entries(projects)) {
+  for (const project of await listDirectories(projects)) {
     const tasks = join(projects, project, "tasks");
-    for (const task of await entries(tasks)) {
-      for (const attempt of await entries(join(tasks, task))) {
+    for (const task of await listDirectories(tasks)) {
+      for (const attempt of await listDirectories(join(tasks, task))) {
         const dir = join(tasks, task, attempt);
         if (await exists(join(dir, "journal.jsonl"))) found.push(dir);
       }
     }
   }
   return found.sort();
+}
+
+/**
+ * Verifies that the live database is not held open by concurrent readers or
+ * writers. Under POSIX rename, open file descriptors remain attached to the
+ * superseded inode, which would allow prior connections to invisibly keep
+ * reading or writing stale data without error (B4-15).
+ */
+/**
+ * Verifies that the live database is not held open by concurrent readers or
+ * writers. Under POSIX rename, open file descriptors remain attached to the
+ * superseded inode, which would allow prior connections to invisibly keep
+ * reading or writing stale data without error (B4-15).
+ */
+function assertNoActiveHandles(targetPath: string): void {
+  // Check within current process
+  if (existsSync("/proc/self/fd")) {
+    try {
+      const selfFds = readdirSync("/proc/self/fd");
+      for (const fd of selfFds) {
+        try {
+          const target = readlinkSync(`/proc/self/fd/${fd}`);
+          if (target === targetPath || target === `${targetPath}-wal` || target === `${targetPath}-shm`) {
+            throw new Error(`live database has active handles or locks: open in process (${target})`);
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message.startsWith("live database has active handles")) throw e;
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("live database has active handles")) throw err;
+    }
+  }
 }
 
 /**
@@ -224,18 +406,42 @@ export async function discoverAttempts(stateRoot: string): Promise<string[]> {
  * same act — a stale WAL left next to a brand-new database is how a
  * "successful" rebuild silently serves the old file's pages.
  */
-async function retainAndSwap(targetPath: string, candidatePath: string, stamp: string): Promise<string | null> {
+export async function retainAndSwap(
+  targetPath: string,
+  candidatePath: string,
+  stamp: string,
+  renameFn?: (from: string, to: string) => Promise<void>,
+): Promise<string | null> {
+  const doRename = renameFn ?? rename;
   let retainedPath: string | null = null;
+  const movedSidecars: string[] = [];
   if (await exists(targetPath)) {
+    assertNoActiveHandles(targetPath);
     retainedPath = `${targetPath}.superseded-${stamp}`;
     await link(targetPath, retainedPath);
     for (const suffix of ["-wal", "-shm"]) {
       if (await exists(`${targetPath}${suffix}`)) {
-        await rename(`${targetPath}${suffix}`, `${retainedPath}${suffix}`);
+        await doRename(`${targetPath}${suffix}`, `${retainedPath}${suffix}`);
+        movedSidecars.push(suffix);
       }
     }
   }
-  await rename(candidatePath, targetPath);
+  try {
+    await doRename(candidatePath, targetPath);
+  } catch (error) {
+    if (retainedPath !== null) {
+      for (const suffix of movedSidecars) {
+        try {
+          if (await exists(`${retainedPath}${suffix}`)) {
+            await doRename(`${retainedPath}${suffix}`, `${targetPath}${suffix}`);
+          }
+        } catch {
+          // best-effort compensation to restore WAL sidecars
+        }
+      }
+    }
+    throw error;
+  }
   return retainedPath;
 }
 
@@ -281,13 +487,15 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
   // reproduces the insertion order the live database saw, which is what
   // makes "every query view byte-identical" true and not just nearly true.
   loaded.sort((a, b) => order(a.source.session.startedAt, b.source.session.startedAt, a.source.session.sessionId, b.source.session.sessionId));
-  const merged = loaded
-    .flatMap(({ source, records: journalRecords }) =>
-      journalRecords.map((record) => ({ source, sessionId: source.session.sessionId, record })),
-    )
-    .sort((a, b) =>
-      order(a.record.recorded_at, b.record.recorded_at, `${a.sessionId}:${a.record.source_seq}`, `${b.sessionId}:${b.record.source_seq}`),
-    );
+  // Each journal keeps its own source_seq order; the merge only decides how the
+  // journals and the task-level decisions interleave, by recorded_at (B4-34, B4-33).
+  const streams: ReplayItem[][] = [
+    ...loaded.map(({ source, records: journalRecords }) =>
+      journalRecords.map((record): ReplayItem => ({ kind: "record", source, sessionId: source.session.sessionId, record })),
+    ),
+    ...decisionStreams(options.decisions ?? []),
+  ];
+  const merged = mergeStreams(streams, replayPrecedes);
 
   const db = openDatabase(
     candidatePath,
@@ -295,11 +503,24 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
   );
   let projected = 0;
   let records = 0;
+  let closed: CloseOutcome;
   try {
     for (const { source } of loaded) {
       if (source.attemptStatus === undefined) createSession(db, source.session);
     }
-    for (const { source, sessionId, record } of merged) {
+    // Decisions not yet attachable, per task, in file order (see drainHeldDecisions).
+    const held = new Map<string, DecisionRecord[]>();
+    for (const item of merged) {
+      if (item.kind === "decision") {
+        const key = taskKey(item.record.project, item.record.taskId);
+        const queue = held.get(key) ?? [];
+        queue.push(item.record);
+        held.set(key, queue);
+        const failure = drainHeldDecisions(db, held, key);
+        if (failure !== null) return refuse(failure);
+        continue;
+      }
+      const { source, sessionId, record } = item;
       records += 1;
       const outcome = source.attemptStatus === undefined
         ? (() => {
@@ -320,6 +541,11 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
         );
       }
       if (outcome.applied) projected += 1;
+      // This record may have created the session a held decision waits for.
+      if (held.size > 0) {
+        const failure = drainHeldDecisions(db, held, taskKey(source.session.projectSlug, source.session.taskId));
+        if (failure !== null) return refuse(failure);
+      }
     }
     // After every journal, so every session an attribution names already
     // exists. In file order, so the latest record for an attempt is still the
@@ -330,16 +556,6 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
       } catch (error) {
         return refuse(
           `projection failed replaying the attribution of ${record.project}/${record.taskId} attempt ${record.attempt}: ` +
-            `${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
-    for (const record of options.decisions ?? []) {
-      try {
-        projectDecision(db, record);
-      } catch (error) {
-        return refuse(
-          `projection failed replaying decision ${record.id} of ${record.project}/${record.taskId}: ` +
             `${error instanceof Error ? error.message : String(error)}`,
         );
       }
@@ -363,10 +579,25 @@ export async function rebuildDatabase(options: RebuildOptions): Promise<RebuildR
       }
     }
   } finally {
-    closeDatabase(db);
+    closed = closeDatabase(db);
+  }
+  // A checkpoint that did not finish leaves committed pages in the candidate's
+  // -wal, which the swap would silently drop (B4-37). The candidate stays on disk.
+  if (!closed.checkpointed) {
+    return refuse(
+      `the rebuilt candidate's WAL did not checkpoint into its file (${closed.detail ?? "unknown"}), ` +
+        "so swapping it in would drop committed pages",
+    );
   }
 
-  const retainedPath = await retainAndSwap(options.targetPath, candidatePath, stamp);
+  let retainedPath: string | null;
+  try {
+    retainedPath = await retainAndSwap(options.targetPath, candidatePath, stamp, options.rename);
+  } catch (error) {
+    return refuse(
+      `swap failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   return {
     ok: true,
     targetPath: options.targetPath,

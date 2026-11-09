@@ -2,6 +2,9 @@
 // stubbed in every test; no test reaches the network or reads a real key.
 
 import { test, type TestContext } from "node:test";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import {
   ContractError,
@@ -17,6 +20,7 @@ import {
 } from "../../../src/decision/jev-transport.ts";
 import { REDACTED_VALUE } from "../../../src/policy/redaction.ts";
 import { loadCatalog, CatalogSchemaError } from "../../../src/registry/catalog.ts";
+import { readJevProjectSwitch } from "../../../src/decision/jev-project.ts";
 import { jevSwitchOf } from "../../../src/registry/catalog-schema.ts";
 
 // Not a credential: a placeholder that only has to be present and nonblank.
@@ -47,7 +51,7 @@ function validBody(overrides: Record<string, unknown> = {}): Record<string, unkn
       },
       risk: {
         type: "score",
-        score: 0.97,
+        score: 1,
         legend: { "0": "low", "1": "medium", "2": "high" },
         probabilities: { "0": 0.3, "1": 0.43, "2": 0.27 },
         confidence: 0.4,
@@ -219,6 +223,11 @@ test("a score out of range or with a foreign legend is a contract error", async 
   stubFetch(t, [() => json(outOfRange)]);
   expectOutcome(await transport().ask("state", QUESTIONS), "contract-error");
 
+  const fractional = validBody();
+  (fractional.answers as Record<string, Record<string, unknown>>).risk!.score = 1.5;
+  stubFetch(t, [() => json(fractional)]);
+  expectOutcome(await transport().ask("state", QUESTIONS), "contract-error");
+
   const foreignLegend = validBody();
   (foreignLegend.answers as Record<string, Record<string, unknown>>).risk!.legend = { "0": "low", "1": "mid", "2": "high" };
   stubFetch(t, [() => json(foreignLegend)]);
@@ -234,6 +243,23 @@ test("a missing key is a typed unavailable result naming the variable, and nothi
   assert.equal(transport({ env: { [JEV_KEY_ENV]: "   " } }).available, false);
 });
 
+test("a missing project catalog keeps its schema default but credentials come only from the explicit environment", async (t) => {
+  const calls = stubFetch(t, [() => json(validBody())]);
+  const previous = process.env[JEV_KEY_ENV];
+  process.env[JEV_KEY_ENV] = KEY;
+  try {
+    const catalog = await readJevProjectSwitch(join(tmpdir(), `awsf-missing-${randomUUID()}`, "awsf.project.yaml"));
+    assert.equal(catalog.value, "on");
+    assert.equal(catalog.source, "default, no catalog");
+    const result = expectOutcome(await transport({ projectSwitch: catalog.value, env: {} }).ask("state", QUESTIONS), "unavailable");
+    assert.equal(result.reason, "missing-key");
+    assert.equal(calls.length, 0, "ambient process credentials must not authorize a request");
+  } finally {
+    if (previous === undefined) delete process.env[JEV_KEY_ENV];
+    else process.env[JEV_KEY_ENV] = previous;
+  }
+});
+
 test("the key is read once, at construction", async (t) => {
   const env: Record<string, string | undefined> = { [JEV_KEY_ENV]: KEY };
   const jev = transport({ env });
@@ -242,13 +268,16 @@ test("the key is read once, at construction", async (t) => {
   expectOutcome(await jev.ask("state", QUESTIONS), "answered");
 });
 
-test("the switch turned off is a typed refusal before validation, redaction or egress", async (t) => {
+test("the switch turned off is a typed refusal before redaction or egress, but validation runs first", async (t) => {
   const calls = stubFetch(t, [() => json(validBody())]);
   const jev = transport({ projectSwitch: "off" });
   assert.equal(jev.available, false);
   const result = expectOutcome(await jev.ask("state", QUESTIONS), "refused-by-switch");
   assert.match(result.detail, /off/);
   assert.equal(calls.length, 0);
+
+  // Invalid question sets throw QuestionValidationError even when the switch is off (B2-37)
+  await assert.rejects(jev.ask("state", {} as JevQuestions), QuestionValidationError);
 });
 
 test("the catalog carries decision.jev, defaulting to on, and rejects anything else", () => {

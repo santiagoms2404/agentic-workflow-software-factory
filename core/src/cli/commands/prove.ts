@@ -35,6 +35,7 @@ import type { AwsfConfig } from "../../config/schema.ts";
 import { SEEDED_DEFECT_CLASSES, type ProvingGroundItem, type ReplayRecord } from "../../contracts/proving-ground.ts";
 import { armKey, parseRouteArm } from "../../metrics/route-arm-score.ts";
 import { REDACTED_VALUE, scrubCredentialString } from "../../policy/redaction.ts";
+import { AttemptLock } from "../../persistence/attempt-lock.ts";
 import { callCeilingsOf } from "../../state/tiers.ts";
 import { requestedPhaseRoute } from "../../workflow/phase-routing.ts";
 import { assertReplayArmRoute, compileProve, PROVE_WORKFLOW_ID } from "../../workflow/prove/compile.ts";
@@ -174,11 +175,13 @@ export interface ProveCommandResult {
 export function assertProveReason(reason: string): string {
   const normalized = reason.trim().replace(/\s+/gu, " ");
   if (normalized.length === 0) throw new ProveReasonRequired();
-  const bounded = normalized.length <= MAX_REASON ? normalized : normalized.slice(0, MAX_REASON);
-  if (scrubCredentialString(bounded) !== bounded || bounded.includes(REDACTED_VALUE)) {
+  if (scrubCredentialString(normalized) !== normalized || normalized.includes(REDACTED_VALUE)) {
     throw new ProveCredentialRejected("owner prove reason");
   }
-  return bounded;
+  if (normalized.length <= MAX_REASON) return normalized;
+  const last = normalized.charCodeAt(MAX_REASON - 1);
+  const end = last >= 0xd800 && last <= 0xdbff ? MAX_REASON - 1 : MAX_REASON;
+  return normalized.slice(0, end);
 }
 
 function assertPlace(flag: "--rep" | "--order", value: number): void {
@@ -331,27 +334,31 @@ export async function proveCommand(options: ProveCommandOptions): Promise<ProveC
   const confirmed = await options.terminal.confirm(`Create replay ${taskId}: ${item.id} on ${arm}, repetition ${String(repetition)}, place ${String(placed.order)}?`);
   if (!confirmed) return { confirmed: false, status: null, replay: null, commands: null };
 
-  // Close the display-to-write race: another terminal may have recorded this
-  // triple, or taken this place, since the owner read it.
-  placeReplay(await recordedReplays(options.stateRoot, project), item.id, arm, repetition, placed.order, draw);
-  const created = await newCommand({
-    stateRoot: options.stateRoot,
-    project,
-    taskId,
-    repository: options.repository,
-    // The item's own words, or `bind.ts` refuses the replay at start.
-    request: item.request,
-    workflow: PROVE_WORKFLOW_ID,
-    tier: recipe.tier,
-    replay,
-    configSnapshotJson: toConfigSnapshotJson(options.config),
-    routeOverrides,
-    callCeilings: callCeilingsOf(options.config.risk.call_ceiling),
-    allowance: options.config.risk.correction_allowance,
-    lastActivity: `owner created this proving-ground replay: ${reason}`,
-    ...(options.projectRecord === undefined ? {} : { projectRecord: options.projectRecord }),
-    ...(options.now === undefined ? {} : { now: options.now }),
-    ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+  // The re-check and task creation share one project lock: two owner terminals
+  // cannot both observe a free triple (or order place) and append it.
+  const created = await new AttemptLock(join(options.stateRoot, "projects", project, "prove-create.lock")).withLock(async () => {
+    const latest = await latestAttemptNumber(taskRoot(options.stateRoot, project, taskId));
+    if (latest !== null) throw new Error(`${project}/${taskId} already has attempt ${String(latest)}; a replay is a new task`);
+    placeReplay(await recordedReplays(options.stateRoot, project), item.id, arm, repetition, placed.order, draw);
+    return newCommand({
+      stateRoot: options.stateRoot,
+      project,
+      taskId,
+      repository: options.repository,
+      // The item's own words, or `bind.ts` refuses the replay at start.
+      request: item.request,
+      workflow: PROVE_WORKFLOW_ID,
+      tier: recipe.tier,
+      replay,
+      configSnapshotJson: toConfigSnapshotJson(options.config),
+      routeOverrides,
+      callCeilings: callCeilingsOf(options.config.risk.call_ceiling),
+      allowance: options.config.risk.correction_allowance,
+      lastActivity: `owner created this proving-ground replay: ${reason}`,
+      ...(options.projectRecord === undefined ? {} : { projectRecord: options.projectRecord }),
+      ...(options.now === undefined ? {} : { now: options.now }),
+      ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+    });
   });
   const { commands, lines } = renderProveActions(nextSteps({ ...created.status, state: created.status.lifecycleState }));
   options.terminal.write(`Created ${project}/${taskId} attempt ${String(created.status.attempt)} in DRAFT. Nothing has started.`);

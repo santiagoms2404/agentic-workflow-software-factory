@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { SessionCard as Session, SessionPlan } from "../../shared/types.ts";
+import { formatCost } from "../display.ts";
 import {
   selectAllState,
   toggleAllFilterValues,
@@ -30,7 +31,7 @@ const cards = computed(() => sessionPlanCards(props.sessions, props.plans));
  * happened to have a number into a confident wrong one.
  */
 function costLabel(cost: PlanRunCost): string {
-  return cost.usd === null || cost.partial ? "unknown" : `$${cost.usd.toFixed(2)}`;
+  return cost.usd === null || cost.partial ? "unknown" : formatCost(cost.authority, cost.usd);
 }
 </script>
 

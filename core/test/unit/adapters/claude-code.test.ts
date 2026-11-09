@@ -819,6 +819,17 @@ test("`resets at <timestamp>` yields a timestamp, not the word `at` glued to one
   assert.ok(Number.isFinite(Date.parse(resetAt)), "a resetAt nothing can parse is not a reset time");
 });
 
+test("a reset phrase that is not an instant stays unknown", async () => {
+  const events = await replayText(
+    `${INIT_LINE}\n${JSON.stringify({
+      type: "result",
+      is_error: true,
+      error: "Claude AI usage limit reached. resets 5pm (Europe/Madrid)",
+    })}\n`,
+  );
+  assert.equal(only(events, "quota")[0]?.resetAt, null);
+});
+
 test("a millisecond epoch is refused rather than multiplied into the year 58570", async () => {
   // An unreported reset is a gap; a confident nonsense one is a lie.
   const events = await replayText(
@@ -923,6 +934,37 @@ test("a run cancelled after a message_delta reports the tokens it already spent"
   assert.equal(usage[0]?.usage.reasoningTokens, 3);
   assert.equal(events[events.length - 1]?.kind, "run.cancelled");
   assert.deepEqual(validateEventSequence(events), []);
+});
+
+test("a decoded terminal flushes accumulated usage when it carries no usage block", async () => {
+  const delta = JSON.stringify({
+    type: "stream_event",
+    event: {
+      type: "message_delta",
+      usage: { input_tokens: 7, output_tokens: 11, output_tokens_details: { thinking_tokens: 3 } },
+    },
+  });
+  for (const terminalLine of [
+    JSON.stringify({ type: "result", is_error: false }),
+    JSON.stringify({ type: "result", is_error: true, error: "provider failure" }),
+    JSON.stringify({
+      type: "rate_limit_event",
+      rate_limit_info: { status: "blocked", resetsAt: 1786147200, rateLimitType: "five_hour" },
+    }),
+  ]) {
+    const events = await replayText(`${INIT_LINE}\n${delta}\n${terminalLine}\n`);
+    const usage = only(events, "usage");
+    assert.equal(usage.length, 1);
+    assert.deepEqual(usage[0]?.usage, {
+      inputTokens: 7,
+      outputTokens: 11,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+      reasoningTokens: 3,
+      reasoningRelation: "unknown",
+    });
+    assert.ok(events.findIndex((event) => event.kind === "usage") < events.length - 1);
+  }
 });
 
 test("a run that reached its own terminal never flushes a second usage event", async () => {
@@ -1030,7 +1072,7 @@ test("the terminal survives a stream that breaks AFTER the provider settled", as
   } as unknown as ProcessTransport;
 
   const events: NormalizedEvent[] = [];
-  for await (const event of adapter().parse(transport)) events.push(event);
+  for await (const event of adapter().parse(transport, undefined, { requestedModel: "sonnet" })) events.push(event);
   assert.equal(events[events.length - 1]?.kind, "run.completed");
   assert.deepEqual(validateEventSequence(events), []);
 });

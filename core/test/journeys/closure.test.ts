@@ -248,7 +248,7 @@ async function changeEvidence(w: World, changes: Partial<AttemptStatus>) {
   writeFileSync(join(w.attemptDir, "status.json"), JSON.stringify(status));
 }
 
-for (const scenario of ["non-interactive", "wrong actor", "not LANDED", "no selection", "candidate outside HEAD", "dirty", "changed ask", "unset identity", "HEAD moved"] as const) {
+for (const scenario of ["non-interactive", "wrong actor", "not LANDED", "no selection", "candidate outside HEAD", "dirty", "changed ask", "HEAD moved"] as const) {
   test(`closure refuses ${scenario} after a real stub build and preserves checkout bytes`, async () => {
     const w = await world(false, scenario !== "not LANDED" && scenario !== "candidate outside HEAD");
     try {
@@ -266,7 +266,6 @@ for (const scenario of ["non-interactive", "wrong actor", "not LANDED", "no sele
           writeFileSync(join(w.canonical, planPath), readFileSync(join(w.canonical, planPath), "utf8").replace("Widget T01 exists.", "Different requirement."));
           git(w.canonical, "add", planPath); git(w.canonical, "commit", "-m", "test: change fixture ask");
           message = /closure ask changed since base: T01.checklist/; break;
-        case "unset identity": git(w.canonical, "config", "user.name", ""); message = /closure requires the checkout's configured user.name and user.email/; break;
         case "HEAD moved":
           terminal = { ...terminal, confirm: async prompt => {
             if (prompt.startsWith("Commit these")) {

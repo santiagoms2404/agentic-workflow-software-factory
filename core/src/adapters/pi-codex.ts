@@ -46,6 +46,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   AdapterError,
+  assertSameProviderSession,
   type Availability,
   type ContinuityCapableAdapter,
   type ContinuityEvidence,
@@ -73,7 +74,12 @@ import { OutputBudget, type OutputBudgetOptions } from "./stream/output-budget.t
 import {
   DEFAULT_EXIT_WAIT_MS,
   awaitExit,
+  awaitStderr,
+  cancellationReason,
+  describeError,
+  describeExit,
   drainStderr,
+  isCancellation,
   stderrSuffix,
 } from "./stream/transport-loop.ts";
 
@@ -351,6 +357,10 @@ function readPiSessionFile(path: string, expectedId: string): PiSessionFileFacts
       // be stricter about the file than the tool that writes it.
       continue;
     }
+    // A line that parses to a non-object (`null`, a bare number or string) is
+    // malformed for this purpose too. Reading a property off it throws, and the
+    // throw escapes a function whose contract is a named refusal (B11-17, B11-18).
+    if (entry === null || typeof entry !== "object") continue;
     if (header === null) {
       if (entry.type !== "session" || typeof entry.id !== "string") return null;
       if (entry.id !== expectedId) return null;
@@ -379,22 +389,7 @@ function readPiSessionFile(path: string, expectedId: string): PiSessionFileFacts
  * promised, which is `E_BACKEND_FAILURE`.
  */
 export function assertSameSession(first: PiSessionRecord, next: PiSessionRecord): void {
-  if (first.resolvedModel !== next.resolvedModel) {
-    throw new AdapterError(
-      PI_ADAPTER_ID,
-      "E_MODEL_MISMATCH",
-      `the correction answered on ${JSON.stringify(next.resolvedModel)} but the phase ` +
-        `began on ${JSON.stringify(first.resolvedModel)}; a phase answers on one model`,
-    );
-  }
-  if (first.sessionId === null || next.sessionId === null || first.sessionId !== next.sessionId) {
-    throw new AdapterError(
-      PI_ADAPTER_ID,
-      "E_BACKEND_FAILURE",
-      `the correction ran in provider session ${JSON.stringify(next.sessionId)} rather than ` +
-        `${JSON.stringify(first.sessionId)}; a correction re-enters the session it corrects`,
-    );
-  }
+  assertSameProviderSession(PI_ADAPTER_ID, first, next);
 }
 
 export interface PiParseOptions {
@@ -743,6 +738,16 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
     signal?: AbortSignal,
     options: PiParseOptions = {},
   ): AsyncIterable<NormalizedEvent> {
+    // Refused before a byte is read, for the same reason the sibling route refuses it:
+    // a stream with no request to check its identity against is not read, and
+    // the placeholder is never journaled as the model asked for (B11-12).
+    if (options.requestedModel === undefined) {
+      throw new AdapterError(
+        this.id,
+        "E_INVALID_REQUEST",
+        "parse was given no requested model; a stream is read against the model the host asked for",
+      );
+    }
     const framer = new LineFramer();
     const sequencer = new EventSequencer({
       runId: transport.runId,
@@ -752,7 +757,7 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
     const decoder = new PiStreamDecoder({
       adapter: this.id,
       provider: PI_PROVIDER,
-      requestedModel: options.requestedModel ?? "unknown-model",
+      requestedModel: options.requestedModel,
       now: this.#now,
       ...(options.session === undefined ? {} : { session: options.session }),
       ...(options.images === undefined ? {} : { images: options.images }),
@@ -785,7 +790,8 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
     } catch (error) {
       // The stream itself failed. A run whose bytes stopped arriving still owes
       // exactly one terminal, and a settlement for every tool call it left open.
-      await stderr.done;
+      // Bounded: a descendant holding the stderr pipe must not hang it.
+      await awaitStderr(stderr, this.#exitWaitMs);
       // The run may ALREADY have settled — the provider printed its terminal
       // and the pipe broke on the way out. Holding the terminal to measure the
       // exit code made that case lose it entirely: the sequencer is terminal,
@@ -801,12 +807,15 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
         ? sequencer.cancel(cancellationReason(signal, error))
         : sequencer.fail(
             "E_BACKEND_FAILURE",
-            `the provider's output stream failed: ${describe(error)}${stderrSuffix(stderr)}`,
+            `the provider's output stream failed: ${describeError(error)}${stderrSuffix(stderr)}`,
           );
       return;
     }
 
-    await stderr.done;
+    // Bounded like the exit wait. Stderr closes only when every holder closes
+    // it, and a descendant that inherited the pipe can outlive the provider; an
+    // unbounded wait here withheld a terminal the provider had already written.
+    await awaitStderr(stderr, this.#exitWaitMs);
     if (held !== null) {
       yield* this.#settleHeld(transport, held);
       return;
@@ -824,33 +833,11 @@ export class PiCodexAdapter implements ContinuityCapableAdapter {
       yield* sequencer.cancel(cancellationReason(signal, null));
       return;
     }
+    const exit = await awaitExit(transport, this.#exitWaitMs);
     yield* sequencer.fail(
       "E_TERMINAL_MISSING",
-      `the provider's stream ended without a terminal event${stderrSuffix(stderr)}`,
+      `the provider's stream ended without a terminal event; ${describeExit(exit, this.#exitWaitMs)}` +
+        stderrSuffix(stderr),
     );
   }
-}
-
-/** What the run was cancelled for: the caller's own reason wherever there is one. */
-function cancellationReason(signal: AbortSignal | undefined, error: unknown): string {
-  const reason = signal?.aborted === true ? describe(signal.reason) : describe(error);
-  return `the provider's output stream was cancelled: ${reason}`;
-}
-
-/**
- * Whether a stream failure was a cancellation rather than a fault.
- *
- * Anything unrecognized is a failure: calling an unknown fault a cancellation
- * would let a real defect arrive as an intentional stop.
- */
-function isCancellation(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const code = (error as { code?: unknown }).code;
-  return (
-    error.name === "AbortError" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE"
-  );
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

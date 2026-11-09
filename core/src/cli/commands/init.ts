@@ -23,6 +23,7 @@ export class InitTargetNotEmptyError extends Error {
 
 /** Creates a repository containing only its minimal configuration and baseline commit. */
 export async function initCommand(options: InitCommandOptions): Promise<InitCommandResult> {
+  const minimalConfig = buildMinimalConfig(options.slug);
   const path = resolve(options.path);
   let exists = true;
 
@@ -37,9 +38,20 @@ export async function initCommand(options: InitCommandOptions): Promise<InitComm
 
   if (!exists) await mkdir(path, { recursive: true });
 
+  const protectedPaths = minimalConfig.policy.protected_paths.includes("awsf.project.yaml")
+    ? minimalConfig.policy.protected_paths
+    : [...minimalConfig.policy.protected_paths, "awsf.project.yaml"];
+  const config = {
+    ...minimalConfig,
+    policy: {
+      ...minimalConfig.policy,
+      protected_paths: protectedPaths,
+    },
+  };
+
   const runner = systemGitRunner(path);
   runGit(runner, ["init"]);
-  await writeFile(join(path, "awsf.config.yaml"), toYaml(buildMinimalConfig(options.slug)), "utf8");
+  await writeFile(join(path, "awsf.config.yaml"), toYaml(config), "utf8");
   const commitSha = commitAsHost({ repository: path, message: "chore: awsf init baseline" });
   const line = `Initialized ${path} at ${commitSha}.`;
   const output: InitOutput = {

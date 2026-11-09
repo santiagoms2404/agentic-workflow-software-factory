@@ -28,6 +28,7 @@ import { decide, type DecideContext } from "../../../src/decision/decide.ts";
 import {
   ContractError,
   JEV_DEFAULT_MODEL,
+  JevTransport,
   QuestionValidationError,
   type JevOutcome,
   type JevQuestions,
@@ -72,6 +73,7 @@ function answered(overrides: Partial<Extract<JevOutcome, { outcome: "answered" }
 interface Stub {
   readonly ask: (state: JevState, questions: JevQuestions) => Promise<JevOutcome>;
   readonly calls: Array<{ state: JevState; questions: JevQuestions }>;
+  readonly model?: string;
 }
 
 function stub(outcome: JevOutcome | (() => never)): Stub {
@@ -93,7 +95,7 @@ function sandbox(label: string): { root: string; stateRoot: string; close: () =>
 let ids = 0;
 function context(
   box: { stateRoot: string },
-  transport: Stub,
+  transport: Stub | Pick<JevTransport, "ask">,
   overrides: Partial<DecideContext<StopJudgmentParams>> = {},
 ): DecideContext<StopJudgmentParams> {
   const taskId = overrides.taskId ?? "decide-task";
@@ -181,6 +183,33 @@ test("unavailable, refused and contract-error calls return their outcome with no
     const records = await readTaskDecisions(taskRoot(box.stateRoot, PROJECT, "decide-task"));
     assert.deepEqual(records.map((record) => record.outcome), ["unavailable", "refused-by-switch", "refused-by-switch", "contract-error"]);
   } finally { box.close(); }
+});
+
+test("refused-by-switch preserves the transport's configured model (B2-26)", async () => {
+  const box = sandbox("refused-transport-model");
+  try {
+    const transportWithModel: Stub = {
+      ...stub({
+        outcome: "refused-by-switch",
+        detail: "Jev is switched off for this project (decision.jev: off).",
+      }),
+      model: "custom-configured-model-v1",
+    };
+    const decision = await decide(STOP_JUDGMENT, { stop: "ceiling" }, context(box, transportWithModel));
+    assert.equal(decision.outcome, "refused-by-switch");
+    assert.equal(decision.record.requestedModel, "custom-configured-model-v1");
+
+    const jevTransport = new JevTransport({
+      projectSwitch: "off",
+      env: {},
+      model: "jev-model-configured-in-transport",
+    });
+    const decision2 = await decide(STOP_JUDGMENT, { stop: "ceiling" }, context(box, jevTransport, { taskId: "task-jev" }));
+    assert.equal(decision2.outcome, "refused-by-switch");
+    assert.equal(decision2.record.requestedModel, "jev-model-configured-in-transport");
+  } finally {
+    box.close();
+  }
 });
 
 test("a request that could never be valid throws before anything is journaled (T01 C2)", async () => {

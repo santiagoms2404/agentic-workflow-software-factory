@@ -28,7 +28,13 @@ export function toAttemptStatusProjection(
     attempt: status.attempt,
     workflowId: status.workflow,
     riskTier: status.tier,
-    isProtected: false,
+    isProtected: Boolean(
+      event?.evidence?.type === "protected-grant" ||
+      event?.evidence?.type === "protected-activation" ||
+      event?.evidence?.type === "protected-candidate" ||
+      event?.evidence?.type === "protected-landing" ||
+      (status as { isProtected?: boolean }).isProtected === true,
+    ),
     requestText: status.request,
     // The attempt's own effective ceiling — its configured tier ceiling plus
     // whatever `awsf raise` granted it — never a re-read of live config.

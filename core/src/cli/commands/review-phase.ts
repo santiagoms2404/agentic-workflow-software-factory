@@ -35,8 +35,8 @@
 // defect statement, the owner's rejection reason, or a superseded verdict. A
 // reviewer told what to find is not a reviewer.
 
-import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, promises as fs } from "node:fs";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import type {
   BrokerProcessRegistration,
   HarnessAdapter,
@@ -47,7 +47,7 @@ import type {
   TransportBroker,
 } from "../../adapters/interface.ts";
 import { AdapterError } from "../../adapters/interface.ts";
-import { assertPrivateSystemPrompt } from "../../adapters/system-prompt-file.ts";
+import { assertPrivateSystemPrompt, assertSystemPromptSlot } from "../../adapters/system-prompt-file.ts";
 import type { AdapterEntry, AgentDefinition, AwsfConfig } from "../../config/schema.ts";
 import { BUILD_OUTPUT_SCHEMA_ID } from "../../contracts/build-output.ts";
 import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
@@ -72,10 +72,10 @@ import { ContinuityStore } from "../../execution/continuity-store.ts";
 import { buildPhaseRequest, openRetainedColdTurn, phasePersistenceEvidence, redactPhaseProcess } from "../../execution/phase-request.ts";
 import type { BarrierRecord } from "../../execution/launcher-barrier.ts";
 import type { BrokerOptions } from "../../execution/transport-broker.ts";
-import { artifactsExist, jsonParses, type ArtifactObservation } from "../../gates/artifacts.ts";
+import { artifactsExist, jsonParses } from "../../gates/artifacts.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
-import { GateReport, type GateId } from "../../gates/interface.ts";
+import { GateReport, gateKindFor } from "../../gates/interface.ts";
 import { reviewEnvelopeComplete, reviewEvidencePresent, verdictConsistent } from "../../gates/review.ts";
 import { captureChangeSet, changedPaths } from "../../git/changes.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
@@ -108,7 +108,7 @@ import {
   runMandatoryReview,
 } from "../../workflow/review-routing.ts";
 import type { AttemptEvent, AttemptStatus } from "./attempt.ts";
-import { ProductionRouteUnavailable, ProductionWorkflowUnsupported, isReviewTransportFailure, observedExitCode } from "./production-run.ts";
+import { ProductionRouteUnavailable, ProductionWorkflowUnsupported, artifactReader, cancelOrRecord, isReviewTransportFailure, observedExitCode } from "./production-run.ts";
 import {
   assertPromptCompositionCurrent,
   type RecordedRoute,
@@ -119,7 +119,12 @@ const { chmod, mkdir, readFile, realpath, writeFile } = fs;
 const HOST = globalThis as unknown as {
   process: { env: Readonly<Record<string, string>> };
   AbortController: new () => { signal: Parameters<TransportBroker["startProcess"]>[2]; abort(reason?: unknown): void };
+  setTimeout(callback: () => void, milliseconds: number): unknown;
+  clearTimeout(timer: unknown): void;
 };
+
+/** The abort and cancel reason the builder's silence timer gives, reused for the reviewer's. */
+const SILENCE_ELAPSED = "configured silence timeout elapsed";
 
 /** Marks the appended block so a compiled prompt says which turn it was. */
 export const CONTRACT_RETRY_HEADING = "ENVELOPE CONTRACT CORRECTION";
@@ -185,6 +190,19 @@ export class ReplacementReviewInconsistent extends Error {
 }
 
 /**
+ * Host-deterministic: the reviewer emitted nothing for the configured silence
+ * window, and the host aborted it and cancelled its process tree (H17: B8-01).
+ * Not a transport fault, so it earns no retry: a second silent turn would buy
+ * another call and another full window for the same nothing.
+ */
+export class ReviewProviderSilent extends Error {
+  constructor(detail: string) {
+    super(`the reviewer went silent: ${detail}`);
+    this.name = "ReviewProviderSilent";
+  }
+}
+
+/**
  * Every review failure the host can classify without interpreting a verdict,
  * and which host-observed code L17 records after the process exits.
  *
@@ -202,6 +220,7 @@ export function reviewFailureBlocker(
   if (failure instanceof ReviewEvidenceUnfit) return { code: "review-evidence-invalid", detail, edge: "L17" };
   if (failure instanceof PermissionBreach) return { code: "permission-breach", detail, edge: "L17" };
   if (failure instanceof ReplacementReviewInconsistent) return { code: "review-inconsistent", detail, edge: "L17" };
+  if (failure instanceof ReviewProviderSilent) return { code: "silence", detail, edge: "L17" };
   if (failure instanceof AdapterError && failure.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail, edge: "L17" };
   return null;
 }
@@ -272,28 +291,23 @@ function contextTokens(usage: TokenUsage): number | null {
   return usage.inputTokens === null && usage.outputTokens === null ? null : (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
 }
 
-function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
-  if (gateId === "commands_pass") return "subprocess";
-  if (["head_advanced", "diff_matches_claims", "candidate_hygiene"].includes(gateId)) return "git";
-  if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
-  return gateId === "journey_passes" ? "journey" : "pure";
-}
-
-function artifactReader(worktree: string): (path: string) => ArtifactObservation {
-  return (path) => {
-    const root = resolve(worktree);
-    const candidate = resolve(root, path);
-    const fromRoot = relative(root, candidate);
-    if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) return { exists: false, size: 0 };
-    try {
-      const observed = statSync(candidate);
-      if (!observed.isFile()) return { exists: false, size: 0 };
-      const content = path.toLowerCase().endsWith(".json") ? readFileSync(candidate, "utf8") : undefined;
-      return { exists: true, size: observed.size, ...(content === undefined ? {} : { content }) };
-    } catch {
-      return { exists: false, size: 0 };
+/** Retain one complete text event per turn while preserving non-text evidence order. */
+export function coalescedPersistableEvents(
+  events: readonly NormalizedEvent[],
+  output: string,
+): NormalizedEvent[] {
+  const lastTextDelta = events.findLastIndex((event) => event.kind === "text.delta");
+  const retained: NormalizedEvent[] = [];
+  for (const [index, event] of events.entries()) {
+    if (!isPersistableKind(event.kind)) continue;
+    if (event.kind === "text.delta") {
+      if (index !== lastTextDelta) continue;
+      retained.push({ ...event, text: output });
+    } else {
+      retained.push(event);
     }
-  };
+  }
+  return retained;
 }
 
 /** Replacement-review seam retained for the three-path prompt-bundle characterization. */
@@ -754,6 +768,10 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
 
   const runtimeDir = join(subject.attemptDir, "private", phaseKey);
   await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
+  // B11-02: containment is checked BEFORE the write. The runtime is writable
+  // from inside the sandbox, and the realpath check below runs only after the
+  // bytes have landed wherever a planted link pointed.
+  await assertSystemPromptSlot(route.adapter.id, runtimeDir);
   const systemPromptPath = await infra.writeSystemPrompt(route.systemPrompt, runtimeDir);
   await validateMaterializedSystemPrompt(route.adapter.id, runtimeDir, systemPromptPath, route.systemPrompt);
   const openPermission = (): PermissionSession => openPermissionSession({
@@ -765,6 +783,8 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
     tools: route.agent.tools.allow,
     writes: route.agent.writes,
     protectedPaths: config.policy.protected_paths,
+    // B10-02: seeded, Git-ignored inputs stay immutable to the reviewer.
+    seedPaths: config.runtime.seed_paths,
     readOnlyRoots: [deliveryContext.diffDelivery!.directory],
     providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [],
     ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
@@ -781,6 +801,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
    * preserved rather than widened.
    */
   const continuity = new ContinuityStore({ path: join(runtimeDir, "continuity.json") });
+  await continuity.load();
   let nextColdTurn = 0;
   type ReviewTurnPreflight = { request: ModelRequest; grant: SandboxGrant; spec: ProcessSpec; continuityHandle: string | null; context: ReviewContext };
   const preflightFor = async (prompt: string): Promise<ReviewTurnPreflight> => {
@@ -852,7 +873,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
       const at = infra.now();
       await persist("attempt.updated", {}, {
         type: "gate", id: `${phaseDb}:${String(round)}:${report.gateId}`, phaseId: phaseDb, round,
-        gateId: report.gateId, kind: gateKind(report.gateId), candidateSha: subject.candidateSha,
+        gateId: report.gateId, kind: gateKindFor(report.gateId), candidateSha: subject.candidateSha,
         passed: report.passed, exitCode: null, checks: report.checks,
         violations: report.checks.filter((check) => !check.ok).map((check) => `${check.item}: ${check.note}`),
         outputPath: null, startedAt: at, endedAt: at,
@@ -897,6 +918,7 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
 
     const broker = infra.createBroker({
       ledger: budget,
+      terminate: { graceMs: options.config.runtime.process_grace_seconds * 1_000 },
       register: async (record) => {
         state.processRecord = redactPhaseProcess(record, continuity);
         state.processSettled = false;
@@ -981,22 +1003,74 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         reservationId: held.id, adapterId: route.adapterId, role: route.agent.name,
       };
       const controller = new HOST.AbortController();
+      // The builder's silence bound from production-run.ts, which the reviewer
+      // loop lacked (H17: B8-01). A reviewer that stays alive and writes nothing
+      // never resumes the for-await, so `awsf review`, `awsf adopt` and the T2
+      // rework review all sat in REVIEWING with the process record open. The
+      // adapter reads the signal only once stdout ends, so the abort alone does
+      // not end the stream; the cancel does. The timer cannot await that cancel,
+      // so it is held here, and a failed cancel names itself in the reason.
+      // The turn then fails as `ReviewProviderSilent`, which L17 admits as
+      // `silence` in every caller's recovery.
+      const silence: { elapsed: boolean; cancelled: Promise<void>; failure: Error | null } = {
+        elapsed: false, cancelled: Promise.resolve(), failure: null,
+      };
+      const silenceFailure = (): ReviewProviderSilent => new ReviewProviderSilent(silence.failure?.message ??
+        `${SILENCE_ELAPSED}: no provider event for ${String(config.runtime.silence_timeout_seconds)} s`);
+      let idle: unknown | null = null;
+      const arm = (): void => {
+        if (idle !== null) HOST.clearTimeout(idle);
+        idle = HOST.setTimeout(() => {
+          silence.elapsed = true;
+          controller.abort(new Error(SILENCE_ELAPSED));
+          silence.cancelled = cancelOrRecord(turnTransport ?? undefined, SILENCE_ELAPSED, (failure) => { silence.failure = failure; });
+        }, config.runtime.silence_timeout_seconds * 1_000);
+        (idle as { unref?: () => void }).unref?.();
+      };
       const events: NormalizedEvent[] = [];
       let output = "";
       let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;
       let terminal: NormalizedEvent | null = null;
       state.observed = null;
-      for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
-        routeEventExact(event, route);
-        events.push(event);
-        if (event.kind === "text.delta") output += event.text;
-        if (event.kind === "model.resolved") resolved = { model: event.resolvedModel, provenance: event.provenance };
-        const outcome = observedProcessOutcome(event, event.hostAt);
-        if (outcome !== null) {
-          terminal = event;
-          state.observed = outcome;
+      arm();
+      try {
+        for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
+          arm();
+          routeEventExact(event, route);
+          events.push(event);
+          if (event.kind === "text.delta") output += event.text;
+          if (event.kind === "model.resolved") resolved = { model: event.resolvedModel, provenance: event.provenance };
+          const outcome = observedProcessOutcome(event, event.hostAt);
+          if (outcome !== null) {
+            terminal = event;
+            state.observed = outcome;
+          }
         }
+      } catch (error) {
+        await silence.cancelled;
+        const exitObserved = state.observed !== null && state.observed.settled && state.observed.status === "EXITED";
+        const unobservedTransport = turnTransport as ProcessTransport | null;
+        if (unobservedTransport !== null && !exitObserved) {
+          try { await unobservedTransport.cancel("reviewer terminal unobserved"); }
+          catch { /* ignore */ }
+        }
+        if (state.processRecord !== null && !state.processSettled) {
+          const endedAt = infra.now();
+          const outcome: ObservedProcessOutcome = { status: "CANCELLED", exitCode: null, endedAt, settled: true };
+          state.observed = outcome;
+          await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, {
+            type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
+            record: state.processRecord, status: outcome.status,
+            registeredAt: state.releasedAt ?? endedAt, releasedAt: state.releasedAt, endedAt,
+            exitCode: null, exitSignal: null,
+          });
+          state.processSettled = true;
+        }
+        throw silence.elapsed ? silenceFailure() : error;
+      } finally {
+        if (idle !== null) HOST.clearTimeout(idle);
       }
+      await silence.cancelled;
       const endedAt = infra.now();
       if (state.observed !== null) {
         const exitCode = terminal?.kind === "run.failed" ? await observedExitCode(turnTransport) : state.observed.exitCode;
@@ -1005,14 +1079,22 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
       // The reviewer's own words are not swept, for the reason the prompt is
       // not: it is reading the candidate and quoting it back, and the runner
       // retains the identical output from the identical phase unswept.
-      for (const event of events) {
-        if (!isPersistableKind(event.kind)) continue;
+      for (const event of coalescedPersistableEvents(events, output)) {
         await persist("attempt.updated", { lastActivityAt: event.hostAt, lastActivity: `${phaseKey}: ${event.kind}` }, {
           type: "normalized-event", phaseId: phaseDb, event,
         });
       }
       if (state.processRecord !== null) {
-        const outcome = state.observed ?? { status: "FAILED" as const, exitCode: null, endedAt, settled: false };
+        const exitObserved = state.observed !== null && state.observed.settled && state.observed.status === "EXITED";
+        const unobservedTransport = turnTransport as ProcessTransport | null;
+        if (unobservedTransport !== null && !exitObserved) {
+          try { await unobservedTransport.cancel("reviewer terminal unobserved"); }
+          catch { /* ignore */ }
+        }
+        const outcome = exitObserved
+          ? state.observed!
+          : { status: "CANCELLED" as const, exitCode: state.observed?.exitCode ?? null, endedAt, settled: true };
+        state.observed = outcome;
         await persist("attempt.updated", { process: null, lastActivityAt: outcome.endedAt }, {
           type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
           record: state.processRecord, status: outcome.status,
@@ -1021,6 +1103,10 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         });
         state.processSettled = true;
       }
+      // What the reviewer said before going quiet is recorded above; the turn
+      // still fails as silence, never as the missing terminal (a transport
+      // retry) that follows from it.
+      if (silence.elapsed) throw silenceFailure();
       if (terminal?.kind === "run.failed") throw new AdapterError(route.adapter.id, terminal.errorCode, terminal.message);
       if (terminal?.kind === "run.cancelled") throw new AdapterError(route.adapter.id, "E_CANCELLED", terminal.reason);
       if (terminal?.kind !== "run.completed") throw new AdapterError(route.adapter.id, "E_TERMINAL_MISSING", "adapter event stream ended without a terminal");
@@ -1151,6 +1237,27 @@ export async function prepareReview(options: PrepareReviewOptions): Promise<Prep
         }
         const held = attempt === 1 ? runOptions.reservation : budget.reserve({ cost: 1, subject: runOptions.retrySubject });
         if (attempt !== 1) {
+          const exitObserved = state.observed !== null && state.observed.settled && state.observed.status === "EXITED";
+          if (state.activeTransport !== null && !exitObserved) {
+            try { await state.activeTransport.cancel("reviewer attempt 1 cancelled before attempt 2"); }
+            catch { /* ignore */ }
+          }
+          if (state.processRecord !== null && !state.processSettled) {
+            const endedAt = infra.now();
+            const outcome: ObservedProcessOutcome = { status: "CANCELLED", exitCode: null, endedAt, settled: true };
+            state.observed = outcome;
+            await persist("attempt.updated", { process: null, lastActivityAt: endedAt }, {
+              type: "process", phaseId: phaseDb, adapterId: route.adapterId, role: route.agent.name,
+              record: state.processRecord, status: outcome.status,
+              registeredAt: state.releasedAt ?? endedAt, releasedAt: state.releasedAt, endedAt,
+              exitCode: null, exitSignal: null,
+            });
+            state.processSettled = true;
+          }
+          state.activeTransport = null;
+          state.processRecord = null;
+          state.processSettled = false;
+          state.observed = null;
           await persist("attempt.updated", {
             budget: budget.snapshot(), lastActivityAt: infra.now(),
             lastActivity: state.contractRetries > 0

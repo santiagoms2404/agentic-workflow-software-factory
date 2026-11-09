@@ -77,6 +77,10 @@ function replayFamilies(graph: CanvasGraph): ReplayFamily[] {
     })).sort((left, right) => left.pair.localeCompare(right.pair));
 }
 
+function replayNodeIds(families: readonly ReplayFamily[]): Set<string> {
+  return new Set(families.flatMap((family) => [...(family.hub === null ? [] : [family.hub]), family.pair, ...family.runs]));
+}
+
 function familyRadius(count: number): number {
   return Math.max(90, count * MIN_SEPARATION / (2 * Math.PI));
 }
@@ -85,7 +89,7 @@ function familyRadius(count: number): number {
 export function initialPositions(graph: CanvasGraph): ReadonlyMap<string, Point> {
   const positions = new Map<string, Point>();
   const families = replayFamilies(graph);
-  const replayIds = new Set(families.flatMap((family) => [...(family.hub === null ? [] : [family.hub]), family.pair, ...family.runs]));
+  const replayIds = replayNodeIds(families);
   const ordinary = graph.nodes.filter((node) => !replayIds.has(node.id));
   ordinary.forEach((node, index) => {
     const radius = 34 * Math.sqrt(index + 1);
@@ -165,9 +169,19 @@ interface Body {
  */
 export function stepSimulation(graph: CanvasGraph, bodies: Map<string, Body>): void {
   const families = replayFamilies(graph);
-  const replayIds = new Set(families.flatMap((family) => [...(family.hub === null ? [] : [family.hub]), family.pair, ...family.runs]));
-  stepReplayFamilies(families, bodies);
+  const replayIds = replayNodeIds(families);
   const ids = graph.nodes.map((node) => node.id).filter((id) => !replayIds.has(id));
+  stepSimulationPrepared(graph, bodies, families, replayIds, ids);
+}
+
+function stepSimulationPrepared(
+  graph: CanvasGraph,
+  bodies: Map<string, Body>,
+  families: readonly ReplayFamily[],
+  replayIds: ReadonlySet<string>,
+  ids: readonly string[],
+): void {
+  stepReplayFamilies(families, bodies);
   for (let left = 0; left < ids.length; left += 1) {
     for (let right = left + 1; right < ids.length; right += 1) {
       const one = bodies.get(ids[left]!);
@@ -321,7 +335,7 @@ export interface LayoutOptions {
 export function layoutGraph(graph: CanvasGraph, options: LayoutOptions = {}): CanvasLayout {
   const families = replayFamilies(graph);
   if (families.length === 0) return settle(graph, initialPositions(graph), options);
-  const replayIds = new Set(families.flatMap((family) => [...(family.hub === null ? [] : [family.hub]), family.pair, ...family.runs]));
+  const replayIds = replayNodeIds(families);
   const ordinaryGraph = { ...graph, nodes: graph.nodes.filter((node) => !replayIds.has(node.id)),
     edges: graph.edges.filter((edge) => !replayIds.has(edge.from) && !replayIds.has(edge.to)) };
   // Settle the ordinary drawing once and keep that result byte for byte. Its
@@ -346,8 +360,11 @@ export function settle(
   options: LayoutOptions = {},
 ): CanvasLayout {
   const bodies = bodiesFrom(graph, from, options.pinned ?? new Map());
+  const families = replayFamilies(graph);
+  const replayIds = replayNodeIds(families);
+  const ids = graph.nodes.map((node) => node.id).filter((id) => !replayIds.has(id));
   const steps = options.steps ?? SETTLE_STEPS;
-  for (let step = 0; step < steps; step += 1) stepSimulation(graph, bodies);
+  for (let step = 0; step < steps; step += 1) stepSimulationPrepared(graph, bodies, families, replayIds, ids);
   const positions = new Map<string, Point>();
   for (const [id, body] of bodies) positions.set(id, { x: body.x, y: body.y });
   return { positions, bounds: boundsOf(positions) };
@@ -359,11 +376,15 @@ export function settle(
  * A layout outlives the runs it was drawn around: a task is archived, a group
  * is renamed, and a position for a node nobody can see would otherwise sit in
  * the store forever, pinning empty space.
+ *
+ * Positions survive kind filtering: hiding runs or plans from the visible map
+ * does not erase their saved arrangement when another dot is dropped.
  */
 export function retainedPins(
   graph: CanvasGraph,
   stored: ReadonlyMap<string, Point>,
 ): ReadonlyMap<string, Point> {
-  const live = new Set(graph.nodes.map((node) => node.id));
+  const source = graph.allNodes ?? [...graph.nodes, ...graph.unplaced];
+  const live = new Set(source.map((node) => node.id));
   return new Map([...stored].filter(([id]) => live.has(id)));
 }

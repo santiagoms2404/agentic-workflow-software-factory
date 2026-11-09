@@ -202,6 +202,18 @@ test("a route the workflow never reads is refused before the attempt exists", ()
   assert.doesNotThrow(() => assertRoutesReachWorkflow(parseRouteFlags(["builder=@high", "reviewer=@high"]), "build-review"));
 });
 
+test("the compiled plan-author roles accept route overrides through the flag and reach their workflow", () => {
+  const overrides = parseRouteFlags(["plan-author=@high", "reviewer=@max"]);
+  assert.deepEqual(routablePhaseIds("plan-author"), ["plan-author", "reviewer"]);
+  assert.doesNotThrow(() => assertRoutesReachWorkflow(overrides, "plan-author"));
+
+  const config = validConfig();
+  const role = { ...config.agents[0]!, name: "plan-author" };
+  const selected = requestedPhaseRoute(config, "plan-author", role, overrides);
+  assert.equal(selected.agent.thinking, "high");
+  assert.equal(selected.requested.sources.effort, "attempt-override");
+});
+
 test("the same-provider notice reaches a shift, read under the role keys it routes by", () => {
   const config = validConfig();
   const both = parseRouteFlags(["builder=claude/anthropic/claude:opus@xhigh", "reviewer=claude/anthropic/claude:opus@high"]);

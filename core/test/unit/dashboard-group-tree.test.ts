@@ -154,5 +154,5 @@ test("the decision tree has its own route, reachable from the nav and by URL", (
   // drawing answers what came from what, the reading answers what it said.
   assert.match(route, /const view = ref<"graph" \| "reading">\("graph"\)/u);
   assert.match(route, /<GroupTreeGraph v-show="view === 'graph'"/u);
-  assert.match(route, /<GroupDecisionTree v-show="view === 'reading'"/u);
+  assert.match(route, /<GroupDecisionTree v-if="view === 'reading'"/u);
 });

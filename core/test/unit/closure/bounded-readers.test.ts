@@ -34,6 +34,19 @@ test("projections rule out journal opens before landing, at/before the cut, or w
   } finally { world.close(); }
 });
 
+test("closure journal recovery refuses an interior blank line", async () => {
+  const world = box();
+  try {
+    const landed = await selectedLanding(world);
+    const path = join(landed.attemptDir, "journal.jsonl");
+    const text = await readFile(path, "utf8");
+    const firstLineEnd = text.indexOf("\n");
+    assert.notEqual(firstLineEnd, -1);
+    await writeFile(path, `${text.slice(0, firstLineEnd + 1)}\n${text.slice(firstLineEnd + 1)}`);
+    await assert.rejects(closureJournalRecords(landed.attemptDir), /blank line interrupts/u);
+  } finally { world.close(); }
+});
+
 test("reverse closure reader matches full evidence with a large pre-landing prefix and reads only the tail", async () => {
   const world = box();
   try {
@@ -59,7 +72,7 @@ test("reverse closure reader matches full evidence with a large pre-landing pref
     const bounded = await landingJournalTail(landed.attemptDir, status, { chunkBytes: 1024, open: async target => {
       const handle = await open(target, "r");
       return { stat: () => handle.stat(), close: async () => { closed++; await handle.close(); },
-        read: async (buffer, offset, length, position) => { const result = await handle.read(buffer, offset, length, position); bytes += result.bytesRead; return result; } };
+        read: async (buffer, offset, length, position) => { const result = await handle.read(buffer, offset, Math.min(length, 17), position); bytes += result.bytesRead; return result; } };
     } });
     const full = await closureJournalRecords(landed.attemptDir);
     assert.deepEqual(bounded, full.slice(count));

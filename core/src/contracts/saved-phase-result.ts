@@ -1,6 +1,7 @@
 import { Type, type Static } from "@sinclair/typebox";
+import { SHA256_HEX_PATTERN } from "./typebox.ts";
 const id = Type.String({ minLength: 1 });
-const hash = Type.String({ pattern: "^[a-f0-9]{64}$" });
+const hash = Type.String({ pattern: SHA256_HEX_PATTERN });
 export const SavedPhaseResultSchema = Type.Object({
   phaseKey: id, runId: id, ordinal: Type.Integer({ minimum: 1 }), envelopeId: id, envelopeDigest: hash,
   round: Type.Integer({ minimum: 0 }), ownerAmendmentDigest: Type.Optional(hash), worktreeDigest: hash,

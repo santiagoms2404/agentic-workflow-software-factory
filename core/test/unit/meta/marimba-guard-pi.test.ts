@@ -36,6 +36,7 @@ import {
   normalizeCommand,
   ownerActViolation,
 } from "../../../../docs/driving/marimba/marimba-guard-rules.mts";
+import { OWNER_ACT_LIST, ownerActName } from "../../../../docs/driving/marimba/owner-acts.mts";
 
 const MARIMBA_DIR = join(drivingDir(), "marimba");
 const SHELL_GUARD = readFileSync(join(MARIMBA_DIR, "delegation-guard.sh"), "utf8");
@@ -120,12 +121,12 @@ test("quiet Pi startup keeps the named status and both fences", async () => {
   assert.equal(denied?.block, true);
 });
 
-test("the actual guard binding denies delegation and admits read-only planning", async () => {
+test("the actual guard binding denies delegation and owner acts, and admits read-only planning", async () => {
   const handler = bindingHandlers().get("tool_call")!;
   assert.equal((await handler({ toolName: "Workflow_Dispatch", input: {} }, { ui: {} }))?.block, true);
   assert.equal((await handler({ toolName: "bash", input: { command: "npm run awsf --silent -- group checklist" } }, { ui: {} }))?.block, false);
   assert.equal((await handler({ toolName: "bash", input: { command: "awsf run T01", timeout: 1 } }, { ui: {} }))?.block, true);
-  assert.equal((await handler({ toolName: "bash", input: { command: "awsf run T01" } }, { ui: {} }))?.block, false);
+  assert.equal((await handler({ toolName: "bash", input: { command: "awsf run T01" } }, { ui: {} }))?.block, true);
 });
 
 // ---------------------------------------------------------------------------
@@ -178,11 +179,14 @@ for (const row of OWNER_ACT_ROWS) {
 }
 
 test("owner-act matrix catches a planted removed owner-rule match through rules and pi binding", async () => {
+  // The rules import the owner-act list (B5-05); a vm script cannot, so the
+  // import is dropped and the same list is handed in, as the binding test does.
   const source = stripTypeScriptTypes(readFileSync(join(MARIMBA_DIR, "marimba-guard-rules.mts"), "utf8"))
+    .replace(/import\s*\{[^}]*\}\s*from "\.\/owner-acts\.mts";/u, "")
     .replace(/\bexport /gu, "")
     .replace("normalized.includes(`awsf ${act}`)", "false")
     .replace("normalized.includes(`${form} ${act} `)", "false");
-  const mutant = runInNewContext(`${source}\nownerActViolation`) as typeof ownerActViolation;
+  const mutant = runInNewContext(`${source}\nownerActViolation`, { OWNER_ACT_LIST, ownerActName }) as typeof ownerActViolation;
   const handler = bindingHandlers({}, mutant).get("tool_call")!;
   for (const row of OWNER_ACT_ROWS.filter((candidate) => candidate.expected !== null)) {
     assert.equal(mutant(row.command), null, "planted defect must actually remove the refusal");
@@ -199,7 +203,7 @@ test("fence 2 denies through a wrapper, padded, or under a PTY", () => {
 });
 
 test("fence 2 is a targeted refusal, not a blanket one", () => {
-  for (const command of ["echo hello", "awsf status", "awsf run T01", "awsf retry T01"]) {
+  for (const command of ["echo hello", "awsf status", "awsf retry T01"]) {
     assert.equal(ownerActViolation(command), null, command);
   }
 });
@@ -234,18 +238,7 @@ test("fence 1 admits the observe-or-stop names, and reads no MCP server's nouns"
   }
 });
 
-test("the three rows the shell guard owns alone are named, not silently absent", () => {
-  // Each is about the shell guard's OWN mechanism, and each is why the pi port
-  // has a different failure mode rather than the same one.
-  const bashOnly = {
-    "payload · malformed JSON": "pi delivers a typed event, so there is no payload for a parser to reject",
-    "payload · empty": "the same fail-open shape, which only a stdin hook protocol has",
-    "machine · the payload parser cannot run": "an external interpreter is the shell guard's own mechanism; this port parses nothing",
-  };
-  assert.equal(Object.keys(bashOnly).length, 3);
-  for (const [row, why] of Object.entries(bashOnly)) {
-    assert.ok(why.length > 0, row);
-  }
+test("the pi binding announces itself at session start", () => {
   // The replacement failure mode is non-loading, so the binding must announce
   // itself. Without this the extension can be absent and silent.
   assert.match(PI_GUARD, /session_start/u);

@@ -76,9 +76,10 @@ in order to decide**, and the shape of that report is fixed:
   refuse — `owner_acts.md`;
 - what remains: calls, correction rounds, owner re-entries.
 
-Then stop. Every remedy for a blocked attempt is an owner act performed at a
-terminal, and recommending one without the evidence its edge requires is the
-failure this document exists to prevent.
+Then stop for the owner's decision. Plain retry is a driver-callable command,
+while adoption and other owner acts require the owner's own invocation. Neither
+is a reason to retry automatically or create a replacement task without an
+agreed remedy and the evidence it requires.
 
 ## Two traps specific to reading a block
 
@@ -111,6 +112,5 @@ step 2 and step 3 is the finding, which owner act the evidence supports, or when
 the honest answer is that nothing ran. That is the whole of the reading above and
 it is not a gap.
 
-One thing the command cannot do is decide for the owner. Every remedy is an owner
-act at a terminal, and `--evidence` makes the case readable rather than making it
-for you.
+The command cannot decide for the owner. `--evidence` makes the case readable.
+It grants no retry, replacement-task or owner-act authority.

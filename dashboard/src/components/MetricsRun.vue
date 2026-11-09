@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { ChartColumn, Copy } from "lucide-vue-next";
 import type { MetricsAttribution, MetricsRun } from "../../shared/types.ts";
 import { formatListEquivalent } from "../../shared/rate-card.ts";
-import { shortSessionId, stateLabel, stateTone } from "../display.ts";
+import { formatDate, shortSessionId, stateLabel, stateTone } from "../display.ts";
 import {
   ATTRIBUTION_CAUSES,
   ATTRIBUTION_LABELS,
@@ -96,7 +96,7 @@ function kindWidth(share: number): string {
           <span class="run-card-task">{{ run.taskId }} · attempt {{ run.attempt }}</span>
           <span class="run-card-foot">
             <span class="state-chip" :class="stateTone(run.lifecycleState)">{{ stateLabel(run.lifecycleState) }}</span>
-            <span class="run-card-date">{{ run.startedAt.slice(0, 10) }}</span>
+            <span class="run-card-date">{{ formatDate(run.startedAt) }}</span>
           </span>
         </a>
         <div class="run-card-controls">

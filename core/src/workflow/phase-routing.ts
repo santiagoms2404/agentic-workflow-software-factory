@@ -102,7 +102,9 @@ export function requestedPhaseRoute(
   // the config already chose rather than discarding the rest of it.
   const override = layered(configured, attempted);
   const adapterId = override.adapter ?? role.harness.adapter;
-  const adapterEntry = config.adapters[adapterId];
+  // Own properties only: a bare lookup takes `toString` or `__proto__` from
+  // Object.prototype as a declared adapter (B6-25).
+  const adapterEntry = Object.hasOwn(config.adapters, adapterId) ? config.adapters[adapterId] : undefined;
   if (adapterEntry === undefined || adapterEntry.enabled === false) {
     throw new InvalidPhaseRouteSelection(phaseId, `adapter ${JSON.stringify(adapterId)} is disabled or undeclared`);
   }
@@ -112,6 +114,13 @@ export function requestedPhaseRoute(
   // Only the phase-level provider selector opts a route into provider enforcement;
   // otherwise the adapter's preflight answer preserves legacy no-override behaviour.
   const provider = override.provider ?? null;
+  // Evidence qualifies the configured route, including values inherited from
+  // the role. Repeating those values in a flag does not invalidate it; changing
+  // any route identity field does, and a flag supplies no replacement evidence.
+  const retainsEvaluation = adapterId === (configured?.adapter ?? role.harness.adapter) &&
+    provider === (configured?.provider ?? null) &&
+    model === (configured?.model ?? role.model) &&
+    effort === (configured?.effort ?? role.thinking);
   const policy = structuredClone(rolePolicyOf(role));
   const adjusted: AgentDefinition = {
     ...role,
@@ -134,8 +143,7 @@ export function requestedPhaseRoute(
         model: sourceOf("model", configured, attempted, "agent-default"),
         effort: sourceOf("effort", configured, attempted, "agent-default"),
       }),
-      // A flag carries no evidence with it; evaluation stays a durable claim.
-      evaluation: configured?.evaluation ?? null,
+      evaluation: retainsEvaluation ? configured?.evaluation ?? null : null,
     }),
   });
 }

@@ -42,11 +42,11 @@ import { renderHeadroomAdvice, renderOwnerAlternatives, type AdviceSelector } fr
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
-import { toConfigSnapshotJson } from "../../config/effective-config.ts";
 import { CallBudget } from "../../execution/call-budget.ts";
 import type { BarrierRecord, TerminationReport } from "../../execution/launcher-barrier.ts";
 import { ProcessTransportBroker } from "../../execution/transport-broker.ts";
-import { assertClean, runGit, systemGitRunner } from "../../git/changes.ts";
+import { assertClean, runGit, systemGitRunner, worktreeStatus } from "../../git/changes.ts";
+import { assertNoExecutionController } from "../../execution/operation-lease.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
@@ -67,13 +67,13 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 import {
-  ProductionConfigSnapshotMismatch,
+  assertProductionConfigSnapshot,
   ProductionRouteUnavailable,
   ProductionWorkflowUnsupported,
   requestOutput,
 } from "./production-run.ts";
 import {
-  candidateGateRows,
+  candidateGateEvidence,
   readAttemptEvidence,
   recordedReviews,
   recordedRoutes,
@@ -108,18 +108,6 @@ const SUPPORTED = new Map<string, WorkflowRecipe>([
   [simpleSdlcWorkflow.id, simpleSdlcWorkflow],
 ]);
 
-/**
- * The host gate set a candidate is measured by, and therefore the set L25's
- * `gateEvidence.configured` demands a passing row for.
- *
- * These two are what `measureCandidate` produces against an exact SHA and what
- * `gatesPass` summarises: hygiene, and the aggregate of every configured
- * command. The individual `config.gates` entries are deliberately not listed —
- * they are aggregated into one `commands_pass` row by construction, so
- * demanding a row per entry would demand rows the host never writes.
- */
-const CANDIDATE_GATE_IDS = Object.freeze(["candidate_hygiene", "commands_pass"]);
-
 /** The sentence D5 requires the owner to read before the call is spent. */
 export const CANDIDATE_LOSS_WARNING = "if this review fails, the candidate is lost";
 
@@ -136,6 +124,9 @@ export {
   ReplacementReviewInconsistent,
   ReplacementReviewMalformed,
   contractRetryPrompt,
+  classify as classifyReviewFailure,
+  inspectCandidate,
+  reconcileStaleReservation,
 };
 
 // ---------------------------------------------------------------------------
@@ -192,9 +183,10 @@ export class ReviewCandidateMoved extends Error {
    *
    * That one is host-deterministic evidence that the tree the reviewer read is
    * not the tree the guard approved, and §5.5 names it as `review-evidence-invalid`.
-   * The earlier two reads happen before anything was bought, so they are
-   * ordinary pre-GO refusals: the reservation goes back, the tranche charge is
-   * rewound, and no blocker vocabulary is invoked for a review that never ran.
+   * The earlier two reads happen before anything was bought: the reservation
+   * goes back and the tranche charge is rewound, but the attempt still leaves
+   * REVIEWING through L17 as `phase-abort` (see `classify`), because L25 cannot
+   * be entered again and a dead review sojourn must not survive.
    */
   readonly afterReview: boolean;
   constructor(when: string, detail: string, afterReview = false) {
@@ -285,7 +277,9 @@ function safeFailure(error: unknown): Error {
 export function assertReviewReason(reason: string): string {
   const normalized = reason.trim().replace(/\s+/g, " ");
   if (normalized.length === 0) throw new ReviewReasonRequired();
-  return credentialSafeText(bounded(normalized), "owner review reason");
+  // Scrubbed whole, then bounded: a token that straddles the cap must be seen
+  // in full, or its leading fragment would be stored where no rule matches it.
+  return bounded(credentialSafeText(normalized, "owner review reason"));
 }
 
 // ---------------------------------------------------------------------------
@@ -319,9 +313,15 @@ function inspectCandidate(status: AttemptStatus): CandidateInspection {
   if (worktree(["merge-base", "--is-ancestor", status.baseSha, status.candidateSha]).status !== 0) {
     throw new ReviewCandidateMoved("at preflight", "the recorded candidate is not descended from the canonical base");
   }
-  const identities = runGit(worktree, ["show", "-s", "--format=%an <%ae>|%cn <%ce>", status.candidateSha]).trim();
-  if (identities !== `${HOST_AUTHOR}|${HOST_AUTHOR}`) {
-    throw new ReviewCandidateMoved("at preflight", `the candidate is not host-created under the owner identity: ${identities}`);
+  const identities = runGit(worktree, ["log", "--format=%an <%ae>|%cn <%ce>", `${status.baseSha}..${status.candidateSha}`])
+    .split("\n")
+    .filter((identity) => identity.length > 0);
+  const foreignIdentity = identities.find((identity) => identity !== `${HOST_AUTHOR}|${HOST_AUTHOR}`);
+  if (identities.length === 0 || foreignIdentity !== undefined) {
+    throw new ReviewCandidateMoved(
+      "at preflight",
+      `the candidate range was not created entirely under the owner identity: ${foreignIdentity ?? "no candidate commit"}`,
+    );
   }
   if (worktree(["diff", "--check", `${status.baseSha}..${status.candidateSha}`, "--"]).status !== 0) {
     throw new ReviewCandidateMoved("at preflight", "the candidate fails `git diff --check`");
@@ -352,9 +352,9 @@ function assertCandidateUnmoved(status: AttemptStatus, inspection: CandidateInsp
   const canonicalHead = runGit(canonical, ["rev-parse", "HEAD"]).trim();
   if (worktreeHead !== inspection.candidate) moved(`worktree HEAD is ${worktreeHead}, not the candidate ${inspection.candidate}`);
   if (canonicalHead !== inspection.base) moved(`canonical HEAD is ${canonicalHead}, not the recorded base ${inspection.base}`);
-  const dirty = runGit(worktree, ["status", "--porcelain"]).trim();
+  const dirty = worktreeStatus(worktree).trim();
   if (dirty.length > 0) moved(`the managed worktree is not clean: ${bounded(dirty, 400)}`);
-  const canonicalDirty = runGit(canonical, ["status", "--porcelain"]).trim();
+  const canonicalDirty = worktreeStatus(canonical).trim();
   if (canonicalDirty.length > 0) moved(`the canonical checkout is not clean: ${bounded(canonicalDirty, 400)}`);
 }
 
@@ -370,7 +370,7 @@ function validateAttempt(status: AttemptStatus, config: AwsfConfig): WorkflowRec
     throw new ProductionWorkflowUnsupported(status.workflow, `recipe is tier ${recipe.tier} but the attempt is tier ${status.tier}`);
   }
   if (config.project.slug !== status.project) throw new Error("attempt and config project do not match");
-  if (toConfigSnapshotJson(config) !== status.configSnapshotJson) throw new ProductionConfigSnapshotMismatch();
+  assertProductionConfigSnapshot(config, status.configSnapshotJson);
   return recipe;
 }
 
@@ -381,10 +381,10 @@ function validateAttempt(status: AttemptStatus, config: AwsfConfig): WorkflowRec
  * nothing about the three revalidations — so it is answered here and everything
  * else is deferred to the one classifier both commands read.
  */
-function classify(error: unknown): { code: string; detail: string; edge: "L17" } {
+export function classify(error: unknown): { code: string; detail: string; edge: "L17" } {
   const failure = safeFailure(error);
   const detail = `${failure.name}: ${failure.message}`;
-  if (failure instanceof ReviewCandidateMoved) {
+  if (failure instanceof ReviewCandidateMoved && failure.afterReview) {
     return { code: "review-evidence-invalid", detail, edge: "L17" };
   }
   return reviewFailureBlocker(failure, detail) ?? { code: "phase-abort", detail, edge: "L17" };
@@ -401,10 +401,10 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
   let status = await readAttempt(options.attemptDir);
   credentialSafeText(status.request, "persisted original request", true);
 
-  // A prior process died holding this command's reservation. Reconcile before
-  // deciding anything: `awsf retry` refuses while a reservation is held, and an
-  // owner re-entry charged for a launch that never happened is confiscation.
-  if (status.lifecycleState === "REVIEWING" && status.budget.callsReserved > 0) {
+  // A prior process died holding this command's reservation or leaving a dead review.
+  // Reconcile before deciding anything: `awsf retry` refuses while a reservation is held,
+  // and an owner re-entry charged for a launch that never happened is confiscation.
+  if (status.lifecycleState === "REVIEWING") {
     status = await reconcileStaleReservation(options, status, infra);
     if (status.lifecycleState === "BLOCKED") return { status, confirmed: true };
   }
@@ -456,8 +456,7 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
     );
   }
   const reviewPhaseIds = new Set(reviews.map((review) => review.phaseId));
-  const rows = candidateGateRows(evidenceRecords, inspection.candidate, reviewPhaseIds);
-  const gateEvidence = { configured: CANDIDATE_GATE_IDS, rows };
+  const gateEvidence = candidateGateEvidence(evidenceRecords, inspection.candidate, status.sessionId);
   const recorded = recordedRoutes(evidenceRecords, reviewPhaseIds);
   const route: ReviewRoute = await resolveReviewRoute({
     config: options.config, configPath: options.configPath, infra, recipe,
@@ -665,7 +664,10 @@ async function runReviewCommand(options: ReviewCommandOptions): Promise<ReviewCo
           return;
         }
         if (observed.revision !== current.revision) throw new Error("replacement review recovery found an unexpected durable revision");
-        status = await persistAttempt(options.attemptDir, current.revision, event);
+        // Nothing committed, so the same write is retried whole. Projection
+        // stays on: a skipped projection is invisible to the projector's gap
+        // check whenever it was the session's last write.
+        status = await persistAttempt(options.attemptDir, current.revision, event, options.projectRecord);
       }
     };
 
@@ -769,14 +771,14 @@ async function reconcileStaleReservation(
   status: AttemptStatus,
   infra: ReviewInfrastructure,
 ): Promise<AttemptStatus> {
+  await assertNoExecutionController(options.attemptDir);
   const evidence = await readAttemptEvidence(options.attemptDir);
+  const lastTransitionIndex = evidence.findLastIndex((record) => record.type === "transition");
+  if (lastTransitionIndex === -1 || (evidence[lastTransitionIndex] as { edgeId?: string }).edgeId !== "L25") return status;
   let launched = false;
-  let lastEdge: string | null = null;
-  for (const record of evidence) {
-    if (record.type === "transition") lastEdge = record.edgeId;
+  for (const record of evidence.slice(lastTransitionIndex + 1)) {
     if (record.type === "process" && record.status !== "REGISTERED") launched = true;
   }
-  if (lastEdge !== "L25") return status;
   const at = infra.now();
   const rewind = !launched && status.budget.ownerReentries > 0;
   const budget = {
@@ -784,7 +786,9 @@ async function reconcileStaleReservation(
     callsReserved: 0,
     ownerReentries: rewind ? status.budget.ownerReentries - 1 : status.budget.ownerReentries,
   };
-  const detail = `recovered a stale L25 reservation; ${rewind ? "no provider launched, so the owner re-entry was rewound" : "a provider had already launched, so the charge stands"}`;
+  const detail = status.budget.callsReserved > 0
+    ? `recovered a stale L25 reservation; ${rewind ? "no provider launched, so the owner re-entry was rewound" : "a provider had already launched, so the charge stands"}`
+    : `recovered a dead review process; ${rewind ? "no provider launched, so the owner re-entry was rewound" : "a provider had already launched, so the charge stands"}`;
   const code = "phase-abort";
   const decision = transition({
     from: "REVIEWING",
@@ -838,12 +842,28 @@ async function refreshRunReport(attemptDir: string, status: AttemptStatus): Prom
   await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
 }
 
+/**
+ * The final advance commits before its lock is released, so a failure there can
+ * leave a candidate awaiting the owner while the command still reports failure.
+ * The readable report must name that candidate anyway, or it describes the
+ * superseded one. Best effort: the failure the owner must see is the one thrown.
+ */
+async function refreshReportIfAwaitingOwner(attemptDir: string): Promise<void> {
+  try {
+    const durable = await readAttempt(attemptDir);
+    if (durable.lifecycleState === "AWAITING_OWNER") await refreshRunReport(attemptDir, durable);
+  } catch {
+    /* the thrown failure below is the one the owner must see. */
+  }
+}
+
 export async function reviewCommand(options: ReviewCommandOptions): Promise<ReviewCommandResult> {
   try {
     const result = await runReviewCommand(options);
     if (result.confirmed) await refreshRunReport(options.attemptDir, result.status);
     return result;
   } catch (error) {
+    await refreshReportIfAwaitingOwner(options.attemptDir);
     throw safeFailure(error);
   }
 }

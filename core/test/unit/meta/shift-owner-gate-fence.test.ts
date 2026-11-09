@@ -98,9 +98,30 @@ test("the detector sees each offence when one is added", () => {
   assert.deepEqual(offences('const edge = "L21";'), ["names a landing state or edge"]);
 });
 
+/** Every property name in a schema, at any depth: a nested object carries the same fields as the top level. */
+function propertyNames(node: unknown): string[] {
+  if (Array.isArray(node)) return node.flatMap(propertyNames);
+  if (typeof node !== "object" || node === null) return [];
+  const record = node as Record<string, unknown>;
+  const declared = record.properties !== null && typeof record.properties === "object" ? Object.keys(record.properties) : [];
+  return [...declared, ...Object.values(record).flatMap(propertyNames)];
+}
+
+/** A key a timer could act on. Capitalised time words count; the `At` suffix is a timestamp and is case-sensitive. */
+function isTimeShaped(key: string): boolean {
+  return /deadline|expir|timeout|ttl|until|due|time/iu.test(key) || key.endsWith("At");
+}
+
 test("nothing a shift or a replay records carries a time a timer could act on", () => {
-  const keys = [ShiftManifestSchema, ShiftManifestTicketSchema, ReplayRecordSchema].flatMap((schema) => Object.keys(schema.properties));
-  assert.deepEqual(keys.filter((key) => /deadline|expir|timeout|ttl|until|due|time|At$/u.test(key)), []);
+  const keys = [ShiftManifestSchema, ShiftManifestTicketSchema, ReplayRecordSchema].flatMap(propertyNames);
+  assert.deepEqual(keys.filter(isTimeShaped), []);
+});
+
+test("the time-key check sees capitalised time words and nested properties", () => {
+  for (const key of ["maxDeadline", "retryUntil", "wallClockTimeoutMs", "deadlineAt", "Expiry"]) assert.equal(isTimeShaped(key), true, key);
+  assert.equal(isTimeShaped("format"), false, "a word that merely ends in the letters at is not a timestamp");
+  assert.deepEqual(propertyNames({ properties: { budget: { properties: { maxDeadline: {} } } } }).filter(isTimeShaped), ["maxDeadline"]);
+  assert.deepEqual(propertyNames({ type: "array", items: { properties: { retryUntil: {} } } }).filter(isTimeShaped), ["retryUntil"]);
 });
 
 test("L20 is the only way into LANDING, and it is human and interactive with no tier exemption", () => {
@@ -159,8 +180,10 @@ test("`awsf land` refuses a non-interactive stdin before it asks anything, and t
 // W17 INV-2 and INV-3, over the same WORKSTREAM_MODULES scope INV-1 uses.
 // INV-2: the dashboard records intent; a human-started session compiles and
 // drains it. `node:child_process` stays out of every workstream module (AGENTS.md
-// invariant 3 bars it repository-wide; this is the workstream's own record of
-// it), and no route this workstream adds may be anything but read-only — which
+// invariant 3 bars it from all shipped code except `transport-broker.ts` —
+// scoped by its O5 owner amendment to the non-test code under `core/src`,
+// `dashboard/src` and `docs/driving`, with tests free to spawn; this is the
+// workstream's own record of it), and no route this workstream adds may be anything but read-only — which
 // this repository spells as "adds nothing to API_ROUTE_TABLE", since `preview.ts`
 // and the shift commands are CLI, never API handlers.
 // INV-3: no push path and no skill in the execution path. AGENTS.md invariant 8

@@ -7,9 +7,42 @@ import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
 import type { StoredEnvelope } from "../contracts/stored-envelope.ts";
 import type { BarrierRecord } from "../execution/launcher-barrier.ts";
 import type { PhasePersistenceEvidence } from "../execution/phase-request.ts";
-import type { GateCheck, GateId } from "../gates/interface.ts";
+import type { GateCheck, GateId, GateKind } from "../gates/interface.ts";
 import type { SandboxBadge, SandboxGrant } from "../policy/sandbox-broker.ts";
 import type { TaskState } from "../state/task-machine.ts";
+
+/**
+ * Structurally the same closed vocabulary as `QuotaProbeFailure`
+ * (`core/src/quota/probe.ts`), duplicated rather than imported: the
+ * quota-fence meta-test (INV-1) forbids `core/src/workflow/**` from
+ * transitively reaching `core/src/quota/**`, and several workflow modules
+ * reach this union through `AttemptEvidence`. Any literal string in the
+ * source type is widened to `string` here so the real type remains assignable
+ * without re-exporting its literal members. Keep the shapes in sync by hand;
+ * a drift only costs an assignability error in production-run.ts, which
+ * constructs the only values of this field.
+ */
+export type QuotaProbeFailureEvidence =
+  | { readonly reasonCode: "executable-not-found"; readonly executable: string }
+  | { readonly reasonCode: "timeout"; readonly command: "version" | "probe"; readonly timeoutMs: number }
+  | {
+      readonly reasonCode: "nonzero-exit";
+      readonly command: "version" | "probe";
+      readonly exitCode: number | null;
+      readonly retainedPath: string | null;
+      readonly retentionFailed?: true;
+      readonly errorMessage?: string;
+    }
+  | {
+      readonly reasonCode: "unparseable";
+      readonly command: "version" | "probe";
+      readonly faultCount: number;
+      readonly retainedPath: string | null;
+      readonly retentionFailed?: true;
+    }
+  | { readonly reasonCode: "version-below-floor"; readonly foundVersion: string; readonly floorVersion: string }
+  | { readonly reasonCode: "semantics-unresolved"; readonly providers: readonly (string | null)[] }
+  | { readonly reasonCode: "stale"; readonly providers: readonly (string | null)[] };
 
 export type SandboxMechanism = SandboxGrant["mechanism"];
 
@@ -90,9 +123,28 @@ export type AttemptEvidence =
   | { readonly type: "protected-grant"; readonly grant: import("../contracts/protected-grant.ts").ProtectedGrant }
   | { readonly type: "protected-activation"; readonly consumption: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly phase: PhaseEvidenceRecord }
   | { readonly type: "protected-candidate"; readonly binding: import("../contracts/protected-grant.ts").ProtectedCandidateBinding }
-  | { readonly type: "protected-landing"; readonly authorization: import("../contracts/protected-grant.ts").ProtectedCandidateAuthorization }
+  | { readonly type: "protected-landing"; readonly protectedApproval: import("../contracts/protected-grant.ts").ProtectedCandidateAuthorization }
   | { readonly type: "phase-result-ready"; readonly phase: PhaseEvidenceRecord; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "phase-validation-started"; readonly phaseId: string; readonly checkpointId: string }
+  /** An affirmative terminal answer bound to one exact phase correction, journaled before its tranche is charged. */
+  | {
+      readonly type: "owner-correction-authorization";
+      readonly sessionId: string;
+      readonly attempt: number;
+      readonly phaseId: string;
+      readonly correctionRound: number;
+      readonly cause: "schema-violation" | "gate-violation";
+      readonly transport: "same-session";
+      readonly authorizedAt: string;
+    }
+  /**
+   * A valid reply whose result-ready checkpoint was NOT written, because its
+   * worktree could not be snapshotted; `reason` is the refusal's message. The
+   * reply still proceeds, but a crash before acceptance cannot reuse it. Before
+   * B6-01 this skip left no trace at all. A projector no-op, like
+   * `phase-validation-started`.
+   */
+  | { readonly type: "phase-result-unsaved"; readonly phaseId: string; readonly reason: string; readonly at: string }
   | { readonly type: "phase-accepted"; readonly phase: PhaseEvidenceRecord; readonly accepted: import("../contracts/phase-recovery.ts").AcceptedPhase }
   | { readonly type: "quota-pause"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
   | { readonly type: "ceiling-pause"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery }
@@ -104,7 +156,8 @@ export type AttemptEvidence =
    */
   | { readonly type: "ticket-block"; readonly checkpoint: import("../contracts/phase-recovery.ts").PhaseRecovery; readonly phaseKey: string; readonly source: "gate" | "process"; readonly detail: string }
   | { readonly type: "resume-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }
-  | { readonly type: "resume-activation"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerInstruction?: import("../contracts/resume-instruction.ts").ResumeInstruction | null; readonly quotaReadings?: readonly import("../contracts/phase-recovery.ts").BoundaryQuota[]; readonly operationId: string; readonly checkpointId: string; readonly reason: string; readonly reservationId: string | null; readonly phase: PhaseEvidenceRecord | null }
+  | { readonly type: "trusted-contract-baseline"; readonly baseline: import("../registry/production-contracts.ts").TrustedContractBaseline }
+  | { readonly type: "resume-activation"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerInstruction?: import("../contracts/resume-instruction.ts").ResumeInstruction | null; readonly ownerApprovalId?: string; readonly quotaReadings?: readonly import("../contracts/phase-recovery.ts").BoundaryQuota[]; readonly operationId: string; readonly checkpointId: string; readonly reason: string; readonly reservationId: string | null; readonly phase: PhaseEvidenceRecord | null }
   | { readonly type: "candidate-seed"; readonly seed: CandidateSeed }
   /**
    * The owner's visual binding as the host verified it at start: digests, frame
@@ -142,7 +195,7 @@ export type AttemptEvidence =
    */
   | { readonly type: "grant-refused"; readonly record: import("../contracts/driver-preflight.ts").GrantRefusedRecord }
   | { readonly type: "rework-instruction-delivery"; readonly phaseId: string; readonly delivery: import("../contracts/owner-amendment.ts").OwnerAmendmentDelivery; readonly at: string }
-  | { readonly type: "transition"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerAmendment?: import("../contracts/owner-amendment.ts").ReworkOwnerAmendment; readonly id: string; readonly seq: number; readonly from: TaskState; readonly to: TaskState; readonly actor: "host" | "owner" | "human"; readonly edgeId: string; readonly reasonSource: string; readonly reasonCode: string | null; readonly reasonDetail: string | null; readonly spawnSite: boolean; readonly at: string }
+  | { readonly type: "transition"; readonly protectedConsumption?: import("../contracts/protected-grant.ts").ProtectedGrantConsumption; readonly ownerAmendment?: import("../contracts/owner-amendment.ts").ReworkOwnerAmendment; readonly ownerApprovalId?: string; readonly ownerOperationId?: string; readonly id: string; readonly seq: number; readonly from: TaskState; readonly to: TaskState; readonly actor: "host" | "owner" | "human" | "delegate"; readonly edgeId: string; readonly reasonSource: string; readonly reasonCode: string | null; readonly reasonDetail: string | null; readonly spawnSite: boolean; readonly at: string }
   | { readonly type: "phase"; readonly phase: PhaseEvidenceRecord }
   | { readonly type: "normalized-event"; readonly phaseId: string; readonly event: NormalizedEvent }
   | {
@@ -161,7 +214,7 @@ export type AttemptEvidence =
     }
   | { readonly type: "process"; readonly phaseId: string; readonly adapterId: string; readonly role: string; readonly record: BarrierRecord; readonly status: "REGISTERED" | "RUNNING" | "EXITED" | "FAILED" | "CANCELLED"; readonly registeredAt: string; readonly releasedAt: string | null; readonly endedAt: string | null; readonly exitCode: number | null; readonly exitSignal: string | null }
   | { readonly type: "envelope"; readonly phaseId: string; readonly envelope: StoredEnvelope<EnvelopeBase> }
-  | { readonly type: "gate"; readonly id: string; readonly phaseId: string; readonly round: number; readonly gateId: GateId; readonly kind: "pure" | "filesystem" | "git" | "subprocess" | "journey"; readonly candidateSha: string | null; readonly passed: boolean; readonly exitCode: number | null; readonly checks: readonly GateCheck[]; readonly violations: readonly string[]; readonly outputPath: string | null; readonly startedAt: string; readonly endedAt: string }
+  | { readonly type: "gate"; readonly id: string; readonly phaseId: string; readonly round: number; readonly gateId: GateId; readonly kind: GateKind; readonly candidateSha: string | null; readonly passed: boolean; readonly exitCode: number | null; readonly checks: readonly GateCheck[]; readonly violations: readonly string[]; readonly outputPath: string | null; readonly startedAt: string; readonly endedAt: string }
   | { readonly type: "agent-start"; readonly phaseId: string; readonly agent: string; readonly adapterId: string; readonly provider: string; readonly color: string | null; readonly requestedModel: string; readonly sandboxBadge: SandboxBadge; readonly sandboxMechanism: SandboxMechanism; readonly purpose?: RecordedAgentPurpose; readonly persistence?: PhasePersistenceEvidence; /** Optional only for journals written before route provenance existed. */ readonly route?: RouteSelectionProvenance; readonly at: string }
   | { readonly type: "agent"; readonly phaseId: string; readonly agent: string; readonly adapterId: string; readonly provider: string; readonly color: string | null; readonly requestedModel: string; readonly resolvedModel: string | null; readonly modelProvenance: ModelResolutionProvenance | null; readonly contextWindow: number | null; readonly usageAuthority: "provider" | "partial" | "none"; readonly usage: TokenUsage; readonly contextTokens: number | null; readonly costUsd: number | null; readonly costAuthority: "provider" | "catalog-estimate" | "unavailable"; readonly purpose?: RecordedAgentPurpose; readonly at: string }
   /**
@@ -178,7 +231,15 @@ export type AttemptEvidence =
    * less independence than the default, and nothing else can produce it.
    */
   | { readonly type: "review-degradation"; readonly reason: string; readonly attempt: number; readonly at: string }
-  | { readonly type: "quota-snapshot"; readonly attribution: "none"; readonly scope: "account-window"; readonly completedPhaseKey: string; readonly nextPhaseKey: string; readonly effectivePercentRemaining: number | null; readonly minutesToReset: number | null; readonly reasonCode: string | null; readonly resolvedVersion: string | null }
+  /**
+   * `failure` is the full QuotaProbeFailure the probe journalled, present
+   * whenever the gauge was unavailable. `reasonCode` alone (kept for the
+   * schema's history) cannot carry a retained path, an exit code, a fault
+   * count or the message a thrown process error produced; this is the one
+   * place that detail survives into the journal, AGENTS.md invariant 10's
+   * only evidence store.
+   */
+  | { readonly type: "quota-snapshot"; readonly attribution: "none"; readonly scope: "account-window"; readonly completedPhaseKey: string; readonly nextPhaseKey: string; readonly effectivePercentRemaining: number | null; readonly minutesToReset: number | null; readonly reasonCode: string | null; readonly resolvedVersion: string | null; readonly failure?: QuotaProbeFailureEvidence }
   | {
       readonly type: "publish";
       readonly remote: string;

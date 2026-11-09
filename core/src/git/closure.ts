@@ -7,6 +7,7 @@ import { closureDelta } from "../closure/delta.ts";
 import type { ClosureRegistry, ClosureTree } from "../closure/tree.ts";
 import type { ClosureRecord } from "../contracts/closure-record.ts";
 import { runGit, type GitRunner } from "./changes.ts";
+import { hostIdentityEnv } from "./commit.ts";
 
 export function closureGitRunner(repository: string): GitRunner {
   const env = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
@@ -21,9 +22,19 @@ export interface ClosureSnapshot {
   readonly blobs: ReadonlyMap<string, string>;
 }
 
+const SNAPSHOT_CACHE = new Map<string, ClosureSnapshot>();
+const BLOB_CACHE = new Map<string, Uint8Array>();
+
+export function clearClosureSnapshotCache(): void {
+  SNAPSHOT_CACHE.clear();
+  BLOB_CACHE.clear();
+}
+
 /** Registration is read independently from each committed tree, never a sealed ticket path. */
 export function readClosureSnapshot(git: GitRunner, sha: string): ClosureSnapshot {
   if (!/^[a-f0-9]{40}$/u.test(sha)) throw new Error("closure requires an exact commit SHA");
+  const cached = SNAPSHOT_CACHE.get(sha);
+  if (cached !== undefined) return cached;
   const catalog = loadCatalog(runGit(git, ["show", `${sha}:awsf.project.yaml`]));
   const root = catalog.plans.root.replace(/\/$/u, "");
   if (root.startsWith("/") || root.split("/").some(part => part === ".." || part === ".") || root.includes("\\")) throw new Error("closure refuses a plans root outside the canonical repository");
@@ -51,11 +62,17 @@ export function readClosureSnapshot(git: GitRunner, sha: string): ClosureSnapsho
     const blob = blobs.get(path);
     if (blob === undefined) continue;
     if (modes.get(path) !== "100644" && modes.get(path) !== "100755") throw new Error(`closure refuses non-regular registered path ${path}`);
-    const bytes = Buffer.from(runGit(git, ["cat-file", "blob", blob]), "utf8");
-    if (createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex") !== blob) throw new Error(`closure refuses non-UTF-8 or truncated registered blob ${path}`);
+    let bytes = BLOB_CACHE.get(blob);
+    if (bytes === undefined) {
+      bytes = Buffer.from(runGit(git, ["cat-file", "blob", blob]), "utf8");
+      if (createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex") !== blob) throw new Error(`closure refuses non-UTF-8 or truncated registered blob ${path}`);
+      BLOB_CACHE.set(blob, bytes);
+    }
     tree.set(path, bytes);
   }
-  return { tree, registry: { plans, lightTickets }, modes, blobs };
+  const snapshot: ClosureSnapshot = { tree, registry: { plans, lightTickets }, modes, blobs };
+  SNAPSHOT_CACHE.set(sha, snapshot);
+  return snapshot;
 }
 
 export function closureHead(git: GitRunner): string { return runGit(git, ["rev-parse", "HEAD"]).trim(); }
@@ -79,12 +96,16 @@ export function verifyClosureCommit(git: GitRunner, record: ClosureRecord): void
   if (!delta.ok) throw new Error(`closure committed delta refused: ${delta.refusal.message}`);
 }
 
+function assertNoSymlinkParents(repository: string, physical: string, refusal: string): void {
+  for (let parent = dirname(physical); parent !== repository; parent = dirname(parent)) {
+    if (parent === dirname(parent) || lstatSync(parent).isSymbolicLink()) throw new Error(refusal);
+  }
+}
+
 export function assertClosureFiles(repository: string, before: ClosureSnapshot, paths: readonly string[]): void {
   for (const path of paths) {
     const physical = join(repository, path);
-    for (let parent = dirname(physical); parent !== repository; parent = dirname(parent)) {
-      if (parent === dirname(parent) || lstatSync(parent).isSymbolicLink()) throw new Error(`closure refuses symlink parent ${path}`);
-    }
+    assertNoSymlinkParents(repository, physical, `closure refuses symlink parent ${path}`);
     const stat = lstatSync(physical);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || !readFileSync(physical).equals(Buffer.from(before.tree.get(path)!))) throw new Error(`closure refuses changed or non-regular file ${path}`);
   }
@@ -92,14 +113,15 @@ export function assertClosureFiles(repository: string, before: ClosureSnapshot, 
 
 /** Isolated index: the canonical index and files are not touched while the commit is built. */
 export function prepareClosureCommit(repository: string, attemptDir: string, parent: string, before: ClosureSnapshot,
-  after: ClosureTree, paths: readonly string[], message: string, identity: { name: string; email: string }): { commit: string; blobs: ClosureRecord["blobs"] } {
+  after: ClosureTree, paths: readonly string[], message: string): { commit: string; blobs: ClosureRecord["blobs"] } {
   const root = join(attemptDir, "private", "closure");
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const stage = mkdtempSync(join(root, "stage-"));
+  // Identity is HOST_AUTHOR, pinned in all four variables: never the checkout's
+  // `git config user.*` and never an ambient author/committer override (AGENTS.md
+  // invariant 11; H9: B1-01 B1-07 B9-01).
   const env = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-    GIT_INDEX_FILE: join(stage, "index"), GIT_AUTHOR_NAME: identity.name, GIT_AUTHOR_EMAIL: identity.email,
-    GIT_COMMITTER_NAME: identity.name, GIT_COMMITTER_EMAIL: identity.email, GIT_TERMINAL_PROMPT: "0" };
-  // Identity comes from Git config, never ambient author/committer overrides.
+    GIT_INDEX_FILE: join(stage, "index"), ...hostIdentityEnv(), GIT_TERMINAL_PROMPT: "0" };
   delete (env as Record<string, string>)["GIT_AUTHOR_DATE"];
   delete (env as Record<string, string>)["GIT_COMMITTER_DATE"];
   const git: GitRunner = argv => runSystemCommand("git", ["-C", repository, "-c", "core.fsync=all", "--literal-pathspecs", ...argv], { timeoutMs: 30_000, env });
@@ -130,9 +152,7 @@ export function finishClosureCheckout(repository: string, record: ClosureRecord,
   if (dirty.some(path => !record.blobs.some(blob => blob.path === path)) || runGit(git, ["ls-files", "--others", "--exclude-standard", "-z"]).length > 0) throw new Error("interrupted closure: checkout changed; no automatic replay");
   for (const blob of record.blobs) {
     const physical = join(repository, blob.path);
-    for (let parent = dirname(physical); parent !== repository; parent = dirname(parent)) {
-      if (parent === dirname(parent) || lstatSync(parent).isSymbolicLink()) throw new Error("interrupted closure: symlink parent; no automatic replay");
-    }
+    assertNoSymlinkParents(repository, physical, "interrupted closure: symlink parent; no automatic replay");
     const bytes = readFileSync(physical);
     if (!bytes.equals(Buffer.from(before.tree.get(blob.path)!)) && !bytes.equals(Buffer.from(after.tree.get(blob.path)!))) throw new Error("interrupted closure: checkout bytes changed; no automatic replay");
     const stat = lstatSync(join(repository, blob.path));

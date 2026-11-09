@@ -646,3 +646,24 @@ test("a journal that predates the split projects exactly as it always did", () =
   assert.equal(projectAttemptStatus(legacy, agentStart("documenter", "anthropic", "worker", 2), 2).ok, true);
   assert.equal(providers(legacy).worker_provider, "anthropic", "legacy last-write-wins is preserved verbatim");
 });
+
+// B4-26: a full disk makes SQLite roll the transaction back by itself. The
+// explicit ROLLBACK then threw "no transaction is active", and that error
+// replaced the disk-full cause in the notice the operator reads.
+test("a projection that fails on a full disk reports the disk-full cause, not the rollback after it", () => {
+  const db = seededDb();
+  try {
+    const pages = (db.prepare("PRAGMA page_count").get() as { page_count: number }).page_count;
+    db.exec(`PRAGMA max_page_count = ${pages}`);
+    const outcome = projectEvent(db, ctx, record(1, {
+      seq: 1, runId: "run1", hostAt: "t0", providerAt: null, kind: "tool.requested",
+      toolCallId: "t1", name: "Read", inputSummary: "x".repeat(1_000_000),
+    }));
+    assert.equal(outcome.ok, false);
+    const detail = outcome.notice?.detail ?? "";
+    assert.match(detail, /full/i);
+    assert.doesNotMatch(detail, /no transaction is active/);
+  } finally {
+    db.close();
+  }
+});

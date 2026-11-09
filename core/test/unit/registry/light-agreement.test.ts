@@ -83,3 +83,14 @@ for (const [oldText, newText] of [
 test("intake refuses invalid base bytes instead of treating them as a new ticket", () => {
   assert.equal(intakeStateGate("plans/tickets/T00.md", "bad frontmatter", ticket).passed, false);
 });
+
+test("B10-36: a light ticket whose depends_on names no ticket is refused, as the plan tier refuses it", () => {
+  const violations = lightTicketAgreement(records({ ...ticket, depends_on: ["T99"] }));
+  assert.ok(violations.some(row => row.rule === "DEPENDENCIES" && row.message.includes("T99")));
+
+  const present = [
+    { path: "plans/tickets/T00.md", frontmatter: ticket },
+    { path: "plans/tickets/T01.md", frontmatter: { ...ticket, id: "T01", depends_on: ["T00"] } },
+  ];
+  assert.deepEqual(lightTicketAgreement(present), []);
+});

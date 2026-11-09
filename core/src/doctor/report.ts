@@ -14,7 +14,9 @@ export function buildDoctorReport(existing: DoctorReport, jev: JevDoctorRow, row
   lines.splice(summary === -1 ? lines.length : summary, 0, ...added);
   const healthy = report.healthy && Object.values(rows).every(row => row.status !== "finding");
   if (!healthy) {
-    for (let index = lines.length - 1; index >= 0; index--) if (lines[index]!.startsWith("healthy: ")) lines.splice(index, 1);
+    // withJevRow and doctorCommand keep a healthy presentation line last only
+    // while their structured health value is true.
+    if (report.healthy) lines.pop();
     for (const [name, row] of Object.entries(rows)) if (row.status === "finding") lines.push(`finding: ${name}`);
   }
   const model: DoctorReadout = scrubCredentials({ schema: DOCTOR_READOUT_SCHEMA_ID, healthy,

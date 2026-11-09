@@ -45,8 +45,12 @@ function world(options: { originalState?: "held" | "spent"; fail?: "register" | 
     close: () => rmSync(root, { recursive: true, force: true }) };
 }
 
-async function launch(f: ReturnType<typeof world>, hooks: StartHooks = {}): Promise<string> {
-  const transport = await f.broker.startProcess(f.w.registration, f.w.spec, new AbortController().signal, hooks);
+async function launch(
+  f: ReturnType<typeof world>,
+  hooks: StartHooks = {},
+  broker: ProcessTransportBroker = f.broker,
+): Promise<string> {
+  const transport = await broker.startProcess(f.w.registration, f.w.spec, new AbortController().signal, hooks);
   const read = async (stream: AsyncIterable<Uint8Array>) => {
     const chunks: Buffer[] = [];
     for await (const chunk of stream) chunks.push(Buffer.from(chunk));
@@ -128,6 +132,32 @@ test("concurrent brokers cannot consume one physical launch intent twice", async
     assert.equal(await first, "continued");
     assert.equal(f.records.length, 1);
     assert.equal(f.w.ledger.callsSpent, 1);
+  } finally { f.close(); }
+});
+
+test("all reconnect authorization frontiers compare the same frozen preflight descriptor", async () => {
+  const f = world();
+  try {
+    const observed: { stage: string; digest: string; frozen: boolean; argvFrozen: boolean; envFrozen: boolean }[] = [];
+    const verifier: TurnReconnectLaunchVerifier = {
+      verify: (registration, spec, stage) => {
+        observed.push({
+          stage: stage ?? "before-spawn",
+          digest: continuityDigest(spec),
+          frozen: Object.isFrozen(spec),
+          argvFrozen: Object.isFrozen(spec.argv),
+          envFrozen: Object.isFrozen(spec.env),
+        });
+        return f.w.verifier.verify(registration, spec, stage);
+      },
+    };
+    const broker = new ProcessTransportBroker({ ...f.brokerOptions, reconnectLaunchVerifier: verifier });
+    assert.equal(await launch(f, {}, broker), "continued");
+    assert.deepEqual(observed.map((entry) => entry.stage), ["before-spawn", "before-go", "before-release"]);
+    assert.ok(observed.every((entry) => entry.digest === continuityDigest(f.w.spec)));
+    assert.ok(observed.every((entry) => entry.frozen && entry.argvFrozen && entry.envFrozen));
+    assert.equal(f.w.ledger.callsSpent, 1, "reconnect retains its original single-call liability");
+    assert.equal(f.records.length, 1, "the durable launch intent is registered once");
   } finally { f.close(); }
 });
 

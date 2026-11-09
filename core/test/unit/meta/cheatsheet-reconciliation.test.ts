@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CLI_COMMANDS } from "../../../src/cli/main.ts";
+import { CLI_COMMANDS } from "../../../src/cli/command-table.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import { LEGAL_EDGES, TASK_STATES } from "../../../src/state/task-machine.ts";
 import { DEFAULT_CALL_CEILINGS, TIERS } from "../../../src/state/tiers.ts";
-import { AWSF_CLI, JUST_TARGET, NPM_RUN, commandsIn, justRecipes } from "./_driving.ts";
+import { OWNER_ACT_LIST, ownerActName } from "../../../../docs/driving/marimba/owner-acts.mts";
+import { AWSF_CLI, JUST_TARGET, NPM_RUN, commandsIn, justRecipes, unknownInvocations } from "./_driving.ts";
 import { repoRoot } from "./_walk.ts";
 
 // ---------------------------------------------------------------------------
@@ -79,12 +80,18 @@ function configFacts(): readonly string[] {
 
 function ownerActFacts(): readonly string[] {
   const guard = readFileSync(GUARD_PATH, "utf8");
-  // Read the executable verb LOOP, never the header comment. Measured when this
-  // fence was written: the stale header says six acts while this loop iterates
-  // seven (`land cancel rework review journey raise publish`).
+  // The canonical list includes three special-case paths outside the shell's
+  // direct-verb loop (seed, group apply and retry --adopt-as). Keep the loop
+  // tied to its case-arm entries; the guard matrix exercises every full-list
+  // entry against the executable shell and Pi bindings.
   const match = /^\s*for verb in ([^;\n]+); do$/m.exec(guard);
   assert.ok(match, "owner acts: the guard's `for verb in ...; do` loop must remain extractable");
-  return (match[1] ?? "").trim().split(/\s+/);
+  assert.deepEqual((match[1] ?? "").trim().split(/\s+/),
+    OWNER_ACT_LIST.filter((entry) => entry.reach === "case-arm").map((entry) => entry.verb),
+    "the shell's direct owner-act loop must match the shared case-arm entries");
+  assert.match(guard, /for phrase in seed group\+apply; do/u, "the shell guard must retain its two external verb paths");
+  assert.match(guard, /--adopt-as/u, "the shell guard must retain the flagged retry owner path");
+  return OWNER_ACT_LIST.map(ownerActName);
 }
 
 const FACT_CLASSES: readonly FactClass[] = [
@@ -181,19 +188,7 @@ function visibleText(html: string): string {
 }
 
 function unknownCommands(html: string): string[] {
-  const blocks = commandBlocks(html);
-  const recipes = justRecipes(JUSTFILE);
-  return [
-    ...commandsIn(blocks, NPM_RUN)
-      .filter((script) => !(script in PACKAGE.scripts))
-      .map((script) => `npm run ${script}`),
-    ...commandsIn(blocks, AWSF_CLI)
-      .filter((command) => !CLI_COMMANDS.includes(command))
-      .map((command) => `awsf ${command}`),
-    ...commandsIn(blocks, JUST_TARGET)
-      .filter((target) => !recipes.has(target))
-      .map((target) => `just ${target}`),
-  ];
+  return unknownInvocations(commandBlocks(html), PACKAGE.scripts, CLI_COMMANDS, justRecipes(JUSTFILE));
 }
 
 test("the cheatsheet exists at its one required path", () => {

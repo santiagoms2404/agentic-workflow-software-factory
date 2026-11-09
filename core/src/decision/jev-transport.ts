@@ -17,6 +17,14 @@ export const JEV_DEFAULT_MODEL = "~typesafe/jev-latest";
 /** The only credential source (Q6). Never a file, never pi's auth.json. */
 export const JEV_KEY_ENV = "OPENROUTER_API_KEY";
 
+/** Shared by the doctor and the meta fence so their source checks cannot drift. */
+const fetchIdentifier = ["fe", "tch"].join("");
+export const JEV_FETCH_REFERENCE = new RegExp(
+  `(^|[^.\\w$])${fetchIdentifier}\\b(?=\\s*(?:\\(|[,);=}:.?]|$))`
+  + `|(?:globalThis|global|self|window)\\s*(?:\\.\\s*${fetchIdentifier}\\b|\\[\\s*(?:'${fetchIdentifier}'|"${fetchIdentifier}"|\\x60${fetchIdentifier}\\x60)\\s*\\])`,
+);
+export const JEV_ENDPOINT_REFERENCE = /api\/alpha\/decisions/;
+
 export const JEV_RETRY_STATUSES: ReadonlySet<number> = new Set([429, 502, 503, 529]);
 export const JEV_MAX_ATTEMPTS = 3;
 /** Total budget for one call, including retries, backoff and the response body. */
@@ -296,7 +304,7 @@ export function validateJevResponse(response: unknown, questions: JevQuestions):
       throw new ContractError(`Undeclared choice returned: ${id}`);
     }
     if (q.type === "score") {
-      if (!isNonNegative(answer.score) || answer.score > keys.length - 1) {
+      if (!isNonNegative(answer.score) || !Number.isInteger(answer.score) || answer.score > keys.length - 1) {
         throw new ContractError(`Score out of range: ${id}`);
       }
       const legend = answer.legend;
@@ -328,8 +336,8 @@ export function jevCost(usage: JevUsage, rate: JevRate | null): JevCost {
 export interface JevTransportOptions {
   /** The project's switch (`jevSwitchOf(catalog)`). Required so no caller defaults past it. */
   readonly projectSwitch: JevSwitch;
-  /** Where the key is read from, once. Defaults to process.env; tests pass their own. */
-  readonly env?: Readonly<Record<string, string | undefined>>;
+  /** Explicit credential source, copied once; the transport never consults ambient process state. */
+  readonly env: Readonly<Record<string, string | undefined>>;
   /** Pin a versioned model instead of the moving alias. */
   readonly model?: string;
   /** Total deadline including retries. Default and ceiling: 30 s. */
@@ -358,7 +366,7 @@ export class JevTransport {
       throw new Error(`projectSwitch must be "on" or "off".`);
     }
     this.#projectSwitch = options.projectSwitch;
-    const key = (options.env ?? process.env)[JEV_KEY_ENV]?.trim();
+    const key = options.env[JEV_KEY_ENV]?.trim();
     this.#key = key ? key : undefined;
     this.#model = options.model ?? JEV_DEFAULT_MODEL;
     const deadlineMs = options.deadlineMs ?? JEV_DEADLINE_MS;
@@ -381,16 +389,21 @@ export class JevTransport {
     return this.#projectSwitch === "on" && this.#key !== undefined;
   }
 
+  /** The transport's configured model. */
+  get model(): string {
+    return this.#model;
+  }
+
   /**
    * Ask Jev. Every ending is a typed outcome; only a request that could never be
    * valid throws (QuestionValidationError), before anything is sent.
    */
   async ask(state: JevState, questions: JevQuestions, options: JevAskOptions = {}): Promise<JevOutcome> {
+    const requestedModel = options.model ?? this.#model;
+    validateJevRequest(state, questions, requestedModel);
     if (this.#projectSwitch === "off") {
       return { outcome: "refused-by-switch", detail: "Jev is switched off for this project (decision.jev: off)." };
     }
-    const requestedModel = options.model ?? this.#model;
-    validateJevRequest(state, questions, requestedModel);
 
     // Redaction runs on the values before the body is serialized, so nothing
     // unredacted is ever turned into wire text.

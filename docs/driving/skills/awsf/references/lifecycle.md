@@ -26,7 +26,7 @@ those.
 | how a failed gate escalates into a counted transition | `core/src/workflow/` |
 | what a gate actually measures | `core/src/gates/` |
 | the tuning that is committed rather than compiled — adapters, routing, per-agent model and harness, workflows, gates, risk, policy, observability | `awsf.config.yaml`, validated by `core/src/config/schema.ts` |
-| why an edge exists at all, and what was decided when it was added | the Amendments in `specs/awsf-plan.html` for a v1 edge, or in the v2 deep plan that added it (`specs/awsf-v2-w*.html`) |
+| why an edge or operation exists, and what was decided when it was added | the owning plan's Amendments under `specs/`, including v3 deep plans; the repository's [documentation map](../../../../README.md) distinguishes current authority from historical records |
 
 ## Three properties of these sources worth knowing before you read them
 

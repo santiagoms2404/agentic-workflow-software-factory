@@ -1,5 +1,5 @@
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { recoveryDigest } from "../contracts/phase-recovery.ts";
 import type { ProtectedCandidateBinding, ProtectedGrant, ProtectedGrantConsumption } from "../contracts/protected-grant.ts";
@@ -10,9 +10,9 @@ import { matchesPathGlob } from "../policy/path-policy.ts";
 import { protectedBlobId, protectedReadOnlyGit, readProtectedContent, verifyProtectedFilesystem } from "../workflow/protected-files.ts";
 import { assertProtectedExecutionProof, type ProtectedState } from "../workflow/protected-grants.ts";
 import { assertControllerSettled, ownExecutionLease, type Holder } from "../execution/operation-lease.ts";
-import { assertOwnedRegular, assertPrivateDirectory, assertWitnessedLockAtMutationBoundary, captureLockWitness,
+import { assertOwnedRegular, assertPrivateDirectory, assertProtectedLockWitness, assertWitnessedLockAtMutationBoundary, captureLockWitness,
   descriptorDigest, lockIdentityDrift, lockIdentityOf, readOwnedRegularFile, type ProtectedLockWitness } from "./protected-lock.ts";
-import type { ProtectedCommitIntent } from "./protected-commit.ts";
+import { isPermissionMaskedMount, type ProtectedCommitIntent } from "./protected-commit.ts";
 
 const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
@@ -72,11 +72,12 @@ function visibleDescriptorHolders(device: number, inode: number): readonly numbe
 export function unfinishedProtectedEffect(state: ProtectedState): ProtectedCommitIntent | null {
   const unbound = state.intents.filter(intent => !state.bindings.some(binding => binding.consumptionId === intent.binding.consumptionId));
   if (unbound.length > 1) throw new Error("protected evidence carries more than one unfinished host effect");
+  if (unbound.length === 1 && unbound[0] !== undefined) return unbound[0];
   const orphaned = state.consumptions.filter(consumption =>
     !state.bindings.some(binding => binding.consumptionId === consumption.id) &&
     !state.intents.some(intent => intent.binding.consumptionId === consumption.id));
   if (orphaned.length > 0) return null;
-  return unbound[0] ?? null;
+  return null;
 }
 
 /**
@@ -130,6 +131,8 @@ export function protectedEffectContext(state: ProtectedState, intent: ProtectedC
   if (runGit(git, ["rev-parse", "--absolute-git-dir"]).trim() !== grant.subject.worktreeGitDir) throw new Error("the worktree Git directory is not the one this grant was issued against");
   if (runGit(git, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim() !== grant.subject.commonGitDir) throw new Error("the common Git directory is not the one this grant was issued against");
   const indexPath = join(grant.subject.worktreeGitDir, "index");
+  const inheritedIndex = process.env["GIT_INDEX_FILE"];
+  if (inheritedIndex !== undefined && inheritedIndex !== indexPath) throw new Error("the Git index path is redirected away from the granted worktree Git directory");
   if (runGit(git, ["rev-parse", "--path-format=absolute", "--git-path", "index"]).trim() !== indexPath) throw new Error("the Git index path is redirected away from the granted worktree Git directory");
   assertOwnedRegular(lstatSync(indexPath), "the Git index", "inherited");
   return Object.freeze({ grant, consumption, binding: intent.binding, root, indexPath });
@@ -161,8 +164,11 @@ export function inspectProtectedPublication(state: ProtectedState, intent: Prote
     return refuse("the recorded candidate's protected delta differs from its intent");
   }
   for (const delta of binding.deltas) {
-    const stat = lstatSync(join(root, delta.path));
-    if (!stat.isFile() || stat.nlink !== 1 || ((stat.mode & 0o111) === 0 ? "100644" : "100755") !== delta.afterMode ||
+    const physical = join(root, delta.path);
+    const stat = lstatSync(physical);
+    const isMasked = isPermissionMaskedMount(root, stat.mode) || isPermissionMaskedMount(physical, stat.mode);
+    const mode = isMasked ? delta.afterMode : ((stat.mode & 0o111) === 0 ? "100644" : "100755");
+    if (!stat.isFile() || stat.nlink !== 1 || mode !== delta.afterMode ||
         protectedBlobId(readProtectedContent(root, delta.path)) !== delta.afterBlob) {
       return refuse("the granted worktree bytes no longer match the recorded candidate");
     }
@@ -194,12 +200,29 @@ export function stagedIndexBytes(attemptDir: string, intent: ProtectedCommitInte
   let directories: readonly string[];
   try { directories = readdirSync(stagingRoot); }
   catch { throw new Error("the pre-staged index this publication needs was not retained"); }
-  assertPrivateDirectory(stagingRoot, "the protected staging root");
+  const rootMasked = isPermissionMaskedMount(stagingRoot);
+  if (!rootMasked) {
+    assertPrivateDirectory(stagingRoot, "the protected staging root");
+  } else {
+    const stat = lstatSync(stagingRoot);
+    if (!stat.isDirectory() || (process.getuid !== undefined && stat.uid !== process.getuid())) {
+      throw new Error("the protected staging root is not an owner-private directory");
+    }
+  }
   for (const name of directories) {
-    const candidate = join(stagingRoot, name, "index");
+    const candidateDir = join(stagingRoot, name);
+    const candidate = join(candidateDir, "index");
     let bytes: Buffer;
     try {
-      assertPrivateDirectory(join(stagingRoot, name), `the retained staging directory ${name}`);
+      const dirMasked = rootMasked || isPermissionMaskedMount(candidateDir);
+      if (!dirMasked) {
+        assertPrivateDirectory(candidateDir, `the retained staging directory ${name}`);
+      } else {
+        const stat = lstatSync(candidateDir);
+        if (!stat.isDirectory() || (process.getuid !== undefined && stat.uid !== process.getuid())) {
+          continue;
+        }
+      }
       bytes = readOwnedRegularFile(candidate, `the retained staged index ${name}`, "inherited");
     } catch { continue; }
     if (sha256(bytes) === intent.stagedIndexDigest) matches.push(bytes);
@@ -301,7 +324,8 @@ function adoptRetainedIndexLock(lockPath: string, intent: ProtectedCommitIntent,
   }
   try {
     const stat = fstatSync(descriptor, { bigint: true });
-    assertOwnedRegular(stat, "the retained Git index lock", "owner-private");
+    const isMasked = isPermissionMaskedMount(lockPath, stat.mode) || isPermissionMaskedMount(context.root, stat.mode);
+    assertOwnedRegular(stat, "the retained Git index lock", isMasked ? "inherited" : "owner-private");
     if (descriptorDigest(descriptor) !== intent.stagedIndexDigest) {
       throw new Error("a Git index lock this publication did not write is present; recovery does not break another holder's lock");
     }
@@ -387,13 +411,34 @@ export async function completeProtectedPublication(options: {
         // the compare-and-swap for the same reason the transport records its
         // own: the next recovery must be able to prove where it came from, and
         // a resemblance argument is exactly what this change removes.
-        witness = captureLockWitness({ descriptor: lock, writer: "recovery", supersedes: retained?.id ?? null,
-          lockPath, indexPath, worktree: root, worktreeGitDir: context.grant.subject.worktreeGitDir,
-          grantId: binding.grantId, consumptionId: binding.consumptionId, candidateSha: binding.candidateSha,
-          parentSha: binding.parentSha, treeSha: binding.treeSha, beforeIndexDigest: intent.beforeIndexDigest,
-          stagedIndexDigest: intent.stagedIndexDigest,
-          controller: { leaseId: lease.id, pid: lease.pid, startIdentity: lease.startIdentity },
-          now: options.now ?? (() => new Date().toISOString()) });
+        try {
+          witness = captureLockWitness({ descriptor: lock, writer: "recovery", supersedes: retained?.id ?? null,
+            lockPath, indexPath, worktree: root, worktreeGitDir: context.grant.subject.worktreeGitDir,
+            grantId: binding.grantId, consumptionId: binding.consumptionId, candidateSha: binding.candidateSha,
+            parentSha: binding.parentSha, treeSha: binding.treeSha, beforeIndexDigest: intent.beforeIndexDigest,
+            stagedIndexDigest: intent.stagedIndexDigest,
+            controller: { leaseId: lease.id, pid: lease.pid, startIdentity: lease.startIdentity },
+            now: options.now ?? (() => new Date().toISOString()) });
+        } catch (err) {
+          if (!isPermissionMaskedMount(lockPath) && !isPermissionMaskedMount(root)) throw err;
+          const stat = fstatSync(lock, { bigint: true });
+          assertOwnedRegular(stat, "the Git index lock this publication created", "inherited");
+          const contentDigest = descriptorDigest(lock);
+          if (contentDigest !== intent.stagedIndexDigest) {
+            throw new Error("the Git index lock this publication created does not hold the exact pre-staged index its intent pinned");
+          }
+          witness = Object.freeze({
+            schema: "awsf.protected-lock-witness/v1" as const, id: randomUUID(), supersedes: retained?.id ?? null, writer: "recovery" as const,
+            grantId: binding.grantId, consumptionId: binding.consumptionId, candidateSha: binding.candidateSha,
+            parentSha: binding.parentSha, treeSha: binding.treeSha, beforeIndexDigest: intent.beforeIndexDigest,
+            stagedIndexDigest: intent.stagedIndexDigest, worktree: root, worktreeGitDir: context.grant.subject.worktreeGitDir,
+            indexPath, lockPath, contentDigest,
+            identity: lockIdentityOf(stat),
+            controller: Object.freeze({ leaseId: lease.id, pid: lease.pid, startIdentity: lease.startIdentity }),
+            createdAt: (options.now ?? (() => new Date().toISOString()))(),
+          });
+          assertProtectedLockWitness(witness);
+        }
         await options.persistWitness(witness);
       }
       if (publication.outcome === "unpublished") {

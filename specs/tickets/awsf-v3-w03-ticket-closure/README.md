@@ -99,4 +99,4 @@ dated Amendment (invariant 12). From G03-C on, the owner runs `awsf close` on ea
 moves rows, milestone markers and states only; Handoff entries and narrative Amendments, when
 wanted, are separate owner commits. A milestone stays `[wip]` until every task in it is `[x]`. Only
 T15's closure moves the spine's Milestone M3 / W03 marker and `../awsf-v3-plan/W03.md`, and it
-retires gate GM. Current plan-aligned states: **T01–T02 `done`** (M1 `[x]`), **T03–T15 `todo`** (M2–M7 `[]`).
+retires gate GM. Historical snapshot, retained from earlier documentation: **T01–T02 `done`** (M1 `[x]`), **T03–T15 `todo`** (M2–M7 `[]`). Read the [registered plan](../../awsf-v3-w03-ticket-closure.html) for current completion.

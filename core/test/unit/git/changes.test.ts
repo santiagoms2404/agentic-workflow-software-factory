@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import {
+  assertClean,
   captureChangeSet,
   changedPaths,
   invalidateStaleResults,
   recordGateFreshness,
   withCleanWorktree,
   WorktreeNotClean,
+  systemGitRunner,
   type GitRunner,
 } from "../../../src/git/changes.ts";
 
@@ -61,9 +67,26 @@ test("a post-gate mutation invalidates both gates and review", () => {
 });
 
 test("gates require a clean tree both before and after", async () => {
-  const beforeDirty = runner({ "status --porcelain": [" M src/a.ts\n"] });
+  const beforeDirty = runner({ "status --porcelain --untracked-files=all": [" M src/a.ts\n"] });
   await assert.rejects(withCleanWorktree("/repo", () => undefined, beforeDirty), WorktreeNotClean);
 
-  const afterDirty = runner({ "status --porcelain": ["", "?? output.txt\n"] });
+  const afterDirty = runner({ "status --porcelain --untracked-files=all": ["", "?? output.txt\n"] });
   await assert.rejects(withCleanWorktree("/repo", () => undefined, afterDirty), WorktreeNotClean);
+});
+
+test("cleanliness ignores ambient showUntrackedFiles=no", () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-b1-51-status-"));
+  const repository = join(root, "repo");
+  try {
+    execFileSync("git", ["init", "-q", repository]);
+    execFileSync("git", ["-C", repository, "config", "status.showUntrackedFiles", "no"]);
+    writeFileSync(join(repository, "untracked.txt"), "untracked\n");
+
+    assert.equal(execFileSync("git", ["-C", repository, "status", "--porcelain"], { encoding: "utf8" }), "",
+      "the fixture proves the ambient setting hides untracked files from ordinary status");
+    assert.match(execFileSync("git", ["-C", repository, "status", "--porcelain", "--untracked-files=all"], { encoding: "utf8" }), /\?\? untracked\.txt/u);
+    assert.throws(() => assertClean(repository, "before", systemGitRunner(repository)), WorktreeNotClean);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

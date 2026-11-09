@@ -18,6 +18,7 @@ import {
   AttributeNotInteractive,
   AttributeReasonRequired,
   AttributeUnknownCause,
+  assertAttributeReason,
   attributeCommand,
   type AttributeCommandOptions,
 } from "../../../src/cli/commands/attribute.ts";
@@ -133,6 +134,13 @@ test("an unknown cause is refused by name", async () => {
     );
     nothingWritten(box, "cause-task");
   } finally { box.close(); }
+});
+
+test("reason bounding never leaves half of an astral code point", () => {
+  const reason = assertAttributeReason(`${"a".repeat(1_999)}😀tail`);
+  assert.equal(reason.length, 1_999);
+  assert.equal(reason, "a".repeat(1_999));
+  assert.equal([...reason].length, 1_999);
 });
 
 test("the reason is required and never credential-shaped", async () => {
@@ -289,6 +297,7 @@ test("a driver attribution of a CANCELLED attempt writes one record and event, a
     assert.equal(live[0]!.session_id, "cancelled-task-session");
     assert.equal(JSON.parse(live[0]!.payload_json).cause, "driver");
     assert.deepEqual(JSON.parse(live[0]!.payload_json).trap, { kind: "trap", id: "TR-01" });
+    projection.close();
     const report = await rebuildCommand(box.stateRoot);
     assert.equal(report.ok, true, report.ok ? undefined : report.reason);
     assert.deepEqual(rows(), live);

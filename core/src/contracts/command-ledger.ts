@@ -1,10 +1,11 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { sha256, canonicalJson } from "./owner-amendment.ts";
+import { OBJECT_ID_PATTERN, SHA256_HEX_PATTERN } from "./typebox.ts";
 
 const id = Type.String({ minLength: 1 });
-const hash = Type.String({ pattern: "^[a-f0-9]{64}$" });
-const sha = Type.String({ pattern: "^[a-f0-9]{40}$" });
+const hash = Type.String({ pattern: SHA256_HEX_PATTERN });
+const sha = Type.String({ pattern: OBJECT_ID_PATTERN });
 
 /**
  * Every site that dispatches an owner-configured `config.gates` command.

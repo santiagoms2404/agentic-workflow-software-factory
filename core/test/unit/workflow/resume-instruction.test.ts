@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createOwnerAmendment, composeOwnerAmendmentChain, sha256, canonicalJson } from "../../../src/contracts/owner-amendment.ts";
-import { acceptedResumeInstructions, composeResumeInstruction, resumeInstructionContext, resumeInstructionLines } from "../../../src/workflow/resume-instruction.ts";
+import { createOwnerAmendment, composeOwnerAmendmentChain, sha256, canonicalJson, type ReworkOwnerAmendment } from "../../../src/contracts/owner-amendment.ts";
+import { acceptedResumeInstructions, assertReworkOwnerAmendmentActivation, composeResumeInstruction, resumeInstructionContext, resumeInstructionLines } from "../../../src/workflow/resume-instruction.ts";
 import type { ResumeInstruction } from "../../../src/contracts/resume-instruction.ts";
 import type { AcceptedPhase } from "../../../src/contracts/phase-recovery.ts";
 import type { AttemptStatus, AttemptEvent } from "../../../src/cli/commands/attempt.ts";
@@ -27,7 +27,8 @@ function fixture() {
     bindingDigest: sha256(canonicalJson(amendment.binding)), operationId: "operation", logicalTurnId: "session:builder:run",
     originalInputDigest: composed.originalInputDigest, composedDigest: composed.composedDigest, providerAcknowledgementDigest: null };
   const evidence: AttemptEvidence[] = [
-    { type: "resume-activation", operationId: "operation", checkpointId: "anchor", reason: "continue", reservationId: "reservation", phase, ownerInstruction: instruction },
+    { type: "resume-activation", operationId: "operation", checkpointId: "anchor", reason: "continue", reservationId: "reservation", phase,
+      ownerInstruction: instruction, ownerApprovalId: amendment.binding.authorizationId },
     { type: "compiled-prompt", phaseId: "session:builder", name: "user", text: original, lineCount: 1, at: "now" },
     { type: "compiled-prompt", phaseId: "session:builder", name: "user+owner-amendment", text: composed.composedText, lineCount: 4, at: "now" },
     { type: "resume-instruction-delivery", phaseId: "session:builder", delivery: { ...delivery, state: "intent" }, at: "now" },
@@ -41,6 +42,30 @@ function fixture() {
   return { status, original, instruction, accepted, records, evidence };
 }
 
+test("a rework supplement is checked against its recorded L19 activation at use, while history stays readable", () => {
+  const expected: ReworkOwnerAmendment["binding"] = {
+    entry: "rework", project: "project", taskId: "task", attempt: 1, sessionId: "session",
+    authorizationId: "auth-record", operationId: "operation", phaseKey: "owner-rework-1", phaseOrdinal: 3,
+    anchorId: "session:candidate:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", anchorRevision: 7,
+    candidateSha: "a".repeat(40), defectDigest: sha256("repair defect"), ownerReentry: 1,
+    logicalTurnId: "session:owner-rework-1:run", correctionRound: 0, priorAmendmentDigest: null,
+    originalRequestDigest: sha256("original request"), originalPromptBundleDigest: sha256("bundle"), deliveryFrontier: "rework-input" as const,
+  };
+  const amendment: ReworkOwnerAmendment = createOwnerAmendment({ id: "rework-amendment", text: "Preserve behavior", confirmedAt: "now", binding: expected });
+  const activation: AttemptEvidence = {
+    type: "transition", id: "session:L19:8", seq: 8, from: "AWAITING_OWNER", to: "RUNNING", actor: "human", edgeId: "L19",
+    reasonSource: "human", reasonCode: null, reasonDetail: "repair defect", spawnSite: true, at: "now",
+    ownerApprovalId: expected.authorizationId, ownerOperationId: expected.operationId, ownerAmendment: amendment,
+  };
+  assert.equal(assertReworkOwnerAmendmentActivation(activation, expected, "repair defect").digest, amendment.digest);
+  const changed: ReworkOwnerAmendment = createOwnerAmendment({ id: amendment.id, text: amendment.text, confirmedAt: amendment.confirmedAt,
+    binding: { ...expected, candidateSha: "b".repeat(40) } });
+  const mismatchedActivation: AttemptEvidence = { ...activation, ownerAmendment: changed };
+  assert.throws(() => assertReworkOwnerAmendmentActivation(mismatchedActivation, expected, "repair defect"), /activation binding changed/u);
+  assert.match(resumeInstructionLines([mismatchedActivation])[0]!, /Preserve behavior/u,
+    "historical display validates the stored record but does not compare against today's candidate");
+});
+
 test("resume input preserves exact owner text and original bytes; later intent is explicitly historical", () => {
   const f = fixture();
   const composed = composeResumeInstruction(f.original, null, f.instruction);
@@ -53,7 +78,7 @@ test("resume input preserves exact owner text and original bytes; later intent i
   assert.ok(resumeInstructionLines(f.evidence)[0]!.includes(JSON.stringify(f.instruction.amendment.text)));
 });
 
-for (const mutation of ["text", "activation", "request", "input", "missing-submission", "duplicate-submission", "missing-acceptance", "orphan-delivery"] as const) {
+for (const mutation of ["text", "activation", "authorization", "missing-authorization", "request", "input", "missing-submission", "duplicate-submission", "missing-acceptance", "orphan-delivery"] as const) {
   test(`resume instruction refuses ${mutation} instead of replaying input`, () => {
     const f = fixture();
     const activation = f.records[1]!.event.evidence;
@@ -62,6 +87,8 @@ for (const mutation of ["text", "activation", "request", "input", "missing-submi
     switch (mutation) {
       case "text": Object.assign(activation, { ownerInstruction: { ...f.instruction, amendment: { ...f.instruction.amendment, text: "changed" } } }); break;
       case "activation": Object.assign(activation, { operationId: "another-operation" }); break;
+      case "authorization": Object.assign(activation, { ownerApprovalId: "another-approval" }); break;
+      case "missing-authorization": Object.assign(activation, { ownerApprovalId: undefined }); break;
       case "request": Object.assign(f.status, { request: "another request" }); break;
       case "input": Object.assign(f.records[2]!.event.evidence!, { text: "substituted input" }); break;
       case "missing-submission": f.records.splice(5, 1); break;

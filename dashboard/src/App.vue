@@ -12,7 +12,10 @@ import MetricsScreen from "./routes/metrics.vue";
 import { usePolling, type PollMode } from "./composables/usePolling.ts";
 import { useNotifySound } from "./composables/useNotifySound.ts";
 import { isCanvasRoute, parseCanvasRoute, type CanvasRoute } from "./canvas-view.ts";
-import { loadAllSessions } from "./session-pages.ts";
+import { loadAllSessions, reuseSessionCollections } from "./session-pages.ts";
+import { memoizeUntilRejected } from "./memo-loader.ts";
+import { readSequence } from "./latest-read.ts";
+import { planBanner, sessionsPlanBanner, type PlanBanner } from "./plan-banner.ts";
 import { DEFAULT_METRICS_ROUTE, isMetricsRoute, parseMetricsRoute, readRoleColors, type MetricsRouteState } from "./metrics-lens.ts";
 import { admitNewFilterValues, LIFECYCLE_STATES } from "./session-filters.ts";
 import { groupFilterValues } from "./session-groups.ts";
@@ -45,7 +48,12 @@ const roleColors = computed(() => readRoleColors(settings.value));
 const backlogPlan = ref<string | null>(null);
 /** The driving session whose tree the groups screen is showing. */
 const selectedGroup = ref<string | null>(null);
-const backlog = ref<TicketsResponse>({ plans: [], tickets: [], ready: [], counts: { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } }, projectedCost: { usd: null, authority: "unavailable", partial: true } });
+const emptyBacklog = (): TicketsResponse => ({ plans: [], tickets: [], ready: [], counts: { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } }, projectedCost: { usd: null, authority: "unavailable", partial: true } });
+const backlog = ref<TicketsResponse>(emptyBacklog());
+/** Said over the board when its catalog does not resolve: refused, or stale (O4). */
+const backlogBanner = ref<PlanBanner | null>(null);
+/** The same, over the views that draw runs against the sessions route's plan list. */
+const sessionsBanner = computed(() => sessionsPlanBanner(sessions.value));
 
 let hasSeededWorkflowSelection = false;
 let hasSeededLifecycleSelection = false;
@@ -102,32 +110,61 @@ function readEnabledWorkflows(value: unknown): readonly string[] {
   return workflowIds;
 }
 
-// The group list is titles and counts, not trees: one read at startup, and the
+// The group list is titles and counts, not trees: one successful read, and the
 // tree itself is fetched only when a reader opens one. Polling a 70-stage
-// journal every few seconds to render a heading would be an odd trade.
-let groupsRequest: Promise<void> | null = null;
-function loadGroupsOnce(): Promise<void> {
-  groupsRequest ??= (async () => {
-    const response = await fetch("/api/v1/groups");
-    if (!response.ok) return;
-    groups.value = await response.json() as GroupsResponse;
-  })().catch(() => {
-    // A project with no planning state is the ordinary case, not an error the
-    // sessions view should refuse to render over.
+// journal every few seconds to render a heading would be an odd trade. A failed
+// read is not memoized: it rejects inside the memo, so the next poll reads
+// again, instead of one startup blip leaving the list empty for the page's life.
+let lastGroupsFetch = 0;
+const readGroups = memoizeUntilRejected(async () => {
+  const response = await fetch("/api/v1/groups");
+  if (!response.ok) throw new Error("Groups unavailable");
+  groups.value = await response.json() as GroupsResponse;
+  lastGroupsFetch = Date.now();
+});
+async function loadGroups(): Promise<void> {
+  const known = new Set(groups.value.groups.map((g) => g.group));
+  const hasUnseen = sessions.value.sessions.some((s) => s.groupId && !known.has(s.groupId));
+  if (hasUnseen && Date.now() - lastGroupsFetch > 1000) {
+    try {
+      const response = await fetch("/api/v1/groups");
+      if (response.ok) {
+        groups.value = await response.json() as GroupsResponse;
+        lastGroupsFetch = Date.now();
+      }
+    } catch {
+      // An empty or failing group list is not an error the sessions view should refuse
+    }
+    return;
+  }
+  return readGroups().catch(() => {
+    // An empty group list is not an error the sessions view should refuse to
+    // render over; the failure is swallowed here, outside the memo, so it is
+    // retried on the next poll rather than kept.
   });
-  return groupsRequest;
 }
 
-let settingsRequest: Promise<void> | null = null;
-function loadSettingsOnce(): Promise<void> {
-  settingsRequest ??= (async () => {
-    const response = await fetch("/api/v1/settings");
-    if (!response.ok) throw new Error("Settings unavailable");
-    const payload: SettingsResponse = await response.json();
-    settings.value = payload.settings;
-    configuredWorkflows.value = readEnabledWorkflows(payload.settings);
-  })();
-  return settingsRequest;
+// Settings are read once too, and a failed read likewise retries on the next
+// poll. Memoizing the rejection made every later poll reject until a reload.
+const loadSettingsOnce = memoizeUntilRejected(async () => {
+  const response = await fetch("/api/v1/settings");
+  if (!response.ok) throw new Error("Settings unavailable");
+  const payload: SettingsResponse = await response.json();
+  settings.value = payload.settings;
+  configuredWorkflows.value = readEnabledWorkflows(payload.settings);
+});
+
+// A malformed percent sequence (e.g. `#/sessions/%` or `#/groups/%E0`) must not
+// throw URIError: throwing inside onMounted aborts before the hashchange
+// listener is registered, permanently breaking navigation. Fall back to the raw
+// string on malformed input, and keep literal `+` untouched (B13-09, B13-10,
+// B13-28, B14-03).
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function readRoute(): void {
@@ -137,7 +174,7 @@ function readRoute(): void {
   // the context survives a reload and a back button rather than only a click.
   const backlogWithPlan = /^#\/backlog\/([^/]+)$/.exec(location.hash);
   backlogRoute.value = location.hash === "#/backlog" || backlogWithPlan !== null;
-  backlogPlan.value = backlogWithPlan?.[1] ? decodeURIComponent(backlogWithPlan[1]) : null;
+  backlogPlan.value = backlogWithPlan?.[1] ? safeDecode(backlogWithPlan[1]) : null;
   // The decision tree has its own screen: a 72-stage group needs the width, and
   // sharing the sessions view with the runs it produced gave it neither.
   // `#/canvas?kinds=…&sel=…&cam=…`: the canvas keeps its whole state here,
@@ -150,11 +187,11 @@ function readRoute(): void {
   if (metricsRoute.value) metricsState.value = parseMetricsRoute(location.hash);
   const groupWithId = /^#\/groups\/([^/]+)$/.exec(location.hash);
   groupsRoute.value = location.hash === "#/groups" || groupWithId !== null;
-  selectedGroup.value = groupWithId?.[1] ? decodeURIComponent(groupWithId[1]) : null;
+  selectedGroup.value = groupWithId?.[1] ? safeDecode(groupWithId[1]) : null;
   const phase = location.hash.match(/^#\/sessions\/([^/]+)\/phases\/([^/]+)$/);
   const session = location.hash.match(/^#\/sessions\/([^/]+)$/);
-  selectedId.value = decodeURIComponent(phase?.[1] ?? session?.[1] ?? "") || null;
-  selectedPhaseId.value = phase?.[2] ? decodeURIComponent(phase[2]) : null;
+  selectedId.value = safeDecode(phase?.[1] ?? session?.[1] ?? "") || null;
+  selectedPhaseId.value = phase?.[2] ? safeDecode(phase[2]) : null;
 }
 function onHashChange(): void { readRoute(); void load(); }
 onMounted(() => { readRoute(); addEventListener("hashchange", onHashChange); });
@@ -177,11 +214,14 @@ function readKind(): ReadKind {
   return selectedId.value ? `session:${selectedId.value}` : "sessions";
 }
 
+/** A poll and a hashchange can overlap; only the read started last may publish (B13-25). */
+const reads = readSequence();
 async function load(): Promise<void> {
   // A paged read publishes only a complete projection. The kind is taken again
   // after the awaits, and a poll whose view changed while it loaded publishes
   // nothing, so one view's response is never read as another's.
   const kind = readKind();
+  const read = reads.begin();
   // The metrics tab polls its own payload; the shell needs only health here.
   const dataRequest = kind === "metrics" ? Promise.resolve(null)
     : kind === "settings" ? fetch("/api/v1/adapters")
@@ -192,9 +232,10 @@ async function load(): Promise<void> {
     fetch("/api/v1/health"),
     dataRequest,
     loadSettingsOnce(),
-    loadGroupsOnce(),
+    loadGroups(),
   ]);
   if (kind !== readKind()) return;
+  if (!reads.isNewest(read)) return;
   if (!nextHealth.ok) throw new Error("Dashboard data unavailable");
   health.value = await nextHealth.json() as HealthResponse;
   if (kind === "metrics") {
@@ -206,11 +247,21 @@ async function load(): Promise<void> {
     detail.value = null;
   } else if (kind === "backlog") {
     const response = nextData as Response;
-    if (!response.ok) throw new Error("Backlog unavailable");
-    backlog.value = await response.json() as TicketsResponse;
+    if (!response.ok) {
+      // A plan catalog that does not resolve is a named refusal, shown as a
+      // banner over an empty board rather than an empty board alone. Any other
+      // failure still fails the poll as before.
+      const refused = planBanner({ ok: false, body: await response.json().catch(() => null) });
+      if (refused === null) throw new Error("Backlog unavailable");
+      backlogBanner.value = refused;
+      backlog.value = emptyBacklog();
+    } else {
+      backlog.value = await response.json() as TicketsResponse;
+      backlogBanner.value = planBanner({ ok: true, body: backlog.value });
+    }
     detail.value = null;
   } else if (kind === "sessions") {
-    sessions.value = nextData as SessionsResponse;
+    sessions.value = reuseSessionCollections(sessions.value, nextData as SessionsResponse);
     detail.value = null;
   } else {
     const response = nextData as Response;
@@ -246,26 +297,39 @@ const { enabled: soundEnabled, setEnabled: setSoundEnabled } = useNotifySound(co
     <SettingsRoute v-if="settingsRoute" :settings="settings" :adapters="adapters.adapters" :health="health"
       :sound-enabled="soundEnabled" @update:sound-enabled="setSoundEnabled" />
     <MetricsScreen v-else-if="metricsRoute" :route="metricsState" :role-colors="roleColors" />
-    <CanvasScreen
-      v-else-if="canvasRoute"
-      :sessions="sessions.sessions"
-      :plans="sessions.plans"
-      :groups="groups.groups"
-      :route="canvasState"
-    />
+    <template v-else-if="canvasRoute">
+      <p v-if="sessionsBanner" class="error-bar" role="alert">
+        <strong>{{ sessionsBanner.heading }}</strong> {{ sessionsBanner.detail }}
+      </p>
+      <CanvasScreen
+        :sessions="sessions.sessions"
+        :plans="sessions.plans"
+        :groups="groups.groups"
+        :route="canvasState"
+      />
+    </template>
     <GroupsRoute v-else-if="groupsRoute" :groups="groups" :selected="selectedGroup" />
-    <BacklogRoute v-else-if="backlogRoute" :backlog="backlog" :plan="backlogPlan" />
+    <template v-else-if="backlogRoute">
+      <p v-if="backlogBanner" class="error-bar" role="alert">
+        <strong>{{ backlogBanner.heading }}</strong> {{ backlogBanner.detail }}
+      </p>
+      <BacklogRoute :backlog="backlog" :plan="backlogPlan" />
+    </template>
     <SessionRoute v-else-if="detail" :session="detail" :selected-phase-id="selectedPhaseId" />
-    <SessionsGrid
-      v-else
-      v-model:selected-workflows="selectedWorkflows"
-      v-model:selected-states="selectedLifecycleStates"
-      v-model:selected-plan-kinds="selectedPlanKinds"
-      v-model:selected-groups="selectedGroups"
-      :sessions="sessions.sessions"
-      :plans="sessions.plans"
-      :groups="groups.groups"
-      :workflows="configuredWorkflows"
-    />
+    <template v-else>
+      <p v-if="sessionsBanner" class="error-bar" role="alert">
+        <strong>{{ sessionsBanner.heading }}</strong> {{ sessionsBanner.detail }}
+      </p>
+      <SessionsGrid
+        v-model:selected-workflows="selectedWorkflows"
+        v-model:selected-states="selectedLifecycleStates"
+        v-model:selected-plan-kinds="selectedPlanKinds"
+        v-model:selected-groups="selectedGroups"
+        :sessions="sessions.sessions"
+        :plans="sessions.plans"
+        :groups="groups.groups"
+        :workflows="configuredWorkflows"
+      />
+    </template>
   </AppShell>
 </template>

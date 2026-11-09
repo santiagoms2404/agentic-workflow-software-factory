@@ -1,6 +1,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { WorktreeRelativePath, phaseEnvelope } from "./envelope-base.ts";
 import { SHA_PATTERN, TestOutputSchema } from "./test-output.ts";
+import { SHA256_HEX_PATTERN } from "./typebox.ts";
 
 // What the mandatory opposite-provider reviewer is judging, composed by the
 // HOST from Git and from the phases that already ran.
@@ -30,7 +31,9 @@ export const REVIEW_CONTEXT_SCHEMA_ID = "awsf.review-context/v1";
  * Sized against `MAX_ENVELOPE_BYTES` (256 KiB): the diff is by far the largest
  * field, `outputTail` is capped at 4,000, and the remainder is paths and prose.
  * A candidate whose evidence still cannot fit fails the fitness precondition
- * before a call is spent rather than being silently trimmed further.
+ * before a call is spent rather than being silently trimmed further. This is a
+ * character budget: the composer tightens it to the envelope's byte allowance
+ * (boundReviewDiffForEnvelope), because multi-byte text overflows bytes first.
  */
 export const REVIEW_CONTEXT_DIFF_MAX_CHARS = 96_000;
 
@@ -43,7 +46,7 @@ export const REVIEW_CONTEXT_DIFF_MAX_CHARS = 96_000;
 export const REVIEW_CONTEXT_STAT_MAX_CHARS = 8_000;
 
 /** Lowercase hex SHA-256 of the FULL diff — the bounded copy is never the digest's subject. */
-export const SHA256_PATTERN = "^[0-9a-f]{64}$";
+export const SHA256_PATTERN = SHA256_HEX_PATTERN;
 
 export const ReviewDiffDeliverySchema = Type.Object({
   directory: Type.String({ minLength: 1 }),

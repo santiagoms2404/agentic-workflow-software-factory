@@ -10,6 +10,7 @@ import {
   CatalogPlanRoleCardinalityError,
   CatalogSchemaError,
   CatalogUnknownGateError,
+  CatalogUnsupportedPlanFormatError,
   CatalogUnknownVersionError,
   loadCatalog,
 } from "../../../src/registry/catalog.ts";
@@ -128,4 +129,23 @@ test("rejects a contract naming an undeclared repository", () => {
   doc.contracts[0].consumers[0].repository = "dispatch-daemon";
 
   assertCode(() => loadCatalog(toYaml(doc)), CatalogContractReferenceError, "E_CATALOG_CONTRACT_REFERENCE");
+});
+
+test("B10-33: a catalog that omits plans.root loads with the root the schema declares", () => {
+  const doc = cloneCatalog();
+  delete doc.plans.root;
+  assert.equal(loadCatalog(toYaml(doc)).plans.root, "specs");
+});
+
+test("B10-34: an unimplemented plan format is refused by name and by its plan, not as a generic schema error", () => {
+  const doc = cloneCatalog();
+  doc.plans.format = "awsf-plan-html/v2";
+  doc.plans.default = "alpha";
+  assert.throws(() => loadCatalog(toYaml(doc)), (error: unknown) => {
+    assert.ok(error instanceof CatalogUnsupportedPlanFormatError);
+    assert.equal(error.code, "E_CATALOG_UNSUPPORTED_PLAN_FORMAT");
+    assert.equal(error.format, "awsf-plan-html/v2");
+    assert.match(error.message, /"alpha"/u);
+    return true;
+  });
 });

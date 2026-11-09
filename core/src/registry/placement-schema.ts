@@ -1,10 +1,10 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { toJsonSchema } from "../contracts/typebox.ts";
+import { ProjectSlugSchema } from "../config/schema.ts";
+import { ExplicitIdSchema } from "./catalog-schema.ts";
 
 export const PLACEMENT_VERSION = "awsf.placement/v1" as const;
 
-const ProjectSlug = Type.String({ minLength: 1, pattern: "^[a-z0-9][a-z0-9-]*$" });
-const RepositoryId = Type.String({ minLength: 1, pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" });
 const Path = Type.String({ minLength: 1 });
 
 const PlacementRepositorySchema = Type.Object(
@@ -20,8 +20,8 @@ const PlacementRepositorySchema = Type.Object(
 export const PlacementSchema = Type.Object(
   {
     version: Type.Literal(PLACEMENT_VERSION),
-    project: ProjectSlug,
-    repositories: Type.Record(RepositoryId, PlacementRepositorySchema, {
+    project: ProjectSlugSchema,
+    repositories: Type.Record(ExplicitIdSchema, PlacementRepositorySchema, {
       minProperties: 1,
       additionalProperties: false,
     }),

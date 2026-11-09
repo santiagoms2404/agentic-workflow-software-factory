@@ -56,8 +56,10 @@ function onKeydown(event: KeyboardEvent): void {
  */
 function onWheel(event: WheelEvent): void {
   if (alone.value) return;
+  const delta = event.deltaY > 0 || event.deltaX > 0 ? 1 : -1;
+  if ((delta < 0 && atStart.value) || (delta > 0 && atEnd.value)) return;
   event.preventDefault();
-  go(event.deltaY > 0 || event.deltaX > 0 ? 1 : -1);
+  go(delta);
 }
 
 function transform(scale: number, turn: number, offset: number): string {

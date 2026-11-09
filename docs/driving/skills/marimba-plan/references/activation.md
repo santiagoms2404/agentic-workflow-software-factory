@@ -29,10 +29,9 @@ landing cannot make its checklist row done while the registered plan/ticket stil
 says unfinished. Updating registered artifacts remains their existing authorized
 workflow, with the synchronization fence unchanged.
 
-The group journal is the foundation shared with the future group timeline UI.
-This slice supplies exact inputs, append stages, units, amendments, closure and
-explicit unit-revision/attempt bindings. Task 3 has since added the execution
-half: `awsf new --group` and `awsf retry --group` record the driving session on
+The group journal supplies the dashboard's group decision views and retains
+exact inputs, append stages, units, amendments, closure and explicit
+unit-revision/attempt bindings. Execution membership is implemented: `awsf new --group` and `awsf retry --group` record the driving session on
 the attempt, the projector writes `sessions.group_id`, and that column is in the
 public query. Group membership is never backfilled onto a run that predates it,
 because no group existed when it ran.
@@ -41,6 +40,5 @@ from timing, task order or proximity. Cross-group continuation is expressed by
 minting the next attempt in the next group, never by copying an attempt into one.
 
 Per-phase model/effort choice, the harness, canvas and visual editor are excluded.
-The skill does not alter mandatory priming, execution gates or accounting. A future
-screen may render checklist data but may not treat a displayed value as an owner
-lifecycle authorization.
+The skill does not alter mandatory priming, execution gates or accounting.
+A screen rendering checklist data grants no owner lifecycle authorization.

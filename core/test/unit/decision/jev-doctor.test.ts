@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { withJevRow, type DoctorReport } from "../../../src/cli/commands/doctor.ts";
@@ -110,10 +110,63 @@ test("a planted fetch or endpoint breaches the fence and is a finding; a tree wi
   } finally { box.close(); }
 });
 
+test("symlinked TypeScript files are detected and checked by jevFenceStatus", async () => {
+  const box = scratch("symlinks");
+  try {
+    box.write(`src/${JEV_TRANSPORT_FILE}`, "export const ok = true;");
+
+    let fileSymlinkSupported = true;
+    try {
+      const probeTarget = box.write("outside/probe.ts", "export const probe = 1;");
+      const probeLink = join(box.root, "probe-link.ts");
+      symlinkSync(probeTarget, probeLink, "file");
+      rmSync(probeLink, { force: true });
+    } catch {
+      fileSymlinkSupported = false;
+    }
+
+    if (fileSymlinkSupported) {
+      const targetClean = box.write("outside/clean-target.ts", "export const clean = 1;");
+      const targetBreach = box.write("outside/breaching-target.ts", "export const bad = () => fetch('https://example.com');");
+
+      const symlinkClean = join(box.root, "src/workflow/symlinked-clean.ts");
+      mkdirSync(dirname(symlinkClean), { recursive: true });
+      symlinkSync(targetClean, symlinkClean, "file");
+
+      const statusClean = await jevFenceStatus(join(box.root, "src"));
+      assert.equal(statusClean.state, "intact");
+      assert.equal(statusClean.files, 2);
+
+      const symlinkBreach = join(box.root, "src/workflow/symlinked-breach.ts");
+      symlinkSync(targetBreach, symlinkBreach, "file");
+
+      const statusBreach = await jevFenceStatus(join(box.root, "src"));
+      assert.equal(statusBreach.state, "breached");
+      assert.ok(statusBreach.offenders.includes("workflow/symlinked-breach.ts"));
+    } else {
+      box.write("outside-clean/clean-module.ts", "export const clean = 1;");
+      const cleanDir = join(box.root, "outside-clean");
+      const linkCleanDir = join(box.root, "src/workflow-clean");
+      symlinkSync(cleanDir, linkCleanDir, process.platform === "win32" ? "junction" : "dir");
+
+      const statusClean = await jevFenceStatus(join(box.root, "src"));
+      assert.equal(statusClean.state, "intact");
+      assert.equal(statusClean.files, 2);
+
+      box.write("outside-clean/breach-module.ts", "export const bad = () => fetch('https://example.com');");
+      const statusBreach = await jevFenceStatus(join(box.root, "src"));
+      assert.equal(statusBreach.state, "breached");
+      assert.ok(statusBreach.offenders.some((o) => o.includes("breach-module.ts")));
+    }
+  } finally {
+    box.close();
+  }
+});
+
 test("withJevRow puts the row before the summary, and a Jev finding makes the report unhealthy", () => {
   const healthy: DoctorReport = {
     healthy: true,
-    lines: ["matrix: 1 legal edges across 2 states", "attempts: 0; database: not built", "healthy: no controller orphan"],
+    lines: ["matrix: 1 legal edges across 2 states", "attempts: 0; database: not built", "all checks clear"],
   };
   const merged = withJevRow(healthy, { line: "jev: row", finding: null });
   assert.deepEqual(merged, { healthy: true, lines: ["jev: row", ...healthy.lines] });

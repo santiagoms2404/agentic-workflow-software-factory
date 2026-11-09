@@ -90,4 +90,4 @@ The spine's status markers are the source of truth. When a workstream's marker f
 
 A spine marker moves to `[wip]` when the owner approves that workstream's deep plan, and to `[x]`
 only when that deep plan's own final phase completes. **The session that authors a deep plan flips
-nothing here.** Current plan-aligned states: **W01–W15 `todo`.**
+nothing here.** Historical snapshot, retained from earlier documentation: **W01–W15 `todo`.** Read the [registered plan](../../awsf-v2-plan.html) for current completion.

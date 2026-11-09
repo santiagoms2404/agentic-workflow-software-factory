@@ -1,20 +1,21 @@
-import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { AttemptEvent, AttemptStatus } from "../cli/commands/attempt.ts";
 import { ATTRIBUTION_RECORD_SCHEMA_ID, type AttributionRecord } from "../contracts/attribution-record.ts";
 import { assertTrapsReadout, TRAPS_READOUT_SCHEMA_ID, type TrapsReadout } from "../contracts/traps-readout.ts";
 import type { JournalRecord } from "../persistence/journal.ts";
 import { journalFilePath } from "../persistence/platform-paths.ts";
+import { listDirectories } from "../persistence/directories.ts";
 import { scanJournal } from "../persistence/replay.ts";
 import { readTaskAttributions } from "../persistence/task-attributions.ts";
 import { readPlacement } from "../registry/placement.ts";
+import { LANDED_STATES } from "../state/task-machine.ts";
 import { NO_TRAPS, NO_TRAP_KINDS, TRAPS, TRAP_CUT } from "./catalogue.ts";
 import { isStopSinceCut } from "./population.ts";
 
 /** The transition evidence owns time. Legacy transitions without evidence use their journal stamp, never lastActivityAt. */
-export function transitionAt(events: readonly (AttemptEvent & { readonly recordedAt?: string })[], state: string): string | null {
-  const event = events.findLast(event => event.kind === "attempt.transitioned" && event.next.lifecycleState === state);
-  return transitionTime(event, state, event?.recordedAt);
+export function transitionAt(records: readonly JournalRecord<AttemptEvent>[], state: string): string | null {
+  const record = records.findLast(({ event }) => event.kind === "attempt.transitioned" && event.next.lifecycleState === state);
+  return transitionTime(record?.event, state, record?.recorded_at);
 }
 
 function transitionTime(event: AttemptEvent | undefined, state: string, recordedAt?: string): string | null {
@@ -72,7 +73,7 @@ export function buildTrapsReadout(projects: readonly string[], attempts: readonl
     stops, nextFreeTrapId: `TR-${String(next).padStart(2, "0")}`,
     projects: [...projects].sort().map(project => {
       const landed = ordered.filter(facts => facts.status.project === project
-        && (facts.status.lifecycleState === "LANDED" || facts.status.lifecycleState === "PUBLISHED")
+        && (LANDED_STATES as readonly string[]).includes(facts.status.lifecycleState)
         && facts.landedAt !== null)
         .sort((a, b) => Date.parse(b.landedAt!) - Date.parse(a.landedAt!))[0];
       return { project, newestLanded: landed === undefined ? null : {
@@ -85,15 +86,6 @@ export function buildTrapsReadout(projects: readonly string[], attempts: readonl
   return model;
 }
 
-async function directories(path: string): Promise<string[]> {
-  try {
-    return (await readdir(path, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name).sort();
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
-}
-
 /** Reduce within this call so no journal records survive into the next scan. */
 async function readAttemptFacts(path: string): Promise<Omit<AttemptFacts, "attribution">> {
   const scan = await scanJournal<AttemptEvent>(path);
@@ -101,10 +93,7 @@ async function readAttemptFacts(path: string): Promise<Omit<AttemptFacts, "attri
   if (scan.tornTail !== null) throw new Error(`interrupted attempt append at ${path}; reports and never repairs`);
   const status = scan.records.at(-1)?.event.next;
   if (status === undefined) throw new Error(`no attempt journal records at ${path}`);
-  const at = (state: string) => {
-    const record = scan.records.findLast(({ event }) => event.kind === "attempt.transitioned" && event.next.lifecycleState === state);
-    return transitionTime(record?.event, state, record?.recorded_at);
-  };
+  const at = (state: string) => transitionAt(scan.records, state);
   return { status, terminalAt: status.lifecycleState === "BLOCKED" || status.lifecycleState === "CANCELLED"
     ? at(status.lifecycleState) : null, landedAt: at("LANDED"), traps: trapsGate(status, scan.records) };
 }
@@ -113,7 +102,7 @@ async function readAttemptFacts(path: string): Promise<Omit<AttemptFacts, "attri
 export async function readTrapsReadout(stateRoot: string, build: typeof buildTrapsReadout = buildTrapsReadout): Promise<TrapsReadout> {
   const projects: string[] = [];
   const attempts: AttemptFacts[] = [];
-  for (const project of await directories(join(stateRoot, "projects"))) {
+  for (const project of await listDirectories(join(stateRoot, "projects"))) {
     try {
       const placement = await readPlacement(stateRoot, project);
       if (placement.project !== project) throw new Error(`placement project disagrees with directory ${project}`);
@@ -123,10 +112,10 @@ export async function readTrapsReadout(stateRoot: string, build: typeof buildTra
       throw error;
     }
     projects.push(project);
-    for (const taskId of await directories(join(stateRoot, "projects", project, "tasks"))) {
+    for (const taskId of await listDirectories(join(stateRoot, "projects", project, "tasks"))) {
       const taskRoot = join(stateRoot, "projects", project, "tasks", taskId);
       const attributions = await readTaskAttributions(taskRoot);
-      for (const attempt of await directories(taskRoot)) {
+      for (const attempt of await listDirectories(taskRoot)) {
         if (!/^[1-9][0-9]*$/.test(attempt)) continue;
         const path = journalFilePath(join(taskRoot, attempt));
         const facts = await readAttemptFacts(path);

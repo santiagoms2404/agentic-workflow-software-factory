@@ -5,7 +5,7 @@ import { mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { landCommand } from "../../src/cli/commands/land.ts";
-import { persistAttempt, readAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
+import { nextRevision, persistAttempt, readAttempt, type AttemptStatus } from "../../src/cli/commands/attempt.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 
 function git(repository: string, ...argv: string[]): string {
@@ -78,6 +78,30 @@ async function fixture(root: string): Promise<{ attemptDir: string; repository: 
     lastSourceSeq: 1,
   };
   await persistAttempt(attemptDir, null, { kind: "attempt.created", next: status });
+  let current = status;
+  for (const gateId of ["candidate_hygiene", "commands_pass"] as const) {
+    const at = "2026-08-07T00:00:00.000Z";
+    current = await persistAttempt(attemptDir, current.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(current, {}),
+      evidence: {
+        type: "gate",
+        id: `${current.sessionId}:candidate:${gateId}`,
+        phaseId: `${current.sessionId}:candidate-gates`,
+        round: 0,
+        gateId,
+        kind: gateId === "candidate_hygiene" ? "git" : "subprocess",
+        candidateSha: candidate,
+        passed: true,
+        exitCode: 0,
+        checks: [{ item: gateId, ok: true, note: "fixture host measurement" }],
+        violations: [],
+        outputPath: null,
+        startedAt: at,
+        endedAt: at,
+      },
+    });
+  }
   return { attemptDir, repository, base, candidate };
 }
 

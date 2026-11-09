@@ -30,7 +30,8 @@ export function selectWorkflow(
   // selection starts from. A selection may raise it, so a higher tier is
   // admitted and a lower one never is.
   const required = recipe?.tier ?? compiled!.tierFloor;
-  const parsed = requestedTier === undefined ? required : Number(requestedTier.replace(/^T/u, ""));
+  const tierText = requestedTier?.replace(/^T/u, "");
+  const parsed = tierText === undefined ? required : /^[012]$/u.test(tierText) ? Number(tierText) : Number.NaN;
   if (parsed !== 0 && parsed !== 1 && parsed !== 2) {
     throw new Error(`tier must be 0, 1, or 2; got ${requestedTier ?? ""}`);
   }

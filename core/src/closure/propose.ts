@@ -1,5 +1,6 @@
 import { scanAwsfPlanHtmlV1 } from "../registry/plan-source.ts";
 import { ticketFrontmatter, treeText, type ClosureRegistry, type ClosureTree } from "./tree.ts";
+import { planRowSpan } from "./plan-row.ts";
 
 export interface ClosureRow {
   readonly path: string;
@@ -31,14 +32,9 @@ export function proposeClosure(tree: ClosureTree, registry: ClosureRegistry, pla
       throw new Error(`closure has no unique registered task for ${ticket}`);
     }
     return tasks[0]!.tokens.map(token => {
-      const opening = html.lastIndexOf("<li", token.start);
-      const closing = html.indexOf("</li>", token.end);
-      const inRow = opening > html.lastIndexOf("</li>", token.start) && closing !== -1;
-      const start = inRow ? opening : html.lastIndexOf("\n", token.start) + 1;
-      const newline = html.indexOf("\n", token.end);
-      const end = inRow ? closing + 5 : newline === -1 ? html.length : newline;
+      const { rowStart, rowEnd } = planRowSpan(html, token.start, token.end);
       return { path: source.planPath, ticket, taskNumber: number, rowIndex: token.rowIndex!,
-        marker: token.value, text: html.slice(start, end) };
+        marker: token.value, text: html.slice(rowStart, rowEnd) };
     });
   });
   return { plan, tickets: closable, rows, notClosable: tickets.filter(id => !closable.includes(id)) };

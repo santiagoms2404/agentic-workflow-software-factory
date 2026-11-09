@@ -17,7 +17,15 @@ import {
 } from "../contracts/decision-record.ts";
 import { appendTaskDecision } from "../persistence/task-decisions.ts";
 import { scrubCredentialString, scrubJsonText } from "../policy/redaction.ts";
-import { JEV_DEFAULT_MODEL, type JevOutcome, type JevState, type JevTransport } from "./jev-transport.ts";
+import {
+  ContractError,
+  JEV_DEFAULT_MODEL,
+  type JevAnswer,
+  type JevOutcome,
+  type JevQuestions,
+  type JevState,
+  type JevTransport,
+} from "./jev-transport.ts";
 import type { Answers, QuestionSet, Thresholds } from "./question-set.ts";
 
 export interface DecideContext<Params> {
@@ -61,7 +69,7 @@ export async function decide<Params, Result, T extends Thresholds>(
     ...(context.signal === undefined ? {} : { signal: context.signal }),
   };
   // Throws QuestionValidationError for a request that could never be valid (T01 C2): a code defect, not an outcome.
-  const result = await context.transport.ask(state, questions, askOptions);
+  const result = declaredOnly(questions, await context.transport.ask(state, questions, askOptions));
 
   const record = toRecord(questionSet, context, result);
   assertDecisionRecord(record);
@@ -80,9 +88,42 @@ export async function decide<Params, Result, T extends Thresholds>(
 }
 
 /**
- * The answers exactly as the contract declares them. The transport validated
- * every declared field; anything else the provider added is not part of the
- * contract and is not recorded (the scrubbed response body keeps it, under Q18).
+ * An answered outcome narrowed to the declared questions (B2-01). Jev output
+ * is untrusted and the transport passes the provider's answers object through
+ * as it came: it validates the declared ids and ignores the rest. So the
+ * declared questions are walked here, never the answers' own keys; an
+ * undeclared key is not part of the contract, is neither recorded nor shown
+ * to the policy, and cannot stop the record being written (INV-7). A declared
+ * answer that is missing or of another type breaks the contract: it becomes a
+ * contract-error outcome naming the question, journaled like any other.
+ */
+function declaredOnly(questions: JevQuestions, result: JevOutcome): JevOutcome {
+  if (result.outcome !== "answered") return result;
+  const answers: Record<string, JevAnswer> = {};
+  for (const [id, question] of Object.entries(questions)) {
+    const answer: unknown = Object.hasOwn(result.answers, id) ? result.answers[id] : undefined;
+    if (answer === null || typeof answer !== "object" || (answer as { type?: unknown }).type !== question.type) {
+      return {
+        outcome: "contract-error",
+        error: new ContractError(`Missing or mismatched answer: ${id}`),
+        responseText: result.responseText,
+        requestedModel: result.requestedModel,
+        elapsedMs: result.elapsedMs,
+        attempts: result.attempts,
+        redacted: result.redacted,
+        requestText: result.requestText,
+      };
+    }
+    answers[id] = answer as JevAnswer;
+  }
+  return { ...result, answers };
+}
+
+/**
+ * The answers exactly as the contract declares them. declaredOnly() already
+ * dropped every undeclared key and checked each declared type; anything else
+ * the provider added is not part of the contract and is not recorded (the
+ * scrubbed response body keeps it, under Q18).
  */
 function recordedAnswers(answers: Answers): NonNullable<DecisionRecord["answers"]> {
   const out: NonNullable<DecisionRecord["answers"]> = {};
@@ -122,7 +163,7 @@ function toRecord<Params>(
       // Nothing was built, so nothing was redacted and no body exists (T01 C1).
       return {
         ...base,
-        requestedModel: context.model ?? JEV_DEFAULT_MODEL,
+        requestedModel: (context.transport as any).model ?? context.model ?? JEV_DEFAULT_MODEL,
         outcome: "refused-by-switch",
         detail: scrubCredentialString(result.detail),
         answers: null,

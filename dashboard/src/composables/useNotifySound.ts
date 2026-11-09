@@ -8,7 +8,6 @@ import {
   readSoundEnabled,
   rememberStates,
   writeSoundEnabled,
-  type Announcement,
   type StateMemory,
 } from "../notify-sound.ts";
 
@@ -25,7 +24,6 @@ import {
 export function useNotifySound(sessions: Ref<readonly SessionCard[]>) {
   const store = browserPreferences();
   const enabled = ref(readSoundEnabled(store));
-  const last = ref<Announcement | null>(null);
   let memory: StateMemory | null = null;
   let context: AudioContext | null = null;
 
@@ -45,7 +43,6 @@ export function useNotifySound(sessions: Ref<readonly SessionCard[]>) {
     // already waiting when the page loaded never chimes for having been there.
     memory = rememberStates(next);
     if (found.length === 0) return;
-    last.value = found[0] ?? null;
     if (!enabled.value) return;
     const signal = chooseSignal(found);
     const device = signal === null ? null : audio();
@@ -65,5 +62,5 @@ export function useNotifySound(sessions: Ref<readonly SessionCard[]>) {
     if (device !== null) await playSignal(device, "needs-you");
   }
 
-  return { enabled, setEnabled, last };
+  return { enabled, setEnabled };
 }

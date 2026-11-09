@@ -1,4 +1,4 @@
-import { Type, type Static, type TProperties } from "@sinclair/typebox";
+import { Type, type Static, type TProperties, type TSchema } from "@sinclair/typebox";
 import { NullableCount, stringUnion, type UnionOf } from "./typebox.ts";
 
 // The normalized event vocabulary — twelve kinds, adopted from
@@ -106,15 +106,21 @@ export const TokenUsageSchema = Type.Object(
 );
 export type TokenUsage = Static<typeof TokenUsageSchema>;
 
-/** A usage record in which the provider reported nothing. Not zeros — nulls. */
-export const UNREPORTED_TOKEN_USAGE: TokenUsage = {
+/**
+ * A usage record in which the provider reported nothing. Not zeros — nulls.
+ *
+ * Shared by reference with every attempt that reports nothing, so it is frozen:
+ * an in-place write would otherwise change the default for every later attempt
+ * in the process (B3-29).
+ */
+export const UNREPORTED_TOKEN_USAGE: TokenUsage = Object.freeze({
   inputTokens: null,
   outputTokens: null,
   cacheReadTokens: null,
   cacheWriteTokens: null,
   reasoningTokens: null,
   reasoningRelation: "unknown",
-};
+});
 
 // ---------------------------------------------------------------------------
 // Event envelope
@@ -220,22 +226,9 @@ export const NORMALIZED_EVENT_SCHEMAS = {
   "run.completed": RunCompletedEventSchema,
   "run.failed": RunFailedEventSchema,
   "run.cancelled": RunCancelledEventSchema,
-} as const;
+} as const satisfies Record<NormalizedEventKind, TSchema>;
 
-export const NormalizedEventSchema = Type.Union([
-  RunStartedEventSchema,
-  ModelResolvedEventSchema,
-  TextDeltaEventSchema,
-  ThinkingDeltaEventSchema,
-  ToolRequestedEventSchema,
-  ToolCompletedEventSchema,
-  UsageEventSchema,
-  QuotaEventSchema,
-  NoticeEventSchema,
-  RunCompletedEventSchema,
-  RunFailedEventSchema,
-  RunCancelledEventSchema,
-]);
+export const NormalizedEventSchema = Type.Union(Object.values(NORMALIZED_EVENT_SCHEMAS));
 export type NormalizedEvent = Static<typeof NormalizedEventSchema>;
 
 /** Host-minted tool call id. Provider ids are never propagated. */

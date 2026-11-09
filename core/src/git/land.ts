@@ -2,7 +2,7 @@
 // land; the CLI's single L20 call site does that before any mutation reaches
 // this boundary.
 
-import { runGit, systemGitRunner, type GitRunner } from "./changes.ts";
+import { isWorktreeClean, runGit, systemGitRunner, type GitRunner } from "./changes.ts";
 
 export type LandingBlockCode =
   | "non-fast-forward"
@@ -55,7 +55,7 @@ function parseCounts(text: string): Divergence {
 }
 
 function clean(runner: GitRunner): boolean {
-  return runGit(runner, ["status", "--porcelain"]).trim().length === 0;
+  return isWorktreeClean(runner);
 }
 
 function head(runner: GitRunner): string {
@@ -76,11 +76,11 @@ function isAncestor(runner: GitRunner, ancestor: string, descendant: string): bo
 }
 
 /** A read-only snapshot shown to the owner and repeated after LANDING is durable. */
-export function inspectLanding(
-  repository: string,
+function inspectLandingWithSummary(
   candidateSha: string,
-  runner = systemGitRunner(repository),
-  seedPin?: { readonly integrationBaseSha: string; readonly recovering?: boolean },
+  runner: GitRunner,
+  seedPin: { readonly integrationBaseSha: string; readonly recovering?: boolean } | undefined,
+  includeSummary: boolean,
 ): LandingInspection {
   try {
     const headSha = head(runner);
@@ -99,12 +99,21 @@ export function inspectLanding(
       candidateSha,
       clean: clean(runner),
       fastForwardPossible: headSha === candidateSha || isAncestor(runner, headSha, candidateSha),
-      summary: summary(runner, candidateSha),
+      summary: includeSummary ? summary(runner, candidateSha) : "",
     };
   } catch (error) {
     if (error instanceof LandingBlocked) throw error;
     throw new LandingBlocked("git-failure", error instanceof Error ? error.message : String(error));
   }
+}
+
+export function inspectLanding(
+  repository: string,
+  candidateSha: string,
+  runner = systemGitRunner(repository),
+  seedPin?: { readonly integrationBaseSha: string; readonly recovering?: boolean },
+): LandingInspection {
+  return inspectLandingWithSummary(candidateSha, runner, seedPin, true);
 }
 
 function assertPreflight(inspection: LandingInspection): void {
@@ -146,7 +155,7 @@ export function completeLanding(
 ): LandingOutcome {
   let inspection: LandingInspection;
   try {
-    inspection = inspectLanding(repository, candidateSha, runner, seedPin);
+    inspection = inspectLandingWithSummary(candidateSha, runner, seedPin, false);
     assertPreflight(inspection);
     if (inspection.headSha !== candidateSha) {
       runGit(runner, ["merge", "--ff-only", "--no-edit", candidateSha]);

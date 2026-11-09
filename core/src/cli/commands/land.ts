@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readProtectedState, inspectProtectedCandidate, assertProtectedPreservedBytes } from "../../workflow/protected-grants.ts";
 import { assertProtectedCandidateAuthorization, protectedFactDigest, type ProtectedCandidateAuthorization } from "../../contracts/protected-grant.ts";
 import { recoveryDigest } from "../../contracts/phase-recovery.ts";
+import { runGit, systemGitRunner } from "../../git/changes.ts";
 import {
   completeLanding,
   inspectLanding,
@@ -14,6 +15,7 @@ import {
 import {
   transition,
   type Actor,
+  type GateEvidence,
   type TransitionResult,
 } from "../../state/task-machine.ts";
 import type { OwnerTerminal } from "../tty.ts";
@@ -29,7 +31,7 @@ import {
   type AttemptProjector,
   type AttemptStatus,
 } from "./attempt.ts";
-import { readAttemptEvidence, recordedReviews, supersededReviewLines } from "./review-record.ts";
+import { candidateGateEvidence, readAttemptEvidence, recordedReviews, supersededReviewLines } from "./review-record.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
 import { verifiedTargetSeed } from "../../workflow/candidate-seed.ts";
 import { PROVE_WORKFLOW_ID, ReplayNotDeliverable } from "../../workflow/prove/compile.ts";
@@ -64,6 +66,7 @@ function authorizeLanding(
   interactive: boolean,
   inspection: LandingInspection,
   confirmed: boolean,
+  gateEvidence?: GateEvidence,
 ): TransitionResult {
   return transition({
     from: status.lifecycleState,
@@ -76,6 +79,7 @@ function authorizeLanding(
     evidence: {
       candidateSha: status.candidateSha ?? "",
       gatesPass: status.gatesPass,
+      ...(gateEvidence === undefined ? {} : { gateEvidence }),
       landing: {
         shaDisplayed: status.candidateSha ?? "",
         summaryDisplayed: inspection.summary,
@@ -84,17 +88,28 @@ function authorizeLanding(
         journeyApproved: status.journeyApproved,
         protectedApprovalsValid: status.protectedApprovalsValid,
         fastForwardPreflightPasses: inspection.clean && inspection.fastForwardPossible,
+        // Flags a stub run wrote are fixture attestations; L20 refuses them at
+        // T2 (owner call O7). Keyed on the run's provenance, not on the start
+        // mark: a stub-started attempt driven by a real run and a real journey
+        // carries real evidence.
+        ...(isStubAttested(status) ? { attestationProvenance: "stub" } : {}),
       },
     },
   });
 }
 
+/** A stub run wrote this attempt's gate, review and journey flags. */
+function isStubAttested(status: AttemptStatus): boolean {
+  return status.attestationProvenance === "stub";
+}
+
 function summaryFor(status: AttemptStatus, inspection: LandingInspection): LandingSummary {
+  const stub = isStubAttested(status);
   const verification = [
-    `- Deterministic gates: ${status.gatesPass ? "passed" : "not passed"}`,
+    `- Deterministic gates: ${status.gatesPass ? (stub ? "stub attestation, no gate ran" : "passed") : "not passed"}`,
     `- Candidate checked: ${inspection.candidateSha}`,
-    `- Required review: ${status.tier === 2 ? (status.requiredReviewPresent ? "recorded" : "missing") : "not required"}`,
-    `- End-user journey: ${status.tier === 2 ? (status.journeyApproved ? "approved" : "not approved") : "not required"}`,
+    `- Required review: ${status.tier === 2 ? (status.requiredReviewPresent ? (stub ? "stub attestation, no reviewer ran" : "recorded") : "missing") : "not required"}`,
+    `- End-user journey: ${status.tier === 2 ? (status.journeyApproved ? (stub ? "stub attestation, not the owner's journey" : "approved") : "not approved") : "not required"}`,
   ].join("\n");
   const risks = [
     `- Risk tier: T${String(status.tier)}`,
@@ -199,7 +214,7 @@ async function finish(
       const approvals = protectedState.records.filter(record => record.event.evidence?.type === "protected-landing");
       const record = approvals[0];
       if (approvals.length !== 1 || record?.event.evidence?.type !== "protected-landing" || record.event.next.lifecycleState !== "LANDING" || record.event.next.landingApproval?.candidateSha !== candidate) throw new Error("protected landing lacks its unique atomic final owner approval");
-      assertProtectedCandidateAuthorization(record.event.evidence.authorization, { sessionId: status.sessionId, attempt: status.attempt, candidateSha: candidate,
+      assertProtectedCandidateAuthorization(record.event.evidence.protectedApproval, { sessionId: status.sessionId, attempt: status.attempt, candidateSha: candidate,
         integrationBaseSha: status.baseSha!, bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest });
     }
     const seed = await verifiedTargetSeed(options.attemptDir, status);
@@ -222,6 +237,19 @@ async function finish(
       options.projectRecord,
     );
   } catch (error) {
+    // B9-26: If canonical HEAD has already moved to the approved candidate,
+    // the fast-forward succeeded. Sealing the attempt as BLOCKED would contradict
+    // Git (canonical HEAD == candidate) and prevent subsequent recovery.
+    // Leave the attempt in LANDING and rethrow so the owner can clean up and retry.
+    let headSha: string | null = null;
+    try {
+      headSha = runGit(systemGitRunner(status.repository), ["rev-parse", "HEAD"]).trim();
+    } catch {
+      // ignore git error and proceed with persistBlocked
+    }
+    if (headSha === candidate) {
+      throw error;
+    }
     const blocked = error instanceof LandingBlocked
       ? error
       : new LandingBlocked(recover ? "ambiguous-recovery" : "git-failure", error instanceof Error ? error.message : String(error));
@@ -246,11 +274,6 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
   // Before every other check, and whatever the state: no path from a replay
   // reaches LANDING, so no replay's candidate can become canonical (Q7).
   if (current.workflow === PROVE_WORKFLOW_ID) throw new ReplayNotDeliverable(current, "land");
-  if (current.lifecycleState === "LANDING") {
-    // Approval is already durable. Re-prompting would create two human gates;
-    // recovery instead proves the one approved SHA or blocks.
-    return { status: await finish(options, current, true), confirmed: true };
-  }
   const actor = options.actor ?? "human";
   const noInspection: LandingInspection = {
     headSha: "",
@@ -261,6 +284,17 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
     behind: 0,
     summary: "candidate unavailable",
   };
+  if (current.lifecycleState === "LANDING") {
+    if (actor !== "human") {
+      // Durable owner approval permits recovery without a second prompt, not a
+      // different actor. Refuse before finish() can perform the local fast-forward.
+      authorizeLanding(current, actor, options.terminal.interactive, noInspection, false);
+      throw new Error("unreachable landing authorization");
+    }
+    // Approval is already durable. Re-prompting would create two human gates;
+    // recovery instead proves the one approved SHA or blocks.
+    return { status: await finish(options, current, true), confirmed: true };
+  }
   if (current.lifecycleState !== "AWAITING_OWNER" || current.candidateSha === null) {
     // Pair, actor, and TTY rejections must outrank missing candidate evidence.
     authorizeLanding(current, actor, options.terminal.interactive, noInspection, false);
@@ -275,15 +309,19 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
     throw new Error("unreachable landing authorization");
   }
 
-  const seed = await verifiedTargetSeed(options.attemptDir, current);
-  const hasProtectedGrant = readProtectedState(options.attemptDir).grants.length > 0;
+  const [seed, protectedState, evidence] = await Promise.all([
+    verifiedTargetSeed(options.attemptDir, current),
+    readProtectedState(options.attemptDir),
+    readAttemptEvidence(options.attemptDir),
+  ]);
+  const hasProtectedGrant = protectedState.grants.length > 0;
   const inspection = inspectLanding(current.repository, current.candidateSha, undefined,
     seed === null && !hasProtectedGrant ? undefined : { integrationBaseSha: seed?.integrationBaseSha ?? current.baseSha! });
   if (seed !== null) {
     options.terminal.write(`Seeded candidate ${seed.seedCandidateSha}. Integration base pinned to ${seed.integrationBaseSha}. Fresh target assurance only.`);
     if (seed.ownerAmendment !== null) options.terminal.write(`Owner supplement: ${JSON.stringify(seed.ownerAmendment.text)}`);
   }
-  for (const line of resumeInstructionLines(await readAttemptEvidence(options.attemptDir))) options.terminal.write(line);
+  for (const line of resumeInstructionLines(evidence)) options.terminal.write(line);
   // Write while the attempt is still AWAITING_OWNER so the polling dashboard
   // can render the same record beside the terminal confirmation.
   await recordSummary(options, current, inspection);
@@ -295,11 +333,10 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
   // `requiredReviewPresent` is one boolean, and a human gate that saw only the
   // replacement verdict would never learn that a review had been replaced or
   // why — which is precisely what L25 is obliged to make visible.
-  for (const line of supersededReviewLines(recordedReviews(await readAttemptEvidence(options.attemptDir), current.sessionId))) {
+  for (const line of supersededReviewLines(recordedReviews(evidence, current.sessionId))) {
     options.terminal.write(line);
   }
   let protectedAuthorization: ProtectedCandidateAuthorization | null = null;
-  const protectedState = readProtectedState(options.attemptDir);
   if (protectedState.grants.length > 0) {
     const proof = inspectProtectedCandidate(options.attemptDir, current.candidateSha);
     assertProtectedPreservedBytes(proof);
@@ -308,7 +345,8 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
     if (!await options.terminal.confirm("Approve these exact protected contents and binding chain for this candidate?")) return { status: current, confirmed: false };
     const unsigned: ProtectedCandidateAuthorization = { schema: "awsf.protected-candidate-authorization/v1", id: randomUUID(),
       sessionId: current.sessionId, attempt: current.attempt, candidateSha: current.candidateSha, integrationBaseSha: current.baseSha!,
-      bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest, confirmedAt: new Date().toISOString(), digest: "" };
+      bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest,
+      confirmedAt: (options.now ?? ((): string => new Date().toISOString()))(), digest: "" };
     protectedAuthorization = { ...unsigned, digest: protectedFactDigest(unsigned) };
   }
   options.terminal.write("Cost: 0 provider calls. This locally fast-forwards the canonical branch to the exact candidate and invalidates no passing gate.");
@@ -325,7 +363,8 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
       integrationBaseSha: current.baseSha!, bindingChainDigest: proof.bindingChainDigest, protectedDeltaDigest: proof.protectedDeltaDigest });
   }
   options.assertAdvancement?.(current.sessionId, "LANDING");
-  const decision = authorizeLanding(current, actor, true, inspection, true);
+  const gateEvidence = candidateGateEvidence(evidence, current.candidateSha, current.sessionId);
+  const decision = authorizeLanding(current, actor, true, inspection, true, gateEvidence);
   const now = (options.now ?? ((): string => new Date().toISOString()))();
   const landing = nextRevision(current, {
     lifecycleState: decision.to,
@@ -340,7 +379,7 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
   const persisted = await persistAttempt(
     options.attemptDir,
     current.revision,
-    { kind: "attempt.transitioned", next: landing, ...(protectedAuthorization === null ? {} : { evidence: { type: "protected-landing" as const, authorization: protectedAuthorization } }) },
+    { kind: "attempt.transitioned", next: landing, ...(protectedAuthorization === null ? {} : { evidence: { type: "protected-landing" as const, protectedApproval: protectedAuthorization } }) },
     options.projectRecord,
   );
   await options.afterLandingPersisted?.(persisted);

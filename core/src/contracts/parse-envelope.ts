@@ -1,7 +1,8 @@
 import { Value } from "@sinclair/typebox/value";
 import type { EnvelopeBase } from "./envelope-base.ts";
 import { isEnvelopeSchemaId, schemaForId, type EnvelopeSchemaId, type EnvelopeTypeById } from "./registry.ts";
-import { VIOLATION_VALUE_MAX_CHARS, type ValidationViolation } from "./stored-envelope.ts";
+import { VIOLATION_VALUE_MAX_CHARS, type EnvelopeExtraction, type ValidationViolation } from "./stored-envelope.ts";
+import { PUBLISH_OUTPUT_SCHEMA_ID, publishedRecoveryRefusal } from "./publish-output.ts";
 import { utf8ByteLength } from "./typebox.ts";
 
 // The envelope parser.
@@ -12,6 +13,8 @@ import { utf8ByteLength } from "./typebox.ts";
 //     salvages a complete JSON object *before* rejecting. It first tries the
 //     outermost `{…}`, then the last complete object when a provider abandoned
 //     a partial object and emitted a corrected one in the same final message.
+//     If neither parses, it tries the complete first-brace object without any
+//     brace-containing prose after it. Existing suffix precedence is preserved.
 //     The trace distinguishes clean JSON from host extraction without burning
 //     a correction round on transport-shaped duplication.
 //   - Maximum envelope size 256 KiB.
@@ -20,21 +23,13 @@ import { utf8ByteLength } from "./typebox.ts";
 
 export const MAX_ENVELOPE_BYTES = 256 * 1024;
 
-/** How the JSON object was recovered from the model's final message. */
-export type EnvelopeExtraction =
-  | "exact"
-  | "fence-stripped"
-  | "outermost-object"
-  /**
-   * The backward suffix salvage, and its own kind on purpose.
-   *
-   * It is not an outermost-object extraction: it deliberately returns an INNER
-   * object, the last suffix that parses whole. Labelling it `outermost-object`
-   * made the retained trace claim the host had taken the outermost object when
-   * it had taken a trailing one, which is unreadable afterwards precisely when
-   * the salvage went wrong.
-   */
-  | "trailing-object";
+// How the JSON object was recovered (`EnvelopeExtraction`) is defined in
+// stored-envelope.ts, so the persisted record can name it. `trailing-object` is
+// the backward suffix salvage and its own kind on purpose: it deliberately
+// returns an INNER object, the last suffix that parses whole. Labelling it
+// `outermost-object` made the retained trace claim the host had taken the
+// outermost object when it had taken a trailing one, which is unreadable
+// afterwards precisely when the salvage went wrong.
 
 export type ParseEnvelopeResult<T extends EnvelopeBase> =
   | { valid: true; payload: T; extraction: EnvelopeExtraction }
@@ -51,7 +46,13 @@ function bound(value: unknown): string | null {
     rendered = String(value);
   }
   if (rendered.length <= VIOLATION_VALUE_MAX_CHARS) return rendered;
-  return `${rendered.slice(0, VIOLATION_VALUE_MAX_CHARS - 1)}…`;
+  // The cut is in UTF-16 code units. Backing off one unit when it would strand a
+  // high surrogate keeps the retained text whole, so a character is never split
+  // into a lone half that does not survive UTF-8 (B3-11).
+  let cut = VIOLATION_VALUE_MAX_CHARS - 1;
+  const kept = rendered.charCodeAt(cut - 1);
+  if (kept >= 0xd800 && kept <= 0xdbff) cut -= 1;
+  return `${rendered.slice(0, cut)}…`;
 }
 
 function tryParseObject(text: string): { ok: true; value: unknown } | { ok: false; why: string } {
@@ -66,6 +67,48 @@ function tryParseObject(text: string): { ok: true; value: unknown } | { ok: fals
     // The parser already knows which it is; this is only a matter of saying so.
     return { ok: false, why: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/** Find only the first object's boundary; JSON.parse still decides whether it is valid JSON. */
+function firstObjectEnd(text: string, first: number): number | null {
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = first; index < text.length; index += 1) {
+    const char = text[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+    } else if (char === '"') quoted = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return null;
+}
+
+/** Return the opening brace paired with a closing brace, ignoring braces inside JSON strings. */
+function openingBraceFor(text: string, closing: number): number | null {
+  let depth = 0;
+  let quoted = false;
+  for (let index = closing; index >= 0; index -= 1) {
+    const char = text[index];
+    if (char === '"') {
+      let backslashes = 0;
+      for (let previous = index - 1; previous >= 0 && text[previous] === "\\"; previous -= 1) {
+        backslashes += 1;
+      }
+      if (backslashes % 2 === 0) quoted = !quoted;
+    } else if (!quoted && char === "}") depth += 1;
+    else if (!quoted && char === "{") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return null;
 }
 
 /** Recovers the single JSON object from a model's final message, recording how much digging it took. */
@@ -92,20 +135,31 @@ function extract(raw: string): { extraction: EnvelopeExtraction; value: unknown 
   if (first !== -1 && last > first) {
     const parsed = tryParseObject(trimmed.slice(first, last + 1));
     if (parsed.ok) return { extraction: "outermost-object", value: parsed.value };
-    // Held for the violation. Prose either side of a WELL-FORMED object is
-    // recovered here, so reaching this line means the object itself is broken,
-    // and where it broke is the only fact that distinguishes the two.
+    // Keep the parse position if all salvage fails. A brace in trailing prose
+    // can widen this slice beyond a well-formed object, so failure here alone
+    // does not establish that the object itself is broken.
     sliceFailure = parsed.why;
 
     // Some provider streams retain an abandoned partial object immediately
-    // before the corrected final object. Work backward from the final closing
-    // brace and accept only a suffix that parses whole. The bound prevents a
-    // brace-heavy malformed response from turning salvage into unbounded work.
-    let opening = trimmed.lastIndexOf("{", last - 1);
-    for (let attempts = 0; opening > first && attempts < 1_024; attempts += 1) {
+    // before the corrected final object. A valid JSON suffix ending at `last`
+    // must begin at the opening brace paired with that close, so one
+    // string-aware scan is sufficient; repeatedly parsing every earlier brace
+    // only re-parsed longer prefixes of the same malformed suffix.
+    const opening = openingBraceFor(trimmed, last);
+    if (opening !== null && opening > first) {
       const suffix = tryParseObject(trimmed.slice(opening, last + 1));
       if (suffix.ok) return { extraction: "trailing-object", value: suffix.value };
-      opening = trimmed.lastIndexOf("{", opening - 1);
+    }
+
+    // The suffix scan cannot recover the first object when prose after it
+    // contains braces. Locate its own closing brace in one string-aware pass
+    // (bounded by the raw byte cap), then let JSON.parse validate the slice.
+    // Do this AFTER suffix salvage: a genuine trailing JSON object keeps its
+    // existing precedence, even if it subsequently fails envelope validation.
+    const end = firstObjectEnd(trimmed, first);
+    if (end !== null && end < last) {
+      const prefix = tryParseObject(trimmed.slice(first, end + 1));
+      if (prefix.ok) return { extraction: "outermost-object", value: prefix.value };
     }
   }
 
@@ -204,6 +258,17 @@ export function parseEnvelope(raw: string, schemaId: string): ParseEnvelopeResul
       received: bound(error.value),
     }));
     return { valid: false, extraction: extracted.extraction, violations };
+  }
+  // Cross-field rules the structural schema cannot state (B3-32).
+  if (schemaId === PUBLISH_OUTPUT_SCHEMA_ID) {
+    const refusal = publishedRecoveryRefusal(extracted.value);
+    if (refusal !== null) {
+      return {
+        valid: false,
+        extraction: extracted.extraction,
+        violations: [{ kind: "schema-mismatch", path: "/result/status/recovery", message: refusal, received: null }],
+      };
+    }
   }
 
   return { valid: true, extraction: extracted.extraction, payload: extracted.value as unknown as EnvelopeBase };

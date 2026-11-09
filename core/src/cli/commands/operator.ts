@@ -1,11 +1,11 @@
 import { access, readdir } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AwsfConfig } from "../../config/schema.ts";
 import { createApiRouter, type ApiRouter } from "../../api/routes.ts";
+import { forwardApiRequest } from "../../api/server.ts";
 import { sendResponse } from "../../api/responses.ts";
 import { SECURITY_HEADERS, validateAuthority } from "../../api/security.ts";
-import { ceilingFor } from "../../state/tiers.ts";
 import { discoverAttempts, rebuildDatabase, type RebuildReport, type RebuildSource } from "../../observability/rebuild.ts";
 import { prepareDatabaseForReadonly } from "../../observability/sqlite.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
@@ -13,7 +13,7 @@ import { declaredContinuation } from "../../persistence/task-relations.ts";
 import { readTaskAttributions } from "../../persistence/task-attributions.ts";
 import { readTaskDecisions } from "../../persistence/task-decisions.ts";
 import { toAttemptStatusProjection } from "./attempt-projection.ts";
-import { readAttempt, withLegacyDefaults, type AttemptEvent } from "./attempt.ts";
+import { isTerminalStatus, readAttempt, withLegacyDefaults, type AttemptEvent } from "./attempt.ts";
 
 async function exists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
@@ -50,23 +50,9 @@ export async function rebuildCommand(stateRoot: string): Promise<RebuildReport> 
         // the ones that actually have journals.
         return relation === null ? projection : { ...projection, continuesTask: relation.continuesTask };
       },
-      session: {
-        sessionId: status.sessionId,
-        projectSlug: status.project,
-        taskId: status.taskId,
-        continuesTask: relation?.continuesTask ?? status.continuesTask,
-        groupId: status.groupId,
-        planRef: status.planRef,
-        attempt: status.attempt,
-        workflowId: status.workflow,
-        riskTier: status.tier,
-        isProtected: false,
-        requestText: status.request,
-        callCeiling: ceilingFor(status.tier, status.budget.ceiling),
-        configSnapshotJson: status.configSnapshotJson,
-        journalPath: journalFilePath(dir),
-        startedAt: status.lastActivityAt,
-      },
+      session: relation === null
+        ? toAttemptStatusProjection(stateRoot, status)
+        : { ...toAttemptStatusProjection(stateRoot, status), continuesTask: relation.continuesTask },
     };
   }));
   // `awsf attribute` writes no attempt record either: the override is about a
@@ -84,7 +70,7 @@ export async function gcCommand(stateRoot: string): Promise<readonly string[]> {
   const candidates: string[] = [];
   for (const dir of await discoverAttempts(stateRoot)) {
     const status = await readAttempt(dir);
-    if (["LANDED", "BLOCKED", "CANCELLED"].includes(status.lifecycleState)) candidates.push(`attempt: ${dir}`);
+    if (isTerminalStatus(status)) candidates.push(`attempt: ${dir}`);
   }
   try {
     for (const name of await readdir(stateRoot)) {
@@ -104,6 +90,30 @@ export interface DashOptions {
   readonly config?: AwsfConfig;
   /** Test seam; production keeps the server alive until the process exits. */
   readonly onListening?: (server: Server) => void;
+}
+
+type AsyncListener = (request: IncomingMessage, response: ServerResponse) => Promise<void>;
+
+/**
+ * `createServer` never awaits its listener, so a rejection from an async one is
+ * unhandled and, with no process-level handler anywhere in AWSF, ends the whole
+ * `awsf dash` process — one bad request would take the dashboard down for every
+ * other client (B9-02). Anything the handler throws is answered here as a 500
+ * instead; the error text stays server-side. A failure after the headers went
+ * out cannot be turned into a status any more, so that socket is destroyed
+ * rather than left hanging.
+ */
+export function guardedListener(handler: AsyncListener): (request: IncomingMessage, response: ServerResponse) => void {
+  return (request, response) => {
+    handler(request, response).catch(() => {
+      if (response.headersSent) {
+        response.destroy();
+        return;
+      }
+      response.writeHead(500, SECURITY_HEADERS);
+      response.end("internal error");
+    });
+  };
 }
 
 /** Serve only an already-built dashboard; building belongs to the owner, never this command. */
@@ -129,7 +139,7 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
     if (path.endsWith(".json")) return "application/json; charset=utf-8";
     return "application/octet-stream";
   };
-  const server = createServer(async (request, response) => {
+  const server = createServer(guardedListener(async (request, response) => {
     try {
       validateAuthority(request.headers);
     } catch {
@@ -138,10 +148,25 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
       return;
     }
     if (router !== null && request.url?.startsWith("/api/")) {
-      sendResponse(response, await router.dispatch({ method: request.method ?? "GET", url: request.url, headers: request.headers }));
+      sendResponse(response, await forwardApiRequest(router, {
+        method: request.method ?? "GET",
+        url: request.url,
+        headers: request.headers,
+      }));
       return;
     }
-    const target = request.url === undefined ? "/" : new URL(request.url, "http://127.0.0.1").pathname;
+    // A target such as `//[` reads as a scheme-relative URL with an invalid
+    // host, so `new URL` throws on it. That is the client's malformed request,
+    // answered 400 like preview.ts answers its own unparsable paths — never a
+    // rejection out of the listener.
+    let target: string;
+    try {
+      target = request.url === undefined ? "/" : new URL(request.url, "http://127.0.0.1").pathname;
+    } catch {
+      response.writeHead(400, SECURITY_HEADERS);
+      response.end("bad request target");
+      return;
+    }
     const path = target === "/" ? index : join(root, target.replace(/^\//, ""));
     const fromRoot = relative(root, resolve(path));
     if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
@@ -157,7 +182,7 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
       response.writeHead(404, SECURITY_HEADERS);
       response.end("not found");
     }
-  });
+  }));
   server.once("close", () => router?.close());
   await new Promise<void>((done, reject) => {
     server.once("error", reject);

@@ -68,6 +68,18 @@ test("the reader loads valid optional task classes and refuses unreadable class 
   }
 });
 
+test("the plan listing refuses CRLF frontmatter that the compiler cannot parse", async () => {
+  const root = await mkdtemp(join(tmpdir(), "awsf-plan-reader-crlf-"));
+  const resolved = source(root, "foo-plan");
+  try {
+    await mkdir(resolved.ticketsPath, { recursive: true });
+    await writeFile(join(resolved.ticketsPath, "T01.md"), ticket("T01", "CRLF").replace(/\n/gu, "\r\n"));
+    assert.deepEqual((await new PlanTicketReader([resolved]).load())[0]?.records, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("ticket expansion reads the complete markdown file byte for byte", async () => {
   const root = await mkdtemp(join(tmpdir(), "awsf-plan-source-"));
   const resolved = source(root, "foo-plan");

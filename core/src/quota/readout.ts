@@ -22,7 +22,7 @@ export function renderObservedDurationComparison(
   if (observation.status === "insufficient-history") {
     return `observed duration=insufficient history (count=${observation.count})`;
   }
-  if (minutesToReset === null) return `observed duration=does not fit (median=${observation.durationMinutes} minutes, count=${observation.count})`;
+  if (minutesToReset === null) return `observed duration=unknown (reset unknown, median=${observation.durationMinutes} minutes, count=${observation.count})`;
   const verdict = minutesToReset >= observation.durationMinutes ? "fits" : "does not fit";
   return `observed duration=${verdict} (median=${observation.durationMinutes} minutes, count=${observation.count})`;
 }
@@ -92,7 +92,7 @@ function thresholdFor(
   defaultEntry: QuotaStopEntry | null,
   byAdapter: Readonly<Record<string, QuotaStopEntry>>,
 ): QuotaStopEntry | null {
-  return byAdapter[adapterId] ?? defaultEntry;
+  return Object.hasOwn(byAdapter, adapterId) ? byAdapter[adapterId]! : defaultEntry;
 }
 
 function providerReadout(
@@ -156,6 +156,9 @@ function figureFor(
   route: ProjectQuotaRoute,
   result: QuotaProbeResult,
 ): Figure {
+  if (route.disposition === "unmeasurable") {
+    return { scope: null, reasonCode: route.reason, remedy: null };
+  }
   if (route.providers.length === 0) {
     return { scope: null, reasonCode: route.reason, remedy: null };
   }

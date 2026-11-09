@@ -1,11 +1,12 @@
-import type { RiskTierName } from "../config/schema.ts";
-import { matchesPathGlob, normalizeRepositoryPath } from "./path-policy.ts";
+import { KNOWN_RISK_TIERS, type RiskTierName } from "../config/schema.ts";
+import { compilePathGlob, normalizeRepositoryPath } from "./path-policy.ts";
 
-export const RISK_TIERS = ["T0", "T1", "T2"] as const;
+export const RISK_TIERS = KNOWN_RISK_TIERS;
 
 export interface RiskPolicy {
   readonly default: RiskTierName;
   readonly paths: Readonly<Record<string, RiskTierName>>;
+  readonly caseSensitive?: boolean;
 }
 
 export interface RiskClassification {
@@ -13,6 +14,7 @@ export interface RiskClassification {
   readonly source: "default" | "path" | "operator-override";
   readonly matched: readonly { path: string; glob: string; tier: RiskTierName }[];
   readonly classifiedTier: RiskTierName;
+  readonly invalidPaths?: readonly string[];
 }
 
 export interface OperatorRiskOverride {
@@ -30,16 +32,33 @@ export function classifyRisk(
   policy: RiskPolicy,
   override?: OperatorRiskOverride,
 ): RiskClassification {
-  const normalized = [...new Set(paths.map(normalizeRepositoryPath))].sort();
+  const normalized: string[] = [];
+  const invalidPaths: string[] = [];
+  for (const raw of paths) {
+    try {
+      normalized.push(normalizeRepositoryPath(raw));
+    } catch {
+      invalidPaths.push(raw);
+    }
+  }
+  const uniqueNormalized = [...new Set(normalized)].sort();
+  const uniqueInvalid = [...new Set(invalidPaths)].sort();
+  const caseSensitive = policy.caseSensitive ?? process.platform !== "win32";
+  const rules = uniqueNormalized.length === 0 ? [] : Object.entries(policy.paths).map(([glob, tier]) => ({
+    glob,
+    tier,
+    matcher: compilePathGlob(glob, caseSensitive),
+  }));
   const matched: { path: string; glob: string; tier: RiskTierName }[] = [];
   let classifiedTier = policy.default;
-  for (const path of normalized) {
-    for (const [glob, tier] of Object.entries(policy.paths)) {
-      if (!matchesPathGlob(path, glob)) continue;
+  for (const path of uniqueNormalized) {
+    for (const { glob, tier, matcher } of rules) {
+      if (!matcher.test(path)) continue;
       matched.push({ path, glob, tier });
       if (tierRank(tier) > tierRank(classifiedTier)) classifiedTier = tier;
     }
   }
+  const invalidExtra = uniqueInvalid.length > 0 ? { invalidPaths: Object.freeze(uniqueInvalid) } : {};
   if (override !== undefined) {
     if (!override.reason.trim()) throw new Error("an operator risk override requires a reason");
     return Object.freeze({
@@ -47,6 +66,7 @@ export function classifyRisk(
       source: "operator-override",
       matched: Object.freeze(matched),
       classifiedTier,
+      ...invalidExtra,
     });
   }
   return Object.freeze({
@@ -54,6 +74,7 @@ export function classifyRisk(
     source: matched.length === 0 ? "default" : "path",
     matched: Object.freeze(matched),
     classifiedTier,
+    ...invalidExtra,
   });
 }
 
@@ -89,9 +110,10 @@ export function admitRisk(
 ): RiskAdmission {
   const classification = classifyRisk(paths, policy);
   const classified = classification.classifiedTier;
+  const invalid = classification.invalidPaths ?? [];
   return Object.freeze({
     classified,
-    sufficient: tierNumberOf(classified) <= tier,
+    sufficient: invalid.length === 0 && tierNumberOf(classified) <= tier,
     raisedBy: Object.freeze(
       classification.matched.filter((match) => tierNumberOf(match.tier) > tier),
     ),

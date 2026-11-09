@@ -23,12 +23,19 @@ test("buildMinimalConfig uses the imported call-ceiling bounds", () => {
   const ceilings = buildMinimalConfig("ceiling-project").risk.call_ceiling;
 
   assert.deepEqual(ceilings, {
-    T0: MIN_CALL_CEILING,
-    T1: MIN_CALL_CEILING,
-    T2: MIN_CALL_CEILING,
+    T0: 1,
+    T1: 3,
+    T2: 5,
   });
   for (const ceiling of Object.values(ceilings)) {
     assert.ok(ceiling >= MIN_CALL_CEILING);
     assert.ok(ceiling <= MAX_CALL_CEILING);
+  }
+});
+
+test("B10-29: the minimal config protects the catalog, plan HTML, build prompts and ticket sets next to it", () => {
+  const protectedPaths = buildMinimalConfig("protected-project").policy.protected_paths;
+  for (const glob of ["AGENTS.md", "awsf.config.yaml", "awsf.project.yaml", "specs/*.html", "specs/*-build-prompts.md", "specs/tickets/*/**"]) {
+    assert.ok(protectedPaths.includes(glob), `${glob} must be protected in a new project`);
   }
 });

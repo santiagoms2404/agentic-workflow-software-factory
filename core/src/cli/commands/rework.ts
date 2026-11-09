@@ -1,11 +1,11 @@
-import { existsSync, readFileSync, statSync, promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { canonicalJson, composeOwnerAmendment, createOwnerAmendment, ownerText, sha256, type ReworkOwnerAmendment, type OwnerAmendmentDelivery } from "../../contracts/owner-amendment.ts";
 import { argvDigest, gateConfigDigest, gatesConfigDigest, COMMAND_LEDGER_PROTOCOL_VERSION } from "../../contracts/command-ledger.ts";
 import { ledgerGovernanceFailure, planCommandRecovery } from "../../workflow/command-ledger.ts";
 import { occurrenceKeyForRework, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
 import { withExecutionLease, assertOwnExecutionLease } from "../../execution/operation-lease.ts";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import type {
   AdapterEntry,
   AgentDefinition,
@@ -21,22 +21,24 @@ import type {
   TransportBroker,
 } from "../../adapters/interface.ts";
 import { AdapterError, reservationIdOf } from "../../adapters/interface.ts";
+import { ExecutableNotFound, SpawnRegistrationInvalid } from "../../execution/transport-broker.ts";
+import { IllegalSpawnSite } from "../../state/errors.ts";
 import { renderHeadroomAdvice, renderOwnerAlternatives, type AdviceSelector } from "../../lifecycle/renderer.ts";
+import { gateEnv } from "../../adapters/env.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { assertPrivateSystemPrompt, writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
-import { injectOutputSchema } from "../../contracts/json-schema.ts";
+import { injectOutputSchema, PREVIOUS_ENVELOPE_PLACEHOLDER } from "../../contracts/json-schema.ts";
 import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
 import type { BuildOutput } from "../../contracts/build-output.ts";
 import type { RouteSelectionProvenance } from "../../contracts/route-selection.ts";
 import {
   UNREPORTED_TOKEN_USAGE,
-  isPersistableKind,
   type ModelResolutionProvenance,
   type NormalizedEvent,
   type TokenUsage,
 } from "../../contracts/normalized-events.ts";
-import type { TestOutput } from "../../contracts/test-output.ts";
+import { type TestOutput, TEST_OUTPUT_TAIL_MAX_CHARS } from "../../contracts/test-output.ts";
 import { CallBudget } from "../../execution/call-budget.ts";
 import type { BarrierRecord, TerminationReport } from "../../execution/launcher-barrier.ts";
 import {
@@ -45,13 +47,13 @@ import {
   type BrokerOptions,
   type SystemCommandOptions,
 } from "../../execution/transport-broker.ts";
-import { artifactsExist, filesNonEmpty, jsonParses, type ArtifactObservation } from "../../gates/artifacts.ts";
+import { artifactsExist, filesNonEmpty, jsonParses } from "../../gates/artifacts.ts";
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { envelopeValid } from "../../gates/envelope.ts";
 import { diffMatchesClaims, headAdvanced, noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
-import { GateReport, type GateId } from "../../gates/interface.ts";
-import { assertClean, captureChangeSet, changedPaths, runGit, systemGitRunner } from "../../git/changes.ts";
+import { GateReport, gateKindFor } from "../../gates/interface.ts";
+import { assertClean, captureChangeSet, changedPaths, isWorktreeClean, runGit, systemGitRunner, worktreeStatus } from "../../git/changes.ts";
 import { commitAsHost, HOST_AUTHOR } from "../../git/commit.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { writeRunReport } from "../../observability/run-report.ts";
@@ -63,8 +65,11 @@ import {
 } from "../../policy/redaction.ts";
 import { openPermissionSession, type SandboxProbe } from "../../policy/sandbox-broker.ts";
 import { refuseUndeliveredVisualPhases } from "../../workflow/visual-references.ts";
+import { assertReworkOwnerAmendmentActivation } from "../../workflow/resume-instruction.ts";
 import { transition, type EdgeId, type TaskState } from "../../state/task-machine.ts";
 import { ceilingFor } from "../../state/tiers.ts";
+import { PHASE_SILENCE_TIMEOUT_REASON, PhaseSilenceTimeout, phaseBlocker } from "./phase-blocker.ts";
+import { writeDurableFile } from "./durable-file.ts";
 import type { WorkflowRecipe } from "../../workflow/compiler.ts";
 import { composePromptBundle, type PromptBundle } from "../../workflow/prompt-composition.ts";
 import { PhaseGateFailure } from "../../workflow/engine.ts";
@@ -87,7 +92,11 @@ import {
   type AttemptStatus,
 } from "./attempt.ts";
 import {
+  // The one realpath-contained artifact reader (H11: B8-02); rework keeps no copy.
+  artifactReader,
   assertProductionConfigSnapshot,
+  // The silence timer's cancel, which must never become an unhandled rejection (H15, H17).
+  cancelOrRecord,
   ProductionRouteUnavailable,
   ProductionWorkflowUnsupported,
   requestOutput,
@@ -95,6 +104,7 @@ import {
 import {
   REVIEW_HEADROOM_CALLS,
   ReplacementReviewEvidenceInvalid,
+  coalescedPersistableEvents,
   createReviewRunState,
   planIntentFrom,
   prepareReview,
@@ -106,13 +116,14 @@ import {
 } from "./review-phase.ts";
 import {
   assertPromptCompositionCurrent,
+  candidateGateEvidence,
   readAttemptEvidence,
   recordedReviews,
   recordedRoutes,
   type RecordedRoute,
 } from "./review-record.ts";
 
-const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
+const { chmod, mkdir, readFile, realpath, writeFile } = fs;
 
 /**
  * Observe the worktree pins without throwing; see the note on the twin in
@@ -122,7 +133,7 @@ const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
 function observePins(worktree: string): { clean: boolean; head: string | null } {
   try {
     const runner = systemGitRunner(worktree);
-    const clean = runGit(runner, ["status", "--porcelain"]).trim().length === 0;
+    const clean = isWorktreeClean(runner);
     const head = runGit(runner, ["rev-parse", "HEAD"]).trim();
     return { clean, head: /^[0-9a-f]{40}$/u.test(head) ? head : null };
   } catch {
@@ -132,12 +143,6 @@ function observePins(worktree: string): { clean: boolean; head: string | null } 
 
 /** This dispatch site's ledger identity. */
 const REWORK_DISPATCHER = "rework/owner-gates" as const;
-
-/** Make one path's bytes durable before any journal record cites their digest. */
-async function fsyncPath(path: string): Promise<void> {
-  const handle = await open(path, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
-}
 
 /** A configured command whose recovery the ledger refuses to decide. Never an ordinary gate failure. */
 class CommandLedgerRefusal extends Error {
@@ -173,7 +178,11 @@ export function nextReworkPhaseOrdinal(evidence: readonly AttemptEvidence[]): nu
 const HOST = globalThis as unknown as {
   process: { env: Readonly<Record<string, string>> };
   AbortController: new () => { signal: Parameters<TransportBroker["startProcess"]>[2]; abort(reason?: unknown): void };
+  setTimeout(callback: () => void, milliseconds: number): unknown;
+  clearTimeout(timer: unknown): void;
 };
+
+/** The abort and cancel reason the builder's silence timer gives; `blocker` reads it as `silence`. */
 
 export class OwnerReworkDefectRequired extends Error {
   constructor() {
@@ -333,6 +342,10 @@ function bounded(value: string, maximum = MAX_EVIDENCE): string {
   return value.length <= maximum ? value : value.slice(0, maximum);
 }
 
+function safeTail(value: string, maximum = TEST_OUTPUT_TAIL_MAX_CHARS): string {
+  return value.length <= maximum ? value : value.slice(value.length - maximum);
+}
+
 function credentialSafeText(value: string, source: string, rejectPriorRedaction = false): string {
   const scrubbed = scrubCredentialString(value);
   if (scrubbed !== value || (rejectPriorRedaction && value.includes(REDACTED_VALUE))) {
@@ -478,8 +491,11 @@ async function resolveRoute(
 
 function reworkPrompt(status: AttemptStatus, defect: string, prior: PriorBuild, route: Route): string {
   const request = bounded(credentialSafeText(status.request, "persisted original request", true), 2_000);
+  const userPrompt = injectOutputSchema(route.userPrompt, "awsf.build-output/v1", {
+    [PREVIOUS_ENVELOPE_PLACEHOLDER]: "See the exact retained envelope reference and bounded summary above.",
+  });
   const handoff = [
-    route.userPrompt,
+    userPrompt,
     "",
     "Owner-authorized fresh rework call (L19). This is not a same-session correction.",
     `Concrete defect: ${defect}`,
@@ -491,12 +507,7 @@ function reworkPrompt(status: AttemptStatus, defect: string, prior: PriorBuild, 
     `Write policy: ${route.agent.writes.join(", ")}`,
     "Edit only the named defect on top of the exact prior candidate. Do not commit, change HEAD, route work, broaden scope, or touch protected paths. The host owns Git and all gates.",
   ].join("\n");
-  return credentialSafeText(
-    injectOutputSchema(handoff, "awsf.build-output/v1")
-      .replaceAll("{previous_envelope}", "See the exact retained envelope reference and bounded summary above."),
-    "final provider prompt",
-    true,
-  );
+  return credentialSafeText(handoff, "final provider prompt", true);
 }
 
 async function validateMaterializedSystemPrompt(
@@ -547,23 +558,6 @@ function preflightDescriptor(
   return spec;
 }
 
-function artifactReader(worktree: string): (path: string) => ArtifactObservation {
-  return (path) => {
-    const root = resolve(worktree);
-    const candidate = resolve(root, path);
-    const fromRoot = relative(root, candidate);
-    if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) return { exists: false, size: 0 };
-    try {
-      const observed = statSync(candidate);
-      if (!observed.isFile()) return { exists: false, size: 0 };
-      const content = path.toLowerCase().endsWith(".json") ? readFileSync(candidate, "utf8") : undefined;
-      return { exists: true, size: observed.size, ...(content === undefined ? {} : { content }) };
-    } catch {
-      return { exists: false, size: 0 };
-    }
-  };
-}
-
 function sumUsage(events: readonly NormalizedEvent[]): TokenUsage {
   const fields = ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "reasoningTokens"] as const;
   const totals: Record<(typeof fields)[number], number | null> = {
@@ -580,13 +574,6 @@ function sumUsage(events: readonly NormalizedEvent[]): TokenUsage {
 
 function contextTokens(usage: TokenUsage): number | null {
   return usage.inputTokens === null && usage.outputTokens === null ? null : (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
-}
-
-function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
-  if (gateId === "commands_pass") return "subprocess";
-  if (["head_advanced", "diff_matches_claims", "candidate_hygiene"].includes(gateId)) return "git";
-  if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
-  return gateId === "journey_passes" ? "journey" : "pure";
 }
 
 function reportWith(report: GateReport, prefix: string, other: GateReport): GateReport {
@@ -612,9 +599,7 @@ function blocker(error: unknown): { code: string; detail: string } {
   const detail = `${failure.name}: ${failure.message}`;
   if (failure instanceof PermissionBreach) return { code: "permission-breach", detail };
   if (failure instanceof AdapterError && failure.code === "E_QUOTA_EXHAUSTED") return { code: "quota-exhausted", detail };
-  if (/ceiling|budget|allowance/i.test(detail)) return { code: "budget-exhausted", detail };
-  if (/silence|timeout/i.test(detail)) return { code: "silence", detail };
-  return { code: "phase-abort", detail };
+  return phaseBlocker(error, detail) ?? phaseBlocker(failure, detail) ?? { code: "phase-abort", detail };
 }
 
 /** Owner-facing production implementation of the literal L19 spawn edge. */
@@ -624,13 +609,21 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   credentialSafeValue(options.config, "configured owner rework data");
   const configuredInfra: ReworkInfrastructure = { ...DEFAULT_INFRASTRUCTURE, ...options.infrastructure };
   const delegatedReservations = new Set<string>();
+  const uncertainReservations = new Set<string>();
   const infra: ReworkInfrastructure = { ...configuredInfra, createBroker: brokerOptions => {
     const delegate = configuredInfra.createBroker(brokerOptions);
     return { startProcess: async (registration, spec, signal) => {
-      delegatedReservations.add(reservationIdOf(registration));
-      try { return await delegate.startProcess(registration, spec, signal); }
-      catch (error) {
-        // No returned transport means the caller cannot prove whether a child exists. Do not retry it.
+      const reservationId = reservationIdOf(registration);
+      try {
+        const transport = await delegate.startProcess(registration, spec, signal);
+        delegatedReservations.add(reservationId);
+        return transport;
+      } catch (error) {
+        // These typed broker refusals all happen before the launcher barrier creates a child.
+        // Every other rejection has an unknown effect: keep any held liability and never retry.
+        if (!(error instanceof SpawnRegistrationInvalid || error instanceof ExecutableNotFound || error instanceof IllegalSpawnSite)) {
+          uncertainReservations.add(reservationId);
+        }
         throw new ReworkRouteMismatch(`broker launch outcome is uncertain: ${error instanceof Error ? error.message : String(error)}`);
       }
     } };
@@ -767,7 +760,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
   // would collide the moment a second rework ran in the same attempt, because
   // the phase in between had already zeroed that counter.
   const runtimeDir = join(options.attemptDir, "private", `owner-rework-${status.budget.ownerReentries + 1}`);
-  await mkdir(runtimeDir, { recursive: true });
+  // Private to the owner, as the review and production runtime directories are.
+  await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
   const systemPromptPath = await infra.writeSystemPrompt(route.systemPrompt, runtimeDir);
   await validateMaterializedSystemPrompt(route.adapter.id, runtimeDir, systemPromptPath, route.systemPrompt);
   const permission = openPermissionSession({
@@ -779,6 +773,8 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     tools: route.agent.tools.allow,
     writes: route.agent.writes,
     protectedPaths: options.config.policy.protected_paths,
+    // B10-02: seeded, Git-ignored inputs stay immutable to the rework phase.
+    seedPaths: options.config.runtime.seed_paths,
     providerWritableRoots: route.adapter.providerWritableRoots?.(HOST.process.env) ?? [],
     ...(infra.sandboxProbe === undefined ? {} : { sandboxProbe: infra.sandboxProbe }),
   });
@@ -855,7 +851,11 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const at = infra.now();
     const seq = transitionOrdinal++;
     await persist("attempt.transitioned", { lifecycleState: to, lastActivityAt: at, ...update }, {
-      type: "transition", ...(amendment === undefined ? {} : { ownerAmendment: amendment }), id: `${status.sessionId}:${edgeId}:${seq}`, seq,
+      type: "transition", ...(amendment === undefined ? {} : {
+        ownerAmendment: amendment,
+        ownerApprovalId: amendment.binding.authorizationId,
+        ownerOperationId: operationId,
+      }), id: `${status.sessionId}:${edgeId}:${seq}`, seq,
       from, to, actor, edgeId, reasonSource: source, reasonCode: code, reasonDetail: detail, spawnSite, at,
     });
   };
@@ -876,7 +876,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const at = infra.now();
     await persist("attempt.updated", {}, {
       type: "gate", id: `${phaseId}:${report.gateId}`, phaseId, round: 0,
-      gateId: report.gateId, kind: gateKind(report.gateId), candidateSha,
+      gateId: report.gateId, kind: gateKindFor(report.gateId), candidateSha,
       passed: report.passed, exitCode, checks: report.checks,
       violations: report.checks.filter((check) => !check.ok).map((check) => `${check.item}: ${check.note}`),
       outputPath, startedAt: at, endedAt: at,
@@ -890,6 +890,23 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     journeyApproved: false, protectedApprovalsValid: false, blocker: null, phase: null,
     lastActivity: `L19 human rework request accepted; call ${reservation.id} held before launch`,
   }, ownerAmendment ?? undefined);
+  if (ownerAmendment !== null) {
+    const activation = (await readAttemptEvidence(options.attemptDir)).findLast((record) =>
+      record.type === "transition" && record.edgeId === "L19" && record.ownerAmendment?.id === ownerAmendment.id);
+    const expected: ReworkOwnerAmendment["binding"] = {
+      entry: "rework", project: status.project, taskId: status.taskId, attempt: status.attempt, sessionId: status.sessionId,
+      authorizationId: ownerAmendment.binding.authorizationId, operationId, phaseKey, phaseOrdinal: builderOrdinal,
+      anchorId: `${status.sessionId}:candidate:${firstInspection.candidate}`, anchorRevision: displayedRevision,
+      candidateSha: firstInspection.candidate, defectDigest: sha256(defect), ownerReentry: status.budget.ownerReentries,
+      logicalTurnId: runId, correctionRound: 0, priorAmendmentDigest: null,
+      originalRequestDigest: sha256(status.request), originalPromptBundleDigest: sha256(canonicalJson(originalBundle)),
+      deliveryFrontier: "rework-input",
+    };
+    const activated = assertReworkOwnerAmendmentActivation(activation, expected, defect);
+    if (activated.digest !== ownerAmendment.digest || composeOwnerAmendment(originalInput, activated).composedText !== prompt) {
+      throw new Error("rework owner supplement differs from its persisted activation input");
+    }
+  }
   await persist("attempt.updated", {}, { type: "phase", phase });
   await persist("attempt.updated", {}, {
     type: "compiled-prompt", phaseId, name: "system", text: route.systemPrompt,
@@ -905,6 +922,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
 
   const broker = infra.createBroker({
     ledger: budget,
+    terminate: { graceMs: options.config.runtime.process_grace_seconds * 1_000 },
     register: async (record) => {
       processRecord = record;
       const registeredAt = infra.now();
@@ -975,35 +993,64 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       reservationId: reservation.id, adapterId: route.adapterId, role: route.agent.name,
     };
     const controller = new HOST.AbortController();
+    // The builder's silence bound from production-run.ts, which this loop
+    // lacked (H17: B8-03). A provider that stays alive and writes nothing never
+    // resumes the for-await, so without it `awsf rework` held the attempt in
+    // RUNNING with the execution lease and the process record open, forever.
+    // The adapter reads the signal only once stdout ends, so the abort alone
+    // does not end the stream; the cancel does. The timer cannot await that
+    // cancel, so it is held here, and a failed cancel becomes the turn's error.
+    // Either way the turn fails with the silence reason and the catch below
+    // settles the process and takes L8, which admits `silence`.
+    const silence: { elapsed: boolean; cancelled: Promise<void>; failure: Error | null } = {
+      elapsed: false, cancelled: Promise.resolve(), failure: null,
+    };
+    const silenceFailure = (): Error => new PhaseSilenceTimeout(silence.failure?.message ??
+      `${PHASE_SILENCE_TIMEOUT_REASON}: no provider event for ${String(options.config.runtime.silence_timeout_seconds)} s`);
+    let idle: unknown | null = null;
+    const arm = (): void => {
+      if (idle !== null) HOST.clearTimeout(idle);
+      idle = HOST.setTimeout(() => {
+        silence.elapsed = true;
+        controller.abort(new PhaseSilenceTimeout());
+        silence.cancelled = cancelOrRecord(activeTransport.current ?? undefined, PHASE_SILENCE_TIMEOUT_REASON, (failure) => { silence.failure = failure; });
+      }, options.config.runtime.silence_timeout_seconds * 1_000);
+      (idle as { unref?: () => void }).unref?.();
+    };
     const events: NormalizedEvent[] = [];
     let output = "";
     let resolved: { model: string; provenance: ModelResolutionProvenance } | null = null;
     let terminal: NormalizedEvent | null = null;
-    for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
-      // Accumulate original deltas before scrubbing: a shape can span any boundary.
-      if (event.kind === "text.delta") output += event.text;
-      const safeEvent = scrubCredentials(event);
-      routeEventExact(safeEvent, route);
-      events.push(safeEvent);
-      if (safeEvent.kind === "model.resolved") resolved = { model: safeEvent.resolvedModel, provenance: safeEvent.provenance };
-      const outcome = observedProcessOutcome(safeEvent, safeEvent.hostAt);
-      if (outcome !== null) {
-        terminal = safeEvent;
-        observedProcess = outcome;
+    arm();
+    try {
+      for await (const event of route.adapter.execute(request, capturingBroker, registration, controller.signal)) {
+        arm();
+        // Accumulate original deltas before scrubbing: a shape can span any boundary.
+        if (event.kind === "text.delta") output += event.text;
+        const safeEvent = scrubCredentials(event);
+        routeEventExact(safeEvent, route);
+        events.push(safeEvent);
+        if (safeEvent.kind === "model.resolved") resolved = { model: safeEvent.resolvedModel, provenance: safeEvent.provenance };
+        const outcome = observedProcessOutcome(safeEvent, safeEvent.hostAt);
+        if (outcome !== null) {
+          terminal = safeEvent;
+          observedProcess = outcome;
+        }
       }
+    } catch (error) {
+      await silence.cancelled;
+      throw silence.elapsed ? silenceFailure() : error;
+    } finally {
+      if (idle !== null) HOST.clearTimeout(idle);
     }
+    await silence.cancelled;
     const endedAt = infra.now();
     if (observedProcess !== null) observedProcess = { ...observedProcess, endedAt };
     // Provider output is evidence, not owner input. Scrub rather than abort.
     // Consolidate text into the last delta so retained fragments cannot reassemble
     // a credential that no individual delta matched. Keep the event order/metadata.
     output = scrubCredentialString(output);
-    const lastTextDelta = events.findLastIndex(event => event.kind === "text.delta");
-    for (const [index, retained] of events.entries()) {
-      const event = retained.kind === "text.delta"
-        ? { ...retained, text: index === lastTextDelta ? output : "" }
-        : retained;
-      if (!isPersistableKind(event.kind)) continue;
+    for (const event of coalescedPersistableEvents(events, output)) {
       await persist("attempt.updated", { lastActivityAt: event.hostAt, lastActivity: `${phaseKey}: ${event.kind}` }, {
         type: "normalized-event", phaseId, event,
       });
@@ -1020,6 +1067,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       });
       processSettled = true;
     }
+    // What the provider said before going quiet is recorded above; the turn
+    // still fails as silence, never as the missing terminal that follows from it.
+    if (silence.elapsed) throw silenceFailure();
     if (terminal?.kind === "run.failed") throw new AdapterError(route.adapter.id, terminal.errorCode, terminal.message);
     if (terminal?.kind === "run.cancelled") throw new AdapterError(route.adapter.id, "E_CANCELLED", terminal.reason);
     if (terminal?.kind !== "run.completed") throw new AdapterError(route.adapter.id, "E_TERMINAL_MISSING", "adapter event stream ended without a terminal");
@@ -1027,7 +1077,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     if (resolved === null) throw new AdapterError(route.adapter.id, "E_MODEL_UNRESOLVED", "adapter emitted no resolved model evidence");
     const usage = events.some((event) => event.kind === "usage") ? sumUsage(events) : UNREPORTED_TOKEN_USAGE;
     await persist("attempt.updated", { model: { resolved: resolved.model, provenance: resolved.provenance } }, {
-      type: "agent", phaseId, agent: route.agent.name, adapterId: route.adapterId,
+      // Purpose is written as production writes it for a builder, so the review
+      // inversion is taken against this builder and never the superseded one.
+      type: "agent", phaseId, agent: route.agent.name, adapterId: route.adapterId, purpose: "build",
       provider: route.model.provider, color: route.agent.color, requestedModel: route.agent.model,
       resolvedModel: resolved.model, modelProvenance: resolved.provenance,
       contextWindow: route.model.contextWindow, usageAuthority: route.model.usageAuthority,
@@ -1078,24 +1130,29 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     }
     const beforeCommitHead = runGit(systemGitRunner(status.worktree!), ["rev-parse", "HEAD"]).trim();
     if (beforeCommitHead !== firstInspection.candidate) throw new ReworkCandidateMismatch(`agent changed HEAD to ${beforeCommitHead}; agents never commit`);
+    // The default runner pins all four GIT_AUTHOR_*/GIT_COMMITTER_* to HOST_AUTHOR (H9: B8-04).
     const candidate = commitAsHost({ repository: status.worktree!, message: "fix: address owner rework request" });
-    const parent = runGit(systemGitRunner(status.worktree!), ["rev-parse", `${candidate}^`]).trim();
+    const git = systemGitRunner(status.worktree!);
+    const candidateIdentities = runGit(git, ["show", "-s", "--format=%an <%ae>|%cn <%ce>", candidate]).trim();
+    if (candidateIdentities !== `${OWNER}|${OWNER}`) {
+      throw new ReworkCandidateMismatch(`new candidate is not host-created under the owner identity: ${candidateIdentities}`);
+    }
+    const parent = runGit(git, ["rev-parse", `${candidate}^`]).trim();
     if (parent !== firstInspection.candidate) throw new ReworkCandidateMismatch(`new candidate parent ${parent} is not prior candidate ${firstInspection.candidate}`);
     await persist("attempt.updated", {
       candidateSha: candidate, budget: budget.snapshot(), lastActivityAt: infra.now(),
       lastActivity: `host created owner-identity candidate ${candidate} on prior candidate ${firstInspection.candidate}`,
     });
     for (const report of structural) await persistGate(report, candidate);
-    const advanced = headAdvanced({ baseSha: firstInspection.candidate, headSha: candidate, hostCommitExists: true });
+    const hostCommitExists = git(["cat-file", "-e", `${candidate}^{commit}`]).status === 0;
+    const advanced = headAdvanced({ baseSha: firstInspection.candidate, headSha: candidate, hostCommitExists });
     await persistGate(advanced, candidate);
     if (!advanced.passed) throw new PhaseGateFailure(phaseKey, [advanced]);
-
-    const git = systemGitRunner(status.worktree!);
     const headBeforeHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
-    const cleanBeforeHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
+    const cleanBeforeHygiene = isWorktreeClean(git);
     const hygieneResult = git(["diff", "--check", `${status.baseSha!}..${candidate}`, "--"]);
     const headAfterHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
-    const cleanAfterHygiene = runGit(git, ["status", "--porcelain"]).trim().length === 0;
+    const cleanAfterHygiene = isWorktreeClean(git);
     await assertOwnExecutionLease(options.attemptDir);
     // Read before this run's own hygiene record exists, so a dispatch point in
     // the snapshot belongs to an earlier run.
@@ -1119,6 +1176,9 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     // production-run.ts. A refusal must not leave behind its own exculpation.
     const ungoverned = ledgerGovernanceFailure(ledger, REWORK_DISPATCHER, occurrenceKey);
     if (ungoverned !== null) throw new CommandLedgerRefusal("owner rework gates", ungoverned);
+    // Built before the opening, as in production-run.ts: gates get the
+    // allowlisted env, never the host's whole environment (O6, B7-03).
+    const gateEnvironment = gateEnv(HOST.process.env);
     await persist("attempt.updated", {}, { type: "command-occurrence-opened", opening: {
       schema: "awsf.command-occurrence-opened/v1", dispatcherId: REWORK_DISPATCHER,
       occurrenceKey, protocolVersion: COMMAND_LEDGER_PROTOCOL_VERSION, openedAt: infra.now(),
@@ -1128,7 +1188,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const worktreeRealPath = await realpath(status.worktree!);
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
       const started = Date.now();
-      const cleanBefore = runGit(git, ["status", "--porcelain"]).trim().length === 0 && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
+      const cleanBefore = isWorktreeClean(git) && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
       const outputRelative = join("raw", `command-${phaseKey}-${candidate}-${gateId}.txt`);
       const planned = planCommandRecovery(ledger, {
         dispatcherId: REWORK_DISPATCHER, occurrenceKey, gateId, gateIds,
@@ -1146,63 +1206,61 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         exit = planned.result.exitCode;
         durationMs = planned.result.durationMs;
       } else {
-      const intentId = randomUUID();
-      await persist("attempt.updated", {}, { type: "command-dispatch-intent", intent: {
-        schema: "awsf.command-dispatch-intent/v1", intentId, dispatcherId: REWORK_DISPATCHER,
-        occurrenceKey, gateId, origin: "phase-dispatch", phaseKey, phaseOrdinal: 0, round: 0,
-        attempt: status.attempt, sessionId: status.sessionId,
-        argv: [...configured.argv], argvDigest: argvDigest(configured.argv),
-        cwd: status.worktree!, worktreeRealPath, timeoutMs: configured.timeout_seconds * 1_000,
-        maxOutputBytes: options.config.runtime.max_output_bytes,
-        gateConfigDigest: gateConfigDigest(configured), gatesConfigDigest: gatesDigest,
-        candidateSha: candidate, headBefore: candidate, cleanBefore,
-        dispatchedAt: infra.now(),
-      } });
-      const [executable, ...argv] = configured.argv;
-      const result = infra.runCommand(executable!, argv, {
-        timeoutMs: configured.timeout_seconds * 1_000, cwd: status.worktree!, maxBuffer: options.config.runtime.max_output_bytes,
-      });
-      rawCommandOutput = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
-      exit = result.status ?? -1;
-      durationMs = Date.now() - started;
-      try {
-        credentialSafeText(rawCommandOutput, "configured gate output");
-      } catch (error) {
-        // The command already ran. Without a result record this occurrence would
-        // hold an intent forever and every later recovery would refuse citing an
-        // unknown effect, when the actual cause is that the bytes were refused.
-        const withheldPins = observePins(status.worktree!);
-        await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
-          schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
-          exitCode: exit, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
-          headAfter: withheldPins.head ?? candidate, cleanAfter: withheldPins.clean && withheldPins.head !== null,
-          descendantQuiescence: "unproved", settledAt: infra.now(),
+        const intentId = randomUUID();
+        await persist("attempt.updated", {}, { type: "command-dispatch-intent", intent: {
+          schema: "awsf.command-dispatch-intent/v1", intentId, dispatcherId: REWORK_DISPATCHER,
+          occurrenceKey, gateId, origin: "phase-dispatch", phaseKey, phaseOrdinal: 0, round: 0,
+          attempt: status.attempt, sessionId: status.sessionId,
+          argv: [...configured.argv], argvDigest: argvDigest(configured.argv),
+          cwd: status.worktree!, worktreeRealPath, timeoutMs: configured.timeout_seconds * 1_000,
+          maxOutputBytes: options.config.runtime.max_output_bytes,
+          gateConfigDigest: gateConfigDigest(configured), gatesConfigDigest: gatesDigest,
+          candidateSha: candidate, headBefore: candidate, cleanBefore,
+          dispatchedAt: infra.now(),
         } });
-        throw error;
+        const [executable, ...argv] = configured.argv;
+        const result = infra.runCommand(executable!, argv, {
+          timeoutMs: configured.timeout_seconds * 1_000, cwd: status.worktree!, maxBuffer: options.config.runtime.max_output_bytes,
+          env: gateEnvironment,
+        });
+        rawCommandOutput = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+        exit = result.status ?? -1;
+        durationMs = Date.now() - started;
+        try {
+          credentialSafeText(rawCommandOutput, "configured gate output");
+        } catch (error) {
+          // The command already ran. Without a result record this occurrence would
+          // hold an intent forever and every later recovery would refuse citing an
+          // unknown effect, when the actual cause is that the bytes were refused.
+          const withheldPins = observePins(status.worktree!);
+          await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+            schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
+            exitCode: exit, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
+            headAfter: withheldPins.head ?? candidate, cleanAfter: withheldPins.clean && withheldPins.head !== null,
+            descendantQuiescence: "unproved", settledAt: infra.now(),
+          } });
+          throw error;
+        }
+        // The COMPLETE output is retained, not the bounded rendering: a bounded
+        // file cannot answer a restore, so an intent recorded against one could
+        // never be settled from its own evidence.
+        const outputAbsolute = join(options.attemptDir, outputRelative);
+        await writeDurableFile(outputAbsolute, rawCommandOutput);
+        const pins = observePins(status.worktree!);
+        await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+          schema: "awsf.command-dispatch-result/v1", intentId,
+          outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
+          exitCode: exit, durationMs, outputRef: outputRelative,
+          outputBytes: Buffer.byteLength(rawCommandOutput), outputDigest: retainedOutputDigest(rawCommandOutput),
+          headAfter: pins.head ?? candidate,
+          cleanAfter: pins.clean && pins.head !== null, descendantQuiescence: "unproved", settledAt: infra.now(),
+        } });
       }
-      // The COMPLETE output is retained, not the bounded rendering: a bounded
-      // file cannot answer a restore, so an intent recorded against one could
-      // never be settled from its own evidence.
-      const outputAbsolute = join(options.attemptDir, outputRelative);
-      await writeFile(outputAbsolute, rawCommandOutput, { mode: 0o600 });
-      await chmod(outputAbsolute, 0o600);
-      await fsyncPath(outputAbsolute);
-      await fsyncPath(dirname(outputAbsolute));
-      const pins = observePins(status.worktree!);
-      await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
-        schema: "awsf.command-dispatch-result/v1", intentId,
-        outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
-        exitCode: exit, durationMs, outputRef: outputRelative,
-        outputBytes: Buffer.byteLength(rawCommandOutput), outputDigest: retainedOutputDigest(rawCommandOutput),
-        headAfter: pins.head ?? candidate,
-        cleanAfter: pins.clean && pins.head !== null, descendantQuiescence: "unproved", settledAt: infra.now(),
-      } });
-      }
-      const commandOutput = bounded(rawCommandOutput);
+      const commandOutput = safeTail(rawCommandOutput, TEST_OUTPUT_TAIL_MAX_CHARS);
       commands.push({ gateId, argv: [...configured.argv], exitCode: exit, durationMs, outputRef: outputRelative });
       if (exit !== 0) failures.push(`${gateId} exited ${exit}`);
-      outputTail = bounded(`${outputTail}\n${commandOutput}`);
-      const cleanAfter = runGit(git, ["status", "--porcelain"]).trim().length === 0 && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
+      outputTail = safeTail(outputTail.length === 0 ? commandOutput : `${outputTail}\n${commandOutput}`, TEST_OUTPUT_TAIL_MAX_CHARS);
+      const cleanAfter = isWorktreeClean(git) && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
       if (!cleanAfter) {
         // The remaining gates are withheld on purpose: they must not run against
         // a tree a prior command corrupted. Recording that keeps a later
@@ -1370,8 +1428,12 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       if (head !== candidate) problems.push(`worktree HEAD is ${head}, not the candidate ${candidate}`);
       const canonicalHead = runGit(canonicalRunner, ["rev-parse", "HEAD"]).trim();
       if (canonicalHead !== baseSha) problems.push(`canonical HEAD is ${canonicalHead}, not the recorded base ${baseSha}`);
-      const dirty = runGit(observed, ["status", "--porcelain"]).trim();
+      const dirty = worktreeStatus(observed).trim();
       if (dirty.length > 0) problems.push(`the managed worktree is not clean: ${bounded(dirty, 400)}`);
+      // The same canonical read review and adoption make: a dirty checkout would
+      // otherwise reach AWAITING_OWNER and be refused only at landing.
+      const canonicalDirty = worktreeStatus(canonicalRunner).trim();
+      if (canonicalDirty.length > 0) problems.push(`the canonical checkout is not clean: ${bounded(canonicalDirty, 400)}`);
       if (problems.length === 0) return;
       const detail = `the candidate under review moved ${when}: ${problems.join("; ")}`;
       // After the answer this is host-deterministic evidence that the tree the
@@ -1381,9 +1443,10 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       throw afterAnswer ? new ReplacementReviewEvidenceInvalid(detail) : new ReworkCandidateMismatch(detail);
     };
 
+    const gateEvidence = candidateGateEvidence(await readAttemptEvidence(options.attemptDir), candidate, status.sessionId);
     const l11 = budget.authorize({
       from: "GATING", to: "REVIEWING", actor: "host", reason: { source: "gate" }, interactive: false,
-      evidence: { gatesPass: true, candidateSha: candidate }, spawn: { cost: 1 },
+      evidence: { gatesPass: true, candidateSha: candidate, gateEvidence }, spawn: { cost: 1 },
     });
     await persistTransition("GATING", "REVIEWING", l11.result.edge, "host", "gate", null,
       `held one call for the ${reviewRoute!.model.provider} review of the reworked candidate`, true, {
@@ -1441,9 +1504,13 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
       try { survivorReport = await failedTransport.cancel("owner rework failed closed"); }
       catch { survivorReport = null; }
     }
-    // Only positive non-delegation permits releasing an unused reservation, for either phase.
+    // An unused reservation is released only when the broker was never asked or
+    // returned a typed preflight refusal. A rejected launch with unknown effect
+    // remains held; a settled launch is already spent/released in the ledger.
     for (const held of budget.outstanding()) {
-      if (!delegatedReservations.has(held.id)) budget.releaseOnRegistrationFailure(held.id);
+      if (!delegatedReservations.has(held.id) && !uncertainReservations.has(held.id)) {
+        budget.releaseOnRegistrationFailure(held.id);
+      }
     }
 
     // persistAttempt may throw after journal+status are already durable (the
@@ -1473,22 +1540,27 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         if (observed.revision !== current.revision) {
           throw new Error("owner rework recovery found an unexpected durable revision");
         }
-        status = await persistAttempt(options.attemptDir, current.revision, event);
+        // Nothing committed, so the same write is retried whole. Projection
+        // stays on: a skipped projection is invisible to the projector's gap
+        // check whenever it was the session's last write.
+        status = await persistAttempt(options.attemptDir, current.revision, event, options.projectRecord);
       }
     };
 
     if (status.lifecycleState === "RUNNING") {
-      const failedPhase: PhaseEvidenceRecord = {
-        ...phase, status: "FAILED", startedAt: phase.startedAt ?? recoveryAt, endedAt: recoveryAt,
-        errorCode: failure.name, errorMessage: failure.message,
-      };
-      try {
-        await recoverPersist("attempt.updated", {
-          phase: { name: failedPhase.name, state: "FAILED", round: 0, maximumRounds: 0 },
-          budget: budget.snapshot(), process: null, lastActivityAt: recoveryAt,
-          lastActivity: `${failedPhase.key} failed closed`,
-        }, { type: "phase", phase: failedPhase });
-      } catch { /* L8 below is the mandatory durable settlement. */ }
+      if (phase.status !== "SUCCEEDED") {
+        const failedPhase: PhaseEvidenceRecord = {
+          ...phase, status: "FAILED", startedAt: phase.startedAt ?? recoveryAt, endedAt: recoveryAt,
+          errorCode: failure.name, errorMessage: failure.message,
+        };
+        try {
+          await recoverPersist("attempt.updated", {
+            phase: { name: failedPhase.name, state: "FAILED", round: 0, maximumRounds: 0 },
+            budget: budget.snapshot(), process: null, lastActivityAt: recoveryAt,
+            lastActivity: `${failedPhase.key} failed closed`,
+          }, { type: "phase", phase: failedPhase });
+        } catch { /* L8 below is the mandatory durable settlement. */ }
+      }
 
       // Refresh again because even a thrown phase projection may have committed.
       status = await readAttempt(options.attemptDir);
@@ -1649,12 +1721,30 @@ async function refreshRunReport(attemptDir: string, status: AttemptStatus): Prom
   await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
 }
 
+/**
+ * The final advance commits before its lock is released, so a failure there can
+ * leave a candidate awaiting the owner while the command still reports failure.
+ * The readable report must name that candidate anyway, or it describes the
+ * superseded one. Best effort: the failure the owner must see is the one thrown.
+ */
+async function refreshReportIfAwaitingOwner(attemptDir: string): Promise<void> {
+  try {
+    const durable = await readAttempt(attemptDir);
+    if (durable.lifecycleState === "AWAITING_OWNER") await refreshRunReport(attemptDir, durable);
+  } catch {
+    /* the thrown failure below is the one the owner must see. */
+  }
+}
+
 export async function reworkCommand(options: ReworkCommandOptions): Promise<ReworkCommandResult> {
   try {
     const result = await runReworkCommand(options);
     if (result.confirmed) await refreshRunReport(options.attemptDir, result.status);
     return result;
   } catch (error) {
+    await refreshReportIfAwaitingOwner(options.attemptDir);
     throw safeFailure(error);
   }
 }
+
+export { safeTail };

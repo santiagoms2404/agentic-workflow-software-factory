@@ -14,6 +14,7 @@ import type { DatabaseSync } from "../observability/sqlite.ts";
 import type {
   LifecycleState,
   MetricsAgentPhase,
+  MetricsDiagnostic,
   MetricsResponse,
   MetricsRoleRow,
   MetricsRun,
@@ -127,14 +128,57 @@ export function buildMetricsPayload(db: DatabaseSync, options: MetricsPayloadOpt
   // Assigned, not cast: this compiles only while core's `RoleRow` satisfies the payload's row type.
   const roleRows: readonly MetricsRoleRow[] = buildRoleRows(facts) satisfies readonly RoleRow[];
   const runs = facts.map((item) => run(item, phases.get(item.sessionId) ?? []));
+  const diagnostics: MetricsDiagnostic[] = facts.flatMap((item) => (item.taskClassDiagnostics ?? []).map((warning) => ({
+    sessionId: item.sessionId, project: item.projectSlug, taskId: item.taskId, attempt: item.attempt,
+    code: warning.code, ticketId: warning.ticketId, path: warning.path, message: warning.message,
+  })));
   return {
     schema: METRICS_SCHEMA,
     extractedAt: options.extractedAt,
     runs,
     roleRows,
+    diagnostics,
     causes: summarizeCauses(runs),
     rateCard: RATE_CARD,
     priors: BENCHMARK_PRIORS,
     untestedRoutes: UNTESTED_ROUTES,
+  };
+}
+
+/**
+ * Reuses a payload only for a long-lived, read-only connection. SQLite's
+ * data_version advances when another connection commits, which is the write
+ * path used by the API router; each response still receives its own timestamp.
+ */
+export function createMetricsPayloadReader(db: DatabaseSync): (options: MetricsPayloadOptions) => MetricsResponse {
+  let version: number | null = null;
+  let payload: Omit<MetricsResponse, "extractedAt"> | null = null;
+  return (options) => {
+    const current = (db.prepare("PRAGMA data_version").get() as { data_version: number }).data_version;
+    if (payload === null || current !== version) {
+      const built = buildMetricsPayload(db, options);
+      payload = {
+        schema: built.schema,
+        runs: built.runs,
+        roleRows: built.roleRows,
+        diagnostics: built.diagnostics,
+        causes: built.causes,
+        rateCard: built.rateCard,
+        priors: built.priors,
+        untestedRoutes: built.untestedRoutes,
+      };
+      version = current;
+    }
+    return {
+      schema: payload.schema,
+      extractedAt: options.extractedAt,
+      runs: payload.runs,
+      roleRows: payload.roleRows,
+      diagnostics: payload.diagnostics,
+      causes: payload.causes,
+      rateCard: payload.rateCard,
+      priors: payload.priors,
+      untestedRoutes: payload.untestedRoutes,
+    };
   };
 }

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import type { BacklogTicket, TicketSourceResponse, TicketsResponse } from "../../shared/types.ts";
 import { initialPlanSelection, togglePlan, visibleGroups as selectVisibleGroups, type PlanFilter } from "../backlog-selection.ts";
+import { admitNewFilterValues } from "../session-filters.ts";
 import BacklogBoard from "../components/BacklogBoard.vue";
 import BacklogMetricsRow from "../components/BacklogMetricsRow.vue";
 import PlanCardRow from "../components/PlanCardRow.vue";
@@ -11,7 +12,10 @@ const props = defineProps<{ backlog: TicketsResponse; plan?: string | null }>();
 const selectedPlans = ref<readonly string[]>([]);
 const collapsedPlans = ref<readonly string[]>([]);
 const expandedColumns = ref<readonly string[]>([]);
+let knownPlans: readonly string[] = [];
 let hasSeededSelection = false;
+/** The plan the URL named when the selection was last seeded. */
+let appliedRequest: string | null = null;
 const planFilter = ref<PlanFilter>("both");
 const activeTicket = ref<BacklogTicket | null>(null);
 const ticketSources = ref<Readonly<Record<string, string>>>({});
@@ -21,9 +25,19 @@ const sourceErrors = ref<Readonly<Record<string, string>>>({});
 watch(
   () => [props.backlog.plans, props.plan] as const,
   ([plans, requested]) => {
-    if (hasSeededSelection || plans.length === 0) return;
-    selectedPlans.value = initialPlanSelection(plans, requested);
-    hasSeededSelection = true;
+    if (plans.length === 0) return;
+    const currentPlanIds = plans.map((plan) => plan.id);
+    const requestedId = requested ?? null;
+    // A different plan in the URL reselects, as a fresh visit would. The same
+    // request arriving again on a poll does not, so the reader's choice holds.
+    if (!hasSeededSelection || requestedId !== appliedRequest) {
+      selectedPlans.value = initialPlanSelection(plans, requestedId);
+      hasSeededSelection = true;
+      appliedRequest = requestedId;
+    } else {
+      selectedPlans.value = admitNewFilterValues(knownPlans, currentPlanIds, selectedPlans.value);
+    }
+    knownPlans = currentPlanIds;
   },
   { immediate: true },
 );
@@ -35,8 +49,13 @@ const groups = computed(() => selectVisibleGroups(
   planFilter.value,
 ));
 
-async function loadSource(ticket: BacklogTicket): Promise<void> {
-  if (ticketSources.value[ticket.uid] !== undefined || loadingSources.value.includes(ticket.uid)) return;
+async function loadSource(ticket: BacklogTicket, refresh = false): Promise<void> {
+  if (!refresh && ticketSources.value[ticket.uid] !== undefined) return;
+  if (loadingSources.value.includes(ticket.uid)) return;
+  if (refresh) {
+    const { [ticket.uid]: _priorSource, ...remainingSources } = ticketSources.value;
+    ticketSources.value = remainingSources;
+  }
   loadingSources.value = [...loadingSources.value, ticket.uid];
   const { [ticket.uid]: _priorError, ...remainingErrors } = sourceErrors.value;
   sourceErrors.value = remainingErrors;
@@ -66,7 +85,7 @@ function toggleExpandedColumn(columnId: string): void {
 
 function openTicket(ticket: BacklogTicket): void {
   activeTicket.value = ticket;
-  void loadSource(ticket);
+  void loadSource(ticket, true);
 }
 
 function closeTicket(): void {

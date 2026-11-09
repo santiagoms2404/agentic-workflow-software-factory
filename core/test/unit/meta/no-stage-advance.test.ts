@@ -5,10 +5,11 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import ts from "typescript";
-import { relRepo, repoRoot, walkFiles } from "./_walk.ts";
+import { relRepo, repoRoot, sourceImportCandidates, walkFiles } from "./_walk.ts";
+import { sourceLocation } from "./_type-program.ts";
 
 const SOURCE_ROOT = join(repoRoot(), "core", "src");
 const STAGES_ROOT = join(SOURCE_ROOT, "stages");
@@ -41,10 +42,7 @@ function relativeImports(
       const specifier = match[2];
       if (specifier === undefined) continue;
       const unresolved = resolve(dirname(file), specifier);
-      const candidates = extname(unresolved) === ""
-        ? [unresolved, `${unresolved}.ts`, `${unresolved}.tsx`, join(unresolved, "index.ts"), join(unresolved, "index.tsx")]
-        : [unresolved];
-      const target = candidates.find((candidate) => sourceFiles.has(candidate));
+      const target = sourceImportCandidates(unresolved).find((candidate) => sourceFiles.has(candidate));
       if (target === undefined) continue;
       const line = source.slice(0, match.index).split("\n").length;
       const relativeTarget = relRepo(target);
@@ -86,10 +84,7 @@ function sourceFile(path: string): ts.SourceFile {
   return ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 }
 
-function location(source: ts.SourceFile, node: ts.Node): string {
-  const position = source.getLineAndCharacterOfPosition(node.getStart(source));
-  return `${relRepo(source.fileName)}:${String(position.line + 1)}:${String(position.character + 1)}`;
-}
+const location = sourceLocation;
 
 function timerOffenders(): readonly string[] {
   const offenders: string[] = [];

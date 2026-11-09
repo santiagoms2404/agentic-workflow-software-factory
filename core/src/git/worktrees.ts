@@ -1,6 +1,6 @@
 // Managed execution trees live under the machine-local Q8 root, never in state or the canonical checkout.
 import { existsSync, promises as fs } from "node:fs";
-import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { renderRestartAdvice } from "../lifecycle/renderer.ts";
 import { matchesPathGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { runGit, systemGitRunner, type GitRunner } from "./changes.ts";
@@ -38,7 +38,7 @@ export class WorktreeSeedError extends Error {
 
 function isContained(root: string, candidate: string): boolean {
   const fromRoot = relative(root, candidate);
-  return fromRoot === "" || (!fromRoot.startsWith("..") && !isAbsolute(fromRoot));
+  return fromRoot === "" || (fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot));
 }
 
 function errorDetail(error: unknown): string {
@@ -210,7 +210,7 @@ function attemptPath(root: string, attemptId: string): string {
   }
   const absoluteRoot = resolve(root);
   const path = resolve(absoluteRoot, attemptId);
-  if (relative(absoluteRoot, path) === "" || relative(absoluteRoot, path).startsWith("..")) {
+  if (relative(absoluteRoot, path) === "" || !isContained(absoluteRoot, path)) {
     throw new Error("attempt worktree escapes its configured root");
   }
   return path;
@@ -253,21 +253,31 @@ export class AttemptWorktreeExists extends Error {
   }
 }
 
+/** Refuse an existing attempt path before any caller performs stateful startup preflight. */
+export function assertWorktreeAvailable(
+  request: Pick<WorktreeRequest, "repository" | "root" | "attemptId">,
+  runner = systemGitRunner(request.repository),
+): string {
+  if (!isAbsolute(request.root)) throw new Error("worktree root must be an absolute machine-local path");
+  const path = attemptPath(request.root, request.attemptId);
+  // Diagnose before asking Git to create anything, so the failure names the
+  // interrupted setup rather than repeating git's message about a path.
+  // trap-refusal-begin TR-12
+  if (existsSync(path)) {
+    const tracked = listWorktrees(request.repository, request.root, runner)
+      .some((worktree) => resolve(worktree.path) === resolve(path));
+    throw new AttemptWorktreeExists(path, tracked);
+  }
+  // trap-refusal-end TR-12
+  return path;
+}
+
 /** Create exactly the attempt's detached execution tree. No removal operation is exposed. */
 export function createWorktree(request: WorktreeRequest, runner = systemGitRunner(request.repository)): ManagedWorktree {
   if (!isAbsolute(request.root)) throw new Error("worktree root must be an absolute machine-local path");
   const path = attemptPath(request.root, request.attemptId);
   const head = runGit(runner, ["rev-parse", request.baseSha]).trim();
-  // Diagnose before asking Git, so the failure names the condition rather than
-  // repeating git's message about a path.
-  // trap-refusal-begin TR-12
-  if (existsSync(path)) {
-    const tracked = runGit(runner, ["worktree", "list", "--porcelain"])
-      .split(/\r?\n/)
-      .some((line) => line.startsWith("worktree ") && resolve(line.slice("worktree ".length)) === resolve(path));
-    throw new AttemptWorktreeExists(path, tracked);
-  }
-  // trap-refusal-end TR-12
+  assertWorktreeAvailable(request, runner);
   runGit(runner, ["worktree", "add", "--detach", path, head]);
   return Object.freeze({ attemptId: request.attemptId, path, head });
 }
@@ -281,7 +291,7 @@ export function listWorktrees(repository: string, root: string, runner = systemG
       const lines = record.split(/\r?\n/);
       const path = lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length);
       const head = lines.find((line) => line.startsWith("HEAD "))?.slice("HEAD ".length);
-      if (!path || !head || relative(absoluteRoot, resolve(path)).startsWith("..")) return [];
+      if (!path || !head || !isContained(absoluteRoot, resolve(path))) return [];
       return [{ attemptId: basename(path), path, head }];
     }));
 }

@@ -2,7 +2,14 @@
 
 Companion to [`awsf-plan.html`](./awsf-plan.html) and [`awsf-plan-build-prompts.md`](./awsf-plan-build-prompts.md). Created 2026-08-04 by claude-fable-5.
 
-Every row is a **claim** paired with the **mechanism that proves it** — a named test, a named command, or a named grep. A row is checked only when its mechanism has actually run and passed; a row that turns out to be impossible as written is marked `[f]` with the design correction recorded in the plan's Amendments, never quietly reworded. Rows are tagged by the milestone whose Definition of Done owns them. Nothing here has been executed yet — this file is authored at M0, before any code exists.
+> **Historical acceptance record.** This checklist began at M0 and retains its
+> original obligations and later recorded additions. It is not a current suite
+> report or a second completion ledger. Later owner amendments and the registered
+> plans govern changed policy, including publication and bounded cleanup.
+> See [current validation](../README.md#verifying-these-claims) and the
+> [documentation map](../docs/README.md). Existing check marks are preserved.
+
+Every row is a **claim** paired with the **mechanism that proves it** — a named test, a named command, or a named grep. A row is checked only when its mechanism has actually run and passed; a row that turns out to be impossible as written is marked `[f]` with the design correction recorded in the plan's Amendments, never quietly reworded. Rows are tagged by the milestone whose Definition of Done owns them. At original authoring in M0, no implementation or acceptance execution existed. Later recorded checks do not establish a fresh run of the remaining rows.
 
 Conventions: test paths are relative to the repository root; `unit | contract | sim | journeys` refer to the canonical scripts `npm run test:unit` etc. created in T1. Where a row names a specific test file, T-tasks must create exactly that file (renames are plan amendments).
 

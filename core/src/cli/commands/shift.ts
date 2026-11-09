@@ -3,9 +3,11 @@ import { relative, sep } from "node:path";
 import { sealShiftManifest, type ShiftManifest } from "../../contracts/shift-selection-record.ts";
 import { ticketFileDigest } from "../../persistence/plan-ticket-body.ts";
 import { CallCeilingExceeded } from "../../state/errors.ts";
-import { ceilingFor, MAX_CALL_CEILING, type ResolvedCeiling, type Tier } from "../../state/tiers.ts";
+import { ceilingFor, MAX_CALL_CEILING, raiseActsNeeded, type RaisePlan, type ResolvedCeiling, type Tier } from "../../state/tiers.ts";
 import type { ShiftSelection } from "../../workflow/shift/select.ts";
 import { MAX_GRANT_CALLS } from "./raise.ts";
+
+export { raiseActsNeeded, type RaisePlan };
 
 // `awsf shift plan <stem> --milestone <Mx>[,<My>,...]` — the pre-flight
 // readout M3 exists for. It reads the tickets and the tier's ceiling and
@@ -26,30 +28,6 @@ export function parseMilestoneSelection(values: readonly string[]): readonly str
     }
   }
   return Object.freeze(milestones);
-}
-
-export interface RaisePlan {
-  /** How many `awsf raise` acts, each granting up to `MAX_GRANT_CALLS`. */
-  readonly acts: number;
-  /** The ceiling reached after all of them land. */
-  readonly finalCeiling: number;
-}
-
-/**
- * The fewest full-grant `awsf raise` acts that carry `ceiling` up to at least
- * `target`, or `null` when `target` itself is past `MAX_CALL_CEILING` — the
- * one shortfall no sequence of acts can close, because the bound is the bound.
- */
-export function raiseActsNeeded(ceiling: number, target: number): RaisePlan | null {
-  if (target > MAX_CALL_CEILING) return null;
-  if (target <= ceiling) return Object.freeze({ acts: 0, finalCeiling: ceiling });
-  let acts = 0;
-  let current = ceiling;
-  while (current < target) {
-    current = Math.min(current + MAX_GRANT_CALLS, MAX_CALL_CEILING);
-    acts += 1;
-  }
-  return Object.freeze({ acts, finalCeiling: current });
 }
 
 export interface ShiftAdmission {

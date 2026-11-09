@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { CLOSURE_CUT, closeArgv, unclosedLandings, type LandingClosureFact } from "../closure/model.ts";
 import {
+  boundedJoin,
   FRESHNESS_REFUSALS,
   K1_FIELD_IDS,
+  K1_REASON_MAX_LENGTH,
   k1FieldKind,
   type FreshnessRefusal,
   requestPathsDigest,
@@ -13,7 +15,7 @@ import {
   type ProtectedPlanEntry,
   type RequestConfirmationRecord,
 } from "../contracts/driver-preflight.ts";
-import { matchesPathGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
+import { matchesPathGlob, normalizeGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import type { TaskState } from "../state/task-machine.ts";
 
 // K1's field evaluators (specs/awsf-v3-w01-driver-checks.html, K1's fields).
@@ -33,8 +35,11 @@ export type FieldVerdict = { readonly passed: true } | { readonly passed: false;
 
 const PASS: FieldVerdict = Object.freeze({ passed: true });
 
+// The record caps every reason at K1_REASON_MAX_LENGTH, so a long problem list
+// keeps its leading problems and counts the rest; an unbounded join would make
+// the refusal fail its own record and never be journaled (B3-01).
 function verdict(problems: readonly string[]): FieldVerdict {
-  return problems.length === 0 ? PASS : Object.freeze({ passed: false, reason: problems.join("; ") });
+  return problems.length === 0 ? PASS : Object.freeze({ passed: false, reason: boundedJoin(problems, "; ", K1_REASON_MAX_LENGTH) });
 }
 
 /** A segment no configured glob names, standing in for "any segment" when a glob is tested as a path. */
@@ -52,6 +57,15 @@ function matches(path: string, glob: string, caseSensitive: boolean): boolean {
 function invalidPath(path: string): string | null {
   try {
     normalizeRepositoryPath(path);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+function invalidGlob(glob: string): string | null {
+  try {
+    normalizeGlob(glob);
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
@@ -193,12 +207,20 @@ function omittablePrefixes(glob: string): string[] {
   const segments = glob.split("/");
   const literal = segments.findIndex((segment) => /[*?[]/u.test(segment));
   const count = literal === -1 ? segments.length : literal;
-  return Array.from({ length: Math.max(count, 1) }, (_, index) => index === 0 ? "" : `${segments.slice(0, index).join("/")}/`);
+  const prefixes = Array.from({ length: Math.max(count, 1) }, (_, index) => index === 0 ? "" : `${segments.slice(0, index).join("/")}/`);
+  if (literal > 0 && !glob.endsWith("/**")) {
+    const fullLiteralPrefix = `${segments.slice(0, literal).join("/")}/`;
+    if (!prefixes.includes(fullLiteralPrefix)) prefixes.push(fullLiteralPrefix);
+  }
+  return prefixes;
 }
 
 /** The protected spelling a candidate resolves to under a glob, or null. Naming a protected directory counts. */
 function protectedSpelling(candidate: string, glob: string): string | null {
+  const firstSegment = glob.split("/")[0];
+  const startsWithFirst = firstSegment && candidate.startsWith(`${firstSegment}/`);
   for (const prefix of omittablePrefixes(glob)) {
+    if (startsWithFirst && prefix !== "") continue;
     const path = `${prefix}${candidate}`;
     // Flat light tickets are files, not paired-ticket directories. Appending
     // a synthetic descendant would misclassify tickets/Tnn.md under */**.
@@ -335,6 +357,7 @@ function protectedHits(facts: ProtectedPathsFacts): ProtectedHit[] {
   for (const token of tokens) {
     for (const candidate of token.candidates) {
       for (const glob of facts.protectedPaths) {
+        if (invalidGlob(glob) !== null) continue;
         const path = protectedSpelling(candidate, glob);
         if (path !== null && !hits.has(path)) hits.set(path, { token: token.text, path, glob });
       }
@@ -346,6 +369,7 @@ function protectedHits(facts: ProtectedPathsFacts): ProtectedHit[] {
   for (const entry of facts.where) {
     if (invalidPath(entry) !== null) continue;
     for (const glob of facts.protectedPaths) {
+      if (invalidGlob(glob) !== null) continue;
       if (!hits.has(glob) && covers(glob, entry, false)) hits.set(glob, { token: glob, path: glob, glob });
     }
   }
@@ -362,6 +386,10 @@ function protectedHits(facts: ProtectedPathsFacts): ProtectedHit[] {
  */
 export function evaluateProtectedPaths(facts: ProtectedPathsFacts): ProtectedPathsResult {
   const problems: string[] = [];
+  for (const glob of facts.protectedPaths) {
+    const invalid = invalidGlob(glob);
+    if (invalid !== null) problems.push(`protected path glob ${JSON.stringify(glob)} is invalid: ${invalid}`);
+  }
   for (const entry of new Set(facts.read)) {
     const invalid = invalidPath(entry);
     if (invalid !== null) problems.push(`--read ${JSON.stringify(entry)} is not a repository path: ${invalid}`);

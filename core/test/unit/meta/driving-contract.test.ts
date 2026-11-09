@@ -2,8 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DRIVING_REL, drivingDir } from "./_driving.ts";
-import { routes } from "./driving-routes.test.ts";
+import { DRIVING_REL, drivingDir, routes } from "./_driving.ts";
 
 // ---------------------------------------------------------------------------
 // The contract is the one driving document that is not READ — it is DELIVERED,
@@ -27,11 +26,8 @@ import { routes } from "./driving-routes.test.ts";
 // failure, where a matcher silently stops matching and reports green over a
 // document it can no longer read.
 //
-// The route matcher is IMPORTED from driving-routes.test.ts rather than
-// re-declared. That import also registers that file's own two tests in this
-// file's process, which is noise in the output and the correct trade: a second
-// copy of the regex is how "route-free" and "every route resolves" would
-// quietly stop being the same property.
+// The route matcher lives in _driving.ts and is shared by both contracts,
+// without loading another test file or registering its cases in this process.
 // ---------------------------------------------------------------------------
 
 const CONTRACT_REL = `${DRIVING_REL}/marimba/CONTRACT.md`;

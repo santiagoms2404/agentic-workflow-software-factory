@@ -8,8 +8,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { MetricsResponse, MetricsRoleRow, MetricsRun, MetricsRunPhase } from "../../../dashboard/shared/types.ts";
-import { formatListEquivalent, listPrice, RATE_CARD } from "../../../dashboard/shared/rate-card.ts";
-import { STATE_GROUPS, stats } from "../../../dashboard/shared/route-metrics.ts";
+import { formatListEquivalent, listEquivalentByKindUsd, listPrice, RATE_CARD } from "../../../dashboard/shared/rate-card.ts";
+import { compareText, formatPercent, STATE_GROUPS, stats } from "../../../dashboard/shared/route-metrics.ts";
 import {
   DEFAULT_FAMILIES,
   DEFAULT_METRICS_ROUTE,
@@ -17,6 +17,8 @@ import {
   metricsRouteHash,
   parseMetricsRoute,
   rowsInLens,
+  rankIn,
+  STATE_LABEL,
   toToken,
   withFamily,
   withRun,
@@ -53,6 +55,7 @@ import {
   roleLines,
   runFacts,
   runListTotal,
+  runOptionLabel,
   runPicker,
 } from "../../../dashboard/src/metrics-run.ts";
 import { ATTRIBUTION_CAUSES as CORE_CAUSES } from "../../src/contracts/attribution-record.ts";
@@ -67,6 +70,16 @@ const runOf = (id: string) => payload.runs.find((run) => run.sessionId === id)!;
 // ---------------------------------------------------------------------------
 // The Ledger.
 // ---------------------------------------------------------------------------
+
+test("metrics label and ordering helpers retain shared null, rounding, and unknown-value rules", () => {
+  assert.equal(formatPercent(null), "–");
+  assert.equal(formatPercent(0.504), "50%");
+  assert.equal(compareText("a", "b"), -1);
+  assert.equal(compareText("b", "a"), 1);
+  assert.equal(compareText("a", "a"), 0);
+  assert.equal(rankIn(["first", "second"], "second"), 1);
+  assert.equal(rankIn(["first", "second"], "other"), 2);
+});
 
 test("every group is the module's stats over its rows, keyed as the lens keys it", () => {
   for (const group of LEDGER_GROUPS) {
@@ -133,7 +146,9 @@ test("a column the same in every group is flat; one group compares nothing", () 
   const flat = flatColumns(rows, columns);
   for (const column of columns) {
     const values = rows.map((row) => column.value(row.stats));
-    assert.equal(flat.has(column.id), values.every((value) => value === values[0]), column.id);
+    const cells = rows.map((row) => column.cell(row.stats));
+    const isFlat = values.every((value) => value === values[0]) && cells.every((cell) => cell.text === cells[0]?.text && cell.note === cells[0]?.note);
+    assert.equal(flat.has(column.id), isFlat, column.id);
   }
   assert.ok(flat.has("state-CANCELLED"), "no cancelled runs anywhere is no signal");
   assert.deepEqual([...flatColumns(rows.slice(0, 1), columns)], []);
@@ -195,6 +210,9 @@ test("column families and the sort live in the hash and flip as the pills and he
 
   assert.deepEqual(parseMetricsRoute("#/metrics?cols=cost,pie,outcome").families, ["outcome", "cost"], "unknown families drop, order is the pills'");
   assert.deepEqual(parseMetricsRoute("#/metrics?cols=").families, []);
+  // B13-22: a value that names only unknown families falls back as any other unknown parameter does.
+  assert.deepEqual(parseMetricsRoute("#/metrics?cols=bogus").families, DEFAULT_FAMILIES, "unknown-only is the default, not an empty Ledger");
+  assert.deepEqual(parseMetricsRoute("#/metrics").families, DEFAULT_FAMILIES);
   assert.equal(metricsRouteHash(parseMetricsRoute("#/metrics?cols=")), "#/metrics?cols=");
   assert.deepEqual(parseMetricsRoute("#/metrics?dir=sideways").sort, { column: COUNT_COLUMN, dir: "desc" });
 });
@@ -209,6 +227,13 @@ test("grouped by run, a row opens the Run view with the lens kept", () => {
 // ---------------------------------------------------------------------------
 // The Run view.
 // ---------------------------------------------------------------------------
+
+test("the run picker uses the same state labels as the other metrics views", () => {
+  for (const stateGroup of Object.keys(STATE_LABEL) as Array<keyof typeof STATE_LABEL>) {
+    const run = { ...runOf("f1"), stateGroup };
+    assert.ok(runOptionLabel(run).endsWith(` · ${STATE_LABEL[stateGroup]}`));
+  }
+});
 
 test("the picker lists the lens's runs newest first and keeps a shown run the lens leaves out", () => {
   const all = runPicker(payload, DEFAULT_METRICS_ROUTE);
@@ -273,19 +298,33 @@ test("the per-role table: design role order, tool counts, first-pass marks and l
   assert.deepEqual(lines.map((line) => line.role), ["builder", "reviewer"]);
   const builder = lines[0]!;
   const row = rows.find((candidate) => candidate.role === "builder")!;
+  const rate = RATE_CARD.rows.find((candidate) => candidate.model === row.resolvedModel)!;
+  const byKindUsd = listEquivalentByKindUsd(row.tokens, rate);
+  assert.equal(byKindUsd.input + byKindUsd["cache read"] + byKindUsd["cache write"] + byKindUsd.output, listPrice(row));
   assert.equal(builder.route, "GPT-6 Sol · xhigh");
   assert.equal(builder.provider, "openai");
   assert.equal(builder.provenance, "stream-authoritative");
   assert.equal(builder.toolMix, `R${row.tools.read} S${row.tools.search} E${row.tools.edit} X${row.tools.exec} O${row.tools.other}`);
   assert.equal(builder.gates, `${row.gates.pass}/${row.gates.total}`);
   assert.equal(builder.list, formatListEquivalent(listPrice(row)));
-  const kinds = listByKind(row)!;
+  const kinds = listByKind(row, listPrice(row))!;
   assert.deepEqual(kinds.map((kind) => kind.kind), ["input", "cache read", "cache write", "output"]);
   assert.ok(Math.abs(kinds.reduce((sum, kind) => sum + kind.usd, 0) - listPrice(row)!) < 1e-9, "the kinds add up to the row's list equivalent");
   assert.ok(Math.abs(kinds.reduce((sum, kind) => sum + kind.share, 0) - 1) < 1e-9);
   const additive = { ...row, tokens: { ...row.tokens, reasoningRelation: "additive" as const, reasoningTokens: 1_000_000 } };
-  assert.ok(Math.abs(listByKind(additive)!.reduce((sum, kind) => sum + kind.usd, 0) - listPrice(additive)!) < 1e-9, "additive reasoning joins output");
-  assert.equal(listByKind({ ...row, resolvedModel: "not-a-card-id" }), null, "an unpriced row has no bars");
+  assert.ok(Math.abs(listByKind(additive, listPrice(additive))!.reduce((sum, kind) => sum + kind.usd, 0) - listPrice(additive)!) < 1e-9, "additive reasoning joins output");
+  assert.equal(listByKind({ ...row, resolvedModel: "not-a-card-id" }, listPrice(row)), null, "an unpriced row has no bars");
+  // B13-23: the bars follow the figure the List column shows, whatever price the caller passed.
+  const injected = listByKind(row, 42)!;
+  assert.ok(Math.abs(injected.reduce((sum, kind) => sum + kind.usd, 0) - 42) < 1e-9, "an injected price is what the bars add up to");
+  assert.ok(Math.abs(injected[0]!.share - kinds[0]!.share) < 1e-9, "the shares stay at the card's rates");
+  assert.equal(listByKind(row, null), null, "no list figure, no bars");
+  const injectedLines = roleLines(rows, () => 42, { ...context, allRows: payload.roleRows });
+  assert.ok(injectedLines.some((line) => line.byKind !== null), "at least one role is priced");
+  for (const line of injectedLines) {
+    if (line.byKind === null) continue;
+    assert.ok(Math.abs(line.byKind.reduce((sum, kind) => sum + kind.usd, 0) - 42) < 1e-9, `${line.role}: bars add up to the List column`);
+  }
 
   assert.equal(firstPassMark({ settled: false, firstPass: false, blockedHere: false }), "open");
   assert.equal(firstPassMark({ settled: true, firstPass: true, blockedHere: false }), "yes");
@@ -355,7 +394,8 @@ test("the Ledger and Run views send nothing: no request channel, the route's one
     assert.equal(/\b(?:XMLHttpRequest|sendBeacon|WebSocket|EventSource|indexedDB)\b/.test(source(path)), false, `${path} opens a channel`);
   }
   const route = source("dashboard/src/routes/metrics.vue");
-  assert.deepEqual(route.match(/\bfetch\s*\(([^)]*)\)/g), ['fetch("/api/v1/metrics")'], "the tab's one read");
+  assert.match(route, /\bfetch\s*\(\s*["']\/api\/v1\/metrics["']/);
+  assert.equal([...route.matchAll(/\bfetch\s*\(/g)].length, 1, "the tab's one read");
   assert.equal(/method\s*:|localStorage|sessionStorage/.test(route), false);
 
   const run = source("dashboard/src/components/MetricsRun.vue");

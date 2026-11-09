@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { assertCommandDispatchIntent, assertCommandDispatchResult,
   assertCommandOccurrenceClosed, assertCommandOccurrenceOpened, type CommandDispatchIntent,
   type CommandDispatchResult, type CommandOccurrenceClosed,
@@ -29,12 +29,12 @@ export function dispatchPointFor(
   if (!phaseId.startsWith(prefix)) return null;
   const local = phaseId.slice(prefix.length);
   if (local === "adoption-tests") {
-    return { dispatcherId: "adopt/adoption-tests", occurrenceKey: `${phaseId}:${candidateSha}` };
+    return { dispatcherId: "adopt/adoption-tests", occurrenceKey: occurrenceKeyForAdoption(phaseId, candidateSha) };
   }
   if (local.startsWith("owner-rework-")) {
-    return { dispatcherId: "rework/owner-gates", occurrenceKey: `${local}:${candidateSha}` };
+    return { dispatcherId: "rework/owner-gates", occurrenceKey: occurrenceKeyForRework(local, candidateSha) };
   }
-  return { dispatcherId: "production-run/measure-candidate", occurrenceKey: `${local}:${candidateSha}:${String(round)}` };
+  return { dispatcherId: "production-run/measure-candidate", occurrenceKey: occurrenceKeyForMeasurement(local, candidateSha, round) };
 }
 
 export const occurrenceKeyForMeasurement = (phaseId: string, candidateSha: string, round: number): string =>
@@ -119,6 +119,10 @@ export async function readCommandLedger(attemptDir: string): Promise<CommandLedg
 
 async function observeRetained(attemptDir: string, intentId: string, outputRef: string): Promise<RetainedOutputObservation> {
   const absolute = join(attemptDir, outputRef);
+  // The journal names the file, so it must stay inside this attempt. A reference that
+  // climbs out would measure a host file as the retained output (B6-15).
+  const rel = relative(resolve(attemptDir), absolute);
+  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return { intentId, bytes: null, digest: null };
   try {
     const info = await stat(absolute);
     if (!info.isFile()) return { intentId, bytes: null, digest: null };

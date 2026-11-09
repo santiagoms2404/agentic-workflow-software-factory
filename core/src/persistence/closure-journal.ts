@@ -3,6 +3,7 @@ import { AttemptLock } from "./attempt-lock.ts";
 import { Journal, type JournalRecord } from "./journal.ts";
 import { journalFilePath, lockFilePath, statusFilePath } from "./platform-paths.ts";
 import { writeStatus } from "./status-store.ts";
+import { scanJournalText } from "./replay.ts";
 import { deriveAttemptStatus, nextRevision, type AttemptEvent, type AttemptProjector, type AttemptStatus } from "../cli/commands/attempt.ts";
 import type { AttemptEvidence } from "../observability/attempt-evidence.ts";
 
@@ -11,8 +12,11 @@ export type ClosureEvidence = Extract<AttemptEvidence, { type: "closure-intent" 
 export async function closureJournalRecords(attemptDir: string): Promise<readonly JournalRecord<AttemptEvent>[]> {
   const text = await readFile(journalFilePath(attemptDir), "utf8");
   if (!text.endsWith("\n")) throw new Error("closure refuses a torn attempt journal");
-  const records = text.split("\n").filter(Boolean).map(line => JSON.parse(line) as JournalRecord<AttemptEvent>);
-  if (records.some((record, index) => record.source_seq !== index + 1 || record.event.next.revision !== record.source_seq)) {
+  const scanned = scanJournalText<AttemptEvent>(text, journalFilePath(attemptDir));
+  if (!scanned.ok) throw new Error(`closure refuses corrupt attempt journal at ${scanned.badKey}: ${scanned.detail}`);
+  if (scanned.tornTail !== null) throw new Error("closure refuses a torn attempt journal");
+  const records = scanned.records;
+  if (records.some((record) => record.event.next.revision !== record.source_seq)) {
     throw new Error("closure refuses a non-contiguous attempt journal");
   }
   return records;
@@ -24,7 +28,7 @@ export async function withClosureJournal<T>(attemptDir: string, project: Attempt
   return new AttemptLock(lockFilePath(attemptDir)).withLock(async () => {
     const records = await closureJournalRecords(attemptDir);
     let status = deriveAttemptStatus(records);
-    if (status === null || status.lifecycleState !== "LANDED") throw new Error("closure requires a LANDED attempt");
+    if (status === null || (status.lifecycleState !== "LANDED" && status.lifecycleState !== "PUBLISHED")) throw new Error("closure requires a LANDED attempt");
     const journal = new Journal<AttemptEvent>(journalFilePath(attemptDir));
     const append = async (evidence: ClosureEvidence): Promise<void> => {
       const next = nextRevision(status!, { lastActivity: evidence.type, lastActivityAt: evidence.type === "closure-intent" ? evidence.intent.at : evidence.record.at });

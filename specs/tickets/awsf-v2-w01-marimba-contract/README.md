@@ -92,8 +92,8 @@ invariant 12, enforced by `core/test/unit/meta/ticket-plan-sync.test.ts`.
 
 **Two marker sets, and only one of them moves before the end.** This plan's markers and these
 tickets move on every task. The spine's W01 marker in `specs/awsf-v2-plan.html`, and `W01.md` in
-`specs/tickets/awsf-v2-plan/`, are touched by **task 9 only**. Current plan-aligned states:
-**T01–T09 `todo`.**
+`specs/tickets/awsf-v2-plan/`, are touched by **task 9 only**. Historical snapshot, retained from earlier documentation:
+**T01–T09 `todo`.** Read the [registered plan](../../awsf-v2-w01-marimba-contract.html) for current completion.
 
 ## Owner decisions these tickets carry
 

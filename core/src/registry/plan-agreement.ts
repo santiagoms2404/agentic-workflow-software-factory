@@ -1,11 +1,9 @@
 import { Value } from "@sinclair/typebox/value";
-import { TicketSchema, TICKET_TASK_CLASSES, type Ticket } from "../contracts/ticket.ts";
+import { TicketSchema, TICKET_STATES, TICKET_TASK_CLASSES, TICKET_WORKFLOWS, type Ticket } from "../contracts/ticket.ts";
+import { TIERS } from "../state/tiers.ts";
 import type { ParsedAwsfPlan } from "./plan-source.ts";
 import { isPlanIdentifierClaim, spineCoverage, type SpineCoverageRule } from "./plan-spine.ts";
 
-const STATES = ["todo", "wip", "done", "failed"];
-const TIERS = [0, 1, 2];
-const WORKFLOWS = ["scout", "plan", "build", "plan-build-test", "build-review", "simple-sdlc", "intake"];
 const TICKET_ID = /^[TW]\d\d$/;
 
 // Spine dependencies order authoring, but states track build completion. G1
@@ -73,6 +71,17 @@ export function lightTicketAgreement(records: readonly { readonly path: string; 
       tickets.push(ticket);
     }
   }
+  // Every declared id counts, valid frontmatter or not, so a dependency is judged against the store as written.
+  const declaredIds = new Set<string>();
+  for (const record of records) {
+    const id = (record.frontmatter as { id?: unknown } | null)?.id;
+    if (typeof id === "string") declaredIds.add(id);
+  }
+  for (const ticket of tickets) {
+    for (const dep of ticket.depends_on) {
+      if (!declaredIds.has(dep)) out.push({ plan: "light", rule: "DEPENDENCIES", message: `light/${ticket.id}: depends on ${dep}, which does not exist` });
+    }
+  }
   const cycle = lightTicketCycle(tickets);
   if (cycle !== null) out.push({ plan: "light", rule: "DEPENDENCY_CYCLES", message: `ticket dependency cycle: ${cycle.join(" -> ")}` });
   return Object.freeze(out);
@@ -109,6 +118,11 @@ export function ticketCoverage(input: PlanAgreementInput): readonly PlanAgreemen
   const highest = Math.max(...numbers);
   const expected = Array.from({ length: highest }, (_, i) => i + 1);
   const messages: string[] = [];
+  const seenPlanNumbers = new Set<number>();
+  for (const task of input.plan) {
+    if (seenPlanNumbers.has(task.number)) messages.push(`duplicate plan task number ${task.number}`);
+    seenPlanNumbers.add(task.number);
+  }
   if (!sameNumbers(numbers, expected)) messages.push("ticket ids must be T01..Tnn with no gaps");
   const uncovered = input.plan.filter((task) => task.number <= highest && !numbers.includes(task.number));
   if (uncovered.length > 0) messages.push("a plan task below the highest ticket has no ticket");
@@ -128,12 +142,17 @@ export function ticketMilestoneStates(input: PlanAgreementInput): readonly PlanA
   const byNumber = new Map(input.plan.map((task) => [task.number, task]));
   const messages: string[] = [];
   for (const ticket of input.tickets) {
-    const marker = byNumber.get(ticket.number)?.milestoneMarker;
-    if (marker === "x" && ticket.state !== "done") {
-      messages.push(`${input.label}/${ticket.id}: milestone ${ticket.milestone} is [x] but ticket is ${ticket.state}`);
+    const rawMarker = byNumber.get(ticket.number)?.milestoneMarker;
+    const marker = rawMarker?.trim() ?? "";
+    const isDoneMarker = marker === "x" || marker === "X" || marker.toLowerCase() === "done";
+    if (isDoneMarker && ticket.state !== "done") {
+      messages.push(`${input.label}/${ticket.id}: milestone ${ticket.milestone} is [${rawMarker}] but ticket is ${ticket.state}`);
     }
     if (marker === "" && ticket.state === "done") {
       messages.push(`${input.label}/${ticket.id}: milestone ${ticket.milestone} is [] but ticket is done`);
+    }
+    if (marker !== "" && marker !== "x" && marker !== "wip" && marker !== "f") {
+      messages.push(`${input.label}/${ticket.id}: milestone ${ticket.milestone} has invalid marker [${rawMarker}]`);
     }
   }
   return violations(input, "MILESTONE_STATE", messages);
@@ -146,17 +165,19 @@ export function planTaskChecklists(input: PlanAgreementInput): readonly PlanAgre
 }
 
 export function ticketChecklistStates(input: PlanAgreementInput): readonly PlanAgreementViolation[] {
-  const byNumber = new Map(input.plan.map((task) => [task.number, task]));
   const messages: string[] = [];
   for (const ticket of input.tickets) {
-    const checklist = byNumber.get(ticket.number)?.checklist ?? [];
-    if (checklist.length === 0) continue; // guarded by planTaskChecklists
-    const allChecked = checklist.every((mark) => mark === "x");
-    if (allChecked && ticket.state !== "done") {
-      messages.push(`${input.label}/${ticket.id}: every plan checklist box is [x] but ticket is ${ticket.state}`);
-    }
-    if (!allChecked && ticket.state === "done") {
-      messages.push(`${input.label}/${ticket.id}: ticket is done but the plan still has unchecked boxes`);
+    const tasks = input.plan.filter((task) => task.number === ticket.number);
+    for (const task of tasks) {
+      const checklist = task.checklist ?? [];
+      if (checklist.length === 0) continue; // guarded by planTaskChecklists
+      const allChecked = checklist.every((mark) => mark === "x");
+      if (allChecked && ticket.state !== "done") {
+        messages.push(`${input.label}/${ticket.id}: every plan checklist box is [x] but ticket is ${ticket.state}`);
+      }
+      if (!allChecked && ticket.state === "done") {
+        messages.push(`${input.label}/${ticket.id}: ticket is done but the plan still has unchecked boxes`);
+      }
     }
   }
   return violations(input, "CHECKLIST_STATE", messages);
@@ -206,12 +227,12 @@ export function validTaskClass(value: unknown): boolean {
 export function ticketVocabularies(input: PlanAgreementInput): readonly PlanAgreementViolation[] {
   const messages: string[] = [];
   for (const ticket of input.tickets) {
-    if (!STATES.includes(ticket.state)) messages.push(`${input.label}/${ticket.id}: state "${ticket.state}"`);
+    if (!(TICKET_STATES as readonly string[]).includes(ticket.state)) messages.push(`${input.label}/${ticket.id}: state "${ticket.state}"`);
     // Optional fields stay optional; no spine is invented for a legacy plan.
-    if (ticket.tier !== undefined && !TIERS.includes(ticket.tier)) {
+    if (ticket.tier !== undefined && !(TIERS as readonly number[]).includes(ticket.tier)) {
       messages.push(`${input.label}/${ticket.id}: tier "${String(ticket.tier)}"`);
     }
-    if (ticket.workflow !== undefined && !WORKFLOWS.includes(ticket.workflow)) {
+    if (ticket.workflow !== undefined && !(TICKET_WORKFLOWS as readonly string[]).includes(ticket.workflow)) {
       messages.push(`${input.label}/${ticket.id}: workflow "${ticket.workflow}"`);
     }
     if (!validTaskClass(ticket.task_class)) {

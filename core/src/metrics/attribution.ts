@@ -22,6 +22,8 @@ export interface RunPhase {
   readonly owner: string;
   readonly status: string;
   readonly errorCode: string | null;
+  /** `null` before the phase started. A phase cancelled before it began carries no evidence. */
+  readonly startedAt: string | null;
 }
 
 export interface RunTransition {

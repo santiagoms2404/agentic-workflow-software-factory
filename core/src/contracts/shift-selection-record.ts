@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { Type, type Static } from "@sinclair/typebox";
 import { canonicalJson } from "./owner-amendment.ts";
+import { sha256 } from "./hash.ts";
 import { TICKET_WORKFLOWS } from "./ticket.ts";
-import { stringUnion, toJsonSchema } from "./typebox.ts";
+import { SHA256_HEX_PATTERN, stringUnion, toJsonSchema } from "./typebox.ts";
 
 // The durable record of one shift selection: which plan, which milestones in
 // the owner's order, and every selected ticket file with a digest of its bytes.
@@ -12,13 +12,13 @@ import { stringUnion, toJsonSchema } from "./typebox.ts";
 // one, and there is no singular form.
 export const SHIFT_MANIFEST_SCHEMA_ID = "awsf.shift-manifest/v1";
 
-const Sha256Hex = Type.String({ pattern: "^[a-f0-9]{64}$" });
+const Sha256Hex = Type.String({ pattern: SHA256_HEX_PATTERN });
 
 export const ShiftManifestTicketSchema = Type.Object(
   {
     id: Type.String({ pattern: "^[TW][0-9]{2}$" }),
-    /** Repository-relative POSIX path of the ticket file. */
-    path: Type.String({ pattern: "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+\\.md$" }),
+    /** Repository-relative POSIX path of the ticket file. Lookaheads span newlines (B3-09). */
+    path: Type.String({ pattern: "^(?!/)(?![\\s\\S]*(?:^|[/\\n\\r\\u2028\\u2029])\\.\\.(?:[/\\n\\r\\u2028\\u2029]|$))[^\\\\]+\\.md$" }),
     /** sha256 hex over the whole ticket file, not its prompt block. */
     digest: Sha256Hex,
     tier: Type.Optional(Type.Union([Type.Literal(0), Type.Literal(1), Type.Literal(2)])),
@@ -49,7 +49,7 @@ export type ShiftManifestBody = Omit<ShiftManifest, "manifestDigest">;
  */
 export function shiftManifestDigest(body: ShiftManifestBody): string {
   const { plan, milestones, tickets } = body;
-  return createHash("sha256").update(canonicalJson({ plan, milestones, tickets }), "utf8").digest("hex");
+  return sha256(canonicalJson({ plan, milestones, tickets }));
 }
 
 export function sealShiftManifest(body: ShiftManifestBody): ShiftManifest {
@@ -63,8 +63,8 @@ export function sealShiftManifest(body: ShiftManifestBody): ShiftManifest {
 
 /** The JSON Schema emission of ShiftManifestSchema; never a hand-maintained copy. */
 export function emitShiftManifestJsonSchema(): Record<string, unknown> {
+  // The schema declares its $id; an option the schema overrides would be dead (B3-20).
   return toJsonSchema(ShiftManifestSchema, {
-    $id: `https://awsf.local/schemas/${SHIFT_MANIFEST_SCHEMA_ID}`,
     title: "ShiftManifest",
     description: "One shift selection: a plan, its selected milestones, and a byte digest per ticket file.",
   });

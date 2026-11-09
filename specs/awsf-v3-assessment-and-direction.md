@@ -1,8 +1,14 @@
 # AWSF v3 assessment and direction
 
-**Draft for owner review.** A brainstorm record, not a plan. It changes no status
-marker, ticket or registered plan. It is evidence for a future
-`specs/awsf-v3-intent.md`.
+**Historical assessment and planning input.** This record informed
+`specs/awsf-v3-intent.md` and the subsequently authored v3 spine. It changes no
+status marker, ticket or registered plan. The dated measurements and conditional
+predictions below are preserved, including the 2026-10-20 re-grade.
+
+For the later remediation at `057370d`, read the
+[whole-project assessment](../docs/whole-project-assessment.html) and its
+[evidence appendix](../docs/whole-project-assessment-evidence.html). They do not
+silently recalculate this record's scores, delivery rate or factory-share KPI.
 
 - **Date:** 2026-10-01
 - **Measured at:** `main` 07b20f9. `npm run test:unit` passed 2,534/2,534.

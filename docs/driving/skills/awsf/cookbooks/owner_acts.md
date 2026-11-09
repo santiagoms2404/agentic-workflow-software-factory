@@ -1,9 +1,11 @@
 # Owner acts
 
-Fourteen commands are the owner's and not yours: `journey`, `land`, `cancel`,
-`rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`, `confirm`, `close`. This document
-is about **which one the evidence supports** and **what to hand the owner before
-they decide**. It is not a table
+Eighteen invocation shapes are owner acts and not yours: `journey`, `land`,
+`cancel`, `rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`,
+`publish`, `resume`, `run`, `grant`, `confirm`, `close`, `seed`, `group apply` and
+`retry --adopt-as`. The canonical list is `docs/driving/marimba/owner-acts.mts`.
+This document is about **which one the evidence supports** and **what to hand the
+owner before they decide**. It is not a table
 of what each one costs, and the reason is at the bottom.
 
 ## The rule
@@ -11,24 +13,24 @@ of what each one costs, and the reason is at the bottom.
 Prepare and explain. Never perform, and never recommend performing one without
 the evidence its edge requires.
 
-This is not merely a convention you could talk yourself out of — the lifecycle
-refuses a non-interactive invocation. Every one of the fourteen requires an
-interactive owner terminal, and a piped or redirected standard input is
-refused by its CLI guard or the normative machine *before* any process can receive a signal and
-before any call is reserved. That refusal is a terminal-shape check, not the
-authorisation boundary: it stops an accidental non-interactive invocation, and
-the boundary a driving session actually operates under is the per-invocation
-tool-surface denial marimba's guard performs.
+Explicit owner acts require the owner's interactive confirmation before their
+authorized effects. `run` can proceed automatically while it uses only the
+automatic correction tranche,
+but if a correction reaches the owner tranche it requires an interactive owner
+terminal and a separate confirmation. A driving session is denied `run` at the
+tool surface regardless, because it must never answer that owner prompt. The
+terminal-shape check stops accidental non-interactive owner confirmations; the
+per-invocation tool-surface denial is the boundary marimba operates under.
 
 The evidence each edge demands is in `core/src/state/guards.ts`, and the edges
 themselves in `core/src/state/task-machine.ts`. Read them there when it matters.
 
 ## Read the confirmation prompt; it is the source of truth
 
-Each of these commands displays what it is about to do and then asks. **The
-prompt is the authority on the cost and the consequences of that act, at that
-moment, for that attempt** — not this document, not your memory, and not a
-summary you wrote earlier in the session.
+When a command asks for confirmation, its prompt is the authority on the cost
+and consequences of that act, at that moment, for that attempt — not this
+document, not your memory, and not a summary you wrote earlier in the session.
+`run` asks only when it reaches a correction that requires owner approval.
 
 The prompts are not advisory copy. `awsf review`'s is asserted line by line by a
 test: it must carry the candidate, the superseded verdict and the evidence defect
@@ -36,9 +38,10 @@ that made it replaceable, the spend against the ceiling, the state the attempt
 leaves and the state it enters, and the fact that once the allowance is spent the
 other two owner re-entries are gone.
 
-So the useful thing you can do is **run the command and read its screen to the
-owner**, rather than paraphrasing a table. If a prompt does not say what it
-should, that is a defect in the command — say so and fix it there.
+Prepare the command and explain its evidence, then let **the owner invoke it
+and read the confirmation screen**. Do not invoke an owner command merely to
+inspect its prompt. If the prompt omits a consequence, report a CLI defect for
+authorized engineering work rather than inventing a replacement approval.
 
 ## Choosing between them
 
@@ -59,7 +62,12 @@ fast-forward meter, and — when a review was replaced — both verdicts side by
 side. Prepare it by making sure the gates, the required
 review and the attestation are all genuinely present, rather than by asking.
 
-**`publish`** settles that the exact landed revision reached its configured remote branch. It forecloses every later act on that attempt: publication transitions it to `PUBLISHED`, which seals it. Prepare it only when the owner should make this the attempt's final act, with the exact revision, remote name and branch they are about to confirm.
+**`publish`** records that the exact landed revision reached its configured
+remote branch and transitions to `PUBLISHED`. Prepare it with the revision,
+remote and branch. Close earned tickets before publication. The current `close`
+implementation also accepts `PUBLISHED`, but that exception's agreement with
+sealed-attempt policy remains an assessment concern. Do not promise either that
+publication closes tickets or that it disables every later command.
 
 **`cancel`** ends the attempt. Reach for it last. A cancelled attempt is still
 retained evidence, but the decision to stop is the owner's, and the case for it
@@ -74,15 +82,15 @@ accepted, and `awsf traps` reports it as a gap), or `--no-trap` with one of
 checked before the prompt and before any signal, and a declined act writes
 nothing. Prepare it by naming the trap, or the kind and the evidence for it.
 
-**`rework`** re-runs one writable builder phase against the same candidate with a
-defect you describe. It is the right act when the build is wrong in a way you can
-state in a sentence and the surrounding evidence is sound. It is the wrong act
-when you cannot name the defect, and it is **refused outright above the middle
-tier** for a structural reason worth understanding rather than memorising — see
-`gotchas.md`.
+**`rework`** builds a new candidate from the prior one for a concrete defect.
+Eligible T1 and T2 recipes are supported. It invalidates the previous gates and
+review. T2 requires fresh candidate gates and a new review, with its full
+headroom checked before the builder call. The old journey attestation does not
+cover the changed candidate. Describe the defect and read the current prompt's
+cost and invalidations. Do not recommend rework without a specific defect.
 
-**`raise`** is one of the two that buy nothing and move no state. It grants one
-named task more calls while its attempt is live, so a run that halted at its
+**`raise`** reserves no provider call and makes no lifecycle transition. It grants
+one named task more calls while its attempt is live, so a run that halted at its
 ceiling can continue instead of being cancelled and re-rolled. Two things about
 it are worth understanding rather than memorising. It is a **command and not a
 configuration edit**, because an attempt is compared against the configuration
@@ -108,7 +116,7 @@ it: a quota error, a transport failure and an unavailable adapter each leave the
 review independent, by construction. `select_a_route.md` has the rest of the
 routing picture.
 
-**`attribute`** records whose fault one BLOCKED attempt was:
+**`attribute`** records the owner's cause for a BLOCKED or CANCELLED attempt:
 `awsf attribute TASK --attempt N --cause model|factory|environment|driver|owner|unknown --reason "WHY" [--trap TR-NN | --no-trap KIND "WHY"]`.
 The trap link follows the same rule as `cancel`'s. `driver` means a check
 before the first provider call would have refused the run, not that its model
@@ -134,7 +142,7 @@ which paths are written and which are only read. Never suggest confirming a
 request whose measured fields still refuse.
 
 **`close`** records a landing in the plan: `awsf close TASK [--attempt N]` for
-a LANDED attempt with a sealed ticket selection, or
+a landed attempt with a sealed ticket selection, or
 `awsf close --commit SHA --plan STEM [--ticket ID,...]` for owner-gate rows on
 the evidence of a commit reachable from HEAD. It moves status markers and ticket
 states only, in one commit with the checkout's identity, and refuses before any
@@ -183,13 +191,32 @@ then asks to land the candidate. A grant does not approve its own implementation
 the initial verifier is installed through separately authorized external edits,
 and the running verifier refuses to grant writes to its own execution worktree.
 
-**`resume`** continues an unstarted phase from a journal-backed quota pause, or
-finishes a phase result that the host already validated and durably accepted.
-It preserves the original request, accepted phases, candidate and debit. It does
-not reopen a genuinely interrupted model turn. Missing checkpoints, unsettled
-execution, changed bindings and unknown quota refuse. Read the evidence and
-prepare the owner command with a reason. Restart a driving session after updating
-its guard so its loaded rules include this act.
+**`run`** is normally automatic, but a correction beyond the automatic tranche
+requires an explicit owner decision at the confirmation prompt. Do not invoke it
+from a driving session: it could reach that owner-only prompt, which the session
+must never answer. The command records consent and charges the owner correction
+allowance before launching the correction.
+
+**`resume`** continues an unstarted phase from a journal-backed quota pause or
+reconstructs a complete saved result. Recovery after host validation or commit
+work began requires the recorded stage and exact effect evidence. It preserves
+the original request, accepted phases, candidate and debit. It does not grant
+permission to reopen an interrupted model turn without proof. Missing
+checkpoints, unsettled execution, changed bindings and unknown quota refuse.
+Read the recovery diagnosis and prepare the owner command with a reason.
+
+**`seed`** starts a fresh, owner-authorized task from an exact retained committed
+candidate. It buys fresh assurance. It does not transfer a grant, review,
+journey attestation or provider conversation.
+
+**`retry --adopt-as`** is owner-authorized adoption into a new task with fresh
+request agreement, preflight and confirmation. Plain retry does not grant
+adoption authority. Read the CLI's staged refusal rather than skipping the new
+task's checks.
+
+**`group apply`** records the owner's acceptance of an exact revision-bound
+planning proposal. It does not authorize a lifecycle act. Present the proposal
+hash, changes and consequences, then let the owner apply it.
 
 ## What to hand the owner
 
@@ -198,7 +225,7 @@ The same shape every time, and it is short:
 - the handle — task, attempt, lifecycle state, calls spent against the ceiling;
 - what the evidence says, with the phase's claim and the host's measurement kept
   distinct;
-- which of the fourteen the evidence supports, which it does not, and why;
+- which owner act the evidence supports, which it does not, and why;
 - what remains — calls, correction rounds, and the attempt-scoped owner re-entry
   allowance, which is what several of these draw on and which does not refresh
   within an attempt.
@@ -215,21 +242,9 @@ at the exact moment it is spending the owner's money.
 
 The right home for that information is **each command's own confirmation prompt**,
 where it is computed from the attempt in front of it and cannot be stale.
-`awsf review` already does this and is the model. The others are uneven, and the
-gap is real rather than rhetorical:
-
-- **`cancel`** displays nothing but the question. It does not say that the spend
-  is not refunded, or that a retry carries it forward.
-- **`land`** displays the candidate, a summary and the fast-forward meter, but no
-  statement of what landing settles or forecloses.
-- **`rework`** displays the route and what remains of the budget and the owner
-  re-entry allowance — good on cost — but never says in words that it invalidates
-  the gates and the recorded review, even though its own transition evidence
-  records exactly that.
-
-So the backlog item is: **bring `cancel`, `land` and `rework`'s confirmation
-prompts up to `awsf review`'s standard — each stating its own cost and its own
-invalidation, computed at the prompt.** It is recorded in the plan's Amendments
-in those terms. None of it is implemented here; this is a document commit, and
-until it lands the gap is an open defect rather than a habit this document has
-absorbed by writing the table anyway.
+The earlier missing-consequence backlog is implemented in
+`core/src/cli/commands/cancel.ts`, `land.ts` and `rework.ts`: their prompts now
+state retained spend, landing finality or candidate-assurance invalidation as
+appropriate. Read the current screen for the exact attempt. Historical
+amendments explain why these disclosures were added. They are not current
+instructions to work around missing prompts.

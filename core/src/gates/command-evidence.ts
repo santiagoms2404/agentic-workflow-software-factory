@@ -23,10 +23,11 @@
 // unwindowed output is retained separately and privately; this is only what may
 // be shown to a model and written into an envelope.
 
+import { TEST_OUTPUT_TAIL_MAX_CHARS } from "../contracts/test-output.ts";
 import { scrubCredentialString } from "../policy/redaction.ts";
 
 /** The default budget, matching `TEST_OUTPUT_TAIL_MAX_CHARS` so the envelope field still fits. */
-export const DEFAULT_EVIDENCE_BUDGET = 4_000;
+export const DEFAULT_EVIDENCE_BUDGET = TEST_OUTPUT_TAIL_MAX_CHARS;
 
 /** Lines of context kept on each side of the first failure marker. */
 export const FAILURE_CONTEXT_LINES = 12;
@@ -83,9 +84,24 @@ function firstFailureLine(lines: readonly string[]): number | null {
   return null;
 }
 
+/**
+ * A cut between the two halves of a surrogate pair leaves a lone half at the
+ * edge, which every UTF-8 consumer renders as a replacement character (B7-27).
+ * The orphaned half is dropped, so a window stays well formed and within budget.
+ */
+function wellFormedEnd(text: string): string {
+  const last = text.charCodeAt(text.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? text.slice(0, -1) : text;
+}
+
+function wellFormedStart(text: string): string {
+  const first = text.charCodeAt(0);
+  return first >= 0xdc00 && first <= 0xdfff ? text.slice(1) : text;
+}
+
 function clip(value: string, maximum: number, from: "start" | "end"): string {
   if (value.length <= maximum) return value;
-  return from === "start" ? value.slice(0, maximum) : value.slice(value.length - maximum);
+  return from === "start" ? wellFormedEnd(value.slice(0, maximum)) : wellFormedStart(value.slice(value.length - maximum));
 }
 
 /**
@@ -103,11 +119,20 @@ function clip(value: string, maximum: number, from: "start" | "end"): string {
  */
 function failureWindow(
   lines: readonly string[],
+  lineStarts: readonly number[],
   markerIndex: number,
   contextLines: number,
   budget: number,
-): string {
+): { readonly text: string; readonly start: number; readonly end: number } {
   const marker = clip(lines[markerIndex] ?? "", budget, "start");
+  if (marker.length < (lines[markerIndex]?.length ?? 0)) {
+    const start = lineStarts[markerIndex]!;
+    return {
+      text: marker,
+      start,
+      end: start + marker.length,
+    };
+  }
   let used = marker.length;
   const after: string[] = [];
   for (let index = markerIndex + 1; index <= markerIndex + contextLines && index < lines.length; index += 1) {
@@ -123,7 +148,12 @@ function failureWindow(
     before.unshift(line);
     used += line.length + 1;
   }
-  return [...before, marker, ...after].join("\n");
+  const firstLine = markerIndex - before.length;
+  const lastLine = markerIndex + after.length;
+  const start = lineStarts[firstLine]!;
+  const end = lineStarts[lastLine]! + lines[lastLine]!.length;
+  const text = [...before, marker, ...after].join("\n");
+  return { text, start, end };
 }
 
 /**
@@ -134,20 +164,24 @@ function failureWindow(
  * — the pilot's exact shape — keeps its identity, its diagnostic, and the
  * summary that proves how much else passed.
  *
- * Credential scrubbing runs on each window rather than on the whole output,
- * which is deliberate: the windows are what leaves the host, and scrubbing what
- * leaves is cheaper and harder to get wrong than scrubbing what is stored.
+ * Credential scrubbing runs once, on the whole output, BEFORE any window is
+ * cut (B10-01). Scrubbing each window after clipping it let a credential that
+ * straddled a clip edge through as a fragment no pattern recognises — the
+ * prefix plus too few characters at the head edge, or the bare body at the tail
+ * edge. Every count below therefore describes the scrubbed text the reader is
+ * shown; the stored, unwindowed output stays host-private and unscrubbed.
  */
 export function boundCommandOutput(
-  output: string,
+  rawOutput: string,
   options: CommandEvidenceOptions = {},
 ): BoundedCommandEvidence {
   const budget = options.budget ?? DEFAULT_EVIDENCE_BUDGET;
   const contextLines = options.contextLines ?? FAILURE_CONTEXT_LINES;
+  const output = scrubCredentialString(rawOutput);
   const totalChars = output.length;
   if (totalChars <= budget) {
     return Object.freeze({
-      head: scrubCredentialString(output),
+      head: output,
       failure: "",
       tail: "",
       failureLine: firstFailureLine(output.split("\n")) === null ? null : firstFailureLine(output.split("\n"))! + 1,
@@ -169,9 +203,9 @@ export function boundCommandOutput(
     const tail = clip(output, budget - half, "end");
     const kept = head.length + tail.length;
     return Object.freeze({
-      head: scrubCredentialString(head),
+      head,
       failure: "",
-      tail: scrubCredentialString(tail),
+      tail,
       failureLine: null,
       totalChars,
       omittedChars: Math.max(0, totalChars - kept),
@@ -179,19 +213,51 @@ export function boundCommandOutput(
     });
   }
 
+  const lineStarts: number[] = [];
+  let curr = 0;
+  for (let i = 0; i < lines.length; i += 1) {
+    lineStarts.push(curr);
+    curr += lines[i]!.length + 1;
+  }
+
   // Half the budget belongs to the failure window, and it is taken first. The
   // remaining half is split between head and tail. A window that comes in under
   // its share leaves the surplus to the other two rather than wasting it.
-  const failure = failureWindow(lines, markerIndex, contextLines, Math.floor(budget / 2));
+  // Head is clipped strictly before the failure window and tail strictly after,
+  // preventing overlap and double-counting (B10-09).
+  const failureInfo = failureWindow(lines, lineStarts, markerIndex, contextLines, Math.floor(budget / 2));
+  const failure = failureInfo.text;
+  const textBefore = output.slice(0, failureInfo.start);
+  const textAfter = output.slice(failureInfo.end);
+
   const remaining = budget - failure.length;
-  const headShare = Math.floor(remaining / 2);
-  const head = clip(output, headShare, "start");
-  const tail = clip(output, remaining - head.length, "end");
+  let head = "";
+  let tail = "";
+  if (remaining > 0) {
+    if (textBefore.length + textAfter.length <= remaining) {
+      head = textBefore;
+      tail = textAfter;
+    } else {
+      const headShare = Math.floor(remaining / 2);
+      const tailShare = remaining - headShare;
+      if (textBefore.length < headShare) {
+        head = textBefore;
+        tail = clip(textAfter, remaining - head.length, "end");
+      } else if (textAfter.length < tailShare) {
+        tail = textAfter;
+        head = clip(textBefore, remaining - tail.length, "start");
+      } else {
+        head = clip(textBefore, headShare, "start");
+        tail = clip(textAfter, remaining - head.length, "end");
+      }
+    }
+  }
+
   const kept = head.length + failure.length + tail.length;
   return Object.freeze({
-    head: scrubCredentialString(head),
-    failure: scrubCredentialString(failure),
-    tail: scrubCredentialString(tail),
+    head,
+    failure,
+    tail,
     failureLine: markerIndex + 1,
     totalChars,
     omittedChars: Math.max(0, totalChars - kept),
@@ -239,7 +305,7 @@ export function renderCommandEvidence(evidence: BoundedCommandEvidence): string 
 export function renderBoundedEvidence(output: string, ceiling = DEFAULT_EVIDENCE_BUDGET): string {
   const rendered = renderCommandEvidence(boundCommandOutput(output, { budget: ceiling }));
   if (rendered.length <= ceiling) return rendered;
-  return renderCommandEvidence(
-    boundCommandOutput(output, { budget: Math.max(0, ceiling - (rendered.length - ceiling) - 128) }),
-  ).slice(0, ceiling);
+  return wellFormedEnd(
+    renderCommandEvidence(boundCommandOutput(output, { budget: Math.max(0, ceiling - (rendered.length - ceiling) - 128) })).slice(0, ceiling),
+  );
 }

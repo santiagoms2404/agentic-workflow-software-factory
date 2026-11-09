@@ -185,7 +185,8 @@ figcaption strong { color:var(--strong); }
   <p class="eyebrow">AWSF</p>
   <h1>Driving the factory</h1>
   <p class="sub">One file. Open it anywhere, with nothing installed and no network.</p>
-  <p class="reader-warning" data-awsf-reader-warning><strong>You do not type the commands in this guide.</strong> You describe the job in your own words, and marimba &mdash; the assistant that drives the factory &mdash; runs them for you. They are shown so you can see what it did on your behalf. Two things are yours to do personally, and the guide says so when it reaches them: installing the repository, and the act at the end that only a person may perform.</p>
+  <p class="reader-warning" data-awsf-reader-warning><strong>You do not type the commands marimba is allowed to run.</strong> You describe the job in your own words, and marimba &mdash; the assistant that drives the factory &mdash; runs those commands for you. They are shown so you can see what it did on your behalf. The guide marks the exceptions: installing the repository, and the owner acts only a person may perform, including the paid run. You run those yourself when the guide says so.</p>
+  <p><strong>Reading rule:</strong> the operating instructions and source-checked reference sets describe the integrated factory. Notes headed &ldquo;On the drive this guide was written from&rdquo; retain historical observations. They are not a launch recipe or current test evidence. <code>docs/README.md</code> maps current authority and dated records.</p>
   <p class="legend">
     <span class="item"><span class="dot built"></span>written</span>
     <span class="item"><span class="dot part"></span>partly written</span>
@@ -204,14 +205,14 @@ figcaption strong { color:var(--strong); }
   <h3>Who does what</h3>
   <ul class="answers">
     <li><b>You</b>describe the job you want and the boundary that decides whether it is done, then read what comes back and decide what happens to it.</li>
-    <li><b>marimba</b>is the assistant you talk to. It picks and runs the commands, watches the work, and explains what came back. It never performs the act at the end.</li>
+    <li><b>marimba</b>is the assistant you talk to. It prepares the request, runs permitted commands, watches the work, and explains the evidence. You invoke owner acts yourself, including confirmation, the paid run and any eventual landing.</li>
     <li><b>The factory</b>does the work in a sealed copy of the project, records everything it did, runs the project&rsquo;s own checks against the result, and then stops in front of a person.</li>
   </ul>
 
   <h3>What this costs, before you start rather than after</h3>
-  <p><strong>Leg 3 spends real money and the other five legs are free.</strong> When you ask for a job, a paid provider is called, and that call is spent whether or not you like what comes back. The worked example on leg 3 should be one call &mdash; one job, one attempt, and no second opinion bought on top of it.</p>
-  <p><strong>There is no free rehearsal, and that was measured rather than assumed.</strong> The repository&rsquo;s <code>README.md</code> describes a route that spends nothing, and the route is real &mdash; but a job you drive cannot reach it. Somebody ran that experiment on a real drive before this guide was written, which is why the sentence is on the first page instead of being discovered by you at leg 3 with the money already gone. If you want to practise for nothing, practise the other five legs: installing, priming, watching, reading a refusal and stopping at the signature all cost nothing.</p>
-  <p><strong>Nothing on this route lands anything.</strong> The route ends with the work waiting for a signature that this guide never tells you to give, so the checkout you start from is the checkout you finish with. That is what lets the worked example be run again, by you and by whoever reads this after you.</p>
+  <p><strong>Factory provider calls begin when the owner launches the prepared job.</strong> The route, corrections and review determine the spend. Read the catalogue and the attempt&rsquo;s budget before agreeing. The driving assistant also uses its own subscription quota, outside the factory&rsquo;s task-call ledger.</p>
+  <p><strong>Fixture execution is separate from real delivery.</strong> The README describes zero-provider-quota tests and explicitly marked stub execution. Stub evidence cannot establish a real journey, independent review or landing. A normally configured job is not a free rehearsal, and marimba cannot invoke the owner-only run command to turn it into one.</p>
+  <p><strong>Nothing on this route lands anything.</strong> The route ends with the work waiting for a signature that this guide never tells you to give, so the checkout you start from is the checkout you finish with.</p>
 
   <h3>The other half of this file</h3>
   <p>Everything from <a href="#reference-commands">Commands</a> onward is the same factory described from the other side: what the assistant actually invoked, what the stages and moves are called, what only a person may do, and what a run is allowed to spend. It is there for when you want to look rather than to be read first. Each leg below ends with a short note pointing into the part of it that belongs to that leg.</p>
@@ -250,7 +251,7 @@ figcaption strong { color:var(--strong); }
   <p>Once a session is open, prime it. In a session that has the command installed, <code>/prime-awsf</code> is the whole instruction; otherwise ask for it in words:</p>
   <p class="ask"><span class="lbl">Ask for</span>&ldquo;Prime this session for driving the factory, then stop.&rdquo;</p>
 
-  <p>Priming reads the driving skill first &mdash; the judgment layer, and the table that says which cookbook answers which kind of request &mdash; then the sources that govern the factory, in a fixed order, and then runs a toolchain check: the repository&rsquo;s own install-and-verify sequence from leg 1, plus the factory&rsquo;s self-diagnosis:</p>
+  <p>Priming loads the current driving sources, prints facts from the code and v3 spine, and verifies the base as prescribed by <code>docs/driving/commands/prime-awsf.md</code>. It does not reinstall dependencies or start a task. Its self-diagnosis is:</p>
   <pre>npm run awsf -- doctor</pre>
   <p>You may see that same command written three ways &mdash; as an npm script, as a <code>just</code> target, or as a bare <code>awsf</code> command. They are three spellings of one thing rather than three commands, and <a href="#reference-commands">Commands</a> is the list of names that actually exist.</p>
 
@@ -282,35 +283,38 @@ npm run awsf -- doctor    # the same command, in another form</pre>
   <h3>The worked example</h3>
   <p class="ask"><span class="lbl">Ask for</span>&ldquo;The repository has a <code>justfile</code> whose targets are meant to be thin wrappers over the project&rsquo;s npm scripts. Add one test that checks that promise: every target that delegates to an npm script must name a script that actually exists. Put it with the other tests that check documents and configuration against the code. Do not change the <code>justfile</code> and do not change any existing test. It is done when the new test passes and the whole suite still passes.&rdquo;</p>
   <p>That is a paragraph of English with a boundary at the end of it. It names a result, the place the result belongs, two things not to touch, and the condition that decides it is finished.</p>
-  <p><strong>Why an example and not a real job.</strong> This one can be run again &mdash; by you, tomorrow, and by the next person who reads this file &mdash; because the route never lands anything, so the checkout is unchanged afterwards and the job is still missing when the next person asks for it. A real job is only new once, which makes it useless as something to practise on.</p>
+  <p><strong>This is a historical request example, not a repeatable missing feature.</strong> The justfile reconciliation test now exists in <code>core/test/unit/meta/doc-reconciliation.test.ts</code>. Do not pay a worker to add it again. For a new trial, choose a real, currently missing bounded change and verify that gap before creation. Preserve the owner&rsquo;s intent and turn the request into the required <code>Ask:</code>, <code>Where:</code>, <code>Done means:</code> and <code>Out of scope:</code> fields.</p>
   <p><strong>When the job is your own, write it in the same four parts:</strong> the result you want, where it belongs, what must not change, and how anyone would tell it is done. Write the last part before anything launches. It is the boundary leg 6 compares the candidate against, and a boundary written after the result arrives measures nothing. Leave the route out of the paragraph: naming a second opinion, a worker or a way of working in it steers the route and its cost on marimba&rsquo;s behalf. Describe the result, and let marimba offer the routes that reach it.</p>
 
   <h3>Four things that surprise people here</h3>
   <p><strong>The six legs are the order you travel, not an order the factory enforces.</strong> If you decided what you wanted before you opened a session &mdash; most people do &mdash; nothing is wrong and nothing needs redoing. The factory checks the shape of what it is handed, never the order in which you thought of it.</p>
 
-  <p><strong>Before anything launches, you will be asked to choose.</strong> marimba does not start work on a description. It comes back with the ways it could proceed and waits for you. Expect three:</p>
+  <p><strong>Before anything launches, you will be asked to choose.</strong> marimba does not start work on a description. It explains the route and its cost, then waits for your choice:</p>
   <ul class="answers">
     <li><b>Drive it through the factory</b>The whole route: registered, sealed, run, checked, and stopped in front of you. <strong>This is the one this guide describes</strong>, and the one that spends a call.</li>
     <li><b>Prepare it without launching</b>The job is registered and everything is made ready, and it stops before anything is spent. Useful when you want to see what would happen; it is not this route.</li>
-    <li><b>Hand it straight to a worker</b>The older convention, which skips the factory. Nothing is recorded, no checks are run against the result, and there is nothing waiting for a signature at the end. If you pick this one you are not driving the factory, you are just using an assistant.</li>
   </ul>
 
   <p><strong>The thing that does the work may not be the assistant you are talking to.</strong> The worker is a configured role with its own provider, chosen by the project&rsquo;s configuration rather than by your session, so a session running on one provider can hand the job to a worker running on another. That is normal rather than a fault, and it is settled by configuration rather than by conversation.</p>
 
   <p><strong>The work happens in a sealed copy.</strong> Nothing in your checkout changes while the job runs. If the job goes wrong, the sealed copy is what goes wrong.</p>
 
-  <h3>What marimba runs, once you have chosen</h3>
+  <h3>What happens after you have chosen</h3>
   <pre>npm run awsf -- workflows
-npm run awsf -- new TASK "&lt;the paragraph you wrote&gt;"
+npm run awsf -- new TASK "&lt;the resolved four-field request&gt;" --workflow build
+npm run awsf -- preflight TASK --where core/test/unit/meta/example.test.ts
+# Owner: inspect the exact request and measured paths, then confirm.
+npm run awsf -- confirm TASK
 npm run awsf -- start TASK
+# Owner: invoke the paid run personally.
 npm run awsf -- run TASK</pre>
-  <p><code>workflows</code> is a read-only catalogue of the enabled routes, their required tiers, baseline provider calls, ceilings, phase order, and <strong>how many corrections each route can afford</strong>. The next three commands register the job, make a sealed copy ready, and begin the work. The provider call is reserved by <code>run</code>, never by <code>start</code>, so stopping after <code>start</code> costs nothing. <code>TASK</code> stands for whatever name your job is given &mdash; you will see the real one in the session.</p>
-  <p><strong>Read the corrections figure before you agree to a route.</strong> A worker that returns a malformed answer can be asked again, but on most routes asking again costs a whole provider call, so the figure is how many such re-asks the <em>entire run</em> can survive &mdash; not how many each step gets. A zero means the first malformed answer ends the job on its first occurrence, and <code>start</code> refuses that route outright rather than letting you find out mid-run. The refusal names the remedy and the exact number of calls it needs:</p>
+  <p><code>workflows</code> is a read-only catalogue of the enabled routes, their required tiers, baseline provider calls, ceilings, phase order, and <strong>how many corrections each route can afford</strong>. <code>new</code> registers the job. The host preflight measures it, the owner confirms the exact request and paths, and <code>start</code> rechecks freshness and prepares the managed copy. Use actual paths and bind the plan/ticket when applicable. The owner then invokes <code>run</code> from an interactive terminal to begin the work. <code>run</code> is an owner act because its production path can ask for explicit owner authorization of a correction tranche, so the driving session is refused at the tool surface. The provider call is reserved by <code>run</code>, never by <code>start</code>, so stopping after <code>start</code> costs nothing. <code>TASK</code> stands for whatever name your job is given &mdash; you will see the real one in the session.</p>
+  <p><strong>Read the corrections figure before you agree to a route.</strong> A worker that returns a malformed answer can be asked again, but on most routes asking again costs a whole provider call, so the figure is how many such re-asks the <em>entire run</em> can survive &mdash; not how many each step gets. A zero leaves no margin for a cold correction. Admission checks the particular recipe&rsquo;s declared requirements. If more headroom is required, the refusal names the remedy and the call count:</p>
   <pre>npm run awsf -- raise TASK --calls &lt;n&gt; --reason "&lt;why this run needs the headroom&gt;"</pre>
-  <p>That is <strong>yours to run, not marimba&rsquo;s</strong> &mdash; it is one of the eight acts in leg 5 &mdash; and it belongs between <code>new</code> and <code>start</code>. It spends nothing, but the window closes once a job stops: a stopped job refuses the grant. Marimba should put this in front of you before it asks you to start anything whose margin is thin; if it does not, that is the gap to report.</p>
+  <p>That is <strong>yours to run, not marimba&rsquo;s</strong> &mdash; it is one of the eighteen owner acts in leg 5 &mdash; and it belongs between <code>new</code> and <code>start</code>. It spends nothing, but the window closes once a job stops: a stopped job refuses the grant. Marimba should put this in front of you before it asks you to start anything whose margin is thin; if it does not, that is the gap to report.</p>
 
-  <p><strong>marimba may stop after preparing and ask before it runs.</strong> Nothing is spent before <code>run</code>, so a careful session prepares the job, stops at <code>PREPARED</code>, and tells you what it staged, which route it chose, what has been spent so far, which is nothing, and the request as the factory recorded it. That is the cheapest moment to compare the request with what you meant.</p>
-  <p><strong>Your answer to that stop is the spending decision this leg is about.</strong> Saying go is choosing the first of the three routes above: <code>run</code> reserves the call, and the call is spent whatever comes back. Saying no leaves a prepared job that has cost nothing.</p>
+  <p><strong>marimba stops after preparing and hands you the paid launch.</strong> Nothing is spent before <code>run</code>, so a careful session prepares the job, stops at <code>PREPARED</code>, and tells you what it staged, which route it chose, what has been spent so far, which is nothing, and the request as the factory recorded it. That is the cheapest moment to compare the request with what you meant.</p>
+  <p><strong>The spending decision is yours to carry out.</strong> If you choose the factory route, you invoke <code>awsf run</code> yourself from an interactive terminal; the call is reserved and spent whatever comes back. A driving session cannot invoke it, even if it reports that you want to proceed. Saying no leaves a prepared job that has cost nothing.</p>
 
   <p><strong>A refusal can arrive here, at launch, before anything is spent.</strong> Read it exactly as leg 5 describes: what refused, what it was protecting, what was not spent, and what you may now decide. No work was done, so there is no candidate, and the decision that follows is leg 6&rsquo;s, taken without one.</p>
   <p><strong>A new job created to get past a refusal is a decision about your job, so it is yours.</strong> You should see the refusal before any replacement exists, and agree to the replacement before it runs. If marimba creates one and carries on, ask it for the refusal it stepped past, and report that it did not stop.</p>
@@ -350,19 +354,19 @@ npm run awsf -- run TASK</pre>
       <text class="fig-s" x="432" y="176" text-anchor="end">nothing spent yet</text>
       <text class="fig-s-acc" x="448" y="176" text-anchor="start">one provider call reserved</text>
     </svg>
-    <figcaption>Three commands, two recorded moves, one spend. <code>start</code> reaches <code>PREPARED</code> without spending, because <code>L1</code> launches nothing. The call is reserved by <code>L4</code> &mdash; the move <code>run</code> causes &mdash; because that is the move that launches a worker. <strong>The boundary sits on the move, not on the command</strong>, which is why stopping after <code>start</code> costs nothing.</figcaption>
+    <figcaption>Three commands, two recorded moves, one spend. <code>start</code> reaches <code>PREPARED</code> without spending, because <code>L1</code> launches nothing. The call is reserved by <code>L4</code> &mdash; the move <code>run</code> causes &mdash; because that is the move that launches a worker. <strong>The boundary sits on the move, not on the command</strong>, which is why stopping after <code>start</code> spends no provider call. This simplified lifecycle diagram omits the required preflight and owner confirmation.</figcaption>
   </figure>
 
   <div class="curtain">
     <p><span class="lbl">Behind the curtain</span> Those three are names in <a href="#reference-commands">Commands</a>, and between them the job makes the first of the recorded moves in <a href="#reference-legal-edges">Legal edges</a>. The reservation made at the third step is what <a href="#reference-risk-tiers">Risk tiers and call ceilings</a> governs: a run cannot quietly spend more than the job was allowed.</p>
-    <p><strong>On the drive this guide was written from</strong>, marimba ran the three commands above with the options it had chosen, and read the state between them:</p>
+    <p><strong>On the drive this guide was written from</strong>, the three commands above were used with the options shown here, and the state was read between them. In present use, marimba registers and prepares; the owner invokes the final <code>run</code> command personally:</p>
 <pre>npm run awsf -- new TASK "&lt;request&gt;" --workflow build --tier T1
 npm run awsf -- status TASK
 npm run awsf -- quota
 npm run awsf -- start TASK
 npm run awsf -- status TASK
 npm run awsf -- run TASK</pre>
-    <p>The two <code>status</code> reads and the <code>quota</code> read cost nothing and decided nothing &mdash; the quota read is advice rather than a gate. <code>--workflow</code> and <code>--tier</code> are the two choices marimba makes on your behalf, and both sets are below. <code>start</code> passed its preflight, pinned the commit the sealed copy starts from, and materialized the copy; the call was reserved by <code>run</code>, one step later.</p>
+    <p>The two <code>status</code> reads and the <code>quota</code> read cost nothing and decided nothing &mdash; the quota read is advice rather than a gate. Those were the options recorded on that drive. In current use the selected recipe fixes its tier, and an explicit mismatched <code>--tier</code> is refused. <code>start</code> passed its preflight, pinned the commit the sealed copy starts from, and materialized the copy; the call was reserved by <code>run</code>, one step later.</p>
     <p>The job then made these recorded moves, and no others:</p>
 <pre>DRAFT --L1--> PREPARED --L4--> RUNNING --L7--> GATING --L12--> AWAITING_OWNER</pre>
     <p>L4 is the one with <code>spawn=true</code>, and it is the move that reserved the builder call. The <code>build</code> route buys no second opinion, so the job never entered <code>REVIEWING</code>, and no correction round was used.</p>
@@ -392,7 +396,7 @@ npm run awsf -- status TASK</pre>
   <p class="warnnote"><strong>Read the checks row exactly.</strong> When it passes, it says that <em>all configured commands passed</em>. That is a statement about the list of checks this project has configured &mdash; and if that list is empty, the same green sentence appears with nothing at all behind it. It is not a claim that your code is good; it is a claim that a list ran and nothing in it failed. Which checks a project has configured is in <a href="#reference-workflows-and-gates">Workflows and gates</a>, and that is the thing to check rather than the sentence.</p>
 
   <figure>
-    <svg viewBox="0 0 700 370" role="img" aria-label="Your checkout pins the commit BASE into a sealed copy. Inside the seal the worker builds from BASE, runs its own checks, and commits CANDIDATE; everything inside the seal is the worker's claim. The host sits outside the seal and runs the configured gates against CANDIDATE; that is the measurement. A dashed return path from CANDIDATE to your checkout is taken only if a person lands it.">
+    <svg viewBox="0 0 700 370" role="img" aria-label="Your checkout pins the commit BASE into a sealed copy. Inside the managed worktree the worker edits from BASE and reports its checks. Host-owned Git creates CANDIDATE; the worker does not commit. The host sits outside the seal and runs the configured gates against CANDIDATE; that is the measurement. A dashed return path from CANDIDATE to your checkout is taken only if a person lands it.">
       <defs>
         <marker id="f2h" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="10" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 4 L0 8 Z" class="fig-head"/></marker>
         <marker id="f2d" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="10" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 4 L0 8 Z" class="fig-head-dim"/></marker>
@@ -413,7 +417,7 @@ npm run awsf -- status TASK</pre>
       <text class="fig-t" x="341" y="178" text-anchor="middle">worker</text>
       <text class="fig-s" x="341" y="198" text-anchor="middle">runs its own checks</text>
       <line class="fig-line" x1="412" y1="182" x2="470" y2="182" marker-end="url(#f2h)"/>
-      <text class="fig-lbl" x="442" y="172" text-anchor="middle">commits</text>
+      <text class="fig-lbl" x="442" y="172" text-anchor="middle">host Git</text>
       <rect class="fig-card" x="478" y="150" width="130" height="64" rx="10"/>
       <text class="fig-m" x="543" y="178" text-anchor="middle">CANDIDATE</text>
       <text class="fig-s" x="543" y="198" text-anchor="middle">produced commit</text>
@@ -426,7 +430,7 @@ npm run awsf -- status TASK</pre>
       <polyline class="fig-line-dash" points="608,182 668,182 668,54 240,54" marker-end="url(#f2d)"/>
       <text class="fig-s" x="445" y="44" text-anchor="middle">only if a person lands it</text>
     </svg>
-    <figcaption>Nothing on this leg touches your checkout: it pins a commit into the seal and is not written to again. <strong>The seal is what separates a claim from a measurement.</strong> The worker&rsquo;s own checks run inside it, on its own account. The host&rsquo;s configured gates run outside it, against the candidate itself. The only path back across the seal is leg 6, and only a person may take it.</figcaption>
+    <figcaption>Nothing on this leg touches your checkout: it pins a commit into the seal and is not written to again. <strong>Worker claims and host measurements have different authority.</strong> The worker may run its own checks, but host-owned Git creates the candidate and the host runs the configured gates against it. The diagram separates authority, not physical gate working directories. The only path back across the seal is leg 6, and only a person may take it.</figcaption>
   </figure>
 
   <div class="curtain">
@@ -552,9 +556,9 @@ npm run typecheck</pre>
 <section id="stop-at-the-signature">
   <p class="eyebrow">Walkthrough &middot; leg 6 of 6</p>
   <h2>Stop at the signature</h2>
-  <p class="secstatus"><span class="dot built"></span>The eight acts that are yours, and exactly what to have in hand before you choose one.</p>
+  <p class="secstatus"><span class="dot built"></span>The eighteen acts that are yours, and exactly what to have in hand before you choose one.</p>
 
-  <p>The route ends in front of you. The factory has done everything it is allowed to do and stopped, holding a candidate change that has not been merged into anything. <strong>This is the second and last thing you do personally.</strong></p>
+  <p>The route ends in front of you. The factory has done everything it is allowed to do and stopped, holding a candidate change that has not been merged into anything. <strong>Every owner act is yours to invoke personally.</strong> Earlier confirmation and launch decisions do not authorize this one.</p>
 
   <p><strong>Passing checks do not mean the job was done.</strong> They mean a list of checks ran against whatever was produced and nothing in it failed. Whether what was produced is what you asked for is a separate question, and it is yours. On the drive this guide was written from, a job arrived here with everything green and a candidate that had done a different thing from the one requested. <strong>Comparing the candidate against the boundary you wrote at leg 3 is part of the act, not a formality before it.</strong></p>
 
@@ -565,21 +569,21 @@ npm run typecheck</pre>
   <p><strong>Some changes can only be judged by looking at them.</strong> The checks this project runs are the suite, the typechecker and the linter, all against source, and the second opinion reads a diff. None of them puts the change on a screen. When what you asked for is something you see, the evidence is the candidate itself, built and shown to you in the form it is used in.</p>
   <p><strong>A capped inline diff is not the whole review input.</strong> Every mandatory review also gets a read-only directory containing the full base-to-candidate diff, one file per changed path, and an index. Its prompt names both and requires reading delivered files for every omitted or partial inline path; no command may be run. An unread path still needs a named limitation. Only the host&rsquo;s observed read-tool requests for that review run count as reads, not the reviewer&rsquo;s claim. Older retained contexts without delivery remain readable.</p>
   <p><strong>A picture of the candidate is not the candidate.</strong> A reconstruction marimba draws of how the change should look is the claim half of <em>claim and measurement</em> below, however faithful it is. It shows what marimba expects, not what was built.</p>
-  <p><strong>Asking marimba to build the candidate and show it to you is a read.</strong> It lands nothing, changes no recorded state, and is not one of the acts that are yours, so marimba may do it and you may ask for it.</p>
-  <p class="ask"><span class="lbl">Ask for</span>&ldquo;Build the candidate exactly as it is and show it to me running. Land nothing.&rdquo;</p>
+  <p><strong>Building or previewing a candidate is an execution, not a read.</strong> It can write outputs and launch processes. Use the factory&rsquo;s configured <code>awsf preview</code> path where available. Marimba must not hand-build inside a managed worktree or invent a preview route that bypasses policy. Missing preview support is a limitation to report.</p>
+  <p class="ask"><span class="lbl">Ask for</span>&ldquo;Show me the exact candidate through the configured preview path. Explain any missing support. Land nothing.&rdquo;</p>
 
-  <p><strong>Nothing expires while you decide.</strong> A candidate waiting for a person stays waiting. Closing the session, shutting the machine, or coming back tomorrow changes nothing about the job&rsquo;s recorded state &mdash; the session was the thing driving, never the thing holding. And a candidate you never sign for changes nothing at all, which is exactly what makes the worked example safe for the next person to run.</p>
+  <p><strong>Nothing expires while you decide.</strong> A candidate waiting for a person stays waiting. Closing the session, shutting the machine, or coming back tomorrow changes nothing about the job&rsquo;s recorded state &mdash; the session was the thing driving, never the thing holding. An unsigned candidate does not advance the canonical checkout. Its retained work, evidence and spend still exist, so this is not permission to repeat an obsolete example.</p>
 
-  <h3>The eight acts that are yours</h3>
-  <p>Fourteen acts belong to the owner, each with its own eligibility: <code>land</code>, <code>cancel</code>, <code>rework</code>, <code>review</code>, <code>degrade-review</code>, <code>attribute</code>, <code>prove</code>, <code>journey</code>, <code>raise</code>, <code>publish</code>, <code>resume</code>, <code>grant</code>, <code>confirm</code> and <code>close</code>. What makes them one set is not what they do, because they do quite different things. It is who may do them. <strong>Each is a decision a person takes, and each is refused to an assistant.</strong></p>
+  <h3>The eighteen acts that are yours</h3>
+  <p>Eighteen acts belong to the owner, each with its own eligibility: <code>land</code>, <code>cancel</code>, <code>rework</code>, <code>review</code>, <code>degrade-review</code>, <code>attribute</code>, <code>prove</code>, <code>journey</code>, <code>raise</code>, <code>publish</code>, <code>resume</code>, <code>run</code>, <code>grant</code>, <code>confirm</code>, <code>close</code>, <code>seed</code>, <code>group apply</code> and <code>retry --adopt-as</code>. What makes them one set is not what they do, because they do quite different things. It is who may do them. <strong>Each is a decision a person takes, and each is refused to an assistant.</strong></p>
 
-  <p><em>Refused</em> is the exact word, and this is the place to use leg 5&rsquo;s distinction on something that matters. The refusal is a thing that stops, not a record that reports: the surface marimba runs through denies the call before the act can begin. So it holds whether or not the assistant has read any instruction, agrees with it, or has been talked round to a different view. What you will see instead is marimba preparing the act, explaining it, and stopping. <strong>That stop is the machine, not the manners.</strong></p>
+  <p><em>Refused</em> is the exact word, and this is the place to use leg 5&rsquo;s distinction on something that matters. The refusal is a thing that stops, not a record that reports: the surface marimba runs through denies the call before the act can begin. The guard denies the command shapes it recognizes independently of the assistant&rsquo;s judgment. It is not a sandbox or a guarantee against deliberate indirection. Its measured limits are in <code>docs/driving/marimba/CONTRACT.md</code>. Marimba must prepare the act, explain it and stop, without routing around the guard.</p>
 
-  <p>Each of the eight shows you what it is about to do and then asks. <strong>That screen is the authority on what the act costs and what it settles</strong> &mdash; for your job, at that moment, worked out there rather than copied from anywhere, this guide included. Read it before you answer it. What each of the eight is for is in <a href="#reference-owner-acts">Owner acts</a>.</p>
+  <p>Explicit owner decisions show their confirmation screen. <code>run</code> can execute automatic work without a prompt and asks only when an owner correction decision is needed. Marimba is denied it either way. <strong>That screen is the authority on what the act costs and what it settles</strong> &mdash; for your job, at that moment, worked out there rather than copied from anywhere, this guide included. Read it before you answer it. What each of the eighteen is for is in <a href="#reference-owner-acts">Owner acts</a>.</p>
 
   <pre>npm run awsf -- status TASK
 npm run awsf -- land TASK</pre>
-  <p>The first is the evidence. The second is the act, and you type it yourself. <code>TASK</code> stands for whatever name your job was given; you will see the real one in the session. <strong><code>land</code> is shown here because it is the act this route most often ends at, not because it is the one to pick.</strong> marimba will prepare and explain whichever of the eight the evidence supports, and it is denied all eight equally.</p>
+  <p>The first is the evidence. The second is the act, and you type it yourself. <code>TASK</code> stands for whatever name your job was given; you will see the real one in the session. <strong><code>land</code> is shown here because it is the act this route most often ends at, not because it is the one to pick.</strong> marimba will prepare and explain whichever of the eighteen the evidence supports, and it is denied all eighteen equally.</p>
 
   <h3>What must be in hand before you decide</h3>
   <p>marimba&rsquo;s whole job on this leg is to put a fixed set of things in front of you. The set is short and it is the same every time. If one of them is missing, that missing thing is what to ask for.</p>
@@ -589,11 +593,11 @@ npm run awsf -- land TASK</pre>
     <li><b>What came back</b>The candidate change, set beside the boundary you wrote at leg 3.</li>
     <li><b>Claim and measurement, kept apart</b>What the worker said it did, and what the checks measured, as two separate statements. The first is not evidence for the second, and where they disagree, the measurement is the one that is right.</li>
     <li><b>What is left</b>What the job may still spend, how many correction rounds remain, and what is left of the allowance for sending it back for another look. Your job&rsquo;s numbers, not general ones.</li>
-    <li><b>Which acts the evidence supports</b>Of the eight, which ones the evidence would carry, which ones it would not, and the reason for each.</li>
+    <li><b>Which acts the evidence supports</b>Of the eighteen, which ones the evidence would carry, which ones it would not, and the reason for each.</li>
   </ul>
 
   <h3>When the route ended in a refusal instead</h3>
-  <p>A refused job reaches this leg with no candidate. The decision is still yours and still made from evidence, and the first piece of evidence to ask for is the cause.</p>
+  <p>A refused job may have no candidate, or may retain one from before a later gate or review failed. Inspect its evidence rather than assuming either case. The decision is still yours and still made from evidence, and the first piece of evidence to ask for is the cause.</p>
   <p class="ask"><span class="lbl">Ask for</span>&ldquo;Diagnose this refusal read-only. Is the cause my request, the route, the project&rsquo;s configuration, or the machine it ran on? Change nothing.&rdquo;</p>
   <p><strong>The diagnosis is marimba&rsquo;s reading to do.</strong> It may have to read the factory&rsquo;s configuration or its source to find the answer, and you should not have to. What you need back is which of the four it is, and the evidence for it.</p>
   <p><strong>Only the first is yours to fix by changing the request.</strong> When the cause is the route or the configuration, a different route is a fix only if it still does everything your boundary asked for. A route that skips a step you required does not complete your job. It swaps it for a smaller one, and the boundary you wrote at leg 3 no longer describes what you would get.</p>
@@ -643,7 +647,7 @@ npm run awsf -- land TASK</pre>
     <li><b>The order or numbering in a session report</b>The six legs are this guide&rsquo;s observation order, not a factory sequence; if a session&rsquo;s numbering makes the graduation record unreadable, W01 owns the contract change.</li>
     <li><b>Exact session-specific invocations outside the six classes</b>This guide does not list task-request, Git-formatting, or state-store read arguments, because no fenced source owns a complete set; if the route needs one, it reopens as a document gap rather than becoming an unfenced list.</li>
     <li><b>Journal size or composition</b>This guide sends you to the dashboard rather than a journal, and no current workstream owns changing what the journal stores.</li>
-    <li><b>A new project&rsquo;s entry path</b>This route is for this checkout, because preparing a greenfield project currently requires protected configuration; W03 owns that missing entry path.</li>
+    <li><b>A new project&rsquo;s entry path</b>This walkthrough uses the factory checkout. <code>awsf init</code> and <code>awsf project register</code> provide project setup, with machine-local placement separate from the committed catalog. Follow the root README and the target project&rsquo;s own policy.</li>
     <li><b>Installing marimba or its launcher</b>Those are per-person, per-machine setup owned by the person who hands you this file, not by this repository or this guide.</li>
     <li><b>What your job is about</b>The material a job depends on, such as a palette, a specification or a style guide, is yours to supply in the request. This guide covers driving the factory and cannot hold any one job&rsquo;s subject matter.</li>
     <li><b>Your job&rsquo;s own account</b>The dashboard card, and marimba&rsquo;s reports after priming, after preparing, at the signature and at a stop, are where your job&rsquo;s facts are. This guide says what to read in each of them and cannot contain the facts themselves.</li>
@@ -651,7 +655,7 @@ npm run awsf -- land TASK</pre>
   </ul>
 
   <h3>What this has been shown to prove</h3>
-  <p>This guide has been driven by its author and not yet by anyone else. It is known to be sufficient to drive with; it is not known to be understandable to somebody new. Only a second reader can establish that, and this document does not claim it has happened.</p>
+  <p>The original authoring record established an author-led drive. It did not establish independent usability. Later source reconciliation and browser checks establish different properties, and must not be reported as a new reader completing a real delivery.</p>
 </section>
 
 <section id="reference-commands">
@@ -724,7 +728,7 @@ npm run awsf -- land TASK</pre>
   <h3>Preflight</h3>
   <p><code>awsf preflight TASK --where GLOB... [--read PATH...] [--consulted SESSION...] [--json]</code> measures a DRAFT attempt and appends one <code>awsf.driver-preflight/v1</code> record, whether or not every field passes. It is not an owner act and takes no owner terminal. <code>--where</code>, <code>--read</code> and <code>--consulted</code> are inputs the host checks against the request, the configuration and the journal; none of them marks a field passed. The suite reuses a landed attempt&rsquo;s gate rows when its candidate is the base, and otherwise runs every configured gate once in the project&rsquo;s baseline worktree, which is created once, re-pointed only when clean, and never removed. Text prints one line per field; JSON prints the record.</p>
   <p>For a shift, <code>write-boundary</code> also scans each selected ticket&rsquo;s <code>DO</code> block in the registered plan store. A path outside the builder&rsquo;s reach, including a protected path, must be classified with <code>--read</code>; the refusal names the ticket and token. Other prompt sections are not scanned.</p>
-  <p>A reused baseline whose ignored seed bytes differ from the repository refuses before measuring gates; inspect and restore it by hand. Nothing is refreshed or cleared. <code>retry SOURCE --adopt-as TARGET --request "..."</code> first records TARGET as DRAFT and requires its own four-line request, preflight and owner confirmation. Run those on TARGET, then repeat the adoption command unchanged; no target tree, integration or provider call precedes K1.</p>
+  <p>A reused baseline whose ignored seed fingerprint differs from the repository refuses before measuring gates. Preserve it and ask the owner to inspect and resolve the mismatch. Marimba must not restore or clear it by hand. Non-OS fingerprint strength remains a documented assessment concern. <code>retry SOURCE --adopt-as TARGET --request "..."</code> first records TARGET as DRAFT and requires its own four-line request, preflight and owner confirmation. Run those on TARGET, then repeat the adoption command unchanged; no target tree, integration or provider call precedes K1.</p>
   <pre>npm run awsf -- preflight TASK --where core/src/example.ts</pre>
 
   <p><code>closure</code> (TR-21) refuses preparation while any attempt in the project landed after <code>2026-10-09T22:02:56Z</code> with a sealed ticket selection and no closure record. The refusal names each attempt and its <code>awsf close</code> command. No flag or environment variable bypasses it, including on intake or proving runs. A closure leaving rows open by your choice counts; a pre-cut landing does not.</p>
@@ -736,8 +740,8 @@ npm run awsf -- land TASK</pre>
   <p><code>awsf doctor --json</code> emits <code>awsf.doctor/v1</code> with named storage, executables, providers, quota and coverage rows, alongside existing diagnostics and Jev. Findings exit 1; low quota and unmeasured logins warn. Doctor never repairs. The quota probe runs with read-only storage and no provider CLI fallback. Pi login is not measured by Codex status.</p>
 
   <h3>Most of these are not on your route</h3>
-  <p><code>awsf resume TASK --reason "quota recovered" [--instruction "Additional guidance"]</code> requires owner TTY confirmation. An optional instruction is shown exactly, bound to the next unstarted model step, and added after its original input. It does not replace the request or grant extra budget or permissions. Completed results and host-only next steps cannot receive a new instruction. Restart existing driving sessions after updating their guard so the loaded rules deny this owner act. Recovery supports new journal-backed quota pauses, host-accepted phases, and durably stored complete replies whose host validation has not started. Saved replies are validated without another model call and cannot receive a new instruction. Their worktree and index bytes must match exactly. Already-started validation, incomplete reply evidence, or an unavailable bounded worktree snapshot is refused rather than replayed. Recovery preserves the original request, accepted phases, candidate and debit. Unknown quota, changed bindings, active controllers and unsettled execution refuse. Legacy attempts without these checkpoints and genuinely interrupted turns are not supported.</p>
-  <p>The six legs use seven of them: <code>new</code>, <code>start</code> and <code>run</code> to give the factory a job, <code>status</code>, <code>dash</code> and <code>watch</code> to see what it is doing, and <code>doctor</code> to check the machine before you start. Eight more are the owner acts below, which a driving session is denied. The rest set a project up, read the backlog, declare that one task continues another, or maintain the durable records.</p>
+  <p><code>awsf resume TASK --reason "quota recovered" [--instruction "Additional guidance"]</code> requires the owner&rsquo;s confirmation. An optional instruction binds to the next eligible unstarted model step and changes neither the original request nor budget or permissions. Complete saved results and host-only recovery cannot receive a new instruction. Recovery can reconstruct accepted phases, saved complete replies and supported host-validation or commit stages from their durable evidence, without repeating the model call. Exact worktree, index, candidate and effect bindings still apply. Missing proof, unknown quota, active controllers and unsettled execution refuse. A disappeared process or interrupted conversation alone never authorizes replay. The CLI diagnosis and <code>core/src/workflow/host-validation.ts</code> define the supported cuts.</p>
+  <p>The walkthrough uses creation, preflight, owner confirmation and preparation before the owner&rsquo;s run, then read commands to inspect the result. The reference sets, rather than a copied command count, define the vocabulary. <code>run</code> is also one of the eighteen owner acts below, because its production path can request owner correction authorization. A driving session is denied every owner act. The other commands set a project up, read the backlog, declare that one task continues another, or maintain the durable records.</p>
 </section>
 
 <section id="reference-lifecycle-states">
@@ -819,7 +823,7 @@ npm run awsf -- land TASK</pre>
   <p><code>L12|GATING-&gt;AWAITING_OWNER|actors=host|spawn=false|interactive=false</code> is the move your job made at the end of leg 4. The three properties after the arrow are the ones worth knowing:</p>
   <ul class="answers">
     <li><b><code>actors</code></b>Who may make the move. <code>host</code> is the factory acting on its own. <code>human</code> is a person at a terminal. <code>owner</code> is an owner-authorized route the factory then drives. A <code>human</code> edge is not something an assistant can take for you, and that is what makes leg 6 a stop rather than a courtesy.</li>
-    <li><b><code>spawn</code></b><code>spawn=true</code> means the move launches a worker, so it is a move that spends. Every other move is free. If you want to know where a job&rsquo;s money went, these are the only places it can have gone.</li>
+    <li><b><code>spawn</code></b><code>spawn=true</code> permits a launch at that edge. Later ordinary agent phases can also spend registered calls within the same <code>RUNNING</code> sojourn, without another lifecycle edge. Read the call ledger rather than counting transitions to infer spend.</li>
     <li><b><code>interactive</code></b><code>interactive=true</code> means the move requires a person at a terminal. Every one of them belongs to the acts below.</li>
   </ul>
   <p>The moves your job actually made are named in the behind-the-curtain notes on <a href="#one-small-job">leg 3</a> and <a href="#read-a-refusal">leg 5</a>.</p>
@@ -828,13 +832,14 @@ npm run awsf -- land TASK</pre>
 <section id="reference-owner-acts">
   <p class="eyebrow">Reference &middot; class 4 of 6</p>
   <h2>Owner acts</h2>
-  <p class="secstatus"><span class="dot built"></span>The eight verbs a driving session is denied, read from the guard&rsquo;s own loop.</p>
+  <p class="secstatus"><span class="dot built"></span>The eighteen owner acts denied by the guard, read from its shared act list and special-case paths.</p>
 
-  <p>These are the acts a person performs. The set is not a policy written down in a document and hoped for: it is the verb loop inside the guard that every driving session runs under, so an assistant is denied them by the tool surface before the act can begin &mdash; whatever it has read, whatever it agrees with, and whatever it has been talked round to.</p>
+  <p>These are the owner-act shapes in <code>docs/driving/marimba/owner-acts.mts</code>, checked against CLI call sites and both guard bindings. A guarded driving session is denied those commands. The operating contract states the text matcher&rsquo;s limits. The session must never use those limits as a bypass.</p>
 
   <ul data-awsf-fact-class="owner-acts">
     <li><code>grant</code></li>
     <li><code>resume</code></li>
+    <li><code>run</code></li>
     <li><code>land</code></li>
     <li><code>cancel</code></li>
     <li><code>rework</code></li>
@@ -847,6 +852,9 @@ npm run awsf -- land TASK</pre>
     <li><code>publish</code></li>
     <li><code>confirm</code></li>
     <li><code>close</code></li>
+    <li><code>seed</code></li>
+    <li><code>group apply</code></li>
+    <li><code>retry --adopt-as</code></li>
   </ul>
 
   <p><strong>So &ldquo;can I just tell marimba to land it?&rdquo; has one answer: no, and not because it is being careful.</strong> It will prepare the act, show you what it would do, and stop. What you do with that is the whole of leg 6.</p>
@@ -861,9 +869,15 @@ npm run awsf -- land TASK</pre>
     <li><b><code>review</code></b>Buys one replacement second opinion on an unchanged candidate. It is available only when the recorded review is defective as evidence, so it cannot be used to shop for a verdict you like better.</li>
     <li><b><code>journey</code></b>Your attestation that you ran the built software yourself and it worked. Nothing inside the factory can answer that question, which is why the answer has to enter through a person &mdash; and why this act cannot pass itself.</li>
     <li><b><code>raise</code></b>Lifts one job&rsquo;s spending ceiling, for that job alone, bounded and recorded. A ceiling is a checkpoint rather than a cap; this is the checkpoint being answered by the person paying.</li>
+    <li><b><code>run</code></b>Launches the prepared workflow and spends its reserved provider call. Its production path can ask for explicit owner authorization of a correction tranche, so the owner invokes it from an interactive terminal; a driving session is denied.</li>
     <li><b><code>grant</code></b>Authorizes exact protected content files for the next unstarted writing phase at its quiescent boundary, never a later writer across an intervening writing call. The owner uses <code>awsf grant TASK --phase builder --file PATH --reason "WHY"</code>, repeating <code>--file</code> for each path. It requires OS isolation and keeps existing role writes and tools. One activation consumes the generation. A separate final confirmation binds protected blobs and candidate SHA before landing. Failed generations, corrections and unfinished host effects receive no automatic replay authority.</li>
-    <li><b><code>resume</code></b>Continues an unstarted phase at a verified quota boundary, or finishes a durably accepted phase result without repeating its model turn. Original input and debit stay intact. Genuinely interrupted turns and legacy attempts without checkpoints refuse.</li>
-    <li><b><code>publish</code></b>Pushes landed work to the remote. The only act whose effect the factory cannot take back, and the reason it records what the remote actually did rather than what it intended.</li>
+    <li><b><code>resume</code></b>Continues a verified quota boundary or reconstructs a complete saved result. Recovery after host validation or commit work began requires exact durable effect evidence. It never grants permission to replay a model turn or command merely because a process disappeared.</li>
+    <li><b><code>degrade-review</code></b>Grants one attempt a same-provider review. It weakens review independence explicitly and is never an automatic quota fallback.</li>
+    <li><b><code>prove</code></b>Creates a frozen proving-ground replay for measurement. It cannot be landed or treated as a delivered change.</li>
+    <li><b><code>seed</code></b>Starts a fresh authorized task from an exact retained committed candidate, with fresh assurance and no transferred grant, review or journey.</li>
+    <li><b><code>group apply</code></b>Accepts an exact revision-bound planning proposal. Planning acceptance does not authorize execution or landing.</li>
+    <li><b><code>retry --adopt-as</code></b>Authorizes adoption into a new task with its own request agreement and preflight. Plain retry carries no adoption authority.</li>
+    <li><b><code>publish</code></b>Pushes landed work to its configured remote. Close earned tickets first. The current close implementation also accepts PUBLISHED, but that exception&rsquo;s agreement with sealed-attempt policy remains an assessment concern.</li>
   </ul>
 
   <p><strong>What each one costs and settles for <em>your</em> job is worked out on that act&rsquo;s own confirmation screen, at the moment you run it.</strong> That screen is the authority on the number. This list is the authority on what the act is for.</p>
@@ -907,10 +921,12 @@ npm run awsf -- land TASK</pre>
     <li><b><code>intake</code></b>Turns a rough request into something the other routes can take.</li>
     <li><b><code>design-to-plan</code></b>Design work, then an architecture review of the design.</li>
     <li><b><code>plan-author</code></b>Writes a new deep plan for one spine ticket into private session output. The host admits it as new files only, then tests it and has the other provider review it. The plan is approved only when you land it.</li>
+    <li><b><code>shift</code></b>Compiles selected milestones into ordered ticket builds, gates and review under one attempt. Completion still needs owner landing and closure.</li>
+    <li><b><code>prove</code></b>Runs frozen corpus measurements. It is not a delivery route and cannot land its candidate.</li>
   </ul>
 
   <h3>A gate is a check this project runs against the candidate</h3>
-  <p>Five are configured here: <code>test</code> runs the project&rsquo;s unit suite, <code>typecheck</code> runs its typechecker, <code>lint</code> runs its linter, <code>journeys</code> runs its end-to-end journeys, which take about twenty minutes, and <code>traps</code> runs the refusal traps, each with its source-deletion mutant. Each has a command and a timeout, and the host runs all of them against the candidate rather than trusting the worker&rsquo;s account of having run them.</p>
+  <p>Five are configured here: <code>test</code> runs the project&rsquo;s unit suite, <code>typecheck</code> runs its typechecker, <code>lint</code> runs its linter, <code>journeys</code> runs its end-to-end journeys, and <code>traps</code> runs the refusal traps, each with its source-deletion mutant. Each has a command and a timeout, and the host runs all of them against the candidate rather than trusting the worker&rsquo;s account of having run them.</p>
   <p class="warnnote"><strong>This list is what leg 4&rsquo;s green sentence is worth.</strong> &ldquo;All configured commands passed&rdquo; is a statement about exactly these five, and a project that configures none gets the same sentence with nothing at all behind it. The list is the thing to read; the sentence only reports on it.</p>
 </section>
 
@@ -928,7 +944,7 @@ npm run awsf -- land TASK</pre>
   </ul>
 
   <ul class="answers">
-    <li><b><code>T0</code></b>Read-only analysis. One call, and no second opinion to buy.</li>
+    <li><b><code>T0</code></b>Analysis or constrained intake output, as the recipe and role permit. One default call and no mandatory independent review. The tier alone is not a write grant.</li>
     <li><b><code>T1</code></b>Localized, reversible change. Three calls. The drive this guide was written from ran here.</li>
     <li><b><code>T2</code></b>Security, process control, persistent data, cross-component or weakly tested work. Five calls &mdash; which is what pays for the opposite-provider review that T2 also requires.</li>
   </ul>

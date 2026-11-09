@@ -117,6 +117,8 @@ test("a catalog with multiple plans and no default lists candidates instead of g
   const cwd = process.cwd();
   try {
     mkdirSync(join(root, "specs", "tickets"), { recursive: true });
+    // A plan source resolves only from a git checkout (B10-03).
+    mkdirSync(join(root, ".git"));
     writeFileSync(join(root, "awsf.project.yaml"), `
 version: awsf.project/v1
 project:

@@ -4,20 +4,24 @@ Launching is one command. Observing is the part that goes wrong.
 
 ## The sequence
 
+Complete the host preflight and owner confirmation described in
+`preflight_a_task.md`, then prepare:
+
 ```bash
 just awsf start TASK
-just awsf run TASK
 ```
 
-`start` prepares the attempt and reports the base it prepared against. `run`
-executes the compiled workflow and returns when the attempt stops moving — which
-is not the same as when it succeeded.
+`start` reports the base it prepared against. Hand the owner `awsf run TASK` to
+invoke personally. **Marimba must not invoke `run`**: it can ask for an owner
+correction decision, so the tool surface denies the whole command.
 
-Report the handle after each: the task, the attempt, the lifecycle state, and
-calls spent against the ceiling. Then read state only when the next decision
-needs it. Do not poll between the two commands to look busy; volunteered state is
-stale on arrival, because state printed before the request describes a system the
-very next run changes.
+The owner's `run` executes the compiled workflow and returns when the attempt
+stops moving. That is not the same as succeeding.
+
+Report the handle after preparation and when reading the run's outcome: task,
+attempt, lifecycle state and calls spent against the ceiling. Read state when a
+decision needs it. Do not turn speculative polling into an unrequested status
+board.
 
 ## What you may run freely, and one thing that is not read-only
 
@@ -38,7 +42,9 @@ right command when you are deciding.
 Rebuilding the projection is **not** read-only and must never be described as
 such. It is **non-destructive and idempotent**: it builds a fresh database aside,
 links the live one out of the way under a retained name, and renames the new file
-into place. Safe at any time, still a write.
+into place. Active database handles or invalid evidence can make it refuse.
+Read its result, preserve retained candidates and do not use it as routine
+priming. It is still a write.
 
 ```bash
 just awsf db rebuild
@@ -62,8 +68,9 @@ with it. Read it top to bottom rather than skimming for a number:
   acts draw on, and it is not the same allowance as the per-phase correction
   budget above it.
 
-Two lines are absent and their absence is not evidence of health: **gate rows and
-the last envelope are not printed.** See `read_a_blocked_attempt.md`.
+The ordinary display is a summary. Add `--evidence` to print failing gate checks,
+the last retained envelope and the process record. Missing evidence is not a
+health claim. See `read_a_blocked_attempt.md`.
 
 ## When a run is stuck
 

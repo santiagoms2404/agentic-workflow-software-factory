@@ -9,8 +9,9 @@
 
 import type { JournalRecord } from "../persistence/journal.ts";
 import type { AttemptEvent } from "../cli/commands/attempt.ts";
-import { allowedActsFor, proposeAct, PROPOSED_ACT_NAMES, RATIONALE_CODES, type JudgmentInput, type PhaseRoles, type ProposedAct, type RationaleCode } from "./policy.ts";
-import { buildStopFacts, STOP_KINDS, type StopFacts, type StopFactsConfig, type StopFactsPhase, type StopKind } from "./stop-facts.ts";
+import { allowedActsFor, proposeAct, type JudgmentInput, type PhaseRoles, type ProposedAct, type RationaleCode } from "./policy.ts";
+import { delegateProposalShapeIssue } from "./proposal.ts";
+import { buildStopFacts, isStopOpeningEvidence, STOP_KINDS, type StopFacts, type StopFactsConfig, type StopFactsPhase, type StopKind } from "./stop-facts.ts";
 
 export const DELEGATE_REPLAY_TYPE = "delegate.replay";
 export const DELEGATE_REPLAY_SCHEMA_ID = "awsf.delegate-replay/v1";
@@ -54,11 +55,8 @@ export function assertDelegateReplay(value: unknown): asserts value is DelegateR
   if (record.mode !== "numbers-only" && record.mode !== "live") fail("mode");
   if (!Number.isInteger(record.attempt) || !Number.isInteger(record.statusRevision)) fail("attempt or statusRevision");
   if (!(STOP_KINDS as readonly unknown[]).includes(record.stopKind)) fail("stopKind");
-  const proposal = record.proposal as Record<string, unknown> | undefined;
-  const act = proposal?.act as Record<string, unknown> | undefined;
-  if (proposal === undefined || act === undefined || !(PROPOSED_ACT_NAMES as readonly unknown[]).includes(act.act)) fail("proposal.act");
-  if (!(RATIONALE_CODES as readonly unknown[]).includes(proposal.rationale)) fail("proposal.rationale");
-  if (typeof proposal.executable !== "boolean" || (proposal.executable && (act.act === "land-shadow" || act.act === "wait-for-owner"))) fail("proposal.executable");
+  const proposalIssue = delegateProposalShapeIssue(record.proposal);
+  if (proposalIssue !== null) fail(`proposal.${proposalIssue}`);
 }
 
 /** One stop per attempt session and status revision: the key live proposals and replays share. */
@@ -74,12 +72,7 @@ export function stopKey(sessionId: string, statusRevision: number): string {
 export function historicalStopIndices(records: readonly JournalRecord<AttemptEvent>[]): number[] {
   const indices: number[] = [];
   records.forEach((record, index) => {
-    const evidence = record.event.evidence;
-    if (evidence === undefined) return;
-    if (evidence.type === "ceiling-pause" || evidence.type === "quota-pause" || evidence.type === "ticket-block" ||
-        (evidence.type === "transition" && (evidence.to === "AWAITING_OWNER" || evidence.to === "BLOCKED"))) {
-      indices.push(index);
-    }
+    if (isStopOpeningEvidence(record.event.evidence)) indices.push(index);
   });
   return indices;
 }
@@ -100,13 +93,19 @@ export function journalPhases(records: readonly JournalRecord<AttemptEvent>[]): 
   for (const record of records) {
     const evidence = record.event.evidence;
     if (evidence?.type === "phase") phases.set(evidence.phase.key, { ordinal: evidence.phase.ordinal, kind: evidence.phase.kind, owner: evidence.phase.owner });
-    if (evidence?.type === "agent-start") routes.set(evidence.phaseId, evidence.adapterId);
+    if (evidence?.type === "agent-start") {
+      routes.set(evidence.phaseId, evidence.adapterId);
+      const colonIndex = evidence.phaseId.indexOf(":");
+      if (colonIndex >= 0) {
+        routes.set(evidence.phaseId.slice(colonIndex + 1), evidence.adapterId);
+      }
+    }
   }
   const ordered = [...phases.entries()].sort(([, left], [, right]) => left.ordinal - right.ordinal);
   const roles: Record<string, string> = {};
   const list: StopFactsPhase[] = ordered.map(([id, phase]) => {
     if (phase.kind === "agent") roles[id] = phase.owner;
-    return { id, ticket: null, route: phase.kind === "agent" ? routes.get(id) ?? UNRECORDED_ROUTE : null };
+    return { id, ticket: null, route: phase.kind === "agent" ? routes.get(id) ?? (id.includes(":") ? routes.get(id.slice(id.indexOf(":") + 1)) : undefined) ?? UNRECORDED_ROUTE : null };
   });
   return { config: { phases: list }, roles };
 }

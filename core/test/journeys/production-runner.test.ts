@@ -43,6 +43,7 @@ import { raiseCommand } from "../../src/cli/commands/raise.ts";
 import { correctionHeadroom } from "../../src/cli/commands/workflows.ts";
 import { WORKFLOW_RECIPES, workflowRecipe } from "../../src/workflow/catalog.ts";
 import { writePlacement } from "../../src/registry/placement.ts";
+import { trustedContractBaselineForAttempt } from "../../src/registry/production-contracts.ts";
 import { k1Request, k1RequestFor, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { nextCommand } from "../../src/cli/commands/next.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
@@ -51,12 +52,28 @@ import { runProductionCommand, resumeProductionCommand, ProductionConfigSnapshot
 import type { PhaseRouteOverrides } from "../../src/workflow/route-flags.ts";
 import { nextRevision, persistAttempt, readAttempt, type AttemptProjector } from "../../src/cli/commands/attempt.ts";
 import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
+import { resumeInstructionLines } from "../../src/workflow/resume-instruction.ts";
 import { agentsForSession, gatesForSession, getSession, phasesForSession, pollEvents, processesForSession } from "../../src/observability/queries.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
 import { TicketStore } from "../../src/persistence/ticket-store.ts";
 
 function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
+}
+
+function assertJournalBytesEqual(actual: Buffer | string, expected: Buffer | string, label: string): void {
+  const text = (value: Buffer | string): string => value.toString();
+  const summary = (value: Buffer | string) => {
+    const records = text(value).trim().split("\n").filter(Boolean).map(line => {
+      const record = JSON.parse(line);
+      return { seq: record.source_seq, kind: record.event.kind, evidence: record.event.evidence?.type, digest: recoveryDigest(record.event) };
+    });
+    return { count: records.length, tail: records.slice(-4) };
+  };
+  const equal = Buffer.isBuffer(actual) || Buffer.isBuffer(expected)
+    ? Buffer.isBuffer(actual) && Buffer.isBuffer(expected) && actual.equals(expected)
+    : actual === expected;
+  assert.ok(equal, `${label}: expected ${JSON.stringify(summary(expected))}; actual ${JSON.stringify(summary(actual))}`);
 }
 
 const RESUME_INSTRUCTION = '  Report this café instruction verbatim in implementationNotes.\n"Keep existing write limits."  ';
@@ -137,14 +154,18 @@ test(`O1 ${granted ? "A2 grant " : ""}${routed ? "selected-route " : ""}${scenar
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /quota.*below/);
     mode = "unknown";
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /quota.*unknown/);
+    const failedQuotaProbes = (await readAttemptEvidence(options.attemptDir)).filter(evidence =>
+      evidence.type === "quota-snapshot" && evidence.completedPhaseKey === "recovery-preflight");
+    assert.equal(failedQuotaProbes.length, 1, "an unavailable resume quota probe remains durable evidence");
     mode = "healthy";
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal: { ...terminal, interactive: false } }), /TTY/);
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal: {
       ...terminal, confirm: async () => { mode = "low"; return true; } } }), /quota.*below/);
     mode = "healthy";
+    const beforeDecline = readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8");
     const declined = await resumeProductionCommand({ ...options, reason: "quota recovered", terminal: { ...terminal, confirm: async () => false } });
     assert.equal(declined.confirmed, false);
-    assert.equal(readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8"), original);
+    assertJournalBytesEqual(readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8"), beforeDecline, "declined resume changed the journal");
     writeFileSync(join(prepared.worktree!, "unapproved.txt"), "retain this\n");
     await assert.rejects(resumeProductionCommand({ ...options, reason: "quota recovered", terminal }), /not clean/);
     assert.equal(readFileSync(join(prepared.worktree!, "unapproved.txt"), "utf8"), "retain this\n");
@@ -296,7 +317,8 @@ for (const workflow of ["plan", "build", "build-review"] as const) {
   });
 }
 
-test("resume supplements survive another quota pause and reach later review as immutable task intent", async () => {
+for (const approvalCase of ["accepted", "mismatched", "absent"] as const) {
+test(`resume supplement authorization is ${approvalCase === "accepted" ? "accepted" : `${approvalCase} refuses before launch while history remains readable`}`, async () => {
   const world = await fixture("simple-sdlc", 0, config => ({ ...config, routing: { ...config.routing,
     quota_stop: { default: { minutes: 60, probe_timeout_ms: 500 } } } }), 2);
   try {
@@ -304,13 +326,17 @@ test("resume supplements survive another quota pause and reach later review as i
     let low: "builder" | "documenter" | null = "builder";
     let probes = 0;
     const prompts: string[] = [];
+    let brokerLaunches = 0;
     const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
       projectRecord: world.projection.project, assertAdvancement: world.projection.assertAdvancement, assertLaunchProjection: world.projection.assertLaunchPermitted,
       infrastructure: {
         adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, request => {
           prompts.push(request.prompt);
           if (!request.model.startsWith("claude:")) low = "documenter";
-        }), createBroker: fakeBroker, sandboxProbe: () => false, now: () => "2026-08-24T20:26:39.429Z",
+        }), createBroker: (brokerOptions: BrokerOptions): TransportBroker => {
+          const delegate = fakeBroker(brokerOptions);
+          return { startProcess: (registration, spec, signal) => { brokerLaunches++; return delegate.startProcess(registration, spec, signal); } };
+        }, sandboxProbe: () => false, now: () => "2026-08-24T20:26:39.429Z",
         resolveExecutable: (executable: string) => executable === "quota-axi" ? "/fixture/quota-axi" : executable,
         runCommand: ((executable, argv, opts) => {
           if (executable !== "/fixture/quota-axi") return runSystemCommand(executable, argv, opts);
@@ -334,6 +360,32 @@ test("resume supplements survive another quota pause and reach later review as i
     assert.equal(first.status.budget.callsSpent, 2);
     assert.ok(prompts[1]!.includes(JSON.stringify(RESUME_INSTRUCTION)));
     assert.ok(!prompts[1]!.includes("unconfirmed substitution"));
+    let history = readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8");
+    let evidence = history.trim().split("\n").map(line => JSON.parse(line).event.evidence);
+    const firstActivation = evidence.find(value => value?.type === "resume-activation" && value.ownerInstruction != null);
+    assert.ok(firstActivation);
+    assert.equal(firstActivation.ownerApprovalId, firstActivation.ownerInstruction.amendment.binding.authorizationId);
+    assert.equal(evidence.filter(value => value?.type === "trusted-contract-baseline").length, 1);
+    assert.equal(brokerLaunches, 2);
+    if (approvalCase !== "accepted") {
+      const rows = history.trim().split("\n").map(line => JSON.parse(line));
+      const activation = rows.findLast(row => row.event.evidence?.type === "resume-activation" && row.event.evidence.ownerInstruction != null);
+      assert.ok(activation);
+      if (approvalCase === "mismatched") activation.event.evidence.ownerApprovalId = "different-owner-approval";
+      else delete activation.event.evidence.ownerApprovalId;
+      history = `${rows.map(row => JSON.stringify(row)).join("\n")}\n`;
+      writeFileSync(join(options.attemptDir, "journal.jsonl"), history);
+      const historical = resumeInstructionLines(await readAttemptEvidence(options.attemptDir));
+      assert.ok(historical.some(line => line.includes(JSON.stringify(RESUME_INSTRUCTION))), "historical owner instruction remains displayable");
+      const beforeCalls = prompts.length;
+      const beforeLaunches = brokerLaunches;
+      await assert.rejects(resumeProductionCommand({ ...options, reason: "continue after the documenter boundary", terminal: {
+        interactive: true, write: () => {}, confirm: async () => assert.fail("invalid historical activation must refuse before confirmation"),
+      } }), /activation or anchor binding changed/u);
+      assert.equal(prompts.length, beforeCalls);
+      assert.equal(brokerLaunches, beforeLaunches);
+      return;
+    }
     low = null;
     const docInstruction = "Document only the verified bounded source.";
     const second = await resumeProductionCommand({ ...options, reason: "second confirmed reason", instruction: docInstruction, terminal });
@@ -348,10 +400,12 @@ test("resume supplements survive another quota pause and reach later review as i
     assert.ok(prompts[3]!.includes(docInstruction));
     assert.match(prompts[3]!, /historical task intent/);
     const journal = readFileSync(join(options.attemptDir, "journal.jsonl"), "utf8");
-    const evidence = journal.trim().split("\n").map(line => JSON.parse(line).event.evidence);
+    evidence = journal.trim().split("\n").map(line => JSON.parse(line).event.evidence);
     const activations = evidence.filter(value => value?.type === "resume-activation");
     assert.deepEqual(activations.map(value => value.reason), ["first confirmed reason", "second confirmed reason"]);
     assert.deepEqual(activations.map(value => value.ownerInstruction.amendment.binding.phaseKey), ["builder", "documenter"]);
+    assert.ok(activations.every(value => value.ownerApprovalId === value.ownerInstruction.amendment.binding.authorizationId));
+    assert.equal(evidence.filter(value => value?.type === "trusted-contract-baseline").length, 1, "resume reuses the durable host baseline");
     assert.equal(evidence.filter(value => value?.type === "resume-instruction-delivery").length, 4);
     const replay = await resumeProductionCommand({ ...options, reason: "verify completed history", instruction: docInstruction, terminal });
     assert.equal(replay.status.revision, second.status.revision);
@@ -361,6 +415,7 @@ test("resume supplements survive another quota pause and reach later review as i
     assert.ok(report.includes(JSON.stringify(docInstruction)));
   } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
 });
+}
 
 for (const fault of ["none", "legacy-context", "broker-uncertain", "after-submission"] as const) {
   test(`resume instruction targets an unstarted review: ${fault}`, async () => {
@@ -409,6 +464,10 @@ for (const fault of ["none", "legacy-context", "broker-uncertain", "after-submis
           },
         } };
       const result = await resumeProductionCommand(resume);
+      const activations = (await readAttemptEvidence(options.attemptDir)).filter(evidence => evidence.type === "resume-activation" && evidence.ownerInstruction != null);
+      assert.equal(activations.length, 1);
+      assert.equal(activations[0]!.type === "resume-activation" ? activations[0]!.ownerApprovalId : null,
+        activations[0]!.type === "resume-activation" ? activations[0]!.ownerInstruction!.amendment.binding.authorizationId : null);
       assert.equal(delegated, 1, "an amended review cannot take a transport retry");
       assert.equal(git(prepared.worktree!, "rev-parse", "HEAD"), sha);
       assert.equal(git(prepared.worktree!, "status", "--porcelain"), "");
@@ -827,6 +886,76 @@ async function fixture(
   return { root, canonical, stateRoot, config, configPath, projection, created };
 }
 
+test("resume keeps the journal-pinned external contract baseline after registered catalog HEAD changes", async () => {
+  const originalBytes = Buffer.from('{"api":"v1"}\n');
+  const originalDigest = `sha256:${createHash("sha256").update(originalBytes).digest("hex")}`;
+  const world = await fixture("plan-build-test", 0, config => ({ ...config, routing: { ...config.routing,
+    quota_stop: { default: { minutes: 30, probe_timeout_ms: 1000 } } } }), 1, undefined, canonical => {
+    writeFileSync(join(canonical, "contract.json"), originalBytes);
+    writeFileSync(join(canonical, "awsf.contracts.yaml"), JSON.stringify({ version: "awsf.contracts/v1",
+      contracts: [{ id: "api", role: "consumes", path: "contract.json", digest: originalDigest }] }));
+    git(canonical, "add", "contract.json", "awsf.contracts.yaml");
+    git(canonical, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: add registered contract participant");
+  });
+  try {
+    const plans = join(world.root, "plans");
+    execFileSync("git", ["init", "-b", "main", plans], { stdio: "ignore" });
+    const catalog = (digest: string) => JSON.stringify({ version: "awsf.project/v1", project: { slug: world.config.project.slug },
+      repositories: { plans: { role: "plan", default_branch: "main" }, app: { role: "service", default_branch: "main" } },
+      plans: { root: "specs", format: "awsf-plan-html/v1" },
+      contracts: [{ id: "api", digest, producer: { repository: "plans", path: "contract.json" },
+        consumers: [{ repository: "app", path: "contract.json" }] }] });
+    const plansContract = Buffer.from('{"api":"producer"}\n');
+    writeFileSync(join(plans, "contract.json"), plansContract);
+    writeFileSync(join(plans, "awsf.project.yaml"), catalog(originalDigest));
+    git(plans, "add", ".");
+    git(plans, "-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com", "commit", "-m", "test: register external contract catalog");
+    const firstCatalogSha = git(plans, "rev-parse", "HEAD");
+    await writePlacement(world.stateRoot, world.config.project.slug, { version: "awsf.placement/v1", project: world.config.project.slug,
+      repositories: { plans: { path: plans }, app: { path: world.canonical } } });
+
+    const prepared = await readAttempt(world.created.attemptDir);
+    let low = true;
+    let probes = 0;
+    const infrastructure = {
+      adapterFor: (_entry: AdapterEntry, id: string) => new ScriptedAdapter(id, prepared.worktree!, () => {}),
+      createBroker: fakeBroker, sandboxProbe: () => false, now: () => "2026-08-24T20:26:39.429Z",
+      resolveExecutable: (executable: string) => executable === "quota-axi" ? "/fixture/quota-axi" : executable,
+      runCommand: ((executable, argv, opts) => {
+        if (executable !== "/fixture/quota-axi") return runSystemCommand(executable, argv, opts);
+        if (argv[0] === "--version") return { status: 0, stdout: "quota-axi 0.1.29", stderr: "", error: null };
+        const data = JSON.parse(readFileSync(resolve("core/test/fixtures/quota-axi/nominal.json"), "utf8"));
+        if (probes++ > 0 && low) data.providers[1].windows[0].resetsAt = "2026-08-24T20:27:39.429Z";
+        return { status: 0, stdout: JSON.stringify(data), stderr: "", error: null };
+      }) satisfies typeof runSystemCommand,
+    };
+    const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
+      infrastructure };
+    const paused = await runProductionCommand(options);
+    assert.equal(paused.recovery?.kind, "quota-pause", JSON.stringify({ lifecycleState: paused.lifecycleState, blocker: paused.blocker, recovery: paused.recovery, probes }));
+    const before = await readAttemptEvidence(options.attemptDir);
+    const baseline = before.find(evidence => evidence.type === "trusted-contract-baseline");
+    assert.equal(baseline?.type === "trusted-contract-baseline" ? baseline.baseline.sourceCommit : null, firstCatalogSha);
+    assert.equal(baseline?.type === "trusted-contract-baseline" ? baseline.baseline.requirements[0]?.digest : null, originalDigest);
+
+    const changedDigest = `sha256:${createHash("sha256").update(Buffer.from('{"api":"v2"}\n')).digest("hex")}`;
+    writeFileSync(join(plans, "awsf.project.yaml"), catalog(changedDigest));
+    git(plans, "add", "awsf.project.yaml");
+    git(plans, "-c", "user.name=Santiago Marin", "-c", "user.email=test@example.invalid", "commit", "-m", "test: move registered contract catalog head");
+    low = false;
+    const resumed = await resumeProductionCommand({ ...options, reason: "resume with the recorded contract baseline",
+      terminal: { interactive: true, write: () => {}, confirm: async () => true } });
+    assert.equal(resumed.status.lifecycleState, "AWAITING_OWNER", resumed.status.blocker?.detail);
+    const after = await readAttemptEvidence(options.attemptDir);
+    const retained = after.filter(evidence => evidence.type === "trusted-contract-baseline");
+    assert.equal(retained.length, 1);
+    assert.equal(retained[0]?.type === "trusted-contract-baseline" ? retained[0].baseline.sourceCommit : null, firstCatalogSha);
+    assert.ok(after.some(evidence => evidence.type === "gate" && evidence.gateId === "contract_digest" && evidence.passed));
+    assert.ok(after.every(evidence => evidence.type !== "gate" || evidence.gateId !== "contract_digest" || evidence.passed),
+      "resumed production did not replace pinned expectations with the moved HEAD digest");
+  } finally { world.projection.close(); rmSync(world.root, { recursive: true, force: true }); }
+});
+
 test("selected plan attempt is created and landed through main on the scripted stub route, then selection reads back", async () => {
   const plan = "selected-plan";
   const world = await fixture("build", 0, config => config, 1, undefined, canonical => {
@@ -890,7 +1019,30 @@ for (const workflow of ["build", "plan-build-test", "simple-sdlc"] as const) {
       assert.equal(declined.confirmed, false); assert.deepEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), journal);
       let confirmations = 0;
       const landed = await landCommand({ attemptDir: world.created.attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => { confirmations++; await assert.rejects(() => assertNoExecutionController(world.created.attemptDir), /controller/); return true; } }, projectRecord: world.projection.project });
-      assert.equal(landed.status.lifecycleState, "LANDED", JSON.stringify(landed.status.blocker));
+      const approval = readProtectedState(world.created.attemptDir).records.findLast(record => record.event.evidence?.type === "protected-landing")?.event.evidence;
+      const proof = inspectProtectedCandidate(world.created.attemptDir, status.candidateSha!);
+      const authorizationSummary = approval?.type === "protected-landing" ? {
+        approvedKeys: Object.keys(approval.protectedApproval),
+        matches: {
+          session: approval.protectedApproval.sessionId === status.sessionId,
+          attempt: approval.protectedApproval.attempt === status.attempt,
+          candidate: approval.protectedApproval.candidateSha === status.candidateSha,
+          base: approval.protectedApproval.integrationBaseSha === status.baseSha,
+          chain: approval.protectedApproval.bindingChainDigest === proof.bindingChainDigest,
+          delta: approval.protectedApproval.protectedDeltaDigest === proof.protectedDeltaDigest,
+        },
+      } : { approval: null };
+      assert.ok(approval?.type === "protected-landing", "journal must retain the protected approval object");
+      assert.deepEqual(Object.keys(approval.protectedApproval).sort(), ["schema", "id", "sessionId", "attempt", "candidateSha", "integrationBaseSha", "bindingChainDigest", "protectedDeltaDigest", "confirmedAt", "digest"].sort());
+      assert.deepEqual({
+        session: approval.protectedApproval.sessionId === status.sessionId,
+        attempt: approval.protectedApproval.attempt === status.attempt,
+        candidate: approval.protectedApproval.candidateSha === status.candidateSha,
+        base: approval.protectedApproval.integrationBaseSha === status.baseSha,
+        chain: approval.protectedApproval.bindingChainDigest === proof.bindingChainDigest,
+        delta: approval.protectedApproval.protectedDeltaDigest === proof.protectedDeltaDigest,
+      }, { session: true, attempt: true, candidate: true, base: true, chain: true, delta: true });
+      assert.equal(landed.status.lifecycleState, "LANDED", JSON.stringify({ blocker: landed.status.blocker, ...authorizationSummary }));
       assert.equal(confirmations, 2); assert.equal(git(world.canonical, "rev-parse", "HEAD"), status.candidateSha);
     } finally { rmSync(world.root, { recursive: true, force: true }); }
   });
@@ -1094,8 +1246,16 @@ for (const cut of ["ungranted", "bad-envelope", "binding-drift", "intent-crash",
         phase: "builder", files: ["core/src/generated.ts"], reason: "One bounded generation.", sandboxProbe: () => true,
         terminal: { interactive: true, write: () => {}, confirm: async () => true } });
       let calls = 0; let injected = false;
+      if (cut === "binding-drift") {
+        assert.ok(prepared.baseSha !== null);
+        const baseline = await trustedContractBaselineForAttempt({ repository: prepared.repository, baseSha: prepared.baseSha,
+          projectSlug: prepared.project, stateRoot: world.stateRoot });
+        const current = await readAttempt(world.created.attemptDir);
+        await persistAttempt(world.created.attemptDir, current.revision, { kind: "attempt.updated", next: nextRevision(current, {}),
+          evidence: { type: "trusted-contract-baseline", baseline } }, world.projection.project);
+        writeFileSync(join(world.root, "prompts/builder/system.md"), "changed runtime prompt\n");
+      }
       const before = readFileSync(join(world.created.attemptDir, "journal.jsonl"));
-      if (cut === "binding-drift") writeFileSync(join(world.root, "prompts/builder/system.md"), "changed runtime prompt\n");
       const options = { attemptDir: world.created.attemptDir, stateRoot: world.stateRoot, config: world.config, configPath: world.configPath,
         projectRecord: async (record: Parameters<AttemptProjector>[0], status: Parameters<AttemptProjector>[1]) => {
           await world.projection.project(record, status);
@@ -1112,7 +1272,7 @@ for (const cut of ["ungranted", "bad-envelope", "binding-drift", "intent-crash",
         assert.ok(cut === "binding-drift" || cut === "intent-crash" || cut === "head-crash" || cut === "publication-crash", String(error));
       }
       assert.equal(calls, cut === "binding-drift" ? 0 : 1);
-      if (cut === "binding-drift") assert.deepEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), before);
+      if (cut === "binding-drift") assertJournalBytesEqual(readFileSync(join(world.created.attemptDir, "journal.jsonl")), before, "binding-drift refusal changed the journal");
       if (cut === "landing-drift") {
         assert.equal(result?.lifecycleState, "AWAITING_OWNER");
         writeFileSync(join(prepared.worktree!, "core/src/generated.ts"), "changed after candidate binding\n");
@@ -2273,7 +2433,9 @@ test("unavailable configured adapter refuses PREPARED before provider launch", a
       infrastructure: { adapterFor: (_entry: AdapterEntry, id: string) => new UnavailableAdapter(id, prepared.worktree!, () => { launches += 1; }) },
     }), { name: "ProductionExecutableUnavailable" });
     const status = await readAttempt(world.created.attemptDir);
-    assert.deepEqual(status, prepared);
+    assert.deepEqual({ ...status, revision: prepared.revision, lastSourceSeq: prepared.lastSourceSeq }, prepared,
+      "the trusted host baseline is the only durable preflight evidence; PREPARED authority is unchanged");
+    assert.equal((await readAttemptEvidence(world.created.attemptDir)).filter(evidence => evidence.type === "trusted-contract-baseline").length, 1);
     assert.equal(status.lifecycleState, "PREPARED");
     assert.equal(status.budget.callsSpent, 0);
     assert.equal(status.budget.callsReserved, 0);

@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
-import { stringUnion } from "./typebox.ts";
+import { SHA256_HEX_PATTERN, stringUnion } from "./typebox.ts";
+import { sha256 as hashText } from "./hash.ts";
 
 // One Jev call, journaled (W19 DD3, INV-7, Q18). Host-written by `decide()` and
 // never parsed out of provider output, so it is registered as a record and never
@@ -37,7 +37,7 @@ export const DECISION_BODY_LIMIT_BYTES = 16 * 1024;
 const id = Type.String({ minLength: 1 });
 const unit = Type.Number({ minimum: 0, maximum: 1 });
 const count = Type.Integer({ minimum: 0 });
-const sha256 = Type.String({ pattern: "^[0-9a-f]{64}$" });
+const digestSchema = Type.String({ pattern: SHA256_HEX_PATTERN });
 const distribution = Type.Record(Type.String(), unit);
 
 const AnswerSchema = Type.Union([
@@ -80,8 +80,8 @@ const BodiesSchema = Type.Union([
   Type.Object(
     {
       kind: Type.Literal("digest"),
-      requestSha256: Type.Union([sha256, Type.Null()]),
-      responseSha256: Type.Union([sha256, Type.Null()]),
+      requestSha256: Type.Union([digestSchema, Type.Null()]),
+      responseSha256: Type.Union([digestSchema, Type.Null()]),
       /** The bytes the digests stand for, so a reader knows why the bodies are absent. */
       bytes: count,
     },
@@ -138,8 +138,6 @@ export function assertDecisionRecord(value: unknown): asserts value is DecisionR
   }
 }
 
-const digest = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
-
 /**
  * Q18's rule over bodies that are already redacted. Both bodies whole when their
  * UTF-8 bytes together are under the limit, else both as sha256 digests. Never
@@ -150,8 +148,8 @@ export function decisionBodies(request: string | null, response: string | null):
   if (bytes < DECISION_BODY_LIMIT_BYTES) return { kind: "inline", request, response };
   return {
     kind: "digest",
-    requestSha256: request === null ? null : digest(request),
-    responseSha256: response === null ? null : digest(response),
+    requestSha256: request === null ? null : hashText(request),
+    responseSha256: response === null ? null : hashText(response),
     bytes,
   };
 }

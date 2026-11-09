@@ -12,7 +12,11 @@ in this revision; **Part VI** is the adjudication ledger, stating for every find
 accepted, narrowed, or refuted, and why. D1–D4 are unchanged and were not re-litigated. The one
 question adjudication could not settle was put to the owner and answered the same day — **D5**.
 
-**All owner decisions are settled. The document is implementation-ready. Commit 1 is next.**
+**Historical implementation sequence.** At the 2026-08-14 adjudication, the
+owner decisions were settled and the sequence below was ready to implement.
+Do not restart that sequence from this record. Current behavior and later
+amendments are mapped in [the documentation map](../docs/README.md). The appended
+independent review remains unchanged.
 
 **Date of investigation:** 2026-08-14
 **Method:** zero provider calls. Evidence read: the complete IndyDevDan *"Engineers, your software

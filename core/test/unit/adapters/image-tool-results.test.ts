@@ -12,7 +12,7 @@ import { PiCodexAdapter } from "../../../src/adapters/pi-codex.ts";
 import { ClaudeCodeAdapter } from "../../../src/adapters/claude-code.ts";
 import { EventSequencer } from "../../../src/adapters/stream/event-sequencer.ts";
 import { OutputBudget } from "../../../src/adapters/stream/output-budget.ts";
-import { redactToolImages, toolResultImages } from "../../../src/adapters/stream/tool-images.ts";
+import { redactToolImages, summarizeToolResult, toolResultImages } from "../../../src/adapters/stream/tool-images.ts";
 import type { ObservedToolImage } from "../../../src/adapters/interface.ts";
 
 const CAPTURED_SHA256 = "44ed3e13bd8a2be50f95fd9ea30d71363b085d5a562f6dd9edd179ac7d04f44d";
@@ -59,6 +59,19 @@ test("without a sink nothing is measured, and a text-only result is never mistak
   assert.deepEqual(toolResultImages({ content: [{ type: "text", text: "iVBORw0KGgo=" }] }), [], "base64 described in prose is not an image");
   assert.deepEqual(toolResultImages([{ type: "image", mimeType: "image/png", data: "not base64!" }]), []);
   assert.deepEqual(redactToolImages([{ type: "image", mimeType: "image/png", data: "AAAA" }]), [{ type: "image", mediaType: "image/png", bytes: 3 }]);
+  for (const [data, expectedBytes] of [["QQ==", 1], ["QUI=", 2]] as const) {
+    const block = [{ type: "image", mimeType: "image/png", data }];
+    assert.deepEqual(redactToolImages(block), [{ type: "image", mediaType: "image/png", bytes: expectedBytes }]);
+    assert.equal(toolResultImages(block)[0]?.bytes, expectedBytes);
+  }
+});
+
+test("tool-result text is summarized without its content envelope", () => {
+  assert.equal(summarizeToolResult([{ type: "text", text: "answer" }]), "answer");
+  assert.equal(summarizeToolResult({ content: [{ type: "text", text: "first" }, { type: "text", text: "second" }] }), "first\nsecond");
+  const imageResult = [{ type: "image", mimeType: "image/png", data: "iVBORw0KGgo=" }];
+  assert.doesNotMatch(summarizeToolResult(imageResult), /iVBORw0KGgo/);
+  assert.match(summarizeToolResult(imageResult), /"bytes":8/);
 });
 
 test("model capability is honest: pi's text-only model reports no image input, Claude's routes do", async () => {
@@ -66,4 +79,29 @@ test("model capability is honest: pi's text-only model reports no image input, C
   assert.equal((await pi.getModelInfo("codex:gpt-5.3-codex-spark")).supportsImages, false);
   assert.equal((await pi.getModelInfo("codex:gpt-5.6-sol")).supportsImages, true);
   assert.equal((await new ClaudeCodeAdapter().getModelInfo("claude:opus")).supportsImages, true);
+});
+
+// B11-25: an image block is redacted whatever shape its payload arrives in. A
+// source that is an object but not a complete base64 source must not let the
+// payload through unredacted, and its digest is still measured.
+test("B11-25: an image block whose base64 source names no media type is redacted, not passed through", () => {
+  const payload = "iVBORw0KGgo=";
+  const block = { type: "image", source: { type: "base64", data: payload } };
+  const redacted = JSON.stringify(redactToolImages([block]));
+  assert.doesNotMatch(redacted, /iVBORw0KGgo/, "the payload does not survive redaction");
+  assert.equal(toolResultImages([block]).length, 1, "its digest is still recorded");
+});
+
+test("B11-25: an image block whose source is a URL but which carries its own payload is redacted too", () => {
+  const payload = "iVBORw0KGgo=";
+  const block = { type: "image", source: { type: "url", url: "https://example.invalid/x.png" }, mimeType: "image/png", data: payload };
+  assert.doesNotMatch(JSON.stringify(redactToolImages([block])), /iVBORw0KGgo/, "the payload does not survive redaction");
+});
+
+test("B11-25: triangulation: a complete base64 source keeps its declared media type in the digest", () => {
+  const images = toolResultImages([
+    { type: "image", source: { type: "base64", media_type: "image/png", data: "iVBORw0KGgo=" } },
+  ]);
+  assert.deepEqual(images.map((image) => image.mediaType), ["image/png"]);
+  assert.equal(images[0]?.bytes, 8);
 });

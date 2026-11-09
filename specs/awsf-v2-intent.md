@@ -1,13 +1,14 @@
 # AWSF v2 — intent
 
-**This file is the `USER_PROMPT` for one `plan-sota` run.** It is the single
-input. It is not a candidate record and it restates none of one: the reasoning,
-the evidence and the collisions live in
-`specs/awsf-v2-candidates-fuse-version.md`, which is the only detail document a
-planning session should read.
+**Historical authoring input for the v2 spine.** The reasoning and candidate
+comparison remain in `specs/awsf-v2-candidates-fuse-version.md`. The authored
+`specs/awsf-v2-plan.html` and its deep plans own their earned completion markers.
+The current direction is in `specs/awsf-v3-intent.md` and the v3 spine.
 
-**Draft for owner review.** Nothing here is authored into a plan until the owner
-edits and approves this file.
+The decisions below retain their original wording. Later owner amendments govern
+changed policy, including protected grants, owner-act coverage and planned
+routing. This file is not a current command guide. See the
+[documentation map](../docs/README.md).
 
 ---
 

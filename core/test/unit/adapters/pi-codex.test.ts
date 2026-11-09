@@ -654,6 +654,19 @@ test("a stream that stops with no terminal and no cancellation is a failure, not
   assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_TERMINAL_MISSING");
 });
 
+test("a missing terminal includes the observed process exit", async () => {
+  const terminal = (await replay(CANCELLED, {
+    exit: { code: 3, signal: null },
+    stderr: "diagnostic",
+  })).at(-1);
+  assert.equal(terminal?.kind, "run.failed");
+  assert.equal(terminal?.kind === "run.failed" ? terminal.errorCode : null, "E_TERMINAL_MISSING");
+  assert.equal(
+    terminal?.kind === "run.failed" ? terminal.message : "",
+    "the provider's stream ended without a terminal event; the process exited with code 3; the provider wrote to stderr: diagnostic",
+  );
+});
+
 test("a cancelled run still carries the usage its completed turn reported", async () => {
   // Emitting each turn's report as it arrives, rather than one aggregate at the
   // end, is what makes this true: an aggregate would have been lost with the
@@ -1147,7 +1160,7 @@ test("the terminal survives a stream that breaks AFTER the provider settled", as
   } as unknown as ProcessTransport;
 
   const events: NormalizedEvent[] = [];
-  for await (const event of adapter().parse(transport)) events.push(event);
+  for await (const event of adapter().parse(transport, undefined, { requestedModel: "gpt-5.6-sol" })) events.push(event);
   assert.equal(events[events.length - 1]?.kind, "run.completed");
   assert.deepEqual(validateEventSequence(events), []);
 });

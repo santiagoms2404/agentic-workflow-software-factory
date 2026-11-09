@@ -79,13 +79,14 @@ function omittedEvidencePaths(context: ReviewContext): readonly string[] {
   for (const path of context.diffOmittedFiles) paths.add(path);
   for (const file of context.diffDelivery?.files ?? []) if (file.inlineOmitted || file.inlineTruncated) paths.add(file.path);
   const marker = /^\*\*\* awsf: \d+ of \d+ hunk\(s\) omitted from /gm;
+  const deliveredPaths = (context.diffDelivery?.files ?? []).map(file => file.path)
+    .sort((a, b) => b.length - a.length);
   for (const match of context.diff.matchAll(marker)) {
     const remainder = context.diff.slice(match.index! + match[0].length);
     // New deliveries give exact Git paths, including embedded newline bytes.
     // Still derive markers independently: inconsistent retained status flags
     // cannot hide a path that the inline diff proves partial.
-    const exact = (context.diffDelivery?.files ?? []).map(file => file.path)
-      .sort((a, b) => b.length - a.length).find(path => remainder.startsWith(`${path}\n`));
+    const exact = deliveredPaths.find(path => remainder.startsWith(`${path}\n`));
     const path = exact ?? remainder.split("\n", 1)[0]?.trim();
     if (path !== undefined && path.length > 0) paths.add(path);
   }
@@ -95,16 +96,35 @@ function omittedEvidencePaths(context: ReviewContext): readonly string[] {
 function observedDeliveredReads(context: ReviewContext, events: readonly NormalizedEvent[], runId: string | undefined): ReadonlySet<string> {
   const read = new Set<string>();
   if (runId === undefined || context.diffDelivery === undefined) return read;
+  const deliveredPaths = new Map<string, string[]>();
+  for (const file of context.diffDelivery.files) {
+    const readPath = join(context.diffDelivery.directory, file.file);
+    const paths = deliveredPaths.get(readPath) ?? [];
+    paths.push(file.path);
+    deliveredPaths.set(readPath, paths);
+  }
+  const completedOk = new Set<string>();
+  for (const event of events) {
+    if (event.runId === runId && event.kind === "tool.completed" && event.outcome === "ok") {
+      completedOk.add(event.toolCallId);
+    }
+  }
   for (const event of events) {
     if (event.runId !== runId || event.kind !== "tool.requested" || event.name.toLowerCase() !== "read") continue;
+    if (!completedOk.has(event.toolCallId)) continue;
     // Match an actual path value, never a substring (file.diff.extra), a grep,
     // a text.delta, or the reviewer's assertion in its output envelope.
     let input: unknown;
     try { input = JSON.parse(event.inputSummary); } catch { input = event.inputSummary; }
+    if (input !== null && typeof input === "object") {
+      const record = input as Record<string, unknown>;
+      if ("offset" in record || "limit" in record) continue;
+    }
     const values = typeof input === "string" ? [input] : input !== null && typeof input === "object"
       ? Object.values(input) : [];
-    for (const file of context.diffDelivery.files) {
-      if (values.includes(join(context.diffDelivery.directory, file.file))) read.add(file.path);
+    for (const value of values) {
+      if (typeof value !== "string") continue;
+      for (const path of deliveredPaths.get(value) ?? []) read.add(path);
     }
   }
   return read;

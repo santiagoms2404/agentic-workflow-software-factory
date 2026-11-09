@@ -1,4 +1,6 @@
 import type { AttemptStatus } from "../cli/commands/attempt.ts";
+import { SEALED_STATES, TERMINAL_STATES } from "../state/task-machine.ts";
+import type { ProcessIdentity } from "../execution/launcher-barrier.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "./attempt-evidence.ts";
 
 export type RecoveryControllerState =
@@ -18,7 +20,8 @@ export interface RecoveryDiagnostic {
   readonly finding: string | null;
 }
 
-const SEALED_SOURCE_STATES = new Set(["BLOCKED", "CANCELLED", "PUBLISHED"]);
+const SEALED_SOURCE_STATES: ReadonlySet<string> = new Set(SEALED_STATES);
+const COMPLETED_CANDIDATE_STATES: ReadonlySet<string> = new Set([...TERMINAL_STATES, "AWAITING_OWNER", "LANDING"]);
 const ACTIVE_PROCESS_STATES = new Set(["REGISTERED", "RUNNING"]);
 const ACTIVE_PHASE_STATES = new Set(["RUNNING", "VALIDATING", "CORRECTING"]);
 const PROVIDER_CONTROLLER_STATES = new Set(["RUNNING", "REVIEWING"]);
@@ -40,7 +43,7 @@ function latestProcesses(evidence: readonly AttemptEvidence[]): readonly Extract
 }
 
 function completedCandidate(status: AttemptStatus, evidence: readonly AttemptEvidence[]): string | null {
-  if (!SEALED_SOURCE_STATES.has(status.lifecycleState) || status.candidateSha === null) return null;
+  if (!COMPLETED_CANDIDATE_STATES.has(status.lifecycleState) || status.candidateSha === null) return null;
   // L7 is the durable statement that every required producer phase completed
   // and the host had a candidate commit. A worktree HEAD or dirty path without
   // that record is partial work and diagnostics must not promote it.
@@ -56,27 +59,27 @@ function completedCandidate(status: AttemptStatus, evidence: readonly AttemptEvi
 export function diagnoseRecovery(
   status: AttemptStatus,
   evidence: readonly AttemptEvidence[],
-  pidIsLive: (pid: number) => boolean,
+  pidIsLive: (pid: number, expected?: ProcessIdentity) => boolean,
 ): RecoveryDiagnostic {
   const phases = latestPhases(evidence);
   const processes = latestProcesses(evidence);
   const activePhases = phases.filter((phase) => ACTIVE_PHASE_STATES.has(phase.status));
   const activeProcesses = processes.filter((record) => ACTIVE_PROCESS_STATES.has(record.status));
-  const liveProcess = activeProcesses.find((record) => pidIsLive(record.record.identity.pid)) ?? null;
-  const liveStatusProcess = status.process !== null && pidIsLive(status.process.pid)
-    ? { record: { identity: status.process, runId: "status" } }
-    : null;
+  const liveProcess = activeProcesses.find((record) => pidIsLive(record.record.identity.pid, record.record.identity)) ?? null;
+  const liveStatusPid = status.process !== null && pidIsLive(status.process.pid, status.process) ? status.process.pid : null;
   const candidateSha = completedCandidate(status, evidence);
+  const currentLivePid = liveProcess?.record.identity.pid ?? liveStatusPid;
+  const staleRunningPhases = Object.freeze(activePhases.map((phase) => phase.phaseId));
+  const staleRunningProcesses = Object.freeze(activeProcesses.map((record) => record.record.runId));
 
-  const currentLiveProcess = liveProcess ?? liveStatusProcess;
-  if (SEALED_SOURCE_STATES.has(status.lifecycleState) && currentLiveProcess !== null) {
+  if (SEALED_SOURCE_STATES.has(status.lifecycleState) && currentLivePid !== null) {
     return Object.freeze({
       controller: "terminal-live-survivor",
       candidateSha,
-      pid: currentLiveProcess.record.identity.pid,
-      staleRunningPhases: Object.freeze(activePhases.map((phase) => phase.phaseId)),
-      staleRunningProcesses: Object.freeze(activeProcesses.map((record) => record.record.runId)),
-      finding: `${status.lifecycleState} lifecycle retains a live process pid ${String(currentLiveProcess.record.identity.pid)}`,
+      pid: currentLivePid,
+      staleRunningPhases,
+      staleRunningProcesses,
+      finding: `${status.lifecycleState} lifecycle retains a live process pid ${String(currentLivePid)}`,
     });
   }
 
@@ -85,17 +88,17 @@ export function diagnoseRecovery(
       controller: "cancelled-stale-records",
       candidateSha,
       pid: null,
-      staleRunningPhases: Object.freeze(activePhases.map((phase) => phase.phaseId)),
-      staleRunningProcesses: Object.freeze(activeProcesses.map((record) => record.record.runId)),
+      staleRunningPhases,
+      staleRunningProcesses,
       finding: null,
     });
   }
 
-  if (currentLiveProcess !== null) {
+  if (currentLivePid !== null) {
     return Object.freeze({
       controller: "live-process",
       candidateSha,
-      pid: currentLiveProcess.record.identity.pid,
+      pid: currentLivePid,
       staleRunningPhases: Object.freeze([]),
       staleRunningProcesses: Object.freeze([]),
       finding: null,
@@ -109,8 +112,8 @@ export function diagnoseRecovery(
       controller: "missing-pid-controller-orphan",
       candidateSha: null,
       pid: recordedPid,
-      staleRunningPhases: Object.freeze(activePhases.map((phase) => phase.phaseId)),
-      staleRunningProcesses: Object.freeze(activeProcesses.map((record) => record.record.runId)),
+      staleRunningPhases,
+      staleRunningProcesses,
       finding: recordedPid === null
         ? "controller orphan: a provider phase is RUNNING but no process PID is recorded"
         : `controller orphan: recorded process pid ${String(recordedPid)} is absent while its provider phase is RUNNING`,
@@ -121,8 +124,8 @@ export function diagnoseRecovery(
     controller: "inactive",
     candidateSha,
     pid: null,
-    staleRunningPhases: Object.freeze(activePhases.map((phase) => phase.phaseId)),
-    staleRunningProcesses: Object.freeze(activeProcesses.map((record) => record.record.runId)),
+    staleRunningPhases,
+    staleRunningProcesses,
     finding: null,
   });
 }

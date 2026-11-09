@@ -18,7 +18,24 @@ const SNIPPET_LIMIT = 400;
 export function summarize(value: unknown): string {
   if (value === undefined || value === null) return "";
   const text = typeof value === "string" ? value : safeJson(value);
-  return text.length > SNIPPET_LIMIT ? `${text.slice(0, SNIPPET_LIMIT)}…` : text;
+  return boundText(text, SNIPPET_LIMIT);
+}
+
+/**
+ * `text`, cut to at most `limit` code units and marked with an ellipsis when it
+ * was cut.
+ *
+ * The cut never leaves half of a surrogate pair behind. A lone high surrogate
+ * at the end is not well-formed text, and any UTF-8 encoding of it replaces the
+ * half with U+FFFD, so the trace would show a corrupted character it never held
+ * (B11-21).
+ */
+export function boundText(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  let cut = limit;
+  const before = text.charCodeAt(cut - 1);
+  if (before >= 0xd800 && before <= 0xdbff) cut -= 1;
+  return `${text.slice(0, cut)}…`;
 }
 
 /** `JSON.stringify` that cannot throw — a cyclic result is still a result. */

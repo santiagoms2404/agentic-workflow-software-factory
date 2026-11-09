@@ -47,6 +47,9 @@ function oneHeader(headers: IncomingHttpHeaders, name: "host" | "origin"): strin
   if (Array.isArray(value)) {
     throw new SecurityError(`invalid-${name}`, `${name} must occur at most once`);
   }
+  if (name === "host" && typeof value === "string" && value.includes(",")) {
+    throw new SecurityError("invalid-host", "Host must occur at most once");
+  }
   return value;
 }
 

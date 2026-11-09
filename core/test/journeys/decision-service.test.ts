@@ -50,7 +50,7 @@ function answerBody(choice = "raise"): string {
       progressing: { type: "noul", noul: 0.81 },
       next_act: { type: "choice", choice, probabilities: { raise: 0.75, cancel: 0, wait_for_owner: 0.2, other: 0.05 }, confidence: 0.68 },
       risk: {
-        type: "score", score: 0.97, legend: Object.fromEntries(risk.criteria.map((level, index) => [String(index), level])),
+        type: "score", score: 1, legend: Object.fromEntries(risk.criteria.map((level, index) => [String(index), level])),
         probabilities: { "0": 0.3, "1": 0.43, "2": 0.27 }, confidence: 0.4,
       },
     },
@@ -105,6 +105,7 @@ test("decide() over a stubbed transport: one record per outcome, one row each, a
     });
 
     const answered = await decide(STOP_JUDGMENT, STATE, context(on));
+    assert.equal(answered.outcome, "answered", answered.record.detail ?? "the scripted response violated the stop-judgment contract");
     const broken = await decide(STOP_JUDGMENT, STATE, context(on));
     const unavailable = await decide(STOP_JUDGMENT, STATE, context(on));
     const refused = await decide(STOP_JUDGMENT, STATE, context(off));

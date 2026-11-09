@@ -9,6 +9,7 @@ import {
   WorktreeConfinementUnavailable,
   assertSandboxRoots,
   grantSandbox,
+  osSandboxAvailable,
 } from "../../../src/policy/sandbox-broker.ts";
 import { ExecutableNotFound } from "../../../src/execution/transport-broker.ts";
 import type { HarnessAdapter } from "../../../src/adapters/interface.ts";
@@ -30,6 +31,16 @@ const SPEC = {
   stdin: "private prompt on stdin",
   shell: false as const,
 };
+
+test("sandbox availability uses the shared Linux-only bwrap probe", () => {
+  const probed: string[] = [];
+  const probe = (executable: string): boolean => { probed.push(executable); return true; };
+  assert.equal(osSandboxAvailable("darwin", probe), false);
+  assert.deepEqual(probed, [], "non-Linux hosts do not probe");
+  assert.equal(osSandboxAvailable("linux", probe), true);
+  assert.deepEqual(probed, ["bwrap"]);
+  assert.equal(osSandboxAvailable("linux", () => false), false);
+});
 
 test("Linux bwrap grants only runtime for writes: [] and wraps argv without a shell", () => {
   const grant = grantSandbox(SPEC, { ...ROOTS, writes: [], platform: "linux" }, () => true);
@@ -113,7 +124,7 @@ function gitRunner(outputs: Record<string, string[]>): GitRunner {
 
 test("the post-run comparison aborts with every path and exposes no correction path", () => {
   const git = gitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": [
       "",
       ["1\t0\tallowed/a.ts", "1\t0\toutside-a.ts", "1\t0\toutside-b.ts", ""].join("\0"),
@@ -140,7 +151,7 @@ test("the post-run comparison aborts with every path and exposes no correction p
 
 test("a reviewer configured writes: [] aborts if it edits a repository file", () => {
   const git = gitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": ["", "1\t0\tquiet-fix.ts\0"],
     "ls-files --others --exclude-standard -z": ["", ""],
   });
@@ -163,7 +174,7 @@ test("a reviewer configured writes: [] aborts if it edits a repository file", ()
 
 test("the widened readonly reviewer may read the worktree and still may not write to it", () => {
   const git = gitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": ["", "1\t0\tquiet-fix.ts\0"],
     "ls-files --others --exclude-standard -z": ["", ""],
   });
@@ -192,7 +203,7 @@ test("the widened readonly reviewer may read the worktree and still may not writ
 
 test("a clean reviewer writes: [] run is green", () => {
   const git = gitRunner({
-    "status --porcelain": [""],
+    "status --porcelain --untracked-files=all": [""],
     "diff HEAD --numstat --no-renames -z": ["", ""],
     "ls-files --others --exclude-standard -z": ["", ""],
   });
@@ -429,7 +440,7 @@ test("worktree confinement refuses without bwrap, where host confinement falls b
     assert.throws(() => grantSandbox(world.spec, { ...request, confinement: "worktree" }, () => false), WorktreeConfinementUnavailable);
     assert.throws(() => grantSandbox(world.spec, { ...request, platform: "darwin", confinement: "worktree" }, () => true), WorktreeConfinementUnavailable);
     assert.equal(grantSandbox(world.spec, request, () => false).badge, "tool-policy");
-    const git = gitRunner({ "status --porcelain": [""], "diff HEAD --numstat --no-renames -z": [""], "ls-files --others --exclude-standard -z": [""] });
+    const git = gitRunner({ "status --porcelain --untracked-files=all": [""], "diff HEAD --numstat --no-renames -z": [""], "ls-files --others --exclude-standard -z": [""] });
     assert.throws(() => new PermissionSession({ ...request, confinement: "worktree", profile: "readonly",
       tools: ["read"], protectedPaths: [], sandboxProbe: () => false, git }), WorktreeConfinementUnavailable);
   } finally { rmSync(world.root, { recursive: true, force: true }); }
@@ -479,4 +490,9 @@ test("pi declares exactly its agent directory under the child's HOME; Claude dec
   assert.deepEqual(new PiCodexAdapter().providerWritableRoots({ HOME: "/home/owner" }), ["/home/owner/.pi/agent"]);
   assert.deepEqual(new PiCodexAdapter().providerWritableRoots({}), []);
   assert.equal("providerWritableRoots" in new ClaudeCodeAdapter(), false);
+});
+
+test("B10-31: a managed worktree or runtime whose name starts with two dots and sits inside the checkout is refused", () => {
+  assert.throws(() => assertSandboxRoots({ ...ROOTS, worktree: "/srv/repos/project/..wt" }), /disjoint/);
+  assert.throws(() => assertSandboxRoots({ ...ROOTS, sessionRuntime: "/srv/repos/project/..runtime" }), /canonical repository writable/);
 });

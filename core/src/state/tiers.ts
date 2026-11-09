@@ -15,6 +15,16 @@
 
 import { CallCeilingExceeded } from "./errors.ts";
 
+/**
+ * The most one act may add.
+ *
+ * A T2 workflow's whole budget, which is enough to buy a correction cycle plus
+ * the replacement review the pilot could not afford. A larger jump is several
+ * deliberate acts, each with its own reason on the record — which is the point:
+ * the cost signal is what makes the factory trustworthy in the other direction.
+ */
+export const MAX_GRANT_CALLS = 5;
+
 /** `sessions.risk_tier INTEGER NOT NULL CHECK (risk_tier IN (0,1,2))`. */
 export type Tier = 0 | 1 | 2;
 
@@ -33,7 +43,7 @@ export const TIERS: readonly Tier[] = [0, 1, 2];
 export const DEFAULT_CALL_CEILINGS: Readonly<Record<Tier, number>> = { 0: 1, 1: 3, 2: 5 };
 
 /** One ceiling per tier — the shape `risk.call_ceiling` resolves to. */
-export type CallCeilings = Readonly<Record<Tier, number>>;
+export type CallCeilings = Readonly<Record<Tier, number> & { [key: number]: number }>;
 
 /**
  * Either a whole tier table (the effective configuration) or one already
@@ -95,6 +105,30 @@ export function ceilingFor(tier: Tier, resolved: ResolvedCeiling = DEFAULT_CALL_
  */
 export function compositeCost(workerCount: number): number {
   return workerCount + 1;
+}
+
+export interface RaisePlan {
+  /** How many `awsf raise` acts, each granting up to `MAX_GRANT_CALLS`. */
+  readonly acts: number;
+  /** The ceiling reached after all of them land. */
+  readonly finalCeiling: number;
+}
+
+/**
+ * The fewest full-grant `awsf raise` acts that carry `ceiling` up to at least
+ * `target`, or `null` when `target` itself is past `MAX_CALL_CEILING` — the
+ * one shortfall no sequence of acts can close, because the bound is the bound.
+ */
+export function raiseActsNeeded(ceiling: number, target: number): RaisePlan | null {
+  if (target > MAX_CALL_CEILING) return null;
+  if (target <= ceiling) return Object.freeze({ acts: 0, finalCeiling: ceiling });
+  let acts = 0;
+  let current = ceiling;
+  while (current < target) {
+    current = Math.min(current + MAX_GRANT_CALLS, MAX_CALL_CEILING);
+    acts += 1;
+  }
+  return Object.freeze({ acts, finalCeiling: current });
 }
 
 export interface WorkflowCallSpec {

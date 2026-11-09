@@ -26,7 +26,7 @@ import { selectedLanding } from "../fixtures/closure-readers.ts";
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { Value } from "@sinclair/typebox/value";
 import { nextRevision, persistAttempt, readAttempt } from "../../src/cli/commands/attempt.ts";
@@ -35,6 +35,7 @@ import { newCommand } from "../../src/cli/commands/new.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 import { main } from "../../src/cli/main.ts";
+import { loadConfig } from "../../src/config/load.ts";
 import { K1_FIELD_IDS, assertPreflightRefusedRecord, type K1FieldId } from "../../src/contracts/driver-preflight.ts";
 import { TrapsReadoutSchema, type TrapsReadout } from "../../src/contracts/traps-readout.ts";
 import { writePlacement } from "../../src/registry/placement.ts";
@@ -71,15 +72,26 @@ function box(label: string): Box {
   const repository = join(root, "canonical");
   execFileSync("git", ["init", "-q", "-b", "main", repository], { stdio: "ignore" });
   writeFileSync(join(repository, ".gitignore"), "node_modules/\n");
-  commit(repository, "fixture.txt", "offline fixture\n");
-  mkdirSync(join(repository, "node_modules"));
-  writeFileSync(join(repository, "node_modules", "seeded.txt"), "seed\n");
   const source = readFileSync(resolve("awsf.config.yaml"), "utf8");
   const configText = source.replace(/\ngates:\n(?: {2}.*\n)+/u,
-    "\ngates:\n  test: { argv: [npm, run, test:unit], timeout_seconds: 600 }\n  lint: { argv: [npm, run, lint], timeout_seconds: 300 }\n");
+    "\ngates:\n  test: { argv: [node, -e, process.exit(0), test], timeout_seconds: 10 }\n  lint: { argv: [node, -e, process.exit(0), lint], timeout_seconds: 10 }\n");
   assert.notEqual(configText, source);
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText);
+  const config = loadConfig(configText);
+  for (const agent of config.agents) {
+    for (const promptPath of [agent.prompt.system, agent.prompt.user]) {
+      const prompt = join(root, promptPath);
+      mkdirSync(dirname(prompt), { recursive: true });
+      writeFileSync(prompt, readFileSync(resolve(promptPath), "utf8"));
+    }
+  }
+  const sharedPrompt = join(root, "prompts/shared/headless-role.md");
+  mkdirSync(dirname(sharedPrompt), { recursive: true });
+  writeFileSync(sharedPrompt, readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
+  commit(repository, "fixture.txt", "offline fixture\n");
+  mkdirSync(join(repository, "node_modules"));
+  writeFileSync(join(repository, "node_modules", "seeded.txt"), "seed\n");
   return {
     root, repository, stateRoot: join(root, "state"), worktreeRoot: join(root, "worktrees"), configPath,
     close: () => rmSync(root, { recursive: true, force: true }),

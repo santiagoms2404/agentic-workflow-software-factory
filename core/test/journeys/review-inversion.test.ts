@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { candidateGateEvidence } from "../../src/cli/commands/review-record.ts";
 import type { ReviewContext } from "../../src/contracts/review-context.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import type { TestOutput } from "../../src/contracts/test-output.ts";
+import type { AttemptEvidence } from "../../src/observability/attempt-evidence.ts";
 import { CallBudget } from "../../src/execution/call-budget.ts";
 import { verdictConsistent } from "../../src/gates/review.ts";
 import { compileWorkflow } from "../../src/workflow/compiler.ts";
@@ -16,6 +18,7 @@ import {
 } from "../../src/workflow/review-routing.ts";
 
 const candidateSha = "a".repeat(40);
+const sessionId = "journey-review";
 const providers = ["stub-anthropic", "stub-openai"] as const;
 
 function reviewPayload(): ReviewOutput {
@@ -62,14 +65,35 @@ function reviewContext(): ReviewContext {
 
 class TransportFault extends Error {}
 
+function candidateGateJournalRows(): AttemptEvidence[] {
+  const measuredAt = "2026-08-14T00:00:00.000Z";
+  return (["candidate_hygiene", "commands_pass"] as const).map((gateId) => ({
+    type: "gate",
+    id: `${sessionId}:tests:0:${gateId}`,
+    phaseId: `${sessionId}:tests`,
+    round: 0,
+    gateId,
+    kind: gateId === "commands_pass" ? "subprocess" : "git",
+    candidateSha,
+    passed: true,
+    exitCode: 0,
+    checks: [{ item: gateId, ok: true, note: "host gate passed" }],
+    violations: [],
+    outputPath: null,
+    startedAt: measuredAt,
+    endedAt: measuredAt,
+  }));
+}
+
 function enterReview(budget: CallBudget): void {
+  const gateEvidence = candidateGateEvidence(candidateGateJournalRows(), candidateSha, sessionId);
   const authorization = budget.authorize({
     from: "GATING",
     to: "REVIEWING",
     actor: "host",
     reason: { source: "gate" },
     interactive: false,
-    evidence: { gatesPass: true, candidateSha },
+    evidence: { gatesPass: true, candidateSha, gateEvidence },
     spawn: { cost: 1 },
   });
   assert.equal(authorization.result.to, "REVIEWING");

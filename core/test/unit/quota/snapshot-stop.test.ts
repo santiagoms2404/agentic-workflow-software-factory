@@ -279,6 +279,26 @@ function quotaCommands(payload: string, startPayload = payload): {
   };
 }
 
+function quotaCommandsWithFirstProbeFailure(payload: string): {
+  readonly runCommand: ProductionInfrastructure["runCommand"];
+  readonly calls: Array<{ argv: readonly string[]; timeoutMs: number }>;
+} {
+  const calls: Array<{ argv: readonly string[]; timeoutMs: number }> = [];
+  let probes = 0;
+  return {
+    calls,
+    runCommand: (_executable, argv, options) => {
+      calls.push({ argv: [...argv], timeoutMs: options.timeoutMs });
+      if (argv[0] === "--version") return { status: 0, stdout: "quota-axi 0.1.29\n", stderr: "", error: null };
+      const isFirstProbe = probes === 0;
+      probes += 1;
+      return isFirstProbe
+        ? { status: 1, stdout: "", stderr: "quota-axi: rate limited upstream", error: null }
+        : { status: 0, stdout: payload, stderr: "", error: null };
+    },
+  };
+}
+
 interface World {
   readonly root: string;
   readonly stateRoot: string;
@@ -415,7 +435,7 @@ test("a quota snapshot round-trips through a parsed journal line with explicit n
   }
 });
 
-test("an uncrossed fixture run records every boundary snapshot, reaches GATING, and never records L26", async (context) => {
+test("an uncrossed fixture run records every boundary snapshot, reaches GATING, and never records L26", { skip: process.platform === "win32" }, async (context) => {
   const clock = fakeClock(context);
   const fixture = await world(clock);
   const adapter = new CandidateWritingStubAdapter(fixture.sideEffectPath);
@@ -467,6 +487,51 @@ test("an uncrossed fixture run records every boundary snapshot, reaches GATING, 
       // The one configured gate, through the same command seam, at the tests phase.
       ["-e", "process.exit(0)"],
     ]);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("a nonzero-exit probe journals its full failure detail, not only a reason code", { skip: process.platform === "win32" }, async (context) => {
+  const clock = fakeClock(context);
+  const fixture = await world(clock);
+  const adapter = new CandidateWritingStubAdapter(fixture.sideEffectPath);
+  const commands = quotaCommandsWithFirstProbeFailure(quotaPayload(10));
+  try {
+    const status = await runProductionCommand({
+      attemptDir: fixture.attemptDir,
+      stateRoot: fixture.stateRoot,
+      config: fixture.config,
+      configPath: fixture.configPath,
+      infrastructure: {
+        adapterFor: () => adapter,
+        createBroker: fakeBroker,
+        runCommand: commands.runCommand,
+        resolveExecutable: () => "/fixture/quota-axi",
+        now: clock.now,
+        sandboxProbe: () => false,
+      },
+    });
+
+    assert.equal(status.lifecycleState, "AWAITING_OWNER");
+    const snapshots = evidenceOfType(journalRecords(fixture.attemptDir), "quota-snapshot");
+    const failed = snapshots.find((snapshot) => snapshot.completedPhaseKey === "before-l4");
+    assert.ok(failed, "the start-of-run probe must still be journalled");
+    assert.equal(failed.reasonCode, "nonzero-exit");
+    // Before this fix, only reasonCode reached the journal: the retained path,
+    // the exit code and the command the probe ran were all dropped on the
+    // floor, although probe.ts journals the complete QuotaProbeFailure.
+    assert.ok(failed.failure, "the full QuotaProbeFailure must reach the journal, not only its reason code");
+    assert.equal(failed.failure?.reasonCode, "nonzero-exit");
+    if (failed.failure?.reasonCode !== "nonzero-exit") throw new Error("expected a nonzero-exit failure");
+    assert.equal(failed.failure.exitCode, 1);
+    assert.equal(failed.failure.command, "probe");
+    assert.ok(failed.failure.retainedPath, "the failing payload is retained and its path recorded");
+    const retained = readFileSync(join(fixture.attemptDir, failed.failure.retainedPath), "utf8");
+    assert.match(retained, /rate limited upstream/u);
+
+    const rest = snapshots.filter((snapshot) => snapshot.completedPhaseKey !== "before-l4");
+    assert.ok(rest.every((snapshot) => snapshot.failure === undefined), "a known probe carries no failure field");
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }

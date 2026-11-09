@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { stringify } from "yaml";
 
 import {
+  AdapterError,
   reservationIdOf,
   type BrokerProcessRegistration,
   type HarnessAdapter,
@@ -142,6 +143,16 @@ function fakeBroker(options: BrokerOptions): TransportBroker {
         exit: Promise.resolve({ code: 0, signal: null }),
         cancel: async () => ({ termSent: false, killSent: false, survivors: [], terminated: true, skipped: null }),
       };
+    },
+  };
+}
+
+function cancelFailureBroker(options: BrokerOptions): TransportBroker {
+  const delegate = fakeBroker(options);
+  return {
+    async startProcess(registration, spec, signal) {
+      const transport = await delegate.startProcess(registration, spec, signal);
+      return { ...transport, cancel: async () => { throw new Error("termination could not be inspected"); } };
     },
   };
 }
@@ -716,4 +727,153 @@ test("a gates-pass adoption buys a fresh opposite-provider review, then requires
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+class FailingReviewAdapter extends MetadataOnlyAdapter {
+  async *execute(
+    request: ModelRequest,
+    broker: TransportBroker,
+    registration: BrokerProcessRegistration,
+    signal: AbortSignal,
+  ): AsyncIterable<NormalizedEvent> {
+    await broker.startProcess(registration, this.buildSpec(request), signal);
+    this.launches += 1;
+    if (signal.aborted) yield {} as NormalizedEvent;
+    throw new AdapterError(this.id, "E_BACKEND_FAILURE", "scripted adoption reviewer failure");
+  }
+}
+
+test("B8-26: a settlement write that faults after commit still lets a failed adoption review reach BLOCKED", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-b8-26-"));
+  try {
+    const fixture = await sourceFixture(root);
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = {
+      ...loaded,
+      runtime: { ...loaded.runtime, seed_paths: [] },
+      gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } },
+    };
+    config.agents = config.agents.map(agent => ({ ...agent, harness: { ...agent.harness, interrupted_turn: false } }));
+    const adapters = new Map<string, FailingReviewAdapter>();
+    const adopted = await adoptCommand({
+      sourceAttemptDir: fixture.sourceDir,
+      stateRoot: fixture.stateRoot,
+      targetTaskId: "settlement-fault",
+      request: k1Request("review a candidate whose settlement write faults", "core/src/**"),
+      worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]),
+      config,
+      configPath: resolve("awsf.config.yaml"),
+      // The settlement commits, then its projection faults.
+      projectRecord: (record) => {
+        const event = record.event;
+        if (event.kind === "attempt.updated" && event.evidence?.type === "process" && event.evidence.status !== "REGISTERED") {
+          throw new Error("scripted projection fault at the process settlement");
+        }
+      },
+      infrastructure: {
+        adapterFor: (_entry, id) => {
+          const existing = adapters.get(id);
+          if (existing !== undefined) return existing;
+          const created = new FailingReviewAdapter(id, id === "claude" ? "anthropic" : "openai-codex");
+          adapters.set(id, created);
+          return created;
+        },
+        createBroker: fakeBroker,
+        sandboxProbe: () => false,
+        now: () => AT,
+        sessionId: () => "settlement-fault-session",
+        pidIsLive: () => false,
+        runCommand: () => ({ status: 0, stdout: "fresh gate passed\n", stderr: "", error: null }),
+      },
+    });
+    assert.equal(adopted.status?.lifecycleState, "BLOCKED", adopted.status?.blocker?.detail);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an answered adoption review stays at REVIEWING when advancement is refused", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-answered-hold-"));
+  try {
+    const fixture = await sourceFixture(root);
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = {
+      ...loaded,
+      runtime: { ...loaded.runtime, seed_paths: [] },
+      gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } },
+    };
+    const adapters = new Map<string, SuccessfulReviewAdapter>();
+    const adopted = await adoptCommand({
+      sourceAttemptDir: fixture.sourceDir,
+      stateRoot: fixture.stateRoot,
+      targetTaskId: "answered-hold",
+      request: k1Request("hold the answered candidate review", "core/src/**"),
+      worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]),
+      config,
+      configPath: resolve("awsf.config.yaml"),
+      assertAdvancement: () => { throw new Error("observability projection is behind"); },
+      infrastructure: {
+        adapterFor: (_entry, id) => {
+          const existing = adapters.get(id);
+          if (existing !== undefined) return existing;
+          const created = new SuccessfulReviewAdapter(id, id === "claude" ? "anthropic" : "openai-codex", fixture.candidate);
+          adapters.set(id, created);
+          return created;
+        },
+        createBroker: fakeBroker,
+        sandboxProbe: () => false,
+        now: () => AT,
+        sessionId: () => "answered-hold-session",
+        pidIsLive: () => false,
+        runCommand: () => ({ status: 0, stdout: "fresh gate passed\n", stderr: "", error: null }),
+      },
+    });
+    assert.equal(adopted.status?.lifecycleState, "REVIEWING");
+    assert.equal(adopted.status?.blocker?.code, "sqlite-projection-failed");
+    assert.match(adopted.status?.lastActivity ?? "", /held at REVIEWING/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("an adoption failure records when process termination could not be verified", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-adoption-termination-unknown-"));
+  try {
+    const fixture = await sourceFixture(root);
+    const loaded = loadConfig(readFileSync(resolve("awsf.config.yaml"), "utf8"));
+    const config: AwsfConfig = {
+      ...loaded,
+      runtime: { ...loaded.runtime, seed_paths: [] },
+      gates: { test: { argv: ["fixture-test"], timeout_seconds: 1 } },
+    };
+    const adapters = new Map<string, FailingReviewAdapter>();
+    const adopted = await adoptCommand({
+      sourceAttemptDir: fixture.sourceDir,
+      stateRoot: fixture.stateRoot,
+      targetTaskId: "termination-unknown",
+      request: k1Request("retain uncertain process termination evidence", "core/src/**"),
+      worktreeRoot: join(root, "worktrees"),
+      terminal: terminal([]),
+      config,
+      configPath: resolve("awsf.config.yaml"),
+      infrastructure: {
+        adapterFor: (_entry, id) => {
+          const existing = adapters.get(id);
+          if (existing !== undefined) return existing;
+          const created = new FailingReviewAdapter(id, id === "claude" ? "anthropic" : "openai-codex");
+          adapters.set(id, created);
+          return created;
+        },
+        createBroker: cancelFailureBroker,
+        sandboxProbe: () => false,
+        now: () => AT,
+        sessionId: () => "termination-unknown-session",
+        pidIsLive: () => false,
+        runCommand: () => ({ status: 0, stdout: "fresh gate passed\n", stderr: "", error: null }),
+      },
+    });
+    assert.equal(adopted.status?.lifecycleState, "BLOCKED");
+    assert.match(adopted.status?.blocker?.detail ?? "", /registered process termination could not be verified/);
+    assert.doesNotMatch(adopted.status?.blocker?.detail ?? "", /termination could not be inspected/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

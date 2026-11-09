@@ -9,29 +9,43 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
+import {
+  JEV_ENDPOINT_REFERENCE as ENDPOINT,
+  JEV_FETCH_REFERENCE as FETCH,
+} from "../../../src/decision/jev-transport.ts";
 import { repoRoot, walkFiles } from "./_walk.ts";
 
 const CORE_SRC = join(repoRoot(), "core", "src");
 const TRANSPORT = "core/src/decision/jev-transport.ts";
+const HTTPS_CLIENT = /\b(?:from\s*|import\s*\(\s*|require\s*\(\s*)(["'`])(?:node:)?https\1/;
+interface Source { readonly path: string; readonly text: string }
+const cachedSources = new Map<string, readonly Source[]>();
 
-/** The adapter fence's pattern, reused verbatim: bare `fetch(` or `globalThis.fetch`. */
-const FETCH = /(^|[^.\w])fetch\s*\(|globalThis\s*\.\s*fetch/;
-/** The decisions endpoint, by path, whatever host or quoting spells it. */
-const ENDPOINT = /api\/alpha\/decisions/;
+function coreSources(root = repoRoot()): readonly Source[] {
+  const cached = cachedSources.get(root);
+  if (cached !== undefined) return cached;
+  const coreSrc = root === repoRoot() ? CORE_SRC : join(root, "core", "src");
+  const sources = walkFiles(coreSrc).map((file) => ({
+    path: relative(root, file).split(sep).join("/"),
+    text: readFileSync(file, "utf8"),
+  }));
+  cachedSources.set(root, sources);
+  return sources;
+}
 
 /** Files under `root` (a checkout) whose core/src text matches, the transport excepted. */
 function offenders(pattern: RegExp, root = repoRoot()): string[] {
-  const coreSrc = root === repoRoot() ? CORE_SRC : join(root, "core", "src");
-  return walkFiles(coreSrc)
-    .map((file) => relative(root, file).split(sep).join("/"))
-    .filter((file) => file !== TRANSPORT)
-    .filter((file) => pattern.test(readFileSync(join(root, file), "utf8")));
+  return coreSources(root)
+    .filter(({ path }) => path !== TRANSPORT)
+    .filter(({ text }) => pattern.test(text))
+    .map(({ path }) => path);
 }
 
 test("the Jev transport exists where the invariant names it, and calls fetch itself", () => {
   const text = readFileSync(join(repoRoot(), TRANSPORT), "utf8");
   assert.ok(FETCH.test(text), `${TRANSPORT} should hold the one fetch call`);
   assert.ok(ENDPOINT.test(text), `${TRANSPORT} should name the decisions endpoint`);
+  assert.equal(HTTPS_CLIENT.test(text), false, `${TRANSPORT} uses the shared fetch transport, not an alternate HTTPS client`);
 });
 
 test("no file in core/src but the Jev transport calls global fetch", () => {
@@ -42,15 +56,35 @@ test("no file in core/src but the Jev transport names the decisions endpoint", (
   assert.deepEqual(offenders(ENDPOINT), []);
 });
 
+test("no other core source imports a second HTTPS client", () => {
+  assert.deepEqual(offenders(HTTPS_CLIENT), []);
+});
+
 test("the fence is load-bearing: both spellings are caught, an injected port is not", () => {
   assert.ok(FETCH.test("const response = await fetch(url);"));
   assert.ok(FETCH.test("const response = await fetch (url);"));
   assert.ok(FETCH.test("await globalThis.fetch(url)"));
   assert.ok(FETCH.test("const send = globalThis . fetch;"));
+  assert.ok(FETCH.test("await global.fetch(url)"));
+  assert.ok(FETCH.test("const send = global . fetch;"));
+  assert.ok(FETCH.test("(0, fetch)(url)"));
+  assert.ok(FETCH.test("const send = fetch;"));
+  assert.ok(FETCH.test("const send = fetch.bind(globalThis);"));
+  assert.ok(FETCH.test("const { fetch: send } = globalThis;"));
+  assert.ok(FETCH.test("await self.fetch(url)"));
+  assert.ok(FETCH.test("await globalThis['fetch'](url)"));
+  assert.ok(FETCH.test('await globalThis["fetch"](url)'));
+  assert.ok(FETCH.test("await global['fetch'](url)"));
+  assert.ok(FETCH.test('await global["fetch"](url)'));
   assert.equal(FETCH.test("await this.#http.fetch(url)"), false);
+  assert.equal(FETCH.test("await injected.fetch(url)"), false);
   assert.equal(FETCH.test("await prefetch(url)"), false);
+  assert.equal(FETCH.test("// fetch is documented here"), false);
   assert.ok(ENDPOINT.test(`"https://openrouter.ai/api/alpha/decisions"`));
   assert.ok(ENDPOINT.test("`${origin}/api/alpha/decisions`"));
+  assert.ok(HTTPS_CLIENT.test('import { request as send } from "node:https";'));
+  assert.ok(HTTPS_CLIENT.test('const send = require("https").request;'));
+  assert.equal(HTTPS_CLIENT.test('import { createServer } from "node:http";'), false);
 });
 
 test("the fence catches a planted fetch or endpoint in another core/src file", () => {
@@ -65,8 +99,25 @@ test("the fence catches a planted fetch or endpoint in another core/src file", (
     plant("core/src/decision/elsewhere.ts", `export const call = () => fetch("https://example.invalid");`);
     plant("core/src/workflow/sneaky.ts", `export const send = globalThis.fetch;`);
     plant("core/src/cli/url.ts", `export const url = "https://openrouter.ai/api/alpha/decisions";`);
-    assert.deepEqual(offenders(FETCH, root).sort(), ["core/src/decision/elsewhere.ts", "core/src/workflow/sneaky.ts"]);
+    plant("core/src/workflow/global-fetch.ts", `export const send = global.fetch;`);
+    plant("core/src/workflow/bracket-fetch.ts", `export const send = globalThis['fetch'];`);
+    plant("core/src/workflow/aliased-fetch.ts", `const send = fetch;`);
+    plant("core/src/workflow/bound-fetch.ts", `const send = fetch.bind(globalThis);`);
+    plant("core/src/workflow/destructured-fetch.ts", `const { fetch: send } = globalThis;`);
+    plant("core/src/workflow/self-fetch.ts", `export const send = self.fetch;`);
+    plant("core/src/workflow/https-client.ts", 'import { request as send } from "node:https";\nexport const call = (endpoint: string) => send(endpoint);');
+    assert.deepEqual(offenders(FETCH, root).sort(), [
+      "core/src/decision/elsewhere.ts",
+      "core/src/workflow/aliased-fetch.ts",
+      "core/src/workflow/bound-fetch.ts",
+      "core/src/workflow/bracket-fetch.ts",
+      "core/src/workflow/destructured-fetch.ts",
+      "core/src/workflow/global-fetch.ts",
+      "core/src/workflow/self-fetch.ts",
+      "core/src/workflow/sneaky.ts",
+    ]);
     assert.deepEqual(offenders(ENDPOINT, root), ["core/src/cli/url.ts"]);
+    assert.deepEqual(offenders(HTTPS_CLIENT, root), ["core/src/workflow/https-client.ts"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

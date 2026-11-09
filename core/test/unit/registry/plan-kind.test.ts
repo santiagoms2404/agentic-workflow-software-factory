@@ -51,3 +51,17 @@ test("an AWSF-rendered generic workstream is deep without prose in its HTML", ()
     { id: "foo-w01-bar", name: "foo-w01-bar", kind: "deep", parentSpine: "foo-plan", parentSpineName: "foo-plan" },
   ]);
 });
+
+test("B10-37: a deep plan with two -wNN- segments is deep under the spine its own prefix resolves to", () => {
+  const plans = classifyPlans([source("/fixture", "awsf-v3-plan"), source("/fixture", "awsf-v3-w01-alpha-w02-beta")]);
+  assert.deepEqual(plans.find((plan) => plan.id === "awsf-v3-w01-alpha-w02-beta"), {
+    id: "awsf-v3-w01-alpha-w02-beta",
+    name: "awsf-v3-w01-alpha-w02-beta",
+    kind: "deep",
+    parentSpine: "awsf-v3-plan",
+    parentSpineName: "awsf-v3-plan",
+  });
+
+  const nested = classifyPlans([source("/fixture", "awsf-v3-w01-alpha-plan"), source("/fixture", "awsf-v3-w01-alpha-w02-beta")]);
+  assert.equal(nested.find((plan) => plan.id === "awsf-v3-w01-alpha-w02-beta")?.parentSpine, "awsf-v3-w01-alpha-plan");
+});

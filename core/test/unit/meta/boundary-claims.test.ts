@@ -2,8 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { repoRoot, relRepo } from "./_walk.ts";
+import { repoRoot, relRepo, walkFiles } from "./_walk.ts";
 import { DRIVING_REL, drivingDocs } from "./_driving.ts";
+import { OWNER_ACT_LIST, ownerActName, type OwnerActReach } from "../../../../docs/driving/marimba/owner-acts.mts";
+import { hasOwnerTerminalFallback, ownerActsIn, ownerHelperFlagIsGuarded } from "./_owner-terminal.ts";
 
 // ---------------------------------------------------------------------------
 // Two fences over the driving tree, both about the same failure: a document
@@ -180,7 +182,14 @@ test("each claim pattern bites its own offender, and none of them fires on a tru
 });
 
 // ---------------------------------------------------------------------------
-// HALF 2 — the six owner acts, derived.
+// HALF 2 — the owner acts, listed once and held to the code.
+//
+// B5-05/B5-45: deriving the acts from the `case` arms alone missed three that
+// build their terminal elsewhere (seed, group apply, retry --adopt-as), and
+// both guards copied the miss. The list is now data in owner-acts.mts, and
+// this half checks it against the source from the other side: EVERY
+// `processOwnerTerminal()` call site in core/src must map to a listed act, and
+// every listed act must have one.
 // ---------------------------------------------------------------------------
 
 // Read as TEXT, deliberately, and not imported. The fence is about what the
@@ -190,30 +199,121 @@ test("each claim pattern bites its own offender, and none of them fires on a tru
 // same way and for the same reason.
 const MAIN_TS_REL = "core/src/cli/main.ts";
 const MAIN_TS = readFileSync(join(ROOT, ...MAIN_TS_REL.split("/")), "utf8");
+const CLI_DIR_REL = "core/src/cli/";
 
-/** `case "x": {` … up to the next arm or the `default:` that closes the switch. */
-const CASE_ARM = /\bcase "([a-z][\w-]*)":|\bdefault:/g;
 const OWNER_TERMINAL = "processOwnerTerminal()";
 
+/** The case-arm part of the list: what documents enumerate and the shell `for verb` loop names. */
+const OWNER_ACTS: readonly string[] = OWNER_ACT_LIST.filter((entry) => entry.reach === "case-arm").map((entry) => entry.verb);
+const LISTED_ACTS: ReadonlySet<string> = new Set(OWNER_ACT_LIST.map(ownerActName));
+
 /**
- * The owner acts are the CLI commands that construct an owner terminal. The
- * count is NOT written down here: if a seventh command ever takes one, the
- * documents owe a seventh name, and a hardcoded six would fail on the code
- * rather than on the drift.
+ * The nearest enclosing shape a call site can sit in: a case arm, a
+ * `default:` (which ends the arm before it and belongs to no act), an
+ * `if (command === "x")` block, or a named helper function.
  */
-function ownerActsIn(source: string): string[] {
-  const arms = [...source.matchAll(CASE_ARM)];
-  const acts: string[] = [];
-  for (const [index, arm] of arms.entries()) {
-    const name = arm[1];
-    if (name === undefined) continue; // the `default:` sentinel, which only ends the arm before it
-    const body = source.slice(arm.index, arms[index + 1]?.index ?? source.length);
-    if (body.includes(OWNER_TERMINAL)) acts.push(name);
+const ANCHOR = /\bcase "([a-z][\w-]*)":|\bdefault:|\bif \(command === "([a-z][\w-]*)"\)|\bfunction (\w+)\(/g;
+
+function anchorBefore(source: string, index: number): RegExpExecArray | undefined {
+  let last: RegExpExecArray | undefined;
+  for (const match of source.matchAll(ANCHOR)) {
+    if (match.index >= index) break;
+    last = match;
   }
-  return acts;
+  return last;
 }
 
-const OWNER_ACTS = ownerActsIn(MAIN_TS);
+/** The text of the arm opening at `start`, up to the next arm or `default:`. */
+function armBody(source: string, start: number): string {
+  const rest = source.slice(start + 1);
+  const next = /\bcase "[a-z][\w-]*":|\bdefault:/.exec(rest);
+  return source.slice(start, next === null ? source.length : start + 1 + next.index);
+}
+
+/**
+ * The listed act for `verb` built through `reach`, or an `unlisted:` line. A
+ * flagged entry needs its arm to read the flag, which is what separates
+ * `retry --adopt-as` from the plain `retry` that builds no terminal.
+ */
+function actFor(verb: string, reach: OwnerActReach, body: string, callIndex = body.length): string {
+  const entry = OWNER_ACT_LIST.find((candidate) =>
+    candidate.verb === verb && candidate.reach === reach &&
+    (candidate.flag === undefined || ownerHelperFlagIsGuarded(body, candidate.flag, callIndex)));
+  return entry === undefined ? `unlisted: ${verb} (${reach})` : ownerActName(entry);
+}
+
+/** The acts a `processOwnerTerminal()` at `index` of main.ts-shaped `source` is built for. */
+function mainSiteActs(source: string, index: number, viaHelper = false, depth = 0, helperName?: string): string[] {
+  const anchor = anchorBefore(source, index);
+  if (anchor?.[1] !== undefined) {
+    const body = armBody(source, anchor.index);
+    const callIndex = index - anchor.index;
+    if (viaHelper && helperName !== "ownerTerminal") {
+      return [actFor(anchor[1], "helper", body, callIndex)];
+    }
+    const caseAct = actFor(anchor[1], "case-arm", body, callIndex);
+    return viaHelper && helperName === "ownerTerminal" && caseAct.startsWith("unlisted:")
+      ? [actFor(anchor[1], "helper", body, callIndex)]
+      : [caseAct];
+  }
+  if (anchor?.[2] !== undefined) {
+    return [actFor(anchor[2], viaHelper && helperName !== "ownerTerminal" ? "helper" : "if-block", "")];
+  }
+  const helper = anchor?.[3];
+  if (helper !== undefined && depth < 3) {
+    const callers = [...source.matchAll(new RegExp(String.raw`(?<!function )\b${helper}\(`, "g"))];
+    if (callers.length === 0) return [`unattributed: helper ${helper} has no caller`];
+    return callers.flatMap((call) => mainSiteActs(source, call.index, true, depth + 1, helper));
+  }
+  return ["unattributed: no case arm, command block or helper encloses it"];
+}
+
+/**
+ * A command module's call site belongs to the command whose block in main.ts
+ * loads the module, and to the operation the terminal is handed to on that
+ * line: `group.ts`'s `await apply(…, processOwnerTerminal())` is `group apply`.
+ * A terminal handed to anything else reads as an unlisted act, which is the
+ * loud direction to fail in.
+ */
+function moduleSiteActs(fileRel: string, source: string, index: number): string[] {
+  if (!fileRel.startsWith(CLI_DIR_REL)) return [`unattributed: ${fileRel} is not a CLI module`];
+  const specifier = `./${fileRel.slice(CLI_DIR_REL.length)}`;
+  const load = MAIN_TS.indexOf(`import("${specifier}")`);
+  const command = load < 0 ? undefined : anchorBefore(MAIN_TS, load)?.[2];
+  if (command === undefined) return [`unattributed: no command block in ${MAIN_TS_REL} loads ${specifier}`];
+  const line = source.slice(source.lastIndexOf("\n", index) + 1, source.indexOf("\n", index));
+  const callee = /\bawait (\w+)\(/u.exec(line)?.[1];
+  return callee === undefined ? ["unattributed: the terminal is handed to no awaited operation"] : [actFor(`${command} ${callee}`, "module", "")];
+}
+
+interface OwnerTerminalSite {
+  readonly where: string;
+  readonly acts: readonly string[];
+}
+
+/** Every `processOwnerTerminal()` call in core/src, comments and the definition aside. */
+function ownerTerminalSites(): OwnerTerminalSite[] {
+  const sites: OwnerTerminalSite[] = [];
+  for (const file of walkFiles(join(ROOT, "core", "src"), [".ts"])) {
+    const fileRel = relRepo(file);
+    const source = fileRel === MAIN_TS_REL ? MAIN_TS : readFileSync(file, "utf8");
+    for (const match of source.matchAll(/processOwnerTerminal\(\)/g)) {
+      const line = source.slice(source.lastIndexOf("\n", match.index) + 1, source.indexOf("\n", match.index));
+      if (/^\s*(?:\/\/|\*|\/\*)/u.test(line) || line.includes("function processOwnerTerminal")) continue;
+      const where = `${fileRel}:${source.slice(0, match.index).split("\n").length}`;
+      const acts = fileRel === MAIN_TS_REL ? mainSiteActs(source, match.index) : moduleSiteActs(fileRel, source, match.index);
+      sites.push({ where, acts });
+    }
+  }
+  return sites;
+}
+
+/** Sites that map to nothing listed, and listed acts no site builds. */
+function siteOffenders(sites: readonly OwnerTerminalSite[]): { unmapped: string[]; unbuilt: string[] } {
+  const unmapped = sites.flatMap((site) => site.acts.filter((act) => !LISTED_ACTS.has(act)).map((act) => `${site.where} → ${act}`));
+  const built = new Set(sites.flatMap((site) => site.acts));
+  return { unmapped, unbuilt: [...LISTED_ACTS].filter((act) => !built.has(act)) };
+}
 
 /**
  * A run of backticked names joined by commas, `and` or `or` — a list, as
@@ -252,40 +352,140 @@ function enumeratedActs(markdown: string): Set<string> | undefined {
   return new Set(enumerations.flat());
 }
 
+/**
+ * A document owes every case-arm act and may name nothing unlisted. The three
+ * acts built outside an arm may be named and are not yet owed: whether the
+ * driving documents enumerate them is a documentation change of its own.
+ */
 function enumerationOffenders(files: { label: string; text: string }[]): string[] {
   const expected = [...OWNER_ACTS].sort();
   const offenders: string[] = [];
   for (const { label, text } of files) {
     const named = enumeratedActs(text);
     if (named === undefined) continue;
-    const found = [...named].sort();
-    if (found.join(",") !== expected.join(",")) {
-      const missing = expected.filter((act) => !named.has(act));
-      const extra = found.filter((act) => !OWNER_ACTS.includes(act));
+    const missing = expected.filter((act) => !named.has(act));
+    const extra = [...named].sort().filter((act) => !LISTED_ACTS.has(act));
+    if (missing.length > 0 || extra.length > 0) {
       offenders.push(`${label}: missing [${missing.join(", ")}], not an owner act [${extra.join(", ")}]`);
     }
   }
   return offenders;
 }
 
-test(`the owner acts are derived from ${MAIN_TS_REL}, not copied into this test`, () => {
+test(`the list's case-arm acts are exactly the ${MAIN_TS_REL} arms that construct an owner terminal`, () => {
+  const derived = ownerActsIn(MAIN_TS);
   assert.ok(
-    OWNER_ACTS.length > 0,
+    derived.length > 0,
     `no case arm in ${MAIN_TS_REL} constructs ${OWNER_TERMINAL} — either the CLI changed shape or the parser ` +
       `stopped working, and half 2 is now checking every document against an empty set`,
   );
-  // `retry` is a case arm and is not an owner act: it takes no terminal. It is
-  // asserted here because it is the one thing that separates "the parser found
-  // the owner acts" from "the parser listed every command".
-  assert.ok(MAIN_TS.includes('case "retry":'), `${MAIN_TS_REL} no longer has a retry arm to discriminate against`);
-  assert.ok(!OWNER_ACTS.includes("retry"), "retry constructs no owner terminal and must not be derived as an act");
+  assert.deepEqual([...derived].sort(), [...OWNER_ACTS].sort());
 });
 
-test("the executable driving guard denies every CLI-derived owner act", () => {
+test(`every ${OWNER_TERMINAL} call site in core/src maps to a listed act, and every listed act has one`, () => {
+  assert.equal(hasOwnerTerminalFallback(MAIN_TS), true, "the shared CLI helper must default to processOwnerTerminal()");
+  const sites = ownerTerminalSites();
+  const derivedActs = sites.flatMap((site) => site.acts);
+  assert.equal(derivedActs.length, OWNER_ACT_LIST.length, "every owner act must have exactly one terminal site after following helper callers");
+  assert.deepEqual(siteOffenders(sites), { unmapped: [], unbuilt: [] });
+  assert.deepEqual(derivedActs.sort(), [...LISTED_ACTS].sort());
+  // `retry` is a case arm and plain `retry` is not an owner act: only its
+  // `--adopt-as` path builds a terminal, through a helper. It is asserted here
+  // because it separates "the sweep found the owner acts" from "the sweep
+  // listed every command" (B9-08: this line used to say retry builds none).
+  assert.ok(MAIN_TS.includes('case "retry":'), `${MAIN_TS_REL} no longer has a retry arm to discriminate against`);
+  assert.ok(!LISTED_ACTS.has("retry"), "plain retry builds no owner terminal and must not be listed as an act");
+  assert.ok(sites.some((site) => site.acts.includes("retry --adopt-as")), "the adoption helper's call site must map to retry --adopt-as");
+});
+
+test("the executable driving guard denies every listed owner act", () => {
   const guard = readFileSync(join(ROOT, "docs/driving/marimba/delegation-guard.sh"), "utf8");
   const match = /^\s*for verb in ([^;\n]+); do$/m.exec(guard);
   assert.ok(match, "the owner-act denial list must remain explicit");
   assert.deepEqual(match[1]!.trim().split(/\s+/).sort(), [...OWNER_ACTS].sort());
+  // The acts built outside an arm: `+` writes a two-word act as one shell word.
+  const phrases = /^\s*for phrase in ([^;\n]+); do$/m.exec(guard);
+  assert.ok(phrases, "the outside-arm owner-act denial list must remain explicit");
+  const outside = OWNER_ACT_LIST.filter((entry) => entry.reach !== "case-arm");
+  assert.deepEqual(
+    phrases[1]!.trim().split(/\s+/).map((phrase) => phrase.replaceAll("+", " ")).sort(),
+    outside.filter((entry) => entry.flag === undefined).map((entry) => entry.verb).sort(),
+  );
+  for (const entry of outside.filter((candidate) => candidate.flag !== undefined)) {
+    assert.ok(guard.includes(`*" ${entry.flag} "*`) && guard.includes(`*"awsf ${entry.verb}"*`),
+      `delegation-guard.sh must deny ${ownerActName(entry)}`);
+  }
+});
+
+test("the call-site sweep follows the shared fallback and every caller", () => {
+  const source = [
+    "function ownerTerminal(provided) { return provided ?? processOwnerTerminal(); }",
+    "switch (command) {",
+    '  case "land": { await landCommand({ terminal: ownerTerminal(provided) }); }',
+    '  case "retry": {',
+    '    const targetTaskId = parsed.flags["adopt-as"];',
+    '    if (targetTaskId !== undefined) { await adoptCommand({ terminal: ownerTerminal(provided) }); }',
+    "  }",
+    '  case "invented": { await otherCommand({ terminal: ownerTerminal(provided) }); }',
+    "  default:",
+    "    break;",
+    "}",
+  ].join("\n");
+  assert.equal(hasOwnerTerminalFallback(source), true);
+  const fallbackAt = source.indexOf(OWNER_TERMINAL);
+  assert.deepEqual(mainSiteActs(source, fallbackAt), ["land", "retry --adopt-as", "unlisted: invented (helper)"]);
+  assert.deepEqual(ownerActsIn(source), ["land", "invented"]);
+
+  const brokenFallback = source.replace("provided ?? processOwnerTerminal()", "provided ?? inertTerminal()");
+  assert.equal(hasOwnerTerminalFallback(brokenFallback), false);
+  assert.deepEqual(ownerActsIn(brokenFallback), []);
+  const unguardedRetry = source.replace("targetTaskId !== undefined", "targetTaskId === undefined");
+  assert.deepEqual(ownerActsIn(unguardedRetry), ["land", "retry", "invented"]);
+});
+
+test("the call-site sweep attributes arms, command blocks and helpers, and reports what is unlisted", () => {
+  const source = [
+    "function adoptionTerminal(provided) {",
+    "  return provided ?? processOwnerTerminal();",
+    "}",
+    'if (command === "seed") {',
+    "  await seedCommand({ terminal: options.terminal ?? processOwnerTerminal() });",
+    "}",
+    'if (command === "invented") {',
+    "  await inventedCommand({ terminal: options.terminal ?? processOwnerTerminal() });",
+    "}",
+    "switch (command) {",
+    '  case "land": {',
+    "    await landCommand({ terminal: options.terminal ?? processOwnerTerminal() });",
+    "  }",
+    '  case "retry": {',
+    '    const targetTaskId = parsed.flags["adopt-as"];',
+    "    if (targetTaskId !== undefined) await adoptCommand({ terminal: adoptionTerminal(options.terminal) });",
+    "  }",
+    '  case "cancel": {',
+    "    await cancelCommand({ terminal: adoptionTerminal(options.terminal) });",
+    "  }",
+    "  default:",
+    "    throw new Error(USAGE);",
+    "}",
+  ].join("\n");
+  const at = (needle: string): number => source.indexOf("processOwnerTerminal()", source.indexOf(needle));
+  assert.deepEqual(mainSiteActs(source, at("function adoptionTerminal")), ["retry --adopt-as", "unlisted: cancel (helper)"],
+    "a helper's site is every caller's act, and a helper called from an arm with no listed flag is unlisted");
+  assert.deepEqual(mainSiteActs(source, at('command === "seed"')), ["seed"]);
+  assert.deepEqual(mainSiteActs(source, at('command === "invented"')), ["unlisted: invented (if-block)"]);
+  assert.deepEqual(mainSiteActs(source, at('case "land"')), ["land"]);
+
+  // Both directions of the set check bite.
+  assert.deepEqual(siteOffenders([{ where: "x.ts:1", acts: ["unlisted: invented (if-block)"] }]).unmapped,
+    ["x.ts:1 → unlisted: invented (if-block)"]);
+  assert.deepEqual(siteOffenders([]).unbuilt, [...LISTED_ACTS]);
+
+  // A module's site belongs to the command block that loads it, then to the operation it is handed to.
+  assert.deepEqual(moduleSiteActs("core/src/cli/commands/group.ts", "  result = await apply(w, processOwnerTerminal());\n", 30),
+    ["group apply"]);
+  assert.deepEqual(moduleSiteActs("core/src/cli/commands/group.ts", "  result = await propose(w, processOwnerTerminal());\n", 30),
+    ["unlisted: group propose (module)"]);
 });
 
 test(`every ${DRIVING_REL} document enumerating owner acts enumerates exactly the derived set`, () => {

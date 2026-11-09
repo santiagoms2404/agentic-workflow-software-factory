@@ -20,7 +20,7 @@ import {
 import { retryCommand } from "../../../src/cli/commands/retry.ts";
 import { SealedAttempt } from "../../../src/persistence/attempt-lock.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
-import { declaredContinuation, relateCommand, resolveContinues } from "../../../src/cli/commands/relate.ts";
+import { assertRelateReason, declaredContinuation, relateCommand, resolveContinues } from "../../../src/cli/commands/relate.ts";
 import { readTaskRelations } from "../../../src/persistence/task-relations.ts";
 import { rebuildCommand } from "../../../src/cli/commands/operator.ts";
 import { taskRoot } from "../../../src/cli/commands/attempt.ts";
@@ -50,6 +50,10 @@ async function task(
     ...(extra.projectRecord === undefined ? {} : { projectRecord: extra.projectRecord }),
   });
 }
+
+test("reason bounding never splits an astral code point", () => {
+  assert.equal(assertRelateReason(`${"x".repeat(1_999)}😀tail`), "x".repeat(1_999));
+});
 
 test("relate records the declaration on the TASK, leaving every attempt's bytes untouched", async () => {
   const box = sandbox("records");

@@ -15,19 +15,19 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import type { AttemptEvent, AttemptStatus } from "./attempt.ts";
 import type { OwnerTerminal } from "../tty.ts";
-import { decide } from "../../decision/decide.ts";
 import { JevTransport } from "../../decision/jev-transport.ts";
-import { STOP_JUDGMENT } from "../../decision/question-sets/stop-judgment.ts";
+import { readJevProjectSwitch } from "../../decision/jev-project.ts";
 import { discoverAttempts } from "../../observability/rebuild.ts";
 import type { JournalRecord } from "../../persistence/journal.ts";
 import { journalFilePath } from "../../persistence/platform-paths.ts";
 import { scanJournal } from "../../persistence/replay.ts";
 import { readTaskDelegateProposals } from "../../persistence/task-delegate.ts";
 import { appendDelegateReplays, delegateStateDir, readDelegateReplays } from "../../persistence/delegate-replays.ts";
-import { loadCatalog } from "../../registry/catalog.ts";
-import { jevSwitchOf, type JevSwitch } from "../../registry/catalog-schema.ts";
+import type { JevSwitch } from "../../registry/catalog-schema.ts";
+import { readPlacement } from "../../registry/placement.ts";
 import { pairAttempt, type Pair } from "../../delegate/agreement.ts";
 import type { PhaseRoles } from "../../delegate/policy.ts";
+import { judgeStop } from "../../delegate/stop-judge.ts";
 import {
   effectiveReplays,
   historicalStopIndices,
@@ -78,13 +78,41 @@ interface AttemptSource {
   readonly records: readonly JournalRecord<AttemptEvent>[];
 }
 
-async function projectSwitch(catalogPath: string | undefined): Promise<JevSwitch> {
-  if (catalogPath === undefined) return "on";
-  try {
-    return jevSwitchOf(loadCatalog(await readFile(catalogPath, "utf8")));
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT" ? "on" : "off";
+export async function projectSwitch(
+  catalogPath?: string,
+  repositoryOrStatus?: string | { readonly repository?: string },
+  stateRoot?: string,
+  project?: string,
+): Promise<JevSwitch> {
+  let resolvedPath = catalogPath;
+  const repository = typeof repositoryOrStatus === "string" ? repositoryOrStatus : repositoryOrStatus?.repository;
+  if (resolvedPath === undefined && repository) {
+    resolvedPath = join(repository, "awsf.project.yaml");
   }
+  if (resolvedPath === undefined && stateRoot !== undefined && project !== undefined) {
+    try {
+      const placement = await readPlacement(stateRoot, project);
+      for (const repo of Object.values(placement.repositories)) {
+        const candidate = join(repo.path, "awsf.project.yaml");
+        try {
+          await readFile(candidate, "utf8");
+          resolvedPath = candidate;
+          break;
+        } catch {
+          // keep searching
+        }
+      }
+      if (resolvedPath === undefined) {
+        const first = Object.values(placement.repositories)[0];
+        if (first) resolvedPath = join(first.path, "awsf.project.yaml");
+      }
+    } catch {
+      // placement not found
+    }
+  }
+  // No identified project catalog is not permission to use the schema's on default.
+  if (resolvedPath === undefined) return "off";
+  return (await readJevProjectSwitch(resolvedPath)).value;
 }
 
 async function attemptsInScope(stateRoot: string, project: string | undefined): Promise<AttemptSource[]> {
@@ -135,10 +163,16 @@ export async function delegateReplayCommand(options: DelegateReplayOptions): Pro
       }
     }
   }
-  const pending = attempts.reduce((total, source) => total + historicalStopIndices(source.records).filter((index) => {
-    const status = source.records[index]!.event.next;
-    return !skipByTask.get(dirname(source.dir))!.has(stopKey(status.sessionId, status.revision));
-  }).length, 0);
+  let pending = 0;
+  let skipped = 0;
+  for (const source of attempts) {
+    const skip = skipByTask.get(dirname(source.dir))!;
+    for (const index of historicalStopIndices(source.records)) {
+      const status = source.records[index]!.event.next;
+      if (skip.has(stopKey(status.sessionId, status.revision))) skipped += 1;
+      else pending += 1;
+    }
+  }
 
   let judge: ReplayJudge = NUMBERS_ONLY_JUDGE;
   if (mode === "live") {
@@ -148,36 +182,35 @@ export async function delegateReplayCommand(options: DelegateReplayOptions): Pro
       options.terminal.write("replay: not confirmed; nothing asked and nothing written");
       return { mode, recorded: [], skipped: 0, pairs: [], confirmed: false };
     }
+    const firstStatus = attempts[0]?.records[0]?.event.next ?? attempts[0]?.records.at(-1)?.event.next;
     const transport = options.transport ?? new JevTransport({
-      projectSwitch: await projectSwitch(options.catalogPath),
-      ...(options.env === undefined ? {} : { env: options.env }),
+      projectSwitch: await projectSwitch(
+        options.catalogPath,
+        firstStatus,
+        options.stateRoot,
+        options.project ?? firstStatus?.project,
+      ),
+      env: options.env ?? {},
     });
     const decisionsDir = delegateStateDir(options.stateRoot);
-    judge = async (facts, allowedActs) => {
-      try {
-        const decided = await decide(STOP_JUDGMENT, { stop: facts }, {
-          transport, taskRoot: decisionsDir, project: facts.project, taskId: facts.task, attempt: facts.attempt,
-          caller: { kind: "replay", name: facts.stopKind }, params: { allowedActs }, now, newId,
-        });
-        return { judgment: { outcome: decided.outcome, result: decided.policyResult }, decision: { recordId: decided.recordId, outcome: decided.outcome } };
-      } catch {
-        return { judgment: { outcome: "unavailable", result: null }, decision: { recordId: null, outcome: "unavailable" } };
-      }
-    };
+    judge = (facts, allowedActs) => judgeStop(facts, {
+      transport,
+      taskRoot: decisionsDir,
+      caller: "replay",
+      transportFailure: "propagate",
+      allowedActs,
+      now,
+      newId,
+    });
   }
 
   const replayId = newId();
   const replayedAt = now();
   const recorded: DelegateReplayRecord[] = [];
-  let skipped = 0;
   for (const source of attempts) {
     const status = source.records.at(-1)?.event.next;
     if (status === undefined) continue;
     const skip = skipByTask.get(dirname(source.dir))!;
-    skipped += historicalStopIndices(source.records).filter((index) => {
-      const next = source.records[index]!.event.next;
-      return skip.has(stopKey(next.sessionId, next.revision));
-    }).length;
     const phases = options.phasesFor === undefined ? journalPhases(source.records) : await options.phasesFor(status, source.records);
     recorded.push(...await replayAttempt({
       project: source.project, records: source.records, phases, mode, judge, skip, replayId, replayedAt, newId,

@@ -11,24 +11,22 @@ import {
   type PreflightRefusedRecord,
 } from "../../contracts/driver-preflight.ts";
 import { evaluateClosure, evaluateFreshness, type FreshnessFailure } from "../../preflight/fields.ts";
-import { gatherFreshness, K1_EXEMPT_WORKFLOWS } from "./preflight.ts";
+import { gatherFreshness, K1_EXEMPT_WORKFLOWS, pinnedBaseSha, resolveAttemptRecipe } from "./preflight.ts";
+export { resolveAttemptRecipe } from "./preflight.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
-import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
+import { assertWorktreeAvailable, AttemptWorktreeExists, createWorktree, seedWorktreePaths, type ManagedWorktree } from "../../git/worktrees.ts";
 import { transition } from "../../state/task-machine.ts";
-import { callCeilingsOf } from "../../state/tiers.ts";
+import { ceilingFor } from "../../state/tiers.ts";
 import {
   compiledWorkflow,
-  CompiledWorkflowUnbound,
   correctionsFundableFor,
   minimumCallsFor,
   workflowRecipe,
 } from "../../workflow/catalog.ts";
+import type { WorkflowRecipe } from "../../workflow/compiler.ts";
+import { InvalidPhaseRouteSelection, requestedPhaseRoute } from "../../workflow/phase-routing.ts";
 import { composePromptBundle } from "../../workflow/prompt-composition.ts";
 import { readPlacement } from "../../registry/placement.ts";
-import { bindProveRecipe } from "../../workflow/prove/bind.ts";
-import { assertPlanAuthorRole, compilePlanAuthor, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
-import { PROVE_WORKFLOW_ID } from "../../workflow/prove/compile.ts";
-import { bindShiftRecipe } from "../../workflow/shift/bind.ts";
 import { correctionHeadroom } from "./workflows.ts";
 import { verifiedTargetSeed, validateSeedStartup } from "../../workflow/candidate-seed.ts";
 import { parseVisualBinding, recordVisualBinding, verifyVisualReferences, type VerifiedVisualReferences } from "../../workflow/visual-references.ts";
@@ -56,6 +54,8 @@ export interface StartCommandOptions {
   readonly worktreeRoot: string;
   readonly configPath?: string;
   readonly preflight?: (status: AttemptStatus) => Promise<StartPreflight> | StartPreflight;
+  /** Test/demo seam that substitutes only the selected adapter's availability result. */
+  readonly adapterAvailability?: (adapterId: string) => Promise<boolean> | boolean;
   readonly now?: () => string;
   readonly projectRecord?: AttemptProjector;
   /**
@@ -64,15 +64,47 @@ export interface StartCommandOptions {
    * started with it can never run its bound phases without it.
    */
   readonly visualReferences?: string;
+  /**
+   * `awsf start --stub true`: the PREPARED revision carries the persistent stub
+   * mark (owner call O7), so the attempt is a fixture demonstration for good.
+   * `awsf run --stub true` runs nothing else, and whatever that run attests is
+   * refused by the T2 land guard.
+   */
+  readonly stub?: boolean;
 }
 
-async function defaultPreflight(status: AttemptStatus, configPath: string): Promise<StartPreflight> {
+// B9-20: defaultPreflight must check the effective routed adapter for the first phase (including routeOverrides), not just default_worker.
+export async function defaultPreflight(
+  status: AttemptStatus,
+  configPath: string,
+  recipe?: WorkflowRecipe,
+  adapterAvailability?: (adapterId: string) => Promise<boolean> | boolean,
+): Promise<StartPreflight> {
   const config = loadConfig(await readFile(configPath, "utf8"));
-  const selected = registeredAdapter(config.adapters, config.routing.default_worker);
+  let adapterId = config.routing.default_worker;
+  try {
+    const targetRecipe = recipe ?? await resolveAttemptRecipe(status, config);
+    const firstAgentPhase = targetRecipe.phases.find((phase) => phase.kind === "agent");
+    if (firstAgentPhase !== undefined) {
+      const role = config.agents.find((agent) => agent.name === firstAgentPhase.owner);
+      if (role !== undefined) {
+        const route = requestedPhaseRoute(config, firstAgentPhase.id, role, status.routeOverrides);
+        adapterId = route.agent.harness.adapter;
+      }
+    }
+  } catch (error) {
+    if (error instanceof InvalidPhaseRouteSelection) {
+      return { adapter: false, sandbox: true, observability: true };
+    }
+    // Fall back to default_worker if recipe or phase cannot be resolved
+  }
+  const selected = registeredAdapter(config.adapters, adapterId);
   // A fixture route deliberately cannot be manufactured from committed config:
   // its executable is a test-owned absolute path. Tests inject that preflight;
   // production refuses rather than calling an unbound fixture "available".
-  const adapter = selected !== null && (await selected.isAvailable()).status === "available";
+  const adapter = adapterAvailability === undefined
+    ? selected !== null && (await selected.isAvailable()).status === "available"
+    : selected !== null && await adapterAvailability(adapterId);
   // The policy layer may truthfully expose tool-policy when an OS sandbox is
   // absent. Native Windows write-capable runs remain blocked by the later
   // permission broker; preparation itself does not invent an OS guarantee.
@@ -240,28 +272,17 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   if (!config.workflows.enabled.includes(current.workflow)) {
     throw new Error(`workflow ${current.workflow} is not enabled by ${configPath}`);
   }
-  // K1, before the recipe is bound, before any L2, worktree or adapter. Every
-  // caller passes here: no option of this command reaches past it.
+  // These are read-only identity checks, but they must precede K1: K1 can
+  // append refusal evidence, while a withdrawn seed or interrupted exclusive
+  // worktree setup must refuse without changing the attempt at all.
+  const seed = await verifiedTargetSeed(options.attemptDir, current);
+  if (seed !== null) await validateSeedStartup(seed, current, config, configPath, options.attemptDir);
+  assertWorktreeAvailable({ repository: current.repository, root: resolve(options.worktreeRoot), attemptId: current.sessionId });
+  // K1 precedes normal start-recipe resolution, L2, worktree creation and
+  // adapter contact. Seed prompt binding above is read-only provenance validation.
+  // Every caller passes here: no option of this command reaches past it.
   await enforceK1(options, current, config);
-  let recipe = workflowRecipe(current.workflow);
-  if (recipe === null) {
-    const compiled = compiledWorkflow(current.workflow);
-    if (compiled === null) throw new Error(`workflow ${JSON.stringify(current.workflow)} has no shipped recipe`);
-    // Start reads only the phase list's shape (its count, owners and tier),
-    // which no prompt moves; the runner compiles again with the real ones.
-    const prompts = { builder: "", reviewer: "" };
-    if (compiled.id === PLAN_AUTHOR_WORKFLOW_ID) {
-      assertPlanAuthorRole(config);
-      if (current.reviewDegradation !== null) throw new Error("plan-author cannot use degraded same-provider review");
-      recipe = compilePlanAuthor(current);
-    } else if (compiled.id === PROVE_WORKFLOW_ID) {
-      if (current.replay == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${current.taskId}`);
-      recipe = await bindProveRecipe(current, { prompts, gates: Object.keys(config.gates) });
-    } else {
-      if (current.shift == null) throw new CompiledWorkflowUnbound(compiled.id, `task ${current.taskId}`);
-      recipe = await bindShiftRecipe(current.repository, current.shift, { prompts });
-    }
-  }
+  const recipe = await resolveAttemptRecipe(current, config);
   // trap-refusal-begin TR-17
   if (recipe.phases.some(phase => phase.schemaId === "awsf.design-context/v1")) {
     try {
@@ -276,7 +297,10 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
   // contacted. It also deliberately does NOT block the DRAFT: `awsf raise` is
   // legal on a live attempt and terminal on a BLOCKED one, so blocking here
   // would seal away the one remedy the message names.
-  const ceiling = current.budget.ceiling ?? callCeilingsOf(config.risk.call_ceiling);
+  // Legacy statuses with no persisted ceiling use the same documented tier
+  // default as transition() and CallBudget; the current config is not evidence
+  // of the dial this already-created attempt was run under.
+  const ceiling = ceilingFor(current.tier, current.budget.ceiling);
   const headroom = correctionHeadroom(config, recipe, ceiling);
   if (headroom.unfundable) {
     throw new Error(
@@ -327,65 +351,14 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     visual = { binding, verified };
   }
 
-  const seed = await verifiedTargetSeed(options.attemptDir, current);
-  if (seed !== null) await validateSeedStartup(seed, current, config, configPath, options.attemptDir);
   // A replay starts at its item's pinned base, through the same seam a seed's
   // integration base uses: a new detached worktree at that commit, and nothing
   // that moves or discards any other tree or ref.
-  const baseSha = current.replay?.baseSha ?? seed?.integrationBaseSha ??
-    runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim();
-  const managed = createWorktree({
-    repository: current.repository,
-    root: resolve(options.worktreeRoot),
-    attemptId: current.sessionId,
-    baseSha: seed?.seedCandidateSha ?? baseSha,
-  });
-  try {
-    await seedWorktreePaths({
-      repository: current.repository,
-      worktree: managed.path,
-      seedPaths: config.runtime.seed_paths,
-      protectedPaths: config.policy.protected_paths,
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    const decision = transition({
-      from: current.lifecycleState,
-      to: "BLOCKED",
-      actor: "host",
-      tier: current.tier,
-      reason: { source: "git", code: "preflight-failed", detail },
-      interactive: false,
-      budget: current.budget,
-    });
-    const failedAt = (options.now ?? ((): string => new Date().toISOString()))();
-    const blocked = nextRevision(current, {
-      lifecycleState: decision.to,
-      baseSha,
-      worktree: managed.path,
-      lastActivityAt: failedAt,
-      lastActivity: detail,
-      blocker: { code: "preflight-failed", detail, ahead: null, behind: null },
-    });
-    await persistAttempt(
-      options.attemptDir,
-      current.revision,
-      { kind: "attempt.transitioned", next: blocked },
-      options.projectRecord,
-    );
-    throw error;
-  }
-  const preflight = await (options.preflight ?? ((status) => defaultPreflight(status, configPath)))(current);
-  let prepared = current;
-  if (visual !== null) {
-    await recordVisualBinding(options.attemptDir, visual.binding);
-    const at = (options.now ?? ((): string => new Date().toISOString()))();
-    prepared = await persistAttempt(options.attemptDir, current.revision, {
-      kind: "attempt.updated",
-      next: nextRevision(current, { lastActivityAt: at, lastActivity: `bound ${String(visual.verified.bound.frames.length)} visual reference(s) to ${visual.binding.phases.join(", ")}` }),
-      evidence: { type: "visual-references-bound", bound: visual.verified.bound, at },
-    }, options.projectRecord);
-  }
+  const baseSha = pinnedBaseSha(current, seed, () => runGit(systemGitRunner(current.repository), ["rev-parse", "HEAD"]).trim());
+
+  // B9-22: Probing adapter preflight before creating the worktree ensures that a refused
+  // preflight leaves the attempt DRAFT with no worktree left on disk.
+  const preflight = await (options.preflight ?? ((status) => defaultPreflight(status, configPath, recipe, options.adapterAvailability)))(current);
   const decision = transition({
     from: current.lifecycleState,
     to: "PREPARED",
@@ -401,11 +374,68 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
       preflight,
     },
   });
+
+  let managed: ManagedWorktree | undefined;
+  try {
+    managed = createWorktree({
+      repository: current.repository,
+      root: resolve(options.worktreeRoot),
+      attemptId: current.sessionId,
+      baseSha: seed?.seedCandidateSha ?? baseSha,
+    });
+    await seedWorktreePaths({
+      repository: current.repository,
+      worktree: managed.path,
+      seedPaths: config.runtime.seed_paths,
+      protectedPaths: config.policy.protected_paths,
+    });
+  } catch (error) {
+    // Another start may have won the exclusive path after the read-only check.
+    // Keep the interrupted setup recoverable and leave its DRAFT evidence byte-stable.
+    if (error instanceof AttemptWorktreeExists) throw error;
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    const blockedDecision = transition({
+      from: current.lifecycleState,
+      to: "BLOCKED",
+      actor: "host",
+      tier: current.tier,
+      reason: { source: "git", code: "preflight-failed", detail },
+      interactive: false,
+      budget: current.budget,
+    });
+    const failedAt = (options.now ?? ((): string => new Date().toISOString()))();
+    const blocked = nextRevision(current, {
+      lifecycleState: blockedDecision.to,
+      baseSha,
+      worktree: managed?.path ?? null,
+      lastActivityAt: failedAt,
+      lastActivity: detail,
+      blocker: { code: "preflight-failed", detail, ahead: null, behind: null },
+    });
+    await persistAttempt(
+      options.attemptDir,
+      current.revision,
+      { kind: "attempt.transitioned", next: blocked },
+      options.projectRecord,
+    );
+    throw error;
+  }
+  let prepared = current;
+  if (visual !== null) {
+    await recordVisualBinding(options.attemptDir, visual.binding);
+    const at = (options.now ?? ((): string => new Date().toISOString()))();
+    prepared = await persistAttempt(options.attemptDir, current.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(current, { lastActivityAt: at, lastActivity: `bound ${String(visual.verified.bound.frames.length)} visual reference(s) to ${visual.binding.phases.join(", ")}` }),
+      evidence: { type: "visual-references-bound", bound: visual.verified.bound, at },
+    }, options.projectRecord);
+  }
   const now = (options.now ?? ((): string => new Date().toISOString()))();
   const next = nextRevision(prepared, {
     lifecycleState: decision.to,
     baseSha,
     worktree: managed.path,
+    ...(options.stub === true ? { stub: { startedBy: "awsf start --stub true", at: now } } : {}),
     lastActivityAt: now,
     lastActivity: `L1 prepared detached worktree at ${managed.path}`,
   });

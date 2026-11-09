@@ -14,9 +14,12 @@ import { OWNER_ACT_ROWS } from "./_owner-act-spellings.ts";
 // the guard a payload on stdin, and asserts what came back. No provider call,
 // no quota, no network.
 //
-// WHY A META-TEST MAY SPAWN A PROCESS. child-process-fence.test.ts scopes the
-// `node:child_process` ban to `core/src`; junk-drawer.test.ts already spawns
-// `git` from this directory for the same reason. The thing under test is a
+// WHY A META-TEST MAY SPAWN A PROCESS. AGENTS.md invariant 3, as scoped by its
+// O5 owner amendment, bans `node:child_process` in shipped code only — the
+// non-test code under `core/src`, `dashboard/src` and `docs/driving` that
+// child-process-fence.test.ts walks — and says tests may spawn. This file is a
+// test under `core/test`; junk-drawer.test.ts already spawns `git` from this
+// directory for the same reason. The thing under test is a
 // shell script, so running it is the only way to assert its behaviour.
 //
 // THE DENY PROTOCOL, WHICH IS THE HALF A NAIVE TEST FORGETS. The guard's own
@@ -129,12 +132,6 @@ const GUARD_ROWS: readonly GuardRow[] = [
     expect: "allow",
   },
   {
-    id: "bash · awsf run",
-    why: "the spend the phase's tier has already authorised; the guard is not a budget",
-    payload: bash("awsf run T01"),
-    expect: "allow",
-  },
-  {
     id: "bash · awsf retry",
     why: "retry builds no owner terminal, so it is not an owner act and the guard correctly omits it",
     payload: bash("awsf retry T01"),
@@ -143,12 +140,10 @@ const GUARD_ROWS: readonly GuardRow[] = [
   ...OWNER_ACT_ROWS.map(
     (row): GuardRow => ({
       id: `owner-act shell matrix · ${row.label}`,
-      why: row.expected === null
-        ? "KNOWN GAP F17: G01-G must fix the protected guard and flip this row to deny"
-        : "an imported owner act in a W01-Q7 spelling must be denied",
+      why: "an imported owner act in a W01-Q7 spelling must be denied",
       payload: bash(row.command),
-      expect: row.expected === null ? "allow" : "deny",
-      mentions: row.expected === null ? [] : [new RegExp(`\\b${row.act}\\b`)],
+      expect: "deny",
+      mentions: [new RegExp(`\\b${row.act}\\b`)],
     }),
   ),
   {

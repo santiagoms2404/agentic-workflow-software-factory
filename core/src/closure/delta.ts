@@ -52,7 +52,15 @@ function refusal(before: ClosureTree, after: ClosureTree, path: string, kind: Cl
   const left = before.get(path) ?? new Uint8Array();
   const right = after.get(path) ?? new Uint8Array();
   const offset = firstDifference(left, right);
-  const context = (bytes: Uint8Array): string => Buffer.from(bytes.slice(Math.max(0, offset - 24), offset + 24)).toString("utf8");
+  const context = (bytes: Uint8Array): string => {
+    // A UTF-8 continuation byte is 10xxxxxx. Move the start forward and the end forward to character boundaries.
+    const continuation = (index: number): boolean => index < bytes.length && (bytes[index]! & 0xc0) === 0x80;
+    let start = Math.max(0, offset - 24);
+    while (continuation(start)) start += 1;
+    let end = Math.min(bytes.length, offset + 24);
+    while (continuation(end)) end += 1;
+    return Buffer.from(bytes.slice(start, end)).toString("utf8");
+  };
   return { ok: false, refusal: { code: "E_CLOSURE_DELTA", kind, path, offset,
     beforeContext: context(left), afterContext: context(right), message,
     ...(violations === undefined ? {} : { violations }) } };

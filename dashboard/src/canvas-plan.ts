@@ -73,3 +73,24 @@ export function waitingOn(ticket: BacklogTicket, tickets: readonly BacklogTicket
   const done = new Set(tickets.filter((candidate) => candidate.state === "done").map((candidate) => candidate.id));
   return ticket.depends_on.filter((id) => !done.has(id));
 }
+
+/** Prepare each ticket's blockers once, keeping completed ids scoped to their plan. */
+export function waitingOnByTicket(tickets: readonly BacklogTicket[]): ReadonlyMap<string, readonly string[]> {
+  const doneByPlan = new Map<string, Set<string>>();
+  for (const ticket of tickets) {
+    if (ticket.state !== "done") continue;
+    let done = doneByPlan.get(ticket.plan);
+    if (!done) {
+      done = new Set<string>();
+      doneByPlan.set(ticket.plan, done);
+    }
+    done.add(ticket.id);
+  }
+
+  const blockersByTicket = new Map<string, readonly string[]>();
+  for (const ticket of tickets) {
+    const done = doneByPlan.get(ticket.plan);
+    blockersByTicket.set(ticket.uid, ticket.depends_on.filter((id) => !done?.has(id)));
+  }
+  return blockersByTicket;
+}

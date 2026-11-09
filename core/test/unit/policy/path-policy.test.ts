@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   InvalidPolicyPath,
   PermissionBreach,
+  compilePathGlob,
   enforcePathPolicy,
   evaluatePathPolicy,
   matchesPathGlob,
@@ -16,6 +17,17 @@ test("single-star globs stop at separators while double-star crosses them", () =
   assert.equal(matchesPathGlob("src/nested/a.ts", "src/**/*.ts"), true);
   assert.equal(matchesPathGlob("README.md", "**/*.md"), true);
   assert.equal(matchesPathGlob("docs/a/b.md", "**/*.md"), true);
+});
+
+test("compiled policy globs preserve matching behavior for repeated checks", () => {
+  const matches = compilePathGlob("src/**/*.ts");
+  assert.equal(matches.test("src/a.ts"), true);
+  assert.equal(matches.test("src/nested/a.ts"), true);
+  assert.equal(matches.test("src/nested/a.js"), false);
+});
+
+test("a leading tilde can name a literal repository path", () => {
+  assert.equal(normalizeRepositoryPath("~/notes.md"), "~/notes.md");
 });
 
 test("paths are refused rather than repaired into a different authorization", () => {

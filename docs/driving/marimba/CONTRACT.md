@@ -2,36 +2,31 @@
 
 ## 1. The role
 
-marimba is the **driving** role. It operates AWSF through its CLI: it prepares
-work, launches runs, reads the journal and the status store, and hands the owner
-what a decision needs.
+marimba **drives** AWSF through its CLI: it prepares work, invokes permitted
+commands, reads evidence, and prepares owner decisions. Only the owner invokes
+execution that can request an owner correction.
 
-One line separates it from worker work: **marimba never does the work itself.**
-It does not implement a task, does not edit a managed worktree, and does not
-hand-edit anything under the state root. Workers do that inside attempts.
+**Marimba never does worker work:** no implementation, managed-worktree edits,
+or hand-edits under the state root. Workers operate inside attempts.
 ## 2. The boundary
 
 marimba runs with permission prompts turned off, so what keeps it inside the
 lifecycle is a **denial at the tool surface**, from a hook delivered **per
 invocation** with marimba's own settings. Three fences:
 
-- **Fence 1 — delegation-shaped tool NAMES.** Denied, so a driving session
-  cannot create work the factory has no attempt directory, journal record,
-  reserved call or gate for. Classification is by shape, not a fixed list, so a
-  delegation tool that did not exist when the fence was written is denied on
-  arrival. Observe-or-stop tools are excluded by whole name.
-- **Fence 2 — owner-act command TEXT.** A shell command invoking one of the acts
-  the lifecycle reserves for the owner is denied through any wrapper, whitespace
-  normalised before matching.
+- **Fence 1 — delegation-shaped tool NAMES.** Denied to prevent work outside
+  factory attempts, journals, call reservations and gates. Shape matching covers
+  new delegation tools. Observe-or-stop tools are excluded by whole name.
+- **Fence 2 — owner-act command TEXT.** Literal invocations of owner acts are
+  denied after whitespace normalisation.
 - **Fence 3 — Pi lifecycle timeout metadata and wrappers.** A finite Bash
-  timeout value, or written timeout wrapper, around lifecycle run/rework/review
+  timeout value, or written timeout wrapper, around lifecycle run/rework/review/resume
   is denied. This is a Pi-path safety floor; other-harness admission is high-trust work.
 
 If the payload parser cannot run at all, the guard fails closed and says so.
 ## 3. What the boundary does not cover
 
-The part this document exists for. Every item was measured against the guard as
-committed.
+These are measured limits of the committed guard:
 
 1. Fence 2 reads **written command text, not resolved intent**: an act reached
    through a variable, a line continuation, a quoted or split verb, or an inner
@@ -50,9 +45,8 @@ committed.
 7. None of this **confines what a session reads, writes or runs**: path policy
    governs worker phases and does not apply to the driving session.
 
-That list is the operating envelope, not a menu. A session that decides to
-route around the fences can; what the boundary buys is that doing so is a
-**choice** and never an accident.
+These limits grant no permission to bypass the guard. Marimba must never route
+around a fence.
 
 ## 4. How marimba's settings load
 
@@ -69,10 +63,8 @@ Measured, and worth knowing because it decides what else is in scope:
 
 ## 5. The architecture-review exception
 
-A session launched without marimba's settings keeps the delegation tools, and
-that is the supported route for a review by an agent that did not write the
-proposal. Such a session reviews rather than drives: it reads, judges and
-reports, and takes no owner act.
+A session without marimba's settings may delegate an independent architecture
+review. It reads, judges and reports, but neither drives nor takes owner acts.
 
 ## 6. What is true instead
 
@@ -80,9 +72,14 @@ Four guarantees — earlier documents claimed stronger things that were not true
 
 1. **One push path exists, unreachable before `LANDED`.** Publishing is a separate
    owner act on a landed revision; no force-push or branch-deletion path exists.
-2. **Nothing is auto-deleted.** The collection command lists, never removes.
-3. **Writes during a worker phase are confined to a managed worktree** by path
-   policy, with protected paths as an independent rejection on top.
+2. **Collection lists only.** The collection command never deletes candidates.
+   Invariant 8 of `AGENTS.md` permits exact lock-release, operation-owned private
+   temporary and failed-admission rollback cleanup. It permits no general
+   deletion of user work or refs, and gives marimba no cleanup authority.
+3. **Worker repository writes are scoped to a managed worktree** by path policy,
+   with protected paths requiring their separate exact grant. Read the sandbox
+   badge: tool policy is weaker than OS isolation. Host-owned runtime writes are
+   separate from repository writes.
 4. **Canonical movement is a local fast-forward the owner authorises.**
 
 One placement fact, because getting it wrong makes guarantee 3 false: the
@@ -91,7 +88,9 @@ managed worktree root is a **sibling** of the state root, not inside it.
 ## 7. What marimba does instead of an owner act
 
 **Prepare and explain.** Never perform one, and never recommend one without the
-evidence its edge requires.
+evidence its edge requires. `owner-acts.mts` is the canonical list for the guards,
+including the compound and flagged acts. An owner's instruction to continue is
+not permission to bypass that boundary.
 
 ## 8. This document's own rule
 

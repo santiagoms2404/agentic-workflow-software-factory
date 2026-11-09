@@ -20,7 +20,7 @@
 
 import { createHash } from "node:crypto";
 import { constants, promises as fs } from "node:fs";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { parse as parseYaml } from "yaml";
 import type { ModelInfo, ObservedToolImage } from "../adapters/interface.ts";
@@ -33,6 +33,7 @@ import {
   VisualReferenceBindingSchema,
   VisualReferenceDigestsSchema,
   VisualReferenceIndexSchema,
+  VisualReferencesBoundSchema,
   type BoundVisualFrame,
   type VisualObservation,
   type VisualReferenceBinding,
@@ -42,6 +43,7 @@ import { systemGitRunner, type GitRunner } from "../git/changes.ts";
 import { journalFilePath } from "../persistence/platform-paths.ts";
 import { normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { ImageDecodeFailure, inspectImage } from "./visual-image.ts";
+import { protectedBlobId } from "./protected-files.ts";
 
 const { mkdir, open, readdir, readFile, realpath, stat, writeFile } = fs;
 
@@ -99,7 +101,8 @@ function sha256(bytes: Buffer | string): string {
 
 function isContained(root: string, candidate: string): boolean {
   const offset = relative(root, candidate);
-  return offset === "" || (!offset.startsWith("..") && !isAbsolute(offset));
+  // Only a leading ".." component is a parent-directory escape; `..archive` is an ordinary name (B6-26).
+  return offset === "" || (offset !== ".." && !offset.startsWith(`..${sep}`) && !isAbsolute(offset));
 }
 
 function relativePath(value: string, code: VisualRefusalCode, label: string): string {
@@ -182,7 +185,7 @@ function parseJson(bytes: Buffer, code: VisualRefusalCode, label: string): unkno
 function committedIndex(root: string, indexPath: string, bytes: Buffer, git: GitRunner): string {
   const blob = git(["rev-parse", "--verify", "--quiet", `HEAD:./${indexPath}`]);
   if (blob.status !== 0) refuse("index-uncommitted", `${indexPath} is not committed at HEAD of the reference root's Git repository`);
-  const expected = createHash("sha1").update(`blob ${String(bytes.length)}\0`).update(bytes).digest("hex");
+  const expected = protectedBlobId(bytes);
   if (blob.stdout.trim() !== expected) refuse("index-uncommitted", `${indexPath} differs from its committed blob at HEAD; commit or restore it before binding`);
   const head = git(["rev-parse", "--verify", "HEAD"]);
   if (head.status !== 0 || !/^[a-f0-9]{40}$/.test(head.stdout.trim())) refuse("index-uncommitted", `the reference root ${JSON.stringify(root)} has no readable HEAD`);
@@ -200,14 +203,17 @@ export interface VerifyVisualReferencesOptions {
   readonly planRef: string | null;
   /** The agent phases the workflow will run; a binding may name only these. */
   readonly agentPhases: readonly string[];
+  /** Previously host-verified facts may be reused only when the exact image bytes still match. */
+  readonly previousBound?: VisualReferencesBound;
   readonly git?: (root: string) => GitRunner;
 }
 
 /**
  * Verifies a binding end to end: root, committed index, digests bound to that
- * index, exact frame selection, and each image's containment, size, type,
- * structure, dimensions and digest. Returns the verified bytes; throws
- * `VisualReferenceRefused` naming the first failure.
+ * index, exact frame selection, and each image's containment, size, dimensions
+ * and digest. A previous host-bound frame's structure facts are reused only
+ * after the current bytes hash to that same frame. Returns the verified bytes;
+ * throws `VisualReferenceRefused` naming the first failure.
  */
 export async function verifyVisualReferences(binding: VisualReferenceBinding,
   options: VerifyVisualReferencesOptions): Promise<VerifiedVisualReferences> {
@@ -259,21 +265,29 @@ export async function verifyVisualReferences(binding: VisualReferenceBinding,
 
   const frames: BoundVisualFrame[] = [];
   const images = new Map<string, Buffer>();
+  const previousBound = options.previousBound;
+  const reusableFrames = previousBound !== undefined && Value.Check(VisualReferencesBoundSchema, previousBound) &&
+    previousBound.bindingDigest === visualBindingDigest(binding) ? previousBound.frames : [];
   for (const id of selected) {
     const entry = index.frames.find((frame) => frame.id === id);
     if (entry === undefined) refuse("frame-unknown", `frame ${JSON.stringify(id)} is not in the index`);
     const bytes = await readContained(root, relativePath(entry.image, "path-escape", `frame ${id} image`), VISUAL_REFERENCE_LIMITS.maxImageBytes, `frame ${id} image`);
-    let facts;
-    try {
-      facts = inspectImage(bytes);
-    } catch (error) {
-      if (error instanceof ImageDecodeFailure) refuse(error.unsupported ? "image-type" : "image-corrupt", `frame ${id}: ${error.message}`);
-      throw error;
+    const digest = sha256(bytes);
+    const previous = reusableFrames.find((frame) => frame.id === id && frame.sha256 === digest && frame.bytes === bytes.length);
+    let facts: Pick<BoundVisualFrame, "mediaType" | "width" | "height">;
+    if (previous !== undefined) {
+      facts = previous;
+    } else {
+      try {
+        facts = inspectImage(bytes);
+      } catch (error) {
+        if (error instanceof ImageDecodeFailure) refuse(error.unsupported ? "image-type" : "image-corrupt", `frame ${id}: ${error.message}`);
+        throw error;
+      }
     }
     if (facts.width > VISUAL_REFERENCE_LIMITS.maxImageEdge || facts.height > VISUAL_REFERENCE_LIMITS.maxImageEdge) {
       refuse("image-too-large", `frame ${id} is ${String(facts.width)}x${String(facts.height)}; neither edge may exceed ${String(VISUAL_REFERENCE_LIMITS.maxImageEdge)} or a provider may resize it`);
     }
-    const digest = sha256(bytes);
     const expected = digests.images[id];
     if (expected === undefined) refuse("digests-invalid", `the digests file has no entry for frame ${id}`);
     if (digest !== expected) refuse("image-digest-mismatch", `frame ${id} does not match its recorded digest; the image changed after capture`);
@@ -356,7 +370,10 @@ export function assertVisualRoute(input: VisualRouteInput): void {
   const demonstrated = Object.entries(VISUAL_ROUTES).flatMap(([adapter, models]) => Object.keys(models).map((model) => `${adapter}/${model}`));
   const selector = input.model.requestedModel.replace(/^[a-z]+:/, "");
   if (!input.model.supportsImages) refuse("route-text-only", `${input.phaseId} runs on ${input.model.requestedModel}, which takes no image input`);
-  if (VISUAL_ROUTES[input.adapterId]?.[selector] === undefined) {
+  // Own properties at both levels: `toString`, `constructor` and friends are
+  // Object.prototype members, not measured routes (B6-34).
+  const adapterRoutes = Object.hasOwn(VISUAL_ROUTES, input.adapterId) ? VISUAL_ROUTES[input.adapterId] : undefined;
+  if (adapterRoutes === undefined || !Object.hasOwn(adapterRoutes, selector)) {
     refuse("route-unsupported", `${input.phaseId} runs on ${input.adapterId}/${selector}, which has no demonstrated image delivery; demonstrated routes: ${demonstrated.join(", ")}`);
   }
   if (input.profile === "no-tools" || !input.tools.includes("read")) {
@@ -409,10 +426,66 @@ export async function deliverVisualReferences(verified: VerifiedVisualReferences
       await writeFile(frame.path, verified.images.get(frame.id)!, { flag: "wx", mode: 0o444 });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      await completeInterruptedFrame(frame.path, verified.images.get(frame.id)!);
     }
   }
   await revalidateDelivery(delivery);
   return delivery;
+}
+
+/**
+ * A frame write interrupted after exclusive creation can leave a strict prefix
+ * at its final name. Complete only that recognizable partial copy; an unrelated
+ * file at the same name is preserved and refused. No-follow opens and the
+ * single-link check keep a replacement from redirecting the repair elsewhere.
+ */
+async function completeInterruptedFrame(path: string, expected: Buffer): Promise<void> {
+  const source = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  let sourceIdentity: { readonly dev: number; readonly ino: number } | null = null;
+  try {
+    const info = await source.stat();
+    if (!info.isFile() || info.nlink !== 1) refuse("delivery-changed", "an existing delivered frame is not a single-link regular file");
+    const current = await source.readFile();
+    if (current.equals(expected)) {
+      await source.chmod(0o444);
+      return;
+    }
+    if (current.length >= expected.length || !expected.subarray(0, current.length).equals(current)) {
+      refuse("delivery-changed", "an existing delivered frame is not an interrupted prefix of its verified bytes");
+    }
+    sourceIdentity = { dev: info.dev, ino: info.ino };
+    await source.chmod(0o600);
+  } finally {
+    await source.close();
+  }
+  if (sourceIdentity === null) throw new Error("interrupted frame identity was not captured");
+
+  const destination = await open(path, constants.O_RDWR | constants.O_NOFOLLOW);
+  try {
+    const info = await destination.stat();
+    if (!info.isFile() || info.nlink !== 1 || info.dev !== sourceIdentity.dev || info.ino !== sourceIdentity.ino) {
+      refuse("delivery-changed", "the interrupted frame changed identity before it could be completed");
+    }
+    const current = await destination.readFile();
+    if (current.equals(expected)) {
+      await destination.chmod(0o444);
+      return;
+    }
+    if (current.length >= expected.length || !expected.subarray(0, current.length).equals(current)) {
+      await destination.chmod(0o444);
+      refuse("delivery-changed", "an existing delivered frame is not an interrupted prefix of its verified bytes");
+    }
+    let offset = 0;
+    while (offset < expected.length) {
+      const { bytesWritten } = await destination.write(expected, offset, expected.length - offset, offset);
+      if (bytesWritten === 0) throw new Error("could not complete the interrupted visual frame write");
+      offset += bytesWritten;
+    }
+    await destination.truncate(expected.length);
+    await destination.chmod(0o444);
+  } finally {
+    await destination.close();
+  }
 }
 
 /** Re-hashes every delivered file; a missing or changed one ends the phase. */

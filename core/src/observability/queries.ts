@@ -3,7 +3,26 @@
 // explicitly so private references cannot enter an API object by accident.
 
 import type { DatabaseSync } from "./sqlite.ts";
+import { TERMINAL_STATES } from "../state/task-machine.ts";
 import type { RouteSelectionProvenance } from "../contracts/route-selection.ts";
+import { REVIEW_CONTEXT_SCHEMA_ID } from "../contracts/review-context.ts";
+
+type ReadStatement = ReturnType<DatabaseSync["prepare"]>;
+const READ_STATEMENTS = new WeakMap<DatabaseSync, Map<string, ReadStatement>>();
+
+function readStatement(db: DatabaseSync, sql: string): ReadStatement {
+  let statements = READ_STATEMENTS.get(db);
+  if (statements === undefined) {
+    statements = new Map();
+    READ_STATEMENTS.set(db, statements);
+  }
+  let statement = statements.get(sql);
+  if (statement === undefined) {
+    statement = db.prepare(sql);
+    statements.set(sql, statement);
+  }
+  return statement;
+}
 
 export interface SessionRow {
   session_id: string;
@@ -77,7 +96,14 @@ export interface ListSessionsOptions {
   state?: string;
 }
 
+export function sessionsForStage(db: DatabaseSync, projectSlug: string): SessionRow[] {
+  return db
+    .prepare(`SELECT ${SESSION_PUBLIC_COLUMNS} FROM sessions WHERE project_slug = ? ORDER BY started_at DESC, session_id`)
+    .all(projectSlug) as unknown as SessionRow[];
+}
+
 export function listSessions(db: DatabaseSync, opts: ListSessionsOptions = {}): SessionRow[] {
+
   const clauses = ["archived = ?"];
   const params: Array<string | number> = [opts.archived === true ? 1 : 0];
   if (opts.before !== undefined) {
@@ -130,7 +156,8 @@ export interface PhaseRow {
 }
 
 export function phasesForSession(db: DatabaseSync, sessionId: string): PhaseRow[] {
-  return db.prepare("SELECT * FROM phases WHERE session_id = ? ORDER BY ordinal LIMIT 100").all(sessionId) as unknown as PhaseRow[];
+  return readStatement(db, "SELECT * FROM phases WHERE session_id = ? ORDER BY ordinal LIMIT 100")
+    .all(sessionId) as unknown as PhaseRow[];
 }
 
 export function phaseForSession(db: DatabaseSync, sessionId: string, phaseReference: string): PhaseRow | null {
@@ -219,7 +246,7 @@ export interface AgentRow {
 }
 
 export function agentsForSession(db: DatabaseSync, sessionId: string): AgentRow[] {
-  return db.prepare(`SELECT session_id, agent, adapter_id, provider, color, requested_model,
+  return readStatement(db, `SELECT session_id, agent, adapter_id, provider, color, requested_model,
       resolved_model, model_provenance, context_tokens, context_window, call_count,
       input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens,
       total_tokens, estimated_cost_usd, cost_authority, sandbox_badge, sandbox_mechanism,
@@ -301,10 +328,17 @@ export interface ActivityRow {
 /** Latest canonical event evidence for compact cards and waterfall ticks, returned chronologically. */
 export function compactActivityForSession(db: DatabaseSync, sessionId: string, limit = 80): ActivityRow[] {
   const bounded = Math.max(1, Math.min(80, Math.trunc(limit)));
-  return db.prepare(`SELECT event_row, phase_id, type, status, started_at, ended_at FROM (
+  return readStatement(db, `SELECT event_row, phase_id, type, status, started_at, ended_at FROM (
       SELECT event_row, phase_id, type, status, started_at, ended_at
       FROM events WHERE session_id = ? ORDER BY event_row DESC LIMIT ?
     ) ORDER BY event_row`).all(sessionId, bounded) as unknown as ActivityRow[];
+}
+
+/** Latest replay payloads for a session, newest first. */
+export function replayPayloadsForSession(db: DatabaseSync, sessionId: string): { payload_json: string }[] {
+  return readStatement(db, `SELECT payload_json FROM events
+    WHERE session_id = ? AND type = 'replay' ORDER BY event_row DESC`)
+    .all(sessionId) as unknown as { payload_json: string }[];
 }
 
 export function pollEvents(db: DatabaseSync, sessionId: string, afterEventRow: number, limit = 200): EventRow[] {
@@ -336,7 +370,7 @@ export interface TransitionRow {
   seq: number;
   from_state: string;
   to_state: string;
-  actor: "host" | "owner" | "human";
+  actor: "host" | "owner" | "human" | "delegate";
   edge_id: string;
   reason_source: string;
   reason_code: string | null;
@@ -416,6 +450,94 @@ export function envelopesForPhase(db: DatabaseSync, sessionId: string, phaseId: 
     .all(sessionId, phaseId) as unknown as EnvelopeRow[];
 }
 
+export interface StageEnvelopeRow extends EnvelopeRow {
+  readonly session_id: string;
+  readonly phase_id: string;
+}
+
+/** The selected stage-query projection, excluding envelope payload bodies. */
+export interface StageEnvelopeProjectionRow {
+  envelope_id: string;
+  schema_id: string;
+  correction_round: number;
+  valid: number;
+  created_at: string;
+  session_id: string;
+  phase_id: string;
+}
+
+/** Stage resolution needs envelope identity and ordering, never the private payload bodies. */
+export function stageEnvelopesForProject(db: DatabaseSync, projectSlug: string): StageEnvelopeProjectionRow[] {
+  return db.prepare(`SELECT e.envelope_id, e.schema_id, e.correction_round, e.valid, e.created_at,
+      e.session_id, e.phase_id
+    FROM envelopes e JOIN sessions s ON s.session_id = e.session_id
+    WHERE s.project_slug = ? ORDER BY e.session_id, e.phase_id, e.correction_round, e.created_at`)
+    .all(projectSlug) as unknown as StageEnvelopeProjectionRow[];
+}
+
+export interface CandidateDiffStat {
+  readonly baseSha: string;
+  readonly candidateSha: string;
+  readonly files: number;
+  readonly insertions: number;
+  readonly deletions: number;
+}
+
+/** Structured host-composed review evidence for the session's exact current candidate. */
+export function candidateDiffStatForSession(
+  db: DatabaseSync,
+  sessionId: string,
+  baseSha: string | null,
+  candidateSha: string | null,
+): CandidateDiffStat | null {
+  if (baseSha === null || candidateSha === null) return null;
+  const rows = db.prepare(`SELECT e.payload_json FROM phases p
+    JOIN envelopes e ON e.phase_id = p.phase_id
+    WHERE p.session_id = ? AND e.session_id = ? AND e.schema_id = ? AND e.valid = 1
+      AND json_extract(e.payload_json, '$.payload.baseSha') = ?
+      AND json_extract(e.payload_json, '$.payload.candidateSha') = ?
+    ORDER BY e.created_at DESC, e.envelope_id DESC`).all(
+    sessionId, sessionId, REVIEW_CONTEXT_SCHEMA_ID, baseSha, candidateSha,
+  ) as unknown as { payload_json: string }[];
+
+  let result: CandidateDiffStat | null = null;
+  for (const row of rows) {
+    let stored: unknown;
+    try { stored = JSON.parse(row.payload_json) as unknown; } catch { continue; }
+    if (stored === null || typeof stored !== "object" || Array.isArray(stored)) continue;
+    const envelope = stored as { schemaId?: unknown; valid?: unknown; payload?: unknown };
+    if (envelope.schemaId !== REVIEW_CONTEXT_SCHEMA_ID || envelope.valid !== true) continue;
+    const payload = envelope.payload;
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) continue;
+    const evidence = payload as {
+      schema?: unknown;
+      producerStatus?: unknown;
+      baseSha?: unknown;
+      candidateSha?: unknown;
+      changedFiles?: unknown;
+      insertions?: unknown;
+      deletions?: unknown;
+    };
+    if (evidence.schema !== REVIEW_CONTEXT_SCHEMA_ID || evidence.producerStatus !== "success" ||
+        evidence.baseSha !== baseSha || evidence.candidateSha !== candidateSha || !Array.isArray(evidence.changedFiles) ||
+        !evidence.changedFiles.every((path: unknown) => typeof path === "string") ||
+        !Number.isSafeInteger(evidence.insertions) || (evidence.insertions as number) < 0 ||
+        !Number.isSafeInteger(evidence.deletions) || (evidence.deletions as number) < 0) continue;
+
+    const candidate: CandidateDiffStat = {
+      baseSha,
+      candidateSha,
+      files: evidence.changedFiles.length,
+      insertions: evidence.insertions as number,
+      deletions: evidence.deletions as number,
+    };
+    if (result !== null && (result.files !== candidate.files || result.insertions !== candidate.insertions ||
+        result.deletions !== candidate.deletions)) return null;
+    result = candidate;
+  }
+  return result;
+}
+
 export function configSnapshotForSession(db: DatabaseSync, sessionId: string): string | null {
   const row = db.prepare("SELECT config_snapshot_json FROM sessions WHERE session_id = ?").get(sessionId) as
     | { config_snapshot_json: string }
@@ -434,11 +556,13 @@ export interface HealthProjection {
 export function projectionHealth(db: DatabaseSync): HealthProjection {
   const version = db.prepare("PRAGMA user_version").get() as { user_version: number };
   const mode = db.prepare("PRAGMA journal_mode").get() as { journal_mode: string };
+  // Health drives live polling: terminal work (including publication) must not
+  // keep it alive. Use the lifecycle vocabulary rather than a second state list.
   const counts = db.prepare(`SELECT
-      SUM(CASE WHEN lifecycle_state NOT IN ('LANDED','BLOCKED','CANCELLED') THEN 1 ELSE 0 END) active,
+      SUM(CASE WHEN lifecycle_state NOT IN (${TERMINAL_STATES.map(() => "?").join(",")}) THEN 1 ELSE 0 END) active,
       SUM(CASE WHEN observability_degraded = 1 THEN 1 ELSE 0 END) degraded,
       MAX(CASE WHEN state_revision > last_projected_seq THEN state_revision - last_projected_seq ELSE 0 END) lag
-    FROM sessions`).get() as { active: number | null; degraded: number | null; lag: number | null };
+    FROM sessions`).get(...TERMINAL_STATES) as { active: number | null; degraded: number | null; lag: number | null };
   return {
     schemaVersion: version.user_version,
     journalMode: mode.journal_mode,

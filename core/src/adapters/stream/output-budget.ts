@@ -99,6 +99,14 @@ export class OutputBudget {
   constructor(options: OutputBudgetOptions = {}) {
     this.#maxBytes = positive(options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES, "maxOutputBytes");
     this.#maxEvents = positive(options.maxEventCount ?? DEFAULT_MAX_EVENT_COUNT, "maxEventCount");
+    if (this.#maxEvents < MIN_WELL_FORMED_EVENTS) {
+      this.#capped = true;
+      this.#pending = {
+        dimension: "events",
+        message: "event budget reached; remaining provider events were discarded",
+        detail: `max_event_count ${this.#maxEvents} is below the minimum required for well-formed runs`,
+      };
+    }
   }
 
   get maxOutputBytes(): number {
@@ -235,7 +243,7 @@ export class OutputBudget {
     const pending = this.#pending;
     this.#pending = null;
     if (pending === null || this.#announced) return null;
-    if (this.#events + this.owed + 1 > this.#maxEvents) return null;
+    if (!this.unsatisfiable && this.#events + this.owed + 1 > this.#maxEvents) return null;
     this.#announced = true;
     this.#events += 1;
     return pending;

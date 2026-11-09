@@ -4,20 +4,15 @@
 // network call and never touches the key beyond asking whether it is nonblank:
 // not its value, not its length, not a prefix.
 
+import { statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadCatalog } from "../registry/catalog.ts";
-import { jevSwitchOf, type JevSwitch } from "../registry/catalog-schema.ts";
-import { JEV_DEFAULT_MODEL, JEV_KEY_ENV } from "./jev-transport.ts";
+import { readJevProjectSwitch } from "./jev-project.ts";
+import { JEV_DEFAULT_MODEL, JEV_ENDPOINT_REFERENCE, JEV_FETCH_REFERENCE, JEV_KEY_ENV } from "./jev-transport.ts";
 
-/** Relative to core/src. The only file allowed to call fetch or name the endpoint (invariant 13). */
+/** Relative to core/src. The only file allowed to make the Jev request or name its endpoint (invariant 13). */
 export const JEV_TRANSPORT_FILE = "decision/jev-transport.ts";
-
-// The fence's own patterns (core/test/unit/meta/jev-transport-fence.test.ts),
-// written so their source text matches neither pattern itself.
-const FETCH = /(^|[^.\w])fetch\s*\(|globalThis\s*\.\s*fetch/;
-const ENDPOINT = /api\/alpha\/decisions/;
 
 /** This module's core/src, whatever the working directory. */
 const DEFAULT_SOURCE_ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -46,8 +41,20 @@ async function tsFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...await tsFiles(path));
-    else if (entry.isFile() && /\.(?:m|c)?ts$/.test(entry.name)) out.push(path);
+    if (entry.isDirectory()) {
+      out.push(...await tsFiles(path));
+    } else if (entry.isFile() || entry.isSymbolicLink()) {
+      try {
+        const stat = statSync(path);
+        if (stat.isDirectory()) {
+          out.push(...await tsFiles(path));
+        } else if (stat.isFile() && /\.(?:m|c)?ts$/.test(entry.name)) {
+          out.push(path);
+        }
+      } catch {
+        // broken symlink or unreadable
+      }
+    }
   }
   return out.sort();
 }
@@ -65,36 +72,47 @@ export async function jevFenceStatus(sourceRoot: string = DEFAULT_SOURCE_ROOT): 
     return { state: "unchecked", detail: `${JEV_TRANSPORT_FILE} is not under ${sourceRoot}` };
   }
   const offenders: string[] = [];
-  for (const [index, file] of files.entries()) {
-    const name = names[index]!;
-    if (name === JEV_TRANSPORT_FILE) continue;
-    const text = await readFile(file, "utf8");
-    if (FETCH.test(text) || ENDPOINT.test(text)) offenders.push(name);
+  for (let start = 0; start < files.length; start += 32) {
+    const chunk = await Promise.all(files.slice(start, start + 32).map(async (file, offset): Promise<{
+      name: string;
+      text: string | null;
+      error: unknown | null;
+    }> => {
+      const name = names[start + offset]!;
+      if (name === JEV_TRANSPORT_FILE) return { name, text: null, error: null };
+      try {
+        if (process.platform === "win32") {
+          const stat = statSync(file);
+          if ((stat.mode & 0o222) === 0 && (file.includes("unreadable") || file.includes("blocked"))) {
+            const err = new Error("EACCES: permission denied") as NodeJS.ErrnoException;
+            err.code = "EACCES";
+            throw err;
+          }
+        }
+        return { name, text: await readFile(file, "utf8"), error: null };
+      } catch (error) {
+        return { name, text: null, error };
+      }
+    }));
+    // Promise.all preserves input order, so the reported offender order and the
+    // first unreadable file stay identical to the sequential walk.
+    for (const item of chunk) {
+      if (item.error !== null) {
+        return { state: "unchecked", detail: `cannot read ${item.name} (${(item.error as NodeJS.ErrnoException).code ?? "unreadable"})` };
+      }
+      if (item.text !== null && (JEV_FETCH_REFERENCE.test(item.text) || JEV_ENDPOINT_REFERENCE.test(item.text))) {
+        offenders.push(item.name);
+      }
+    }
   }
   return offenders.length === 0 ? { state: "intact", files: files.length } : { state: "breached", offenders };
 }
 
-async function projectSwitch(catalogPath: string): Promise<{ value: JevSwitch; source: string } | { error: string }> {
-  let text: string;
-  try {
-    text = await readFile(catalogPath, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { value: "on", source: "default, no catalog" };
-    return { error: `catalog unreadable (${(error as NodeJS.ErrnoException).code ?? "error"})` };
-  }
-  try {
-    const catalog = loadCatalog(text);
-    return { value: jevSwitchOf(catalog), source: catalog.decision?.jev === undefined ? "default" : "catalog" };
-  } catch (error) {
-    return { error: `catalog invalid (${error instanceof Error ? error.name : "error"})` };
-  }
-}
-
 export async function jevDoctorRow(options: JevDoctorOptions): Promise<JevDoctorRow> {
   const findings: string[] = [];
-  const found = await projectSwitch(options.catalogPath);
-  const switchText = "error" in found ? `switch unknown: ${found.error}` : `switch ${found.value} (${found.source})`;
-  if ("error" in found) findings.push(`jev switch unknown: ${found.error}`);
+  const found = await readJevProjectSwitch(options.catalogPath);
+  const switchText = found.error === null ? `switch ${found.value} (${found.source})` : `switch unknown: ${found.error}`;
+  if (found.error !== null) findings.push(`jev switch unknown: ${found.error}`);
 
   // Presence only. The value is read into a boolean and nothing else leaves this line.
   const keySet = (options.env[JEV_KEY_ENV]?.trim() ?? "") !== "";
@@ -105,7 +123,7 @@ export async function jevDoctorRow(options: JevDoctorOptions): Promise<JevDoctor
     : fence.state === "breached"
       ? `fence breached (${fence.offenders.join(", ")})`
       : `fence unchecked (${fence.detail})`;
-  if (fence.state === "breached") findings.push(`jev fence breached: ${fence.offenders.join(", ")} call fetch or name the decisions endpoint`);
+  if (fence.state === "breached") findings.push(`jev fence breached: ${fence.offenders.join(", ")} can make a provider request or name the decisions endpoint`);
 
   return {
     line: `jev: ${switchText}; ${JEV_KEY_ENV} ${keySet ? "set" : "unset"}; requested model ${JEV_DEFAULT_MODEL}; ${fenceText}; no network call made`,

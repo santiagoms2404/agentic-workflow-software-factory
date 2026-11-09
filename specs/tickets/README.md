@@ -75,8 +75,8 @@ chain grants parallelism:
 ## Keeping state in sync
 
 The plan's status markers are the source of truth. When a task's marker flips in
-`awsf-plan.html`, flip `state:` here in the same commit. Current plan-aligned states:
-**T01–T36 `done`.**
+`awsf-plan.html`, flip `state:` here in the same commit. Historical snapshot, retained from earlier documentation:
+**T01–T36 `done`.** Read the [registered plan](../awsf-plan.html) for current completion.
 
 This is **mechanically enforced** (AGENTS.md invariant 12) by
 `core/test/unit/meta/ticket-plan-sync.test.ts`, which fails the build on drift. The plan carries

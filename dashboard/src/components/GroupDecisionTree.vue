@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import type { GroupTree, TreeProposal } from "../../shared/types.ts";
 import { formatDate } from "../display.ts";
+import { askLine as formatAskLine } from "../presentation.ts";
 import { narrativeFields, notTakenReason, VOICE_LABEL } from "../group-tree.ts";
 
 const props = defineProps<{ tree: GroupTree }>();
@@ -9,15 +10,21 @@ const props = defineProps<{ tree: GroupTree }>();
 /** The ask a decision traces back to, so a reader can follow one link, not scan. */
 const askText = computed(() => new Map(props.tree.asks.map((ask) => [ask.inputId, ask.text])));
 
-function fields(proposal: TreeProposal): ReturnType<typeof narrativeFields> {
-  return narrativeFields(proposal.narrative);
+function askField(inputId: string | null): { text: string; recorded: boolean } {
+  const text = inputId === null ? null : askText.value.get(inputId) ?? null;
+  const line = formatAskLine(text, 120);
+  return { text: line ?? "no recorded ask precedes this", recorded: line !== null };
 }
 
-function askLine(inputId: string | null): string {
-  if (inputId === null) return "no recorded ask precedes this";
-  const text = askText.value.get(inputId) ?? "";
-  const line = text.split("\n").map((value) => value.trim()).find((value) => value.length > 0) ?? "";
-  return line.length <= 120 ? line : `${line.slice(0, 119)}…`;
+function fieldRows(proposal: TreeProposal, middleLabel: "changed" | "its reason") {
+  const fields = narrativeFields(proposal.narrative);
+  const middle = middleLabel === "changed" ? fields.changes : fields.reason;
+  return [
+    { label: "from the ask", ...askField(proposal.ask) },
+    { label: "read as", ...fields.explanation },
+    { label: middleLabel, ...middle },
+    { label: "friction", ...fields.friction },
+  ];
 }
 </script>
 
@@ -49,21 +56,9 @@ function askLine(inputId: string | null): string {
                chip gives the eye a rail to track down, which is the job the
                accent border used to do badly. -->
           <dl class="decision-fields">
-            <div class="decision-field">
-              <dt>from the ask</dt>
-              <dd :class="{ absent: decision.ask === null }">{{ askLine(decision.ask) }}</dd>
-            </div>
-            <div class="decision-field">
-              <dt>read as</dt>
-              <dd :class="{ absent: !fields(decision).explanation.recorded }">{{ fields(decision).explanation.text }}</dd>
-            </div>
-            <div class="decision-field">
-              <dt>changed</dt>
-              <dd :class="{ absent: !fields(decision).changes.recorded }">{{ fields(decision).changes.text }}</dd>
-            </div>
-            <div class="decision-field">
-              <dt>friction</dt>
-              <dd :class="{ absent: !fields(decision).friction.recorded }">{{ fields(decision).friction.text }}</dd>
+            <div v-for="row in fieldRows(decision, 'changed')" :key="row.label" class="decision-field">
+              <dt>{{ row.label }}</dt>
+              <dd :class="{ absent: !row.recorded }">{{ row.text }}</dd>
             </div>
           </dl>
           <!-- What it wrote and what it dropped are the same kind of list and
@@ -100,21 +95,9 @@ function askLine(inputId: string | null): string {
           <h5>{{ proposal.narrative.title }}</h5>
           <p class="decision-reason absent">{{ notTakenReason(proposal) }}</p>
           <dl class="decision-fields">
-            <div class="decision-field">
-              <dt>from the ask</dt>
-              <dd :class="{ absent: proposal.ask === null }">{{ askLine(proposal.ask) }}</dd>
-            </div>
-            <div class="decision-field">
-              <dt>read as</dt>
-              <dd :class="{ absent: !fields(proposal).explanation.recorded }">{{ fields(proposal).explanation.text }}</dd>
-            </div>
-            <div class="decision-field">
-              <dt>its reason</dt>
-              <dd :class="{ absent: !fields(proposal).reason.recorded }">{{ fields(proposal).reason.text }}</dd>
-            </div>
-            <div class="decision-field">
-              <dt>friction</dt>
-              <dd :class="{ absent: !fields(proposal).friction.recorded }">{{ fields(proposal).friction.text }}</dd>
+            <div v-for="row in fieldRows(proposal, 'its reason')" :key="row.label" class="decision-field">
+              <dt>{{ row.label }}</dt>
+              <dd :class="{ absent: !row.recorded }">{{ row.text }}</dd>
             </div>
           </dl>
           <div v-if="proposal.alternatives.length" class="decision-groups">

@@ -1,11 +1,12 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { SavedPhaseResultSchema } from "./saved-phase-result.ts";
+import { OBJECT_ID_PATTERN, SHA256_HEX_PATTERN } from "./typebox.ts";
 import { HostValidationProgressSchema, assertHostValidationProgress } from "./host-validation.ts";
 import { sha256, canonicalJson } from "./owner-amendment.ts";
 const id = Type.String({ minLength: 1 });
-const hash = Type.String({ pattern: "^[a-f0-9]{64}$" });
-const sha = Type.String({ pattern: "^[a-f0-9]{40}$" });
+const hash = Type.String({ pattern: SHA256_HEX_PATTERN });
+const sha = Type.String({ pattern: OBJECT_ID_PATTERN });
 export const AcceptedPhaseSchema = Type.Object({
   phaseKey: id, ordinal: Type.Integer({ minimum: 1 }), envelopeId: id,
   envelopeDigest: hash, ownerAmendmentDigest: Type.Optional(hash), round: Type.Integer({ minimum: 0 }), candidateSha: Type.Union([sha, Type.Null()]),

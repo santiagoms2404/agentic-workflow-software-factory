@@ -1,7 +1,10 @@
 // Earned autonomy, computed at read time (W19 task 6, DD6, Q8).
 //
-// Code-decided acts (raise, resume, wait-until, cancel) are live from the
-// first lease. A judgment act (rework, replacement-review, degrade-review,
+// Code-decided acts (raise, resume, wait-until, cancel) are live under a lease
+// that names them (AGENTS.md invariant 13, "a lease that names it", read as the
+// act: owner call O3, finding B2-12); an act the lease leaves out reports
+// not-leased. No migration: leases are task-scoped and revocable, so the owner
+// reissues one with explicit acts. A judgment act (rework, replacement-review, degrade-review,
 // route-fallback, continue) unlocks on its own when at least 7 of its last 8
 // paired proposals matched, live shadow and replay pairs both counted and
 // labeled. The owner's `autonomy all` switch unlocks every judgment act for
@@ -26,6 +29,7 @@ export type LeaseAutonomy = "earned" | "all" | null;
 export type AutonomyBasis =
   | "no-lease"
   | "code-decided"
+  | "not-leased"
   | "earned"
   | "owner-all"
   | "not-earned"
@@ -59,14 +63,19 @@ export function earningWindow(act: ProposedActName, pairs: readonly Pair[]): Pai
 }
 
 /**
- * Whether the Delegate may take `act` under a lease with `leaseAutonomy`, and
- * why. The window is reported for every act, so the owner sees the evidence
- * even where it does not decide anything.
+ * Whether the Delegate may take `act` under a lease with `leaseAutonomy` that
+ * names `leaseActs` (PolicyLease.acts), and why. The window is reported for
+ * every act, so the owner sees the evidence even where it does not decide
+ * anything.
+ *
+ * A code-decided act is live only when `leaseActs` names it. The list defaults
+ * to empty, so a caller that passes no list leases no code-decided act: the
+ * predicate fails closed instead of treating every lease as naming them all.
  *
  * Earning needs a full window: seven matches among fewer than eight pairs is
  * not "7 of the last 8".
  */
-export function autonomyFor(act: ProposedActName, pairs: readonly Pair[], leaseAutonomy: LeaseAutonomy): AutonomyReport {
+export function autonomyFor(act: ProposedActName, pairs: readonly Pair[], leaseAutonomy: LeaseAutonomy, leaseActs: readonly ProposedActName[] = []): AutonomyReport {
   const window = earningWindow(act, pairs);
   const matched = window.filter((pair) => pair.outcome === "match").length;
   const sources = {
@@ -79,7 +88,7 @@ export function autonomyFor(act: ProposedActName, pairs: readonly Pair[], leaseA
   // Never first: no lease, switch or history reaches these.
   if (act === "land-shadow" || act === "wait-for-owner") return report(false, "never");
   if (leaseAutonomy === null) return report(false, "no-lease");
-  if (isCodeDecided(act)) return report(true, "code-decided");
+  if (isCodeDecided(act)) return leaseActs.includes(act) ? report(true, "code-decided") : report(false, "not-leased");
   if (!isJudgment(act)) return report(false, "never");
   if (leaseAutonomy === "all") return report(true, "owner-all");
   return window.length === EARN_WINDOW && matched >= EARN_MATCHES ? report(true, "earned") : report(false, "not-earned");

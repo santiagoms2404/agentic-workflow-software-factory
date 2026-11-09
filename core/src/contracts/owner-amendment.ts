@@ -1,9 +1,11 @@
-import { createHash } from "node:crypto";
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { scrubCredentialString } from "../policy/redaction.ts";
+import { sha256 } from "./hash.ts";
+import { OBJECT_ID_PATTERN, SHA256_HEX_PATTERN } from "./typebox.ts";
+export { sha256 } from "./hash.ts";
 
-const digestSchema = Type.String({ pattern: "^[a-f0-9]{64}$" });
+const digestSchema = Type.String({ pattern: SHA256_HEX_PATTERN });
 const id = Type.String({ minLength: 1 });
 
 const commonBinding = {
@@ -42,7 +44,7 @@ export const RescueOwnerAmendmentSchema = Type.Object({ ...commonAmendment,
 
 export const ReworkOwnerAmendmentSchema = Type.Object({ ...commonAmendment,
   binding: Type.Object({ ...commonBinding, entry: Type.Literal("rework"), anchorId: id,
-    anchorRevision: Type.Integer({ minimum: 1 }), candidateSha: Type.String({ pattern: "^[a-f0-9]{40}$" }),
+    anchorRevision: Type.Integer({ minimum: 1 }), candidateSha: Type.String({ pattern: OBJECT_ID_PATTERN }),
     defectDigest: digestSchema, ownerReentry: Type.Integer({ minimum: 1 }), logicalTurnId: id,
     correctionRound: Type.Literal(0), priorAmendmentDigest: Type.Null(), deliveryFrontier: Type.Literal("rework-input"),
   }, { additionalProperties: false }),
@@ -52,17 +54,29 @@ export type ReworkOwnerAmendment = Static<typeof ReworkOwnerAmendmentSchema>;
 /** These contracts bind owner intent. They do not enable an entry path or native steering. */
 export const OwnerAmendmentSchema = Type.Union([SeedOwnerAmendmentSchema, ResumeOwnerAmendmentSchema, RescueOwnerAmendmentSchema, ReworkOwnerAmendmentSchema]);
 export type OwnerAmendment = Static<typeof OwnerAmendmentSchema>;
+type OwnerAmendmentForBinding<A extends OwnerAmendment, B extends OwnerAmendment["binding"]> =
+  A extends OwnerAmendment
+    ? B extends A["binding"] ? Omit<A, "binding"> & { binding: B } : never
+    : never;
+export type OwnerAmendmentWithBinding<B extends OwnerAmendment["binding"]> =
+  B extends OwnerAmendment["binding"] ? OwnerAmendmentForBinding<OwnerAmendment, B> : never;
 
-export function sha256(text: string): string {
-  return createHash("sha256").update(text, "utf8").digest("hex");
-}
-
+/**
+ * Sorted-key JSON for digests. Anything it cannot represent faithfully is refused,
+ * as undefined already is. Built-ins such as Date, Map, Set and boxed or typed
+ * values keep their state in internal slots that Object.entries cannot see, so
+ * they would serialize as {} or as a misleading object, and two different inputs
+ * shared one digest (B3-10). NaN and Infinity would serialize as null.
+ */
 export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
+    const tag = Object.prototype.toString.call(value);
+    if (tag !== "[object Object]") throw new Error(`a ${tag.slice(8, -1)} is not canonical JSON; digest its plain data`);
     return `{${Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
       .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
   }
+  if (typeof value === "number" && !Number.isFinite(value)) throw new Error("a non-finite number is not canonical JSON");
   const encoded = JSON.stringify(value);
   if (encoded === undefined) throw new Error("undefined is not canonical JSON");
   return encoded;
@@ -78,12 +92,12 @@ export function ownerText(text: string): string {
 
 export function createOwnerAmendment<B extends OwnerAmendment["binding"]>(
   input: Omit<OwnerAmendment, "schema" | "actor" | "textDigest" | "digest" | "binding"> & { binding: B },
-): OwnerAmendment & { binding: B } {
+): OwnerAmendmentWithBinding<B> {
   const content = { ...input, binding: Object.freeze({ ...input.binding }),
     schema: "awsf.owner-amendment/v1" as const, actor: "owner" as const, textDigest: sha256(ownerText(input.text)) };
   const result = { ...content, digest: sha256(canonicalJson(content)) };
   assertOwnerAmendment(result);
-  return Object.freeze(result) as OwnerAmendment & { binding: B };
+  return Object.freeze(result) as OwnerAmendmentWithBinding<B>;
 }
 
 export function assertOwnerAmendment(value: unknown): asserts value is OwnerAmendment {
@@ -95,9 +109,13 @@ export function assertOwnerAmendment(value: unknown): asserts value is OwnerAmen
 }
 
 /** Validate against the host's current activation, never against provider-supplied bindings. */
-export function assertOwnerAmendmentBinding(amendment: OwnerAmendment, expected: OwnerAmendment["binding"]): void {
+export function assertOwnerAmendmentBinding(
+  amendment: OwnerAmendment,
+  expected: OwnerAmendment["binding"],
+  mismatchMessage = "owner amendment activation binding changed",
+): void {
   assertOwnerAmendment(amendment);
-  if (canonicalJson(amendment.binding) !== canonicalJson(expected)) throw new Error("owner amendment activation binding changed");
+  if (canonicalJson(amendment.binding) !== canonicalJson(expected)) throw new Error(mismatchMessage);
 }
 
 export function composeOwnerAmendment(original: string, amendment: OwnerAmendment | null) {

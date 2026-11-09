@@ -1,4 +1,8 @@
-// THE ONLY MODULE IN THIS REPOSITORY THAT IMPORTS `node:child_process`.
+// THE ONLY MODULE IN SHIPPED CODE THAT IMPORTS `node:child_process`.
+//
+// "Shipped code" is AGENTS.md invariant 3 as scoped by its O5 owner amendment:
+// the non-test code under `core/src`, `dashboard/src` and `docs/driving`, which
+// is exactly what the child-process fence walks. Tests may spawn.
 //
 // Everything else — every adapter, every workflow, every gate — asks this file
 // to start a process and cannot start one itself. That is not a style rule: an
@@ -18,7 +22,13 @@
 // point — a rejection that arrives after `spawn()` has already returned has
 // already failed.
 
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import {
+  spawn,
+  spawnSync,
+  type ChildProcess,
+  type SpawnSyncOptionsWithBufferEncoding,
+  type SpawnSyncReturns,
+} from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { IllegalSpawnSite } from "../state/errors.ts";
@@ -61,11 +71,33 @@ import type {
 import type { Reservation } from "./call-budget.ts";
 import { isVerifiedReconnectAuthorization, type TurnReconnectLaunchVerifier, type VerifiedReconnectAuthorization } from "../workflow/turn-reconnect-authorization.ts";
 import { continuityDigest } from "../contracts/interrupted-turn.ts";
+import { filterEnv } from "./process-environment.ts";
+import { reservationIdOf } from "./process-registration.ts";
 
-function reservationIdOf(registration: BrokerProcessRegistration): string {
-  return registration.kind === "phase-correction" || registration.kind === "turn-reconnect"
-    ? registration.originReservationId
-    : registration.reservationId;
+type PhaseLaunchIdentity = Pick<AgentPhaseProcessRegistration,
+  "runId" | "taskSessionId" | "workflowId" | "phaseId" | "phaseOrdinal" | "adapterId" | "role">;
+type CommonPhaseLaunchEvidence = Pick<AgentPhaseLaunchEvidence,
+  "taskSessionId" | "taskState" | "workflowId" | "phaseId" | "phaseOrdinal" | "phaseKind" | "adapterId" | "role">;
+
+function assertPhaseLaunchIdentity(registration: PhaseLaunchIdentity, refuse: (detail: string) => never): void {
+  if (typeof registration.runId !== "string" || registration.runId.length === 0) refuse("runId is missing");
+  if (typeof registration.taskSessionId !== "string" || registration.taskSessionId.length === 0) refuse("taskSessionId is missing");
+  if (typeof registration.workflowId !== "string" || registration.workflowId.length === 0) refuse("workflowId is missing");
+  if (typeof registration.phaseId !== "string" || registration.phaseId.length === 0) refuse("phaseId is missing");
+  if (!Number.isInteger(registration.phaseOrdinal) || registration.phaseOrdinal < 1) refuse("phaseOrdinal must be a positive integer");
+  if (typeof registration.adapterId !== "string" || registration.adapterId.length === 0) refuse("adapterId is missing");
+  if (typeof registration.role !== "string" || registration.role.length === 0) refuse("role is missing");
+}
+
+function phaseLaunchEvidenceMatches(evidence: CommonPhaseLaunchEvidence, registration: PhaseLaunchIdentity): boolean {
+  return evidence.taskSessionId === registration.taskSessionId &&
+    evidence.taskState === "RUNNING" &&
+    evidence.workflowId === registration.workflowId &&
+    evidence.phaseId === registration.phaseId &&
+    evidence.phaseOrdinal === registration.phaseOrdinal &&
+    evidence.phaseKind === "agent" &&
+    evidence.adapterId === registration.adapterId &&
+    evidence.role === registration.role;
 }
 
 // ---------------------------------------------------------------------------
@@ -234,6 +266,60 @@ export interface SystemCommandOptions {
   readonly cwd?: string;
   readonly maxBuffer?: number;
   readonly env?: Readonly<Record<string, string>>;
+  /**
+   * How stdout is returned. "utf8" (the default) decodes it as text. "latin1"
+   * maps every byte to exactly one character, so `Buffer.from(stdout, "latin1")`
+   * recovers the bytes the command wrote. Stored content whose digest matters
+   * must use "latin1": UTF-8 decoding replaces every byte that is not valid UTF-8.
+   */
+  readonly encoding?: "utf8" | "latin1";
+}
+
+/**
+ * The one spawn behind every read. Output is captured as bytes; runSystemCommand
+ * decodes it, in the encoding the caller asked for, only once the whole stream
+ * is in hand.
+ */
+function spawnSystemCommand(
+  executable: string,
+  argv: readonly string[],
+  options: SystemCommandOptions,
+): SpawnSyncReturns<Buffer> {
+  // The timeout bounds the whole command, not only its direct child (B1-17).
+  // spawnSync's timeout signals the one process it started, so the ssh, the
+  // credential helper or the test-runner workers that process started used to
+  // outlive it, unregistered, in the worktree the next gate runs in. Off
+  // Windows the command therefore gets its own process group — the same reason
+  // the provider launch is `detached` — and a timeout ends that group. Windows
+  // has no process groups to kill; there the direct child is all it bounds.
+  const grouped = process.platform !== "win32";
+  // `detached` is read by spawnSync exactly as by spawn (both go through the
+  // same argument normalisation into libuv's DETACHED flag), but the typings
+  // only declare it for spawn — hence the widened options type.
+  const spawnOptions: SpawnSyncOptionsWithBufferEncoding & { readonly detached: boolean } = {
+    encoding: "buffer",
+    timeout: options.timeoutMs,
+    shell: false,
+    windowsHide: true,
+    detached: grouped,
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    ...(options.env === undefined ? {} : { env: { ...options.env } }),
+    // A process table on a busy machine is large, and configured gate output is
+    // bounded at this sole command boundary rather than after unbounded capture.
+    maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
+  };
+  const result = spawnSync(executable, [...argv], spawnOptions);
+  const timedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
+  if (grouped && timedOut && result.pid > 0) {
+    // The leader is already dead and reaped; the group lives while anything is
+    // in it, so its id cannot have been handed to anyone else yet.
+    try {
+      process.kill(-result.pid, "SIGKILL");
+    } catch {
+      // ESRCH: nothing of the command was left running.
+    }
+  }
+  return result;
 }
 
 export function runSystemCommand(
@@ -241,24 +327,14 @@ export function runSystemCommand(
   argv: readonly string[],
   timeoutOrOptions: number | SystemCommandOptions,
 ): CommandResult {
-  const options = typeof timeoutOrOptions === "number"
+  const options: SystemCommandOptions = typeof timeoutOrOptions === "number"
     ? { timeoutMs: timeoutOrOptions }
     : timeoutOrOptions;
-  const result = spawnSync(executable, [...argv], {
-    encoding: "utf8",
-    timeout: options.timeoutMs,
-    shell: false,
-    windowsHide: true,
-    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-    ...(options.env === undefined ? {} : { env: { ...options.env } }),
-    // A process table on a busy machine is large, and configured gate output is
-    // bounded at this sole command boundary rather than after unbounded capture.
-    maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
-  });
+  const result = spawnSystemCommand(executable, argv, options);
   return {
     status: result.status,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
+    stdout: result.stdout?.toString(options.encoding ?? "utf8") ?? "",
+    stderr: result.stderr?.toString("utf8") ?? "",
     error: result.error === undefined || result.error === null ? null : result.error.message,
   };
 }
@@ -313,6 +389,9 @@ export interface BrokerOptions {
   controller?: ProcessController;
 }
 
+/** One immediate retry for a transient platform census fault before launch refuses closed. */
+const IDENTITY_OBSERVATION_ATTEMPTS = 2;
+
 export interface StartHooks {
   /** Called after each barrier step. The kill-host simulation kills from here. */
   onStep?: (step: BarrierStep) => Promise<void> | void;
@@ -331,6 +410,71 @@ export class LauncherExited extends Error {
     this.name = "LauncherExited";
     this.code = code;
     this.signal = signal;
+  }
+}
+
+/**
+ * The released provider's prompt could not be written for a reason other than
+ * the provider having stopped reading (EPIPE, which is an early exit and not a
+ * refusal). The provider never received its prompt whole, so the host ended it.
+ */
+export class PromptDeliveryFailed extends Error {
+  readonly runId: string;
+  readonly errorCode: string | null;
+
+  constructor(runId: string, cause: NodeJS.ErrnoException) {
+    super(
+      `refusing ${runId || "(unnamed run)"}: the prompt could not be written to the provider's stdin ` +
+        `(${cause.code ?? cause.message}); the provider was ended rather than left running on part of it`,
+      { cause },
+    );
+    this.name = "PromptDeliveryFailed";
+    this.runId = runId;
+    this.errorCode = cause.code ?? null;
+  }
+}
+
+/**
+ * The gated child itself could not be created: `spawn()` failed, so no process
+ * exists, the provider never ran, and the barrier's start step refuses the
+ * launch (refunding its reservation) rather than the host dying of it.
+ *
+ * `spawn()` blames its executable for every ENOENT, and the executable here is
+ * the very node binary the host is running on. The ENOENT that actually happens
+ * is a working directory that is gone — an attempt worktree removed or pruned
+ * after preflight — so the message says which of the two it was.
+ */
+export class GatedSpawnFailed extends Error {
+  readonly runId: string;
+  readonly cwd: string;
+  readonly errorCode: string | null;
+
+  constructor(runId: string, cwd: string, cause: NodeJS.ErrnoException) {
+    const code = cause.code ?? null;
+    let detail = code ?? cause.message;
+    if (code === "ENOENT") {
+      detail += cwdMissing(cwd)
+        ? ": the working directory does not exist"
+        : `: the launcher's node binary ${JSON.stringify(process.execPath)} was not found`;
+    }
+    super(
+      `refusing ${runId || "(unnamed run)"}: the gated child could not be started in ` +
+        `${JSON.stringify(cwd)} (${detail})`,
+      { cause },
+    );
+    this.name = "GatedSpawnFailed";
+    this.runId = runId;
+    this.cwd = cwd;
+    this.errorCode = code;
+  }
+}
+
+function cwdMissing(cwd: string): boolean {
+  try {
+    accessSync(cwd, constants.F_OK);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT";
   }
 }
 
@@ -392,7 +536,15 @@ export class ProcessTransportBroker implements TransportBroker {
     // before launch, never after" check meaningful on all three classes.
     const reservationId = reservationIdOf(registration);
     assertSpecSafe(registration, spec, reservationId);
-    const executable = resolveExecutable(spec.executable, spec.env);
+    // Keep the reconnect descriptor immutable and byte-for-byte equal to the
+    // preflight input across every authorization frontier. Environment
+    // filtering is a broker-owned launch transformation, not a change to the
+    // descriptor whose exact digest the host authorized.
+    const launchSpec: ProcessSpec = { ...spec, env: filterEnv(registration.adapterId, spec.env) };
+    const executable = resolveExecutable(launchSpec.executable, launchSpec.env);
+    if (edge !== null) {
+      this.#assertTaskEdgeLaunch(registration as ProcessRegistration);
+    }
     const evidence = phaseEvidence ?? correctionEvidence ?? (reconnectEvidence === null ? null : {
       taskSessionId: reconnectEvidence.registration.taskSessionId, workflowId: reconnectEvidence.registration.workflowId,
       phaseId: reconnectEvidence.registration.phaseId, phaseOrdinal: reconnectEvidence.registration.phaseOrdinal,
@@ -423,7 +575,7 @@ export class ProcessTransportBroker implements TransportBroker {
     let reattachedProof: VerifiedReconnectAuthorization | null = null;
     const outcome = await runLauncherBarrier({
       start: async () => {
-        const started = this.#spawnGated(executable, spec, registration.runId);
+        const started = await this.#spawnGated(executable, launchSpec, registration.runId);
         held.child = started.child;
         return started.launch;
       },
@@ -459,7 +611,7 @@ export class ProcessTransportBroker implements TransportBroker {
     });
     // Non-null by construction: the barrier only returns after `start` resolved.
     if (held.child === null) throw new SpawnRegistrationInvalid(registration.runId, "the barrier released a launch that never started");
-    return this.#transportFor(held.child, registration.runId, outcome.identity, spec);
+    return this.#transportFor(held.child, registration.runId, outcome.identity, launchSpec);
   }
 
   #assertReconnectLaunch(
@@ -484,33 +636,31 @@ export class ProcessTransportBroker implements TransportBroker {
     return proof;
   }
 
+  /** Distinct validator for task-edge transitions. Checks site and held reservation. */
+  #assertTaskEdgeLaunch(registration: ProcessRegistration): LegalEdge {
+    const edge = assertSpawnSite(registration);
+    const reservation = this.#options.ledger.reservation(registration.reservationId);
+    if (reservation === undefined || reservation.state !== "held" || reservation.cost !== 1) {
+      throw new SpawnRegistrationInvalid(
+        registration.runId,
+        "reservation is unknown, settled, or not exactly one held call",
+      );
+    }
+    return edge;
+  }
+
   /** Distinct validator for launches that are not task transitions. Runs before spawn(). */
   #assertAgentPhaseLaunch(registration: AgentPhaseProcessRegistration): AgentPhaseLaunchEvidence {
     const refuse = (detail: string): never => {
       throw new SpawnRegistrationInvalid(registration.runId, `invalid agent-phase authorization: ${detail}`);
     };
-    if (typeof registration.runId !== "string" || registration.runId.length === 0) refuse("runId is missing");
-    if (typeof registration.taskSessionId !== "string" || registration.taskSessionId.length === 0) refuse("taskSessionId is missing");
-    if (typeof registration.workflowId !== "string" || registration.workflowId.length === 0) refuse("workflowId is missing");
-    if (typeof registration.phaseId !== "string" || registration.phaseId.length === 0) refuse("phaseId is missing");
-    if (!Number.isInteger(registration.phaseOrdinal) || registration.phaseOrdinal < 1) refuse("phaseOrdinal must be a positive integer");
-    if (typeof registration.adapterId !== "string" || registration.adapterId.length === 0) refuse("adapterId is missing");
-    if (typeof registration.role !== "string" || registration.role.length === 0) refuse("role is missing");
+    assertPhaseLaunchIdentity(registration, refuse);
     if (typeof registration.reservationId !== "string" || registration.reservationId.length === 0) refuse("one held reservation is required");
 
     const verifier = this.#options.phaseLaunchVerifier;
     if (verifier === undefined) return refuse("the trusted host verifier is not installed");
     const evidence = verifier.verify(registration);
-    const exact =
-      evidence.taskSessionId === registration.taskSessionId &&
-      evidence.taskState === "RUNNING" &&
-      evidence.workflowId === registration.workflowId &&
-      evidence.phaseId === registration.phaseId &&
-      evidence.phaseOrdinal === registration.phaseOrdinal &&
-      evidence.phaseKind === "agent" &&
-      evidence.adapterId === registration.adapterId &&
-      evidence.role === registration.role &&
-      evidence.launchAuthorization === "agent-phase";
+    const exact = phaseLaunchEvidenceMatches(evidence, registration) && evidence.launchAuthorization === "agent-phase";
     if (!exact) refuse("the trusted verifier returned evidence for a different launch");
 
     const reservation = this.#options.ledger.reservation(registration.reservationId);
@@ -545,17 +695,11 @@ export class ProcessTransportBroker implements TransportBroker {
     const refuse = (detail: string): never => {
       throw new SpawnRegistrationInvalid(registration.runId, `invalid correction authorization: ${detail}`);
     };
-    if (typeof registration.runId !== "string" || registration.runId.length === 0) refuse("runId is missing");
-    if (typeof registration.taskSessionId !== "string" || registration.taskSessionId.length === 0) refuse("taskSessionId is missing");
-    if (typeof registration.workflowId !== "string" || registration.workflowId.length === 0) refuse("workflowId is missing");
-    if (typeof registration.phaseId !== "string" || registration.phaseId.length === 0) refuse("phaseId is missing");
-    if (!Number.isInteger(registration.phaseOrdinal) || registration.phaseOrdinal < 1) refuse("phaseOrdinal must be a positive integer");
+    assertPhaseLaunchIdentity(registration, refuse);
     if (!Number.isInteger(registration.correctionRound) || registration.correctionRound < 1) {
       refuse("correctionRound must be a positive integer; round 0 is the phase's first turn and reserves a call");
     }
     if (registration.tranche !== "auto" && registration.tranche !== "owner") refuse("tranche must be auto or owner");
-    if (typeof registration.adapterId !== "string" || registration.adapterId.length === 0) refuse("adapterId is missing");
-    if (typeof registration.role !== "string" || registration.role.length === 0) refuse("role is missing");
     if (typeof registration.continuityHandle !== "string" || registration.continuityHandle.length === 0) {
       refuse("continuityHandle is missing");
     }
@@ -564,17 +708,12 @@ export class ProcessTransportBroker implements TransportBroker {
     }
 
     const verifier = this.#options.correctionLaunchVerifier;
-    if (verifier === undefined) return refuse("the trusted correction verifier is not installed");
+    if (verifier === undefined || this.#options.onCorrection === undefined) {
+      return refuse("the trusted correction verifier or durable evidence callback is not installed");
+    }
     const evidence = verifier.verify(registration);
     const exact =
-      evidence.taskSessionId === registration.taskSessionId &&
-      evidence.taskState === "RUNNING" &&
-      evidence.workflowId === registration.workflowId &&
-      evidence.phaseId === registration.phaseId &&
-      evidence.phaseOrdinal === registration.phaseOrdinal &&
-      evidence.phaseKind === "agent" &&
-      evidence.adapterId === registration.adapterId &&
-      evidence.role === registration.role &&
+      phaseLaunchEvidenceMatches(evidence, registration) &&
       evidence.correctionRound === registration.correctionRound &&
       evidence.tranche === registration.tranche &&
       evidence.continuityHandle === registration.continuityHandle &&
@@ -596,45 +735,89 @@ export class ProcessTransportBroker implements TransportBroker {
    * cancellation whole: a provider that spawns its own children puts them in
    * this group, so `kill(-pgid)` reaches all of them rather than orphaning the
    * ones the host never saw.
+   *
+   * It resolves only once the child provably exists. `spawn()` reports most of
+   * its failures — a working directory that is gone, EMFILE, EAGAIN — not by
+   * throwing but as an `error` event on the ChildProcess, a tick later. An
+   * `error` nobody listens for is thrown, and nothing in core/src catches it at
+   * the process level: the HOST died before the barrier's start step could
+   * reject, so the reservation was never refunded and no RegistrationFailed was
+   * raised. So both shapes of failure — thrown now or emitted later — become a
+   * `GatedSpawnFailed` rejection here, which the barrier turns into a refused
+   * launch at "start" with the call given back.
+   *
+   * The `error` listener is never removed. After `spawn` the only thing left
+   * that emits on the ChildProcess is a failed `kill()` from `abandon`, which is
+   * already reported through the termination path; it must not crash the host
+   * either.
    */
-  #spawnGated(
+  async #spawnGated(
     executable: string,
     spec: ProcessSpec,
     runId: string,
-  ): { child: ChildProcess; launch: GatedLaunch } {
+  ): Promise<{ child: ChildProcess; launch: GatedLaunch }> {
     const payload = encodeLaunchPayload({ executable, argv: spec.argv });
-    const child = spawn(
-      process.execPath,
-      // The run id is the last argument and the launcher never reads it. It is
-      // there so a human looking at `ps` can tell which run a child blocked at
-      // the barrier belongs to — an opaque gated process is exactly the kind of
-      // thing nobody can act on at 2 a.m.
-      ["--no-warnings", "--experimental-strip-types", this.#launcherPath, payload, runId],
-      {
-        cwd: spec.cwd,
-        env: { ...spec.env },
-        detached: true,
-        // 0-2 are the provider's after the exec; 3 and 4 are the barrier's and
-        // are closed before it.
-        stdio: ["pipe", "pipe", "pipe", "pipe", "pipe"],
-      },
-    );
+    let child: ChildProcess;
+    try {
+      child = spawn(
+        process.execPath,
+        // The run id is the last argument and the launcher never reads it. It is
+        // there so a human looking at `ps` can tell which run a child blocked at
+        // the barrier belongs to — an opaque gated process is exactly the kind of
+        // thing nobody can act on at 2 a.m.
+        ["--no-warnings", "--experimental-strip-types", this.#launcherPath, payload, runId],
+        {
+          cwd: spec.cwd,
+          env: { ...spec.env },
+          detached: true,
+          // 0-2 are the provider's after the exec; 3 and 4 are the barrier's and
+          // are closed before it.
+          stdio: ["pipe", "pipe", "pipe", "pipe", "pipe"],
+        },
+      );
+    } catch (error) {
+      throw new GatedSpawnFailed(runId, spec.cwd, error as NodeJS.ErrnoException);
+    }
+
+    // The handshake attaches in the `spawn` handler itself, so its `exit`
+    // listener is in place before any I/O callback could deliver an exit.
+    const { identify } = await new Promise<{ identify: Promise<ProcessIdentity> }>((resolve, reject) => {
+      let spawned = false;
+      child.on("error", (error: NodeJS.ErrnoException) => {
+        if (spawned) return;
+        reject(new GatedSpawnFailed(runId, spec.cwd, error));
+      });
+      child.once("spawn", () => {
+        spawned = true;
+        resolve({ identify: this.#handshake(child) });
+      });
+    });
 
     let recorded: ProcessIdentity | null = null;
-    const identify = this.#handshake(child);
     const launch: GatedLaunch = {
       identify: async () => {
-        recorded = this.#withObservedIdentity(await identify);
+        recorded = await this.#withObservedIdentity(await identify);
         return recorded;
       },
       release: async () => {
+        // The write's completion callback is called WITH the write error (B1-18).
+        // A launcher that died between identify and release — killed, OOM, or
+        // `awsf cancel` signalling the registered group before GO — fails this
+        // write, and handing the callback straight to `resolve` turned that into
+        // a released launch: the barrier billed it as running and returned a
+        // transport whose exit had already fired before anyone listened. A token
+        // that did not reach the child rejects, and the barrier reports the
+        // launch failed at `spent`, still billed, because it cannot know more.
         await new Promise<void>((resolve, reject) => {
           const channel = child.stdio[RELEASE_FD] as unknown as {
-            end: (chunk: string, cb: () => void) => void;
+            end: (chunk: string, cb: (error?: Error | null) => void) => void;
             once: (event: string, cb: (error: Error) => void) => void;
           };
           channel.once("error", reject);
-          channel.end(`${RELEASE_TOKEN}\n`, resolve);
+          channel.end(`${RELEASE_TOKEN}\n`, (error) => {
+            if (error === undefined || error === null) resolve();
+            else reject(error);
+          });
         });
       },
       abandon: async (reason) => {
@@ -658,29 +841,40 @@ export class ProcessTransportBroker implements TransportBroker {
    * The launcher reads `/proc` and has nothing to read anywhere else, so off
    * Linux it honestly reports `startIdentity: null` — and a null is exactly what
    * `sameProcess` refuses to match, which would turn every later cancellation on
-   * that platform into a no-op that reported success. The host can ask the same
-   * question through its platform port.
+   * that platform into a no-op. The host can ask the same question through its
+   * platform port.
    *
    * It is safe to ask HERE and nowhere later: the child is still blocked on the
    * control channel whose write end this process holds, so it cannot have exited
    * and its PID cannot have been recycled between its report and this
-   * observation. A port that cannot enumerate leaves the honest null in place,
-   * and the ladder refuses to signal on it rather than guessing.
+   * observation. A transient census failure is retried once; if the port still
+   * cannot prove the identity, the launch is refused before registration rather
+   * than creating a process that the supervisor cannot safely signal.
    */
-  #withObservedIdentity(identity: ProcessIdentity): ProcessIdentity {
+  async #withObservedIdentity(identity: ProcessIdentity): Promise<ProcessIdentity> {
     if (identity.startIdentity !== null) return identity;
-    try {
-      const observed = this.#controller.observeIdentity(identity.pid);
-      if (observed === null || observed.startIdentity === null) return identity;
-      return {
-        pid: identity.pid,
-        pgid: observed.pgid,
-        startIdentity: observed.startIdentity,
-        startIdentitySource: observed.startIdentitySource,
-      };
-    } catch {
-      return identity;
+    let failure: unknown = new Error("the census did not find a PID-reuse-proof start identity");
+    for (let attempt = 0; attempt < IDENTITY_OBSERVATION_ATTEMPTS; attempt += 1) {
+      try {
+        const observed = this.#controller.observeIdentity(identity.pid);
+        if (observed !== null && observed.startIdentity !== null) {
+          return {
+            pid: identity.pid,
+            pgid: observed.pgid,
+            startIdentity: observed.startIdentity,
+            startIdentitySource: observed.startIdentitySource,
+          };
+        }
+        failure = new Error("the census did not find a PID-reuse-proof start identity");
+      } catch (error) {
+        failure = error;
+      }
     }
+    throw new Error(
+      `cannot establish a PID-reuse-proof identity for gated child ${String(identity.pid)} after ` +
+        `${String(IDENTITY_OBSERVATION_ATTEMPTS)} census attempts`,
+      { cause: failure },
+    );
   }
 
   /**
@@ -746,6 +940,22 @@ export class ProcessTransportBroker implements TransportBroker {
    * The prompt is written HERE, after release — never before. A prompt written
    * into a blocked launcher's stdin would sit in a pipe nobody is draining, and
    * one larger than the buffer would deadlock the host against its own barrier.
+   *
+   * The prompt's stdin carries its own `error` listener, and it has to. A
+   * provider that exits before draining its prompt — a bad flag, missing
+   * credentials, a startup crash — leaves every byte past the pipe buffer
+   * pending, and that write fails with EPIPE. Node raises it as an `error` on
+   * the stdin socket, an `error` nobody listens for is thrown, and nothing in
+   * core/src catches it at the process level: the HOST died, after
+   * `startProcess` had resolved and before the run's outcome was journaled.
+   *
+   * EPIPE is not a fault of the host's. It says the provider stopped reading,
+   * which is an early exit, and the exit itself — with the provider's own code —
+   * still arrives through `exit` below, the one path every caller already reads
+   * an outcome from. Any other stdin error is a prompt the provider did not
+   * receive whole, which is a launch the host refuses to let run: the tree is
+   * ended, and `exit` rejects with `PromptDeliveryFailed` naming the cause
+   * rather than resolving as if the provider had run on what it was given.
    */
   #transportFor(
     child: ChildProcess,
@@ -753,8 +963,21 @@ export class ProcessTransportBroker implements TransportBroker {
     identity: ProcessIdentity,
     spec: ProcessSpec,
   ): ProcessTransport {
-    const exit = new Promise<ProcessExit>((resolve) => {
-      child.once("exit", (code: number | null, signal: string | null) => resolve({ code, signal }));
+    let deliveryFailure: PromptDeliveryFailed | null = null;
+    const exit = new Promise<ProcessExit>((resolve, reject) => {
+      child.once("exit", (code: number | null, signal: string | null) => {
+        if (deliveryFailure === null) resolve({ code, signal });
+        else reject(deliveryFailure);
+      });
+    });
+    // A caller that never reads `exit` must not turn a refusal into an
+    // unhandled rejection — the very crash this listener exists to prevent.
+    exit.catch(() => undefined);
+    child.stdin?.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "EPIPE") return;
+      if (deliveryFailure !== null) return;
+      deliveryFailure = new PromptDeliveryFailed(runId, error);
+      this.#controller.terminateTree(identity).catch(() => undefined);
     });
     child.stdin?.end(spec.stdin);
     return {

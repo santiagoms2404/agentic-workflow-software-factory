@@ -9,6 +9,7 @@ import {
   ProjectCatalogSchema,
   type ProjectCatalog,
 } from "./catalog-schema.ts";
+import { IMPLEMENTED_PLAN_FORMATS } from "./plan-source.ts";
 
 // Every rejection this loader can throw. Kept as one closed class hierarchy
 // so callers assert on `code` or `instanceof`, never message text.
@@ -36,6 +37,20 @@ export class CatalogUnknownVersionError extends CatalogError {
   constructor(version: string) {
     super("E_CATALOG_UNKNOWN_VERSION", `unknown catalog version: ${JSON.stringify(version)}`);
     this.name = "CatalogUnknownVersionError";
+  }
+}
+
+export class CatalogUnsupportedPlanFormatError extends CatalogError {
+  readonly format: string;
+
+  constructor(format: string, plan: string | undefined) {
+    const named = plan === undefined ? "the catalog" : `plan ${JSON.stringify(plan)}`;
+    super(
+      "E_CATALOG_UNSUPPORTED_PLAN_FORMAT",
+      `${named} declares plans.format ${JSON.stringify(format)}, which is not implemented (implemented: ${IMPLEMENTED_PLAN_FORMATS.join(", ")})`,
+    );
+    this.name = "CatalogUnsupportedPlanFormatError";
+    this.format = format;
   }
 }
 
@@ -92,6 +107,16 @@ function versionOf(doc: unknown): unknown {
   return (doc as Record<string, unknown>).version;
 }
 
+/** The format and plan a document declares, when its plans table holds a string format. */
+function declaredPlanFormat(doc: unknown): { format: string; plan: string | undefined } | null {
+  if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return null;
+  const plans = (doc as Record<string, unknown>).plans;
+  if (plans === null || typeof plans !== "object" || Array.isArray(plans)) return null;
+  const { format, default: plan } = plans as Record<string, unknown>;
+  if (typeof format !== "string") return null;
+  return { format, plan: typeof plan === "string" ? plan : undefined };
+}
+
 function assertStructure(doc: unknown): void {
   if (Value.Check(ProjectCatalogSchema, doc)) return;
 
@@ -100,6 +125,11 @@ function assertStructure(doc: unknown): void {
   const version = versionOf(doc);
   if (nonVersionErrors.length === 0 && typeof version === "string") {
     throw new CatalogUnknownVersionError(version);
+  }
+  // A format the schema does not list is the only fault: name it and its plan, not a generic violation.
+  const declared = declaredPlanFormat(doc);
+  if (declared !== null && nonVersionErrors.length > 0 && nonVersionErrors.every((error) => error.path === "/plans/format")) {
+    throw new CatalogUnsupportedPlanFormatError(declared.format, declared.plan);
   }
 
   const violations = errors.map((error) => `${error.path || "(root)"}: ${error.message}`);
@@ -168,6 +198,17 @@ function assertContractReferences(catalog: ProjectCatalog): void {
   }
 }
 
+/**
+ * Applies the defaults the schema declares to the plans table, so a document
+ * that omits `plans.root` gets the root the schema says it has.
+ */
+function withDeclaredDefaults(doc: unknown): unknown {
+  if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return doc;
+  const plans = (doc as Record<string, unknown>).plans;
+  if (plans === null || typeof plans !== "object" || Array.isArray(plans)) return doc;
+  return { ...(doc as Record<string, unknown>), plans: Value.Default(ProjectCatalogSchema.properties.plans, { ...plans }) };
+}
+
 /** Parses and validates durable `awsf.project.yaml` catalog text. */
 export function loadCatalog(yamlText: string): ProjectCatalog {
   const doc: unknown = parseYaml(yamlText);
@@ -176,8 +217,9 @@ export function loadCatalog(yamlText: string): ProjectCatalog {
   // newly added fields inherit the durable-value restrictions automatically.
   assertNoAbsolutePaths(doc, CatalogAbsolutePathError);
   assertNoCredentialShapedValues(doc);
-  assertStructure(doc);
-  const catalog = doc as ProjectCatalog;
+  const withDefaults = withDeclaredDefaults(doc);
+  assertStructure(withDefaults);
+  const catalog = withDefaults as ProjectCatalog;
 
   assertRepositoryPaths(catalog);
   assertKnownGateIds(catalog);

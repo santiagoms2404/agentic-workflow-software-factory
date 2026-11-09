@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { stringify as toYaml } from "yaml";
+import { Value } from "@sinclair/typebox/value";
+import { ProjectSlugSchema } from "../../../src/config/schema.ts";
+import { ExplicitIdSchema } from "../../../src/registry/catalog-schema.ts";
+import { PlacementSchema } from "../../../src/registry/placement-schema.ts";
 import {
   loadPlacement,
   PlacementRelativePathError,
@@ -30,6 +34,14 @@ function assertCode(action: () => unknown, ErrorType: new (...args: any[]) => Er
   assert.throws(action, (error: unknown) => error instanceof ErrorType && (error as { code?: string }).code === code);
 }
 
+test("placement shares the project slug schema and repository id vocabulary", () => {
+  assert.equal(PlacementSchema.properties.project, ProjectSlugSchema);
+  for (const id of ["repository", "model-source-one", "bad id", "-invalid"]) {
+    const placement = { ...validPlacement(), repositories: { [id]: { path: "/repo" } } };
+    assert.equal(Value.Check(PlacementSchema, placement), Value.Check(ExplicitIdSchema, id), id);
+  }
+});
+
 test("loads absolute placement paths including a per-repository worktree root", () => {
   const placement = loadPlacement(toYaml(validPlacement()));
 
@@ -52,3 +64,13 @@ for (const field of ["default_branch", "role"] as const) {
     assertCode(() => loadPlacement(toYaml(doc)), PlacementSchemaError, "E_PLACEMENT_SCHEMA");
   });
 }
+
+test("B10-35: a home-relative placement path is refused, since nothing expands it", () => {
+  const repository = clonePlacement();
+  repository.repositories.service.path = "~/code/service";
+  assertCode(() => loadPlacement(toYaml(repository)), PlacementRelativePathError, "E_PLACEMENT_RELATIVE_PATH");
+
+  const worktree = clonePlacement();
+  worktree.worktree_root = "~/awsf-worktrees";
+  assertCode(() => loadPlacement(toYaml(worktree)), PlacementRelativePathError, "E_PLACEMENT_RELATIVE_PATH");
+});

@@ -128,6 +128,10 @@ export const MetricsResponseSchema = Type.Object({
   extractedAt: Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$" }),
   runs: Type.Array(MetricsRunSchema),
   roleRows: Type.Array(RoleRowSchema),
+  diagnostics: Type.Array(Type.Object({
+    sessionId: Str, project: Str, taskId: Str, attempt: Count, code: Str,
+    ticketId: Nullable(Str), path: Nullable(Str), message: Str,
+  }, { additionalProperties: false })),
   causes: Type.Object({
     stops: CauseBucket,
     cancels: CauseBucket,

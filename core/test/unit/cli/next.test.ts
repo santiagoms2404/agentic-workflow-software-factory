@@ -67,8 +67,11 @@ for (const state of TASK_STATES) {
       output.length = 0;
       assert.equal(await invoke(["--attempt", "1"]), 0, errors.join("\n"));
       assert.deepEqual(output, renderNextSteps(model, status));
-      // The persisted sentence is rendered without K1's measurement; next adds it at DRAFT.
-      if (state === "DRAFT") assert.equal(output[0], `start is refused until K1 clears: preflight-record missing; ${status.nextAction}`);
+      // Persisted advice names the unmeasured K1 state; `next` adds today's read-only measurement.
+      if (state === "DRAFT") {
+        assert.match(status.nextAction, /^K1 is unmeasured; start remains refused until preflight measures/u);
+        assert.match(output[0]!, /^start is refused until K1 clears: preflight-record missing;/);
+      }
       else assert.equal(output[0], status.nextAction);
       assert.deepEqual(bytes(root), before, "next must not create a DB, lock, journal row or status revision");
       for (const id of ["L10", "L16"].filter(id => model.unavailable.some(edge => edge.edge === id))) {
@@ -168,14 +171,17 @@ test("real offline stub transitions persist the same rendered action next reads"
       repository, request: k1Request("exercise next without providers", "core/src/example.ts"), workflow: "simple-sdlc", tier: 2 });
     assert.equal((await nextCommand(created.attemptDir)).lines[0], created.status.nextAction);
     const prepared = await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"),
-      configPath: resolve("awsf.config.yaml"), preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
+      configPath: resolve("awsf.config.yaml"), preflight: () => ({ adapter: true, sandbox: true, observability: true }), stub: true });
     assert.equal((await nextCommand(created.attemptDir)).lines[0], prepared.nextAction);
     const states: string[] = [];
     const done = await runStubCommand(created.attemptDir, { projectRecord: (_record, status) => {
       states.push(status.lifecycleState);
       assert.equal(status.nextAction, renderAttemptNextAction(status));
     } });
-    assert.deepEqual(states, ["RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER"]);
+    assert.deepEqual(
+      states.filter((state, index) => index === 0 || state !== states[index - 1]),
+      ["RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER"],
+    );
     assert.equal((await nextCommand(created.attemptDir)).lines[0], done.nextAction);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

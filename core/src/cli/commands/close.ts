@@ -9,6 +9,7 @@ import { assertClosureRecord, type ClosureRecord } from "../../contracts/closure
 import { closureJournalRecords, withClosureJournal, type ClosureEvidence } from "../../persistence/closure-journal.ts";
 import { projectClosureJournalRecords, withProjectClosureJournal, type ProjectClosureProjector } from "../../persistence/project-closure-journal.ts";
 import { compareAskedFor, type AskedForSelection } from "../../closure/asked-for.ts";
+import { selectionOf } from "../../closure/model.ts";
 import { closureDelta } from "../../closure/delta.ts";
 import { proposeClosure, applyClosureChoices, type ClosureRow } from "../../closure/propose.ts";
 import { proposeSpineRollUp } from "../../closure/spine.ts";
@@ -75,8 +76,8 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
     refuse("E_CLOSURE_OPTIONS", "closure requires an attempt, or --commit with repository, project directory, project and --plan");
   }
   const status = ownerCommit ? null : await readAttempt(options.attemptDir!);
-  if (status !== null && status.lifecycleState !== "LANDED") refuse("E_CLOSURE_NOT_LANDED", "closure requires a LANDED attempt");
-  const sealed = status?.shift ?? status?.ticketSelection;
+  if (status !== null && status.lifecycleState !== "LANDED" && status.lifecycleState !== "PUBLISHED") refuse("E_CLOSURE_NOT_LANDED", "closure requires a LANDED attempt");
+  const sealed = status === null ? undefined : selectionOf(status);
   if (status !== null && (sealed == null || sealed.tickets.length === 0 || status.planRef !== sealed.plan || status.baseSha === null || status.candidateSha === null)) {
     refuse("E_CLOSURE_SELECTION", "closure requires a sealed ticket selection and recorded base and candidate");
   }
@@ -201,11 +202,7 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
   const paths = [...after.keys()].filter(path => !Buffer.from(after.get(path)!).equals(Buffer.from(before.tree.get(path)!))).sort();
   for (const row of rowsOffered) options.terminal.write(`${row.path} ${row.ticket} row ${row.rowIndex}: [${row.marker}] -> [${closed.has(row) ? "x" : row.marker}]`);
   for (const change of delta.changes) options.terminal.write(`${change.path} ${change.kind} ${change.milestone ?? ""}: ${JSON.stringify(change.oldValue)} -> ${JSON.stringify(change.newValue)}`);
-  const name = git(["config", "--get", "user.name"]);
-  const email = git(["config", "--get", "user.email"]);
-  if (name.status !== 0 || email.status !== 0 || !name.stdout.trim() || !email.stdout.trim() || /[\n\r<>]/u.test(name.stdout.trim() + email.stdout.trim())) {
-    refuse("E_CLOSURE_IDENTITY", "closure requires the checkout's configured user.name and user.email");
-  }
+  // No identity is read here: prepareClosureCommit pins HOST_AUTHOR (H9: B1-01 B9-01).
   assertClosureFiles(repository, before, paths);
   if (!await options.terminal.confirm("Commit these exact closure substitutions?")) return { confirmed: false, record: null };
   if (closureHead(git) !== head) refuse("E_CLOSURE_HEAD_MOVED", "canonical HEAD moved during closure confirmation");
@@ -219,7 +216,7 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
     await append({ type: "closure-intent", intent: { id, parentSha: head, candidateSha: candidate, at } });
     await options.onStep?.("intent");
     const message = `chore(specs): close ${plan ?? "light"} ${primary.tickets.join(",")} after ${candidate.slice(0, 7)}`;
-    const prepared = prepareClosureCommit(repository, options.attemptDir ?? options.projectDir!, head, before, after, paths, message, { name: name.stdout.trim(), email: email.stdout.trim() });
+    const prepared = prepareClosureCommit(repository, options.attemptDir ?? options.projectDir!, head, before, after, paths, message);
     await options.onStep?.("commit");
     const rows = rowsOffered.map(row => ({ path: row.path, ticket: row.ticket, taskNumber: row.taskNumber,
       rowIndex: row.rowIndex, oldValue: row.marker, newValue: closed.has(row) ? "x" : row.marker }));

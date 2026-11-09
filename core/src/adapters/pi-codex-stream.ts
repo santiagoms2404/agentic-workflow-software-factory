@@ -45,7 +45,7 @@ import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { ObservedToolImage } from "./interface.ts";
 import type { EventSequencer } from "./stream/event-sequencer.ts";
 import { summarize } from "./stream/snippet.ts";
-import { redactToolImages, toolResultImages } from "./stream/tool-images.ts";
+import { summarizeToolResult, toolResultImages } from "./stream/tool-images.ts";
 
 interface PiUsage {
   input?: unknown;
@@ -75,15 +75,16 @@ interface PiAssistantMessageEvent {
   type?: string;
   delta?: unknown;
   toolCall?: { id?: string; name?: string; arguments?: unknown };
-  error?: PiMessage;
+  /** Nullable: a JSON `null` is read as absent, never dereferenced (B11-14, B11-15). */
+  error?: PiMessage | null;
 }
 
 interface PiLine {
   type?: string;
   /** `session` header only: the run's session id. */
   id?: string;
-  message?: PiMessage;
-  assistantMessageEvent?: PiAssistantMessageEvent;
+  message?: PiMessage | null;
+  assistantMessageEvent?: PiAssistantMessageEvent | null;
   toolCallId?: string;
   toolName?: string;
   args?: unknown;
@@ -140,12 +141,6 @@ export class PiStreamDecoder {
   readonly #requestedModel: string;
   readonly #session: PiSessionRecord;
   readonly #now: () => string;
-  /**
-   * Mirrors the sequencer's own map rather than reaching into it: the decoder
-   * needs to know whether it has already opened a provider tool id, and the
-   * sequencer's bookkeeping is its own.
-   */
-  readonly #openTools = new Set<string>();
   readonly #images: ObservedToolImage[] | undefined;
   #started = false;
   /** The last stop reason any assistant turn reported. Decides the terminal. */
@@ -305,7 +300,7 @@ export class PiStreamDecoder {
    */
   #messageStart(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const message = line.message;
-    if (message === undefined || message.role !== "assistant") return [];
+    if (message === undefined || message === null || message.role !== "assistant") return [];
     const resolved =
       typeof message.responseModel === "string" && message.responseModel.length > 0
         ? message.responseModel
@@ -365,7 +360,7 @@ export class PiStreamDecoder {
    */
   #messageUpdate(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const event = line.assistantMessageEvent;
-    if (event === undefined) return [];
+    if (event === undefined || event === null) return [];
     switch (event.type) {
       case "text_delta":
         return typeof event.delta === "string" ? sequencer.text("text.delta", event.delta) : [];
@@ -423,8 +418,7 @@ export class PiStreamDecoder {
   ): readonly NormalizedEvent[] {
     const id = input.providerToolId;
     if (typeof id !== "string" || id.length === 0) return [];
-    if (this.#openTools.has(id)) return [];
-    this.#openTools.add(id);
+    if (sequencer.hasOpenTool(id)) return [];
     return sequencer.toolRequested({
       providerToolId: id,
       name: typeof input.name === "string" ? input.name : "tool",
@@ -444,12 +438,11 @@ export class PiStreamDecoder {
   #toolEnd(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const id = line.toolCallId;
     if (typeof id !== "string" || id.length === 0) return [];
-    this.#openTools.delete(id);
     const outcome = line.isError === true ? "error" : "ok";
     const settled = sequencer.toolCompleted({
       providerToolId: id,
       outcome,
-      resultSnippet: summarizeResult(line.result),
+      resultSnippet: summarizeToolResult(line.result),
       providerAt: null,
     });
     const completed = settled.find((event) => event.kind === "tool.completed");
@@ -482,7 +475,7 @@ export class PiStreamDecoder {
    */
   #turnEnd(line: PiLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const message = line.message;
-    if (message === undefined || message.role !== "assistant") return [];
+    if (message === undefined || message === null || message.role !== "assistant") return [];
     this.#noteStop(message);
     const at = providerAt(message);
     const usage = message.usage;
@@ -501,8 +494,8 @@ export class PiStreamDecoder {
     this.#session.costUsd = (this.#session.costUsd ?? 0) + total;
   }
 
-  #noteStop(message: PiMessage | undefined): void {
-    if (message === undefined || message.role !== "assistant") return;
+  #noteStop(message: PiMessage | null | undefined): void {
+    if (message === undefined || message === null || message.role !== "assistant") return;
     if (typeof message.stopReason === "string" && message.stopReason.length > 0) {
       this.#stopReason = message.stopReason;
     }
@@ -605,29 +598,6 @@ function providerAt(message: PiMessage | undefined): string | null {
 }
 
 /**
- * A tool result, which pi shapes as `{ content: [{ type: "text", text }] }`.
- *
- * The text blocks are joined when the shape is that one, and the whole value is
- * summarized when it is not. Reading the shape is worth it because the
- * alternative puts `{"content":[{"type":"text","text":"…` in front of every
- * result in the trace, spending the snippet's budget on the envelope instead of
- * on the answer.
- */
-function summarizeResult(result: unknown): string {
-  if (result === null || typeof result !== "object") return summarize(result);
-  const content = (result as { content?: unknown }).content;
-  if (!Array.isArray(content)) return summarize(redactToolImages(result));
-  const texts = content
-    .filter((block): block is { text: string } => {
-      if (block === null || typeof block !== "object") return false;
-      return typeof (block as { text?: unknown }).text === "string";
-    })
-    .map((block) => block.text);
-  // An image-only result would otherwise put its base64 payload in the journal.
-  return texts.length === 0 ? summarize(redactToolImages(result)) : summarize(texts.join("\n"));
-}
-
-/**
  * The five metrics, and only the five.
  *
  * Mapped explicitly rather than passed through: `normalizeUsage` reports every
@@ -676,13 +646,11 @@ function mapUsage(usage: unknown): unknown {
 /**
  * Quota-shaped error text.
  *
- * The first alternation is carried unchanged from T13's reading of the Claude
- * CLI, because a host rule that recognized one provider's exhaustion and not
- * the other's would be a rule with a hole in it. The rest is this route's own
- * vocabulary, read off `openai-codex-responses.ts:115` — `isTerminalRateLimitError`,
- * the function pi itself uses to decide that a 429 is final rather than
- * retryable — plus the sentence pi builds for the operator at line 1477, "You
- * have hit your ChatGPT usage limit".
+ * The shared host vocabulary is `usage limit`, `quota`, and the provider,
+ * plan, subscription, or account `limit reached` forms. This route adds its
+ * own billing and balance terms, read off `openai-codex-responses.ts:115` —
+ * `isTerminalRateLimitError`, the function this route uses to decide that a
+ * 429 is final rather than retryable — plus its own usage-limit wording.
  *
  * TWO alternations T13's copy carries are deliberately absent here, and both
  * absences are this route's own reading rather than a simplification:
@@ -704,4 +672,8 @@ const QUOTA_SHAPED =
   /\b(?:usage limit|quota|insufficient_quota|out of budget|billing)\b|\b(?:usage|plan|subscription|account) limit reached\b|available balance|UsageLimitError/i;
 
 /** `Try again in ~37 min.` — pi's rendering of the provider's `resets_at`. */
-const RESET_IN_MINUTES = /try again in\s*~?\s*(\d{1,6})\s*min/i;
+// The optional `~` is a literal between the two whitespace runs, so no run of
+// spaces can be split between two quantifiers. The earlier pattern had two
+// adjacent `\s*` with nothing fixed between them, which backtracked quadratically
+// on a long run of spaces (B11-16).
+const RESET_IN_MINUTES = /try again in\s*(?:~\s*)?(\d{1,6})\s*min/i;

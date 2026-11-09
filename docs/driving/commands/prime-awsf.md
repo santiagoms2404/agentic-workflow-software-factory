@@ -3,73 +3,81 @@ description: Prime an AWSF driving session — the judgment layer plus live fact
 ---
 # /prime-awsf
 
-Orient a driving session: the tier above the factory, where the owner decides
-what to ask for, prepares it, launches it, watches it and reads what came back.
-Load exactly what follows. Every item is a single source or printed from the
-code; nothing here restates one, because a copy goes wrong quietly. Paths
-starting `../` are relative to this file; every other path and every command is
-from the checkout root.
+Orient the driving session without starting a task. Load the judgment layer and
+print facts from their sources. Paths starting `../` are relative to this file.
+Other paths and commands are relative to the checkout root.
 
-Already in your context — do not re-read: `AGENTS.md` (project instructions)
-and, in a marimba session, `../marimba/CONTRACT.md` (system prompt).
+Confirm that the current `AGENTS.md` and `../marimba/CONTRACT.md` are loaded.
+If either is absent or stale, read it. A missing guard makes this a read-only
+session. Do not infer that a launcher supplied it from the launcher's name.
 
 ## 1. Read, in this order
 
-1. `../skills/awsf/SKILL.md` — posture, owner acts, hard rules, and
-   the routes table. Read the table now; read a cookbook only when a request
-   calls for it.
-2. `../skills/awsf/cookbooks/run_and_observe.md` — launching and
-   watching a run.
-3. `../skills/awsf/references/gotchas.md` — every trap measured so
-   far.
-4. `../skills/marimba-plan/SKILL.md` — the group journal.
+1. `../skills/awsf/SKILL.md` for posture, boundaries and the cookbook routes.
+2. `../skills/awsf/cookbooks/run_and_observe.md` for preparation, owner launch
+   and observation.
+3. `../skills/awsf/references/gotchas.md` for live traps and historical repairs.
+4. `../skills/marimba-plan/SKILL.md` for the group journal.
 
-These four are also what a marimba session reloads after a compaction.
+These four are also the repository profile's re-prime pack after compaction.
+Priming does not survive compaction unless its sources have been reloaded.
 
-## 2. Print the live facts
+## 2. Print the current facts
 
-Current by construction: recipes, phases, minimum calls and tier ceilings;
-adapters, efforts and routable phase ids; the group operations and their flags;
-every lifecycle edge with its actors, spawn site and interactivity; the v2
-milestone markers.
+Print the workflow catalogue, route vocabulary, group operations, lifecycle
+edges and current v3 milestone markers:
 
 ```bash
 npm run awsf --silent -- workflows
-npm run awsf --silent -- routes list 2>&1
+npm run awsf --silent -- routes list
 npm run awsf --silent -- group help
 grep -E '^\s*\{ id: "L[0-9]+"' core/src/state/task-machine.ts
-grep -E '<h3><code class="status">' specs/awsf-v2-plan.html | sed -E 's/<[^>]+>//g; s/^ +//'
+grep -E '<h3><code class="status">' specs/awsf-v3-plan.html
 ```
 
-`just awsf X` in any driving document is `npm run awsf -- X`; use the npm form
-when `just` is not installed.
+Use the v2 spine only for work that belongs to it or historical context.
+`just awsf X` in a driving document means `npm run awsf -- X`. Use npm when
+`just` is not installed. Do not carry a model list or copied ceiling into the
+session as current authority.
 
-## 3. Preflight — unless the owner waives it
+## 3. Verify the base unless the owner waives this orientation check
+
+Dependencies must already be installed. Missing dependencies are a setup stop,
+not permission for the driver to rewrite dependency files.
 
 ```bash
-npm install --no-audit --no-fund 2>&1 | tail -n 1
-npm test 2>&1 | grep -E '^# (tests|pass|fail) |^layers|^not ok'
-npm run lint 2>&1 | tail -n 2
-npm run awsf --silent -- doctor 2>&1 | grep -vE 'recovery: no live controller|candidate: none'
+npm run lint
+npm run typecheck
+npm test
+npm run awsf --silent -- doctor
 ```
 
-Report any red before driving: a red base blocks a correct build. `doctor` is
-read-only and has no repair path; a finding is evidence for the owner, never
-permission to alter an attempt.
+Run each command separately and retain its original exit code. Do not pipe a
+command into a filter and report the filter's success as the command's result.
+Report the tested revision or tree and measured totals. The root suite runs
+unit, contract, simulation, journeys and traps.
 
-## 4. Look up on demand, never preload
+Report red before driving. `doctor` is read-only and has no repair path. A
+finding is evidence for the owner, never permission to alter an attempt. An
+owner waiver here cannot waive a later task's mandatory host preflight,
+confirmation, closure or configured gates.
 
-- guards, tiers, the phase machine, error classes: `core/src/state/`, mapped
-  question by question in `../skills/awsf/references/lifecycle.md`
-- where evidence lives: `../skills/awsf/references/evidence_map.md`
-- committed tuning: `awsf.config.yaml`, validated by `core/src/config/schema.ts`
-- a workstream's scope and decisions: its deep plan `specs/awsf-v2-w*.html`.
-  `specs/awsf-plan.html` is v1 and complete: open its Amendments only to learn
-  why a v1 edge exists.
+## 4. Look up on demand
+
+- Lifecycle rules: `core/src/state/`, mapped by
+  `../skills/awsf/references/lifecycle.md`.
+- Evidence locations and read boundaries:
+  `../skills/awsf/references/evidence_map.md`.
+- Execution configuration: `awsf.config.yaml`. Project registration and gates:
+  `awsf.project.yaml` and the machine-local placement.
+- Workstream scope: its registered deep plan, Section B prompt and ticket.
+  The current v3 deep plans use `specs/awsf-v3-w*.html`.
+- Repository reference: the [documentation map](../../README.md) distinguishes
+  current guidance from historical records.
+
+Do not preload closed plans or rewrite their recorded evidence.
 
 ## 5. Then stop
 
-Do not print a status board: state volunteered before a request is stale on
-arrival, and a file that shows it breaks `AGENTS.md` invariant 1. Read state
-when a request needs it, for the task the owner names. Say you are primed in
-one line.
+Do not print an unrequested runtime status board. Read state when the owner's
+request requires it, for the named task. Say you are primed in one line.

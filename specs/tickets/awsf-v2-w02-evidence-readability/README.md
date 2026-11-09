@@ -100,8 +100,8 @@ AGENTS.md invariant 12, enforced by `core/test/unit/meta/ticket-plan-sync.test.t
 
 **Two marker sets, and only one of them moves before the end.** This plan's own markers and these
 tickets move on every task. The spine's W02 marker in `specs/awsf-v2-plan.html`, and `W02.md` in
-`specs/tickets/awsf-v2-plan/`, are touched by **T05 only**. Current plan-aligned states: **T01–T05
-`todo`.**
+`specs/tickets/awsf-v2-plan/`, are touched by **T05 only**. Historical snapshot, retained from earlier documentation: **T01–T05
+`todo`.** Read the [registered plan](../../awsf-v2-w02-evidence-readability.html) for current completion.
 
 ## Owner decisions these tickets carry
 

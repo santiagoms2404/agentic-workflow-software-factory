@@ -164,6 +164,7 @@ export function validateGraph(group: Group): void {
   unique(group.order, "order entry");
   unique(group.requirements.map((requirement) => requirement.id), "requirement");
   const units = currentUnits(group);
+  unique(units.map((unit) => unit.taskId), "taskId across units");
   if (new Set(group.units.map((unit) => unit.id)).size !== group.order.length) throw new Error("order must contain every stable unit id");
   const requirements = new Set(group.requirements.map((requirement) => requirement.id));
   const covered = new Set<string>();

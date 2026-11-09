@@ -144,11 +144,11 @@ function parseScopeFigure(
   nowMs: number | null,
   providerPath: string,
   faults: string[],
-): Omit<QuotaScopeReadout, "windowId" | "resetsAt" | "rejected"> {
+): Omit<QuotaScopeReadout, "windowId" | "resetsAt" | "rejected"> & { readonly bindingWindowId: string | null } {
   const path = `${providerPath}.quotaSemantics.effectiveAvailability[${String(index)}]`;
   if (!isObject(raw)) {
     faults.push(`${path} was not an object — recorded as unavailable`);
-    return { scope: null, effectivePercentRemaining: null, minutesToReset: null };
+    return { scope: null, effectivePercentRemaining: null, minutesToReset: null, bindingWindowId: null };
   }
 
   const scope = requiredString(raw, "scope", path, faults);
@@ -157,39 +157,40 @@ function parseScopeFigure(
   // Freshness and semantic resolution are structural payload facts. Raw
   // windows remain diagnostic data and cannot override either one.
   if (stateStatus !== "fresh" || semanticsStatus !== "known" || (effectiveStatus !== "known" && effectiveStatus !== "rejected")) {
-    return { scope, effectivePercentRemaining: null, minutesToReset: null };
+    return { scope, effectivePercentRemaining: null, minutesToReset: null, bindingWindowId: null };
   }
 
   const percentage = effectiveStatus === "rejected" ? 0 : raw["effectivePercentRemaining"];
   if (typeof percentage !== "number" || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
     faults.push(`${path}.effectivePercentRemaining was ${JSON.stringify(percentage)}, which is not a percentage — recorded as unavailable`);
-    return { scope, effectivePercentRemaining: null, minutesToReset: null };
+    return { scope, effectivePercentRemaining: null, minutesToReset: null, bindingWindowId: null };
   }
 
   const runway = raw["runway"];
   if (!isObject(runway)) {
     faults.push(`${path}.runway was not an object — minutes to reset recorded as null`);
-    return { scope, effectivePercentRemaining: percentage, minutesToReset: null };
+    return { scope, effectivePercentRemaining: percentage, minutesToReset: null, bindingWindowId: null };
   }
   const runwayStatus = requiredString(runway, "status", `${path}.runway`, faults);
   if (runwayStatus === "unknown") {
-    return { scope, effectivePercentRemaining: percentage, minutesToReset: null };
+    return { scope, effectivePercentRemaining: percentage, minutesToReset: null, bindingWindowId: null };
   }
   if (runwayStatus !== "through_reset" && runwayStatus !== "projected_exhaustion") {
     if (runwayStatus !== null) {
       faults.push(`${path}.runway.status was ${JSON.stringify(runwayStatus)}, which is not understood — minutes to reset recorded as null`);
     }
-    return { scope, effectivePercentRemaining: percentage, minutesToReset: null };
+    return { scope, effectivePercentRemaining: percentage, minutesToReset: null, bindingWindowId: null };
   }
 
-  const bindingId = limitingWindowId(raw, runway, runwayStatus, path, faults);
-  if (bindingId === null) {
-    return { scope, effectivePercentRemaining: percentage, minutesToReset: null };
+  const bindingWindowId = limitingWindowId(raw, runway, runwayStatus, path, faults);
+  if (bindingWindowId === null) {
+    return { scope, effectivePercentRemaining: percentage, minutesToReset: null, bindingWindowId: null };
   }
   return {
     scope,
     effectivePercentRemaining: percentage,
-    minutesToReset: minutesForBindingWindow(rawWindows, bindingId, nowMs, `${providerPath}.windows`, faults),
+    minutesToReset: minutesForBindingWindow(rawWindows, bindingWindowId, nowMs, `${providerPath}.windows`, faults),
+    bindingWindowId,
   };
 }
 
@@ -198,16 +199,16 @@ function parseScope(
   rawWindows: readonly unknown[], nowMs: number | null, providerPath: string, faults: string[],
 ): QuotaScopeReadout {
   const figure = parseScopeFigure(raw, index, stateStatus, semanticsStatus, rawWindows, nowMs, providerPath, faults);
+  const { bindingWindowId, ...scopeFigure } = figure;
   // Only the semantic binding chooses a window; raw percentages never do.
   let windowId: string | null = null;
   let resetsAt: string | null = null;
-  if (figure.minutesToReset !== null && isObject(raw) && isObject(raw["runway"])) {
-    const runway = raw["runway"];
-    windowId = limitingWindowId(raw, runway, String(runway["status"]), providerPath, []);
+  if (figure.minutesToReset !== null && bindingWindowId !== null) {
+    windowId = bindingWindowId;
     const window = rawWindows.find((value): value is JsonObject => isObject(value) && value["id"] === windowId);
     resetsAt = typeof window?.["resetsAt"] === "string" ? window["resetsAt"] : null;
   }
-  return { ...figure, windowId, resetsAt,
+  return { ...scopeFigure, windowId, resetsAt,
     rejected: stateStatus === "fresh" && semanticsStatus === "known" && isObject(raw) && raw["status"] === "rejected" };
 }
 

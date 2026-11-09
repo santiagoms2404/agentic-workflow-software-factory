@@ -129,6 +129,35 @@ test("a journey after a T2 owner rework follows every recorded recipe and rework
   }
 });
 
+test("retrying after the journey phase is written reuses it instead of duplicating its phase id", async () => {
+  const fixture = await awaitingJourney(false);
+  const owner = { interactive: true, write: () => {}, confirm: async () => true };
+  try {
+    const options = {
+      attemptDir: fixture.attemptDir,
+      journeyId: "recorded-owner-journey",
+      observedSha: fixture.candidateSha,
+      now: () => AT,
+      terminal: owner,
+    };
+    await assert.rejects(
+      journeyCommand({ ...options, projectRecord: () => { throw new Error("projection interrupted"); } }),
+      /projection interrupted/u,
+    );
+
+    const recovered = await journeyCommand(options);
+    assert.equal(recovered.status.journeyApproved, true);
+    const evidence = await readAttemptEvidence(fixture.attemptDir);
+    const phases = evidence.filter((record) => record.type === "phase" && record.phase.key === "owner-journey");
+    const gates = evidence.filter((record) => record.type === "gate" && record.gateId === "journey_passes");
+    assert.equal(phases.length, 1);
+    assert.equal(gates.length, 1);
+    assert.equal(gates[0]?.type === "gate" ? gates[0].phaseId : null, phases[0]?.type === "phase" ? phases[0].phase.phaseId : undefined);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("a journey without rework remains immediately after the compiled T2 workflow", async () => {
   const fixture = await awaitingJourney(false);
   try {

@@ -36,16 +36,22 @@ export interface QuotaCommandReport {
   readonly lines: readonly string[];
 }
 
-function configuredInteractiveTimeout(
+/**
+ * W07 decided two distinct timeouts: 8000 ms for interactive preflight readout
+ * and 2500 ms for phase boundary probes. The boundary timeout in quota_stop
+ * must not clamp the interactive preflight readout below its 8000 ms default.
+ */
+export function configuredInteractiveTimeout(
   routes: readonly { readonly adapterId: string }[],
   quotaStop: ReturnType<typeof loadConfig>["routing"]["quota_stop"],
 ): number {
   if (quotaStop === undefined) return DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs;
   const values = routes.map((route) =>
     (quotaStop.by_adapter?.[route.adapterId] ?? quotaStop.default).probe_timeout_ms);
-  return values.length === 0
+  const boundaryTimeout = values.length === 0
     ? quotaStop.default.probe_timeout_ms
     : Math.max(...values);
+  return Math.max(DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs, boundaryTimeout);
 }
 
 async function registeredPlacement(

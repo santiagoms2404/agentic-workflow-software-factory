@@ -241,6 +241,17 @@ export function createCorrectionLaunchVerifier(
       if (registration.correctionRound > total) {
         return reject(`round ${registration.correctionRound} exceeds the configured allowance of ${total}`);
       }
+      // The phase machine draws one tranche unit on entering CORRECTING, before this
+      // launch is described. So the launch's tranche must have been drawn, and every
+      // round up to this one must have been charged. An allowance bound alone let an
+      // uncharged launch through (B6-22).
+      if (used < 1) {
+        return reject(`no correction was charged to the ${registration.tranche} tranche for this round`);
+      }
+      const charged = corrections.used.auto + corrections.used.owner;
+      if (charged < registration.correctionRound) {
+        return reject(`round ${registration.correctionRound} has no charge behind it (${charged} charged)`);
+      }
 
       return Object.freeze({
         taskSessionId: base.taskSessionId,

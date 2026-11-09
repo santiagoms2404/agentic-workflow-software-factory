@@ -17,22 +17,8 @@ trap is worse than an absent one.
 
 ## Live
 
-### 1. Owner rework is refused above the middle tier
-
-**Trap link.** none — `fixed`. The seed ledger (G02-S) found this entry stale: 31a1a97 made owner rework serve tier 2, and `core/test/journeys/owner-rework-t2.test.ts` proves it. It leaves the refusal list.
-
-**Symptom.** `awsf rework` refuses a top-tier attempt outright, before anything
-is spent, and points you at cancel and retry instead.
-
-**Cause.** Rework re-runs one writable builder phase, so the candidate it
-produces has never been reviewed — and the verdict-consistency gate binds a
-review to the exact revision it read. Letting it through would leave an attempt
-that gates cleanly and can never satisfy landing. `core/src/cli/commands/rework.ts`
-refuses on any tier that is not the middle one.
-
-**Guard.** The refusal is the guard. The honest route is cancel plus retry, which
-re-runs the whole pipeline including its opposite-provider review and carries the
-spend forward — see entry 3 before you suggest it.
+Entry 1's former top-tier rework refusal is historical H5 below. The remaining
+entry numbers are retained for existing references.
 
 ### 2. Owner acts refuse after the configuration changed under them
 
@@ -121,9 +107,11 @@ the sort of thing a session is tempted to clean up before mentioning.
 **Symptom.** Disk usage is unchanged after running it.
 
 **Cause.** It lists cleanup candidates and that is all; no delete operation
-exists in the module (`core/src/cli/commands/operator.ts`), and no force-push or
-auto-delete path exists anywhere in `core/src`. The one push path in the
-codebase belongs to publishing, which runs only on an already-landed revision.
+exists in the module (`core/src/cli/commands/operator.ts`). Invariant 8 of
+`AGENTS.md` separately permits exact lock-release, private-temporary and
+failed-admission rollback cleanup. Those exceptions do not authorize general
+cleanup or deletion of user work or refs. The single publishing path applies
+only to an already-landed revision.
 
 **Guard.** By design, and enforced by a meta-test. Deleting a candidate is the
 owner's decision, made with an ordinary file manager, and only after the evidence
@@ -137,35 +125,37 @@ in it is no longer wanted.
 configuration you did not mean, and the mistake is permanent because attempts are
 retained.
 
-**Cause.** `awsf new` records the current working directory as the attempt's
-repository, and every command resolves `awsf.config.yaml` relative to it unless
-`--config` is given. Nothing displays the resolution before acting.
+**Cause.** Creation and configuration resolution depend on the repository and
+catalog selected by the caller. A mechanically valid repository can still be
+the wrong project for the owner's request.
 
-**Guard.** There is no mechanical guard today, and that is the point of the entry
-— this exact mistake has already produced a permanently retained junk task. A
-displayed resolved repository and HEAD, confirmed at a terminal, is carried as
-named backlog in the plan's Amendments. Until it lands, confirm your working
-directory before `awsf new` and treat that as a real step rather than a
-formality.
+**Guard.** Read the canonical repository and base before creation. Host preflight
+and `start` check recorded repository identity and freshness. Owner confirmation
+binds the request and paths. These checks do not infer which project the owner
+intended. Sources: `core/src/cli/commands/preflight.ts`, `confirm.ts` and
+`start.ts`.
 
-### 8. Piped standard input refuses every owner act
+### 8. Owner correction needs an explicit interactive terminal
 
 **Trap link.** none — `not-a-stop`. Piped standard input creates no BLOCKED or CANCELLED attempt.
 
 **Symptom.** `awsf land`, `cancel`, `journey`, `rework`, `review`,
-`degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`, `confirm` or `close` refuses when run from a script,
-a pipe, or any non-terminal context.
+`degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `run`, `grant`, `confirm`, `close`, `seed`, `group apply` or `retry --adopt-as` refuses when run from a script,
+a pipe, or any non-terminal context. `awsf run` can execute automatic work, but
+it refuses to use the owner correction tranche without an interactive owner
+terminal and explicit approval.
 
-**Cause.** All fourteen — `land`, `cancel`, `journey`, `rework`, `review`,
-`degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`, `confirm`, `close` — require an interactive owner
-terminal, and the refusal comes from the
-normative machine *before* any process can receive a signal and before any
-call is reserved. The check is a terminal-shape test (`process.stdin.isTTY`),
+**Cause.** Explicit owner actions require interactive owner confirmation for
+their authorized effects. `run` is included in the owner-act set because it may
+solicit a correction decision: it uses only automatic corrections without an
+owner prompt, and refuses a correction that needs owner authority without an
+interactive owner terminal. The terminal-shape check (`process.stdin.isTTY`) is
 not the authorisation boundary itself.
 
-**Guard.** No flag bypasses it, but a PTY makes the check pass — `script -qec`
-supplies one and clears it. The fence that actually holds the line is the
-per-invocation tool-surface denial marimba's hook performs.
+**Guard.** No flag bypasses an owner confirmation, but a PTY makes the terminal
+shape check pass — `script -qec` supplies one and clears it. A driving session is
+still denied every listed owner act, including `run`, by the per-invocation
+tool-surface denial marimba's hook.
 
 ### 9. The two provider routes fail in opposite directions on an unknown session
 
@@ -226,18 +216,14 @@ the tree while the attempt record does not, and the retry has nowhere to put a
 second one. Nothing ran and nothing was spent — the attempt is intact, only its
 tree is in the way.
 
-**Guard.** The state is safe. Do not cancel the attempt and do not retry it —
-both spend something to fix a problem that has cost nothing. AWSF clears no tree
-itself, by design: `AGENTS.md` invariant 8 keeps every force and auto-clearing
-path out of `core/src`, and that absence is the point rather than an omission.
-Clear it with Git yourself and start again. The error states which of the two
-cases you are in — Git tracks the tree, or it is an untracked leftover
-directory — because the recovery differs. Use `git worktree` for the first and
-an ordinary directory deletion for the second, then:
-
-```bash
-just awsf start TASK
-```
+**Guard.** Preserve the attempt and inspect the exact refusal. Do not cancel or
+create a retry merely to clear an unspent preparation. The error distinguishes a
+Git-registered worktree from an untracked leftover directory. **Recovery that
+removes either is the owner's decision and action, never marimba's.** Show the
+owner the path, registration and retained evidence before any cleanup. Do not
+use force, delete another attempt's work or treat the narrow temporary cleanup
+exceptions in invariant 8 as permission to clear a worktree. After the owner
+has resolved the obstruction, `awsf start TASK` can be attempted again.
 
 Seeding copies the configured `runtime.seed_paths`; on this repository that is
 `node_modules`, which is large. On a slow or network-backed filesystem the first
@@ -304,6 +290,16 @@ record you read when a run is stuck, and why that absence is correct rather than
 a gap. The redaction is exact-match rather than pattern-based, because the host
 minted those strings and can name them precisely instead of guessing what a
 session id looks like on a route it has not met.
+
+### H5. Top-tier owner rework was refused — closed by `31a1a97`
+
+The old rework path rebuilt only the builder phase and could not renew T2 review
+evidence for its changed candidate. It therefore refused T2. The current path
+runs fresh gates and review, checks the required headroom before spending and
+invalidates the old journey attestation. See `core/src/cli/commands/rework.ts`
+and `core/test/journeys/owner-rework-t2.test.ts`. G02-S classified the former
+live entry 1 as `none — fixed`. Do not recommend cancel plus retry merely
+because an attempt is T2.
 
 ---
 

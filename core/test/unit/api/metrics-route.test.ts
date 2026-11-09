@@ -129,6 +129,23 @@ test("the payload the route serves is the payload the builder returns", async ()
   }
 });
 
+test("the metrics route refreshes its cached payload after a projection commit", async () => {
+  const db = fixture();
+  const router = createApiRouter({ dbPath: db.dbPath, config: validConfig(), planSources: [] });
+  const writer = openDatabase(db.dbPath);
+  try {
+    const first = await router.dispatch({ method: "GET", url: "/api/v1/metrics", headers });
+    assert.equal((first.body as MetricsResponse).runs.length, 2);
+    new SyntheticAttempt(session("m3")).project(writer);
+    const second = await router.dispatch({ method: "GET", url: "/api/v1/metrics", headers });
+    assert.equal((second.body as MetricsResponse).runs.length, 3, "a commit from another connection invalidates the payload");
+  } finally {
+    writer.close();
+    router.close();
+    db.close();
+  }
+});
+
 test("the metrics route takes no query and no write", async () => {
   const db = fixture();
   const router = createApiRouter({ dbPath: db.dbPath, config: validConfig(), planSources: [] });

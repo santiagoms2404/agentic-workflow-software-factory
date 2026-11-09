@@ -13,7 +13,13 @@ not a judgement call. Several are mechanically enforced by meta-tests under
    pre-declared.
 3. **`node:child_process` is imported nowhere except
    `core/src/execution/transport-broker.ts`.** Enforced by the child-process
-   fence meta-test.
+   fence meta-test. Scoped to shipped code by owner amendment on 2026-10-16
+   (O5 of the whole-project review): "nowhere" means the code that fence
+   walks, which is exactly `core/src/**`, `dashboard/src/**` and
+   `docs/driving/**`, every file ending `.ts .tsx .vue .mts .cts .js .mjs .cjs`
+   except test files (`*.test.*` / `*.spec.*`). It does not cover
+   `core/test/**`, `dashboard/shared/**`, the rest of `docs/**`, or non-code
+   files (`.sh .md .json`). Tests may spawn.
 4. **No `shell: true`, anywhere.** Executable + argv array only. Enforced by the
    no-`shell:true` meta-test.
 5. **`core/src/state/**` imports nothing impure** — no I/O, no clock, no
@@ -34,11 +40,38 @@ not a judgement call. Several are mechanically enforced by meta-tests under
    Publication is a separate, human-initiated act on an already-landed revision: 
    it is authorized by the pure ordered truth table in `core/src/publish/authorize.ts`, 
    and the push argv it authorizes is constructed in `core/src/publish/argv.ts` and nowhere else. 
-   The force and auto-delete halves remain unconditional absences and now also cover 
-   the argv-array spellings the previous scan never saw — a `+`-prefixed refspec
-   source, and an empty or all-zeros refspec source, which is how Git spells a
-   remote branch deletion. Enforced by the no-destructive-paths, publish-fence,
-   and no-land-route meta-tests.
+   Force remains unconditionally prohibited. Deletion remains prohibited except
+   for the previously authorized lock-release cleanup and the bounded
+   operation-owned temporary/failed-admission rollback cleanup recorded in the
+   dated owner amendment below. Neither exception authorizes push or deletion of
+   user refs or work. The fences also cover argv-array spellings —
+   a `+`-prefixed refspec source, and an empty or all-zeros refspec source,
+   which is how Git spells a remote branch deletion. Enforced by the
+   no-destructive-paths, publish-fence, and no-land-route meta-tests.
+
+   Owner amendment (2026-11-06, D1): invariant 8 permits only the six existing
+   operation-owned cleanup callsites in `core/src/execution/continuity-store.ts`
+   and `core/src/registry/plan-admission.ts`: removal of private temporary files
+   created exclusively by the operation, and rollback of files and empty
+   directories created exclusively during failed plan admission. These narrow
+   rollback actions do not permit general cleanup or deletion of user work or
+   refs, and do not permit force or push paths. The two publish argv deny-list
+   and validation lines are validation-only fence exceptions, not delete authorizations.
+
+   Owner amendment (2026-11-06, owner-resolution cleanup approval): the same
+   narrow permission additionally covers exactly one private-temp cleanup site
+   in `core/src/persistence/status-store.ts` and one in
+   `core/src/cli/commands/metrics-export.ts`. Status cleanup may remove only the
+   exclusive-created temporary for that atomic write after checking its inode,
+   regular-file/link state and exact bytes; an EEXIST path is never owned.
+   Metrics export cleanup may remove only its exclusive-created temporary after
+   checking the same properties; publication is a complete-file hard link that
+   never overwrites an existing output. `core/src/registry/plan-admission.ts`
+   may roll back only its exact exclusively-created file objects whose bytes and
+   uncommitted state remain unchanged; committed, staged, modified, linked,
+   symlinked or uncertain paths are retained. Empty-directory rollback remains
+   restricted to the exact created directory identities. These are not general
+   cleanup permissions and authorize no deletion of user work or refs.
 9. **No credential-shaped value is committed, in fixtures or anywhere else.**
    Enforced by the credential-pattern meta-test.
 10. **No runtime artifact, receipt, or manifest file is committed.** Git and the
@@ -54,7 +87,13 @@ not a judgement call. Several are mechanically enforced by meta-tests under
     `built on: <provider>:<model>`) belongs only in the plan's
     `<dl>`/Amendments, never in the commit itself. Enforced by the
     no-agent-coauthor meta-test, which scans this repository's own commit
-    history (author, committer, and message trailers alike).
+    history (author, committer, and message trailers alike). One known
+    pre-fence breach stays in history by owner amendment on 2026-10-16 (O1 of
+    the whole-project review): commit
+    `e04664e3c85c3fc5d6f43353102d2215b501a803` carries an agent session
+    trailer in its message. It landed before the fence read message lines
+    beyond co-author trailers, and history is kept rather than rewritten. The
+    no-agent-coauthor fence exempts exactly that full SHA and no other commit.
 12. **A plan and its ticket set never disagree, and the pairing is resolved
     through the registered plan source rather than through directory
     adjacency.** Every ticket set belongs to exactly one plan. The plan's

@@ -3,10 +3,10 @@ import { test, type TestContext } from "node:test";
 import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { capture, propose, apply, replay, hash, proposalHash, reference, groupDirectory, type Location } from "../../src/planning/store.ts";
+import { capture, propose, apply, replay, hash, proposalHash, reference, groupDirectory, readInput, type Location } from "../../src/planning/store.ts";
 import { currentUnit, affectedSuccessors, type Change, type Group, type Narrative, type Proposal, type Unit } from "../../src/planning/model.ts";
 import { checklist } from "../../src/planning/evidence.ts";
-import { bounded, packet, previewGroup } from "../../src/planning/views.ts";
+import { bounded, decisionTree, groupSummary, packet, previewGroup, readGroupSummary, readGroupTree } from "../../src/planning/views.ts";
 import { writePlacement } from "../../src/registry/placement.ts";
 import { main } from "../../src/cli/main.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
@@ -47,6 +47,23 @@ async function attempt(location: Location, taskId = "one") {
 async function bind(location: Location, group: Group, sessionId = "session-one") {
   return amendment(location, [{ kind: "bind", binding: { unit: "one", revision: currentUnit(group, "one").revision, taskId: "one", attempt: 1, sessionId } }], `binding-${group.revision}`);
 }
+
+test("readInput enforces its admission bound before loading an oversized source", async (t) => {
+  const location = await fixture(t);
+  const path = join(location.stateRoot, "bounded-input.txt");
+  await writeFile(path, Buffer.alloc(1_048_576, 0x61));
+  assert.equal((await readInput(path)).length, 1_048_576);
+  await writeFile(path, Buffer.alloc(1_048_577, 0x61));
+  await assert.rejects(readInput(path), /input exceeds 1 MiB admission limit/u);
+});
+
+test("group summary projection matches the full decision-tree readout", async (t) => {
+  const location = await fixture(t);
+  await initial(location);
+  await amendment(location, [{ kind: "requirements", values: [{ id: "R1", text: "Preserve intended behavior" }] },
+    { kind: "define", unit: unit() }]);
+  assert.deepEqual(await readGroupSummary(location), groupSummary(await readGroupTree(location)));
+});
 
 test("exact mixed-language UTF-8 input round-trips once, including BOM, CRLF and whitespace", async (t) => {
   const location = await fixture(t);
@@ -405,6 +422,95 @@ test("registered plan source and Section B/ticket authority remain part of the r
   await writeFile(join(tickets, "T01.md"), ticket);
   await writeFile(catalog, catalogText.replace("awsf-plan-html/v1", "unsupported-format/v1"));
   assert.notEqual((await checklist(group, location.stateRoot, at)).rows[0]?.delivery, "done");
+});
+
+const registeredCatalog = "version: awsf.project/v1\nproject:\n  slug: sample\nrepositories:\n  plans:\n    role: plan\n    default_branch: main\nplans:\n  root: specs\n  format: awsf-plan-html/v1\n  default: sample-plan\n";
+const registeredHtml = '<section><h3><code class="status">[]</code> Milestone M1: Sample</h3><h4>1. Sample task</h4><ul><li><code class="status">[]</code> Complete</li></ul></section>';
+const registeredPrompt = "Build the sample task";
+const registeredTicket = `---\nid: T01\ntitle: Sample task\nmilestone: M1\nstate: todo\ndepends_on: []\n---\n\n## Build prompt\n\n${registeredPrompt}\n`;
+/** A registered plan repository with the given plan HTML, Section B prompts file and ticket. Returns the catalog path. */
+async function registeredRepository(location: Location, html: string, sectionB: string, ticket: string): Promise<string> {
+  const repository = join(location.stateRoot, "foreign-plan-repository");
+  const catalog = join(repository, "awsf.project.yaml");
+  await mkdir(join(repository, "specs", "tickets", "sample-plan"), { recursive: true });
+  await writeFile(catalog, registeredCatalog);
+  await writePlacement(location.stateRoot, location.project, { version: "awsf.placement/v1", project: location.project, repositories: { plans: { path: repository } } });
+  await writeFile(join(repository, "specs", "sample-plan.html"), html);
+  await writeFile(join(repository, "specs", "sample-plan-build-prompts.md"), sectionB);
+  await writeFile(join(repository, "specs", "tickets", "sample-plan", "T01.md"), ticket);
+  return catalog;
+}
+/** A unit bound to a landed attempt, so its delivery reads the registered plan authority. */
+async function landedRegisteredUnit(location: Location, catalog: string, html: string, stem = "sample-plan"): Promise<Group> {
+  let group = await defined(location, [{ ...unit(), plan: { catalog, stem, task: "T01", sourceSha256: hash(html) } }]);
+  const created = await attempt(location);
+  group = await bind(location, group);
+  await persistAttempt(created.attemptDir, 1, { kind: "attempt.transitioned", next: nextRevision(created.status, { lifecycleState: "LANDED", candidateSha: "a".repeat(40) }) });
+  return group;
+}
+
+test("B12-25: W-ticket identity resolves through its numeric Section B task key", async (t) => {
+  const location = await fixture(t);
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task\n\n${registeredPrompt}\n`;
+  const ticket = registeredTicket.replace("id: T01", "id: W01");
+  const catalog = await registeredRepository(location, registeredHtml, sectionB, ticket);
+  await writeFile(join(location.stateRoot, "foreign-plan-repository", "specs", "tickets", "sample-plan", "W01.md"), ticket);
+  const group = await defined(location, [{ ...unit(), plan: { catalog, stem: "sample-plan", task: "W01", sourceSha256: hash(registeredHtml) } }]);
+  const row = (await checklist(group, location.stateRoot, at)).rows[0]!;
+  assert.equal(row.delivery, "todo");
+  assert.ok(row.evidence.some((value) => value.endsWith(`#W01@${hash(registeredHtml)}`)));
+  assert.deepEqual(row.conditions, []);
+});
+
+test("B12-19: a duplicated plan task number refuses the registered join instead of reading its first copy", async (t) => {
+  const location = await fixture(t);
+  const html = '<section><h3><code class="status">[x]</code> Milestone M1: Sample</h3><h4>1. Sample task</h4><ul><li><code class="status">[x]</code> Complete</li></ul><h4>1. Sample task again</h4><ul><li><code class="status">[]</code> Open</li></ul></section>';
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task\n\n${registeredPrompt}\n`;
+  const catalog = await registeredRepository(location, html, sectionB, registeredTicket.replace("state: todo", "state: done"));
+  const group = await landedRegisteredUnit(location, catalog, html);
+  const row = (await checklist(group, location.stateRoot, at)).rows[0]!;
+  assert.equal(row.delivery, "unknown");
+  assert.ok(row.conditions.includes("registered plan refused: registered plan task T01 is not unique"), JSON.stringify(row.conditions));
+});
+
+test("B12-20: a Section B heading with trailing spaces agrees with its ticket title", async (t) => {
+  const location = await fixture(t);
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task   \n\n${registeredPrompt}\n`;
+  const catalog = await registeredRepository(location, registeredHtml, sectionB, registeredTicket);
+  const group = await landedRegisteredUnit(location, catalog, registeredHtml);
+  assert.equal((await checklist(group, location.stateRoot, at)).rows[0]?.delivery, "awaiting-owner");
+});
+
+test("B12-22: an unresolvable registered plan is named on its row, not reported as a generic lookup gap", async (t) => {
+  const location = await fixture(t);
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task\n\n${registeredPrompt}\n`;
+  const catalog = await registeredRepository(location, registeredHtml, sectionB, registeredTicket);
+  const group = await defined(location, [{ ...unit(), plan: { catalog, stem: "missing-plan", task: "T01", sourceSha256: hash(registeredHtml) } }]);
+  const row = (await checklist(group, location.stateRoot, at)).rows[0]!;
+  assert.equal(row.delivery, "unknown");
+  assert.ok(row.conditions.includes("registered plan refused: registered plan source unresolved"), JSON.stringify(row.conditions));
+});
+
+test("B12-22: a broken registered-plan row is refused without hiding healthy checklist rows", async (t) => {
+  const location = await fixture(t);
+  const sectionB = `# Section B — Task prompts (recommended)\n\n### T1 — Sample task\n\n${registeredPrompt}\n`;
+  const catalog = await registeredRepository(location, registeredHtml, sectionB, registeredTicket);
+  const healthy = { ...unit("healthy"), plan: { catalog, stem: "sample-plan", task: "T01", sourceSha256: hash(registeredHtml) } };
+  const refused = { ...unit("refused"), plan: { catalog, stem: "missing-plan", task: "T02", sourceSha256: hash(registeredHtml) } };
+  const group = await defined(location, [healthy, refused]);
+  const result = await checklist(group, location.stateRoot, at);
+  assert.deepEqual(result.rows.map((row) => row.id), ["healthy", "refused"]);
+  assert.equal(result.rows[0]?.delivery, "todo");
+  assert.ok(result.rows[0]?.evidence.some((value) => value.endsWith(`#T01@${hash(registeredHtml)}`)));
+  assert.deepEqual(result.rows[0]?.conditions, []);
+  assert.equal(result.rows[1]?.delivery, "unknown");
+  assert.ok(result.rows[1]?.conditions.includes("registered plan refused: registered plan source unresolved"));
+});
+
+test("B12-21: a long first input line is cut on a whole code point, never leaving a lone surrogate", async (t) => {
+  const location = await fixture(t);
+  const group = await initial(location, `${"a".repeat(178)}\u{1F600}b`);
+  assert.equal(decisionTree(group).title?.text, `${"a".repeat(178)}…`);
 });
 
 test("current source refresh supersedes historical hashes without erasing amendment history", async (t) => {

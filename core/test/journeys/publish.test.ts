@@ -13,6 +13,8 @@ import {
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
 import { newCommand } from "../../src/cli/commands/new.ts";
 import { publishCommand } from "../../src/cli/commands/publish.ts";
+import { journeyCommand } from "../../src/cli/commands/journey.ts";
+import { recordCandidateGateEvidence } from "../fixtures/candidate-gate-evidence.ts";
 import { main } from "../../src/cli/main.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 import { observePublishTarget, runPublish } from "../../src/git/publish.ts";
@@ -122,7 +124,7 @@ function awaiting(fixture: BareFixture, base: string, candidate: string): Attemp
     nextAction: `run \`awsf land ${TASK}\``,
     gatesPass: true,
     requiredReviewPresent: true,
-    journeyApproved: true,
+    journeyApproved: false,
     protectedApprovalsValid: true,
     process: null,
     landingApproval: null,
@@ -139,6 +141,8 @@ async function seedAwaiting(
   candidate: string,
 ): Promise<string> {
   const attemptDir = join(stateRoot, "projects", PROJECT, "tasks", TASK, "1");
+  const worktree = join(fixture.root, "candidate-worktree");
+  git(fixture.work, "worktree", "add", "--detach", worktree, candidate);
   const projection = createDashboardProjection(stateRoot);
   try {
     await persistAttempt(
@@ -147,6 +151,9 @@ async function seedAwaiting(
       { kind: "attempt.created", next: awaiting(fixture, base, candidate) },
       projection.project,
     );
+    await recordCandidateGateEvidence(attemptDir, projection.project, AT);
+    await journeyCommand({ attemptDir, terminal: terminal(), journeyId: "publish-fixture", observedSha: candidate,
+      now: () => AT, projectRecord: projection.project });
   } finally {
     projection.close();
   }

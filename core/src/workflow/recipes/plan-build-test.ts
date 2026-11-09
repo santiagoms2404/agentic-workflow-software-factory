@@ -28,7 +28,7 @@ export const planBuildTestWorkflow = {
       outputSchema: PlanOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("planner"),
+      get prompt() { return loadUserPrompt("planner"); },
     },
     {
       id: "builder",
@@ -39,7 +39,7 @@ export const planBuildTestWorkflow = {
       outputSchema: BuildOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("builder"),
+      get prompt() { return loadUserPrompt("builder"); },
     },
     {
       id: "tests",

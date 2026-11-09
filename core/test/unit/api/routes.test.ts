@@ -9,7 +9,7 @@ import { openDatabase, type OpenDatabaseOptions } from "../../../src/observabili
 import { writeLandingSummary } from "../../../src/persistence/landing-summary.ts";
 import { loadCatalog } from "../../../src/registry/catalog.ts";
 import { resolvePlanSources } from "../../../src/registry/plan-source.ts";
-import type { SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse, TicketsResponse, TicketSourceResponse } from "../../../../dashboard/shared/types.ts";
+import type { AdaptersResponse, SessionsResponse, SessionDetailResponse, PhaseDetailResponse, EventsResponse, TicketsResponse, TicketSourceResponse } from "../../../../dashboard/shared/types.ts";
 import { repoRoot } from "../meta/_walk.ts";
 import { apiFixture } from "./_fixture.ts";
 
@@ -92,6 +92,19 @@ test("tickets endpoint returns every resolved repository ticket including the W-
   } finally { router.close(); fixture.close(); }
 });
 
+test("tickets refuses a dependency cycle instead of showing every cyclic ticket as not ready", async () => {
+  const fixture = apiFixture();
+  const tickets = fixture.planSources[0]!.ticketsPath;
+  await writeFile(join(tickets, "T01.md"), `---\nid: T01\ntitle: First\nmilestone: M1\nstate: todo\ndepends_on: [T02]\n---\nfirst\n`);
+  await writeFile(join(tickets, "T02.md"), `---\nid: T02\ntitle: Second\nmilestone: M1\nstate: todo\ndepends_on: [T01]\n---\nsecond\n`);
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, planSources: fixture.planSources });
+  try {
+    const response = await router.dispatch(request("/api/v1/tickets"));
+    assert.equal(response.status, 500, "cyclic plan data is a read failure, not a valid empty-ready backlog");
+    assert.deepEqual(response.body, { error: "request failed", code: "internal-error" });
+  } finally { router.close(); fixture.close(); }
+});
+
 test("sessions embeds ordered phases and agents in one response", async () => {
   const fixture = apiFixture();
   const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
@@ -125,6 +138,16 @@ test("sessions embeds ordered phases and agents in one response", async () => {
     router.close();
     fixture.close();
   }
+});
+
+test("sessions accepts PUBLISHED from the machine lifecycle vocabulary", async () => {
+  const fixture = apiFixture();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config, planSources: fixture.planSources });
+  try {
+    const response = await router.dispatch(request("/api/v1/sessions?state=PUBLISHED"));
+    assert.equal(response.status, 200);
+    assert.deepEqual((response.body as SessionsResponse).sessions, []);
+  } finally { router.close(); fixture.close(); }
 });
 
 test("sessions expose declared continuations, group membership, and honest nulls", async () => {
@@ -266,6 +289,51 @@ test("events use a bounded row cursor, insertion order, and private payload supp
   }
 });
 
+test("session before cursors normalize to the stored millisecond timestamp form", async () => {
+  const fixture = apiFixture();
+  createSession(fixture.writer, {
+    sessionId: "session-newer", projectSlug: "test-project", taskId: "T-newer", continuesTask: null,
+    groupId: null, planRef: null, attempt: 1, workflowId: "build", riskTier: 1, isProtected: false,
+    requestText: "Newer than the cursor", callCeiling: 3, configSnapshotJson: "{}",
+    journalPath: "state://newer.jsonl", startedAt: "2026-08-08T12:00:00.500Z",
+  });
+  createSession(fixture.writer, {
+    sessionId: "session-older", projectSlug: "test-project", taskId: "T-older", continuesTask: null,
+    groupId: null, planRef: null, attempt: 1, workflowId: "build", riskTier: 1, isProtected: false,
+    requestText: "Older than the cursor", callCeiling: 3, configSnapshotJson: "{}",
+    journalPath: "state://older.jsonl", startedAt: "2026-08-08T11:59:59.000Z",
+  });
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  try {
+    const response = await router.dispatch(request("/api/v1/sessions?before=2026-08-08T12:00:00Z"));
+    assert.equal(response.status, 200);
+    assert.deepEqual((response.body as SessionsResponse).sessions.map((session) => session.sessionId), ["session-older"]);
+  } finally { router.close(); fixture.close(); }
+});
+
+test("B13-16: the state filter admits every lifecycle state the machine has, PUBLISHED included", async () => {
+  const fixture = apiFixture();
+  fixture.writer.prepare("UPDATE sessions SET lifecycle_state = 'PUBLISHED' WHERE session_id = 'session-1'").run();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  try {
+    const published = await router.dispatch(request("/api/v1/sessions?state=PUBLISHED"));
+    assert.equal(published.status, 200);
+    assert.deepEqual((published.body as SessionsResponse).sessions.map((session) => session.sessionId), ["session-1"]);
+    assert.equal((await router.dispatch(request("/api/v1/sessions?state=NOT_A_STATE"))).status, 400);
+  } finally { router.close(); fixture.close(); }
+});
+
+test("B13-17: a landed run's detail names the owner's publish act rather than no next action", async () => {
+  const fixture = apiFixture();
+  fixture.writer.prepare("UPDATE sessions SET lifecycle_state = 'LANDED' WHERE session_id = 'session-1'").run();
+  const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
+  try {
+    const detail = await router.dispatch(request("/api/v1/sessions/session-1"));
+    assert.equal(detail.status, 200);
+    assert.deepEqual((detail.body as SessionDetailResponse).allowedNextActions, ["publish in terminal"]);
+  } finally { router.close(); fixture.close(); }
+});
+
 test("malformed and out-of-range query values are wrapped and do not poison later requests", async () => {
   const fixture = apiFixture();
   const router = createApiRouter({ dbPath: fixture.path, config: fixture.config });
@@ -339,7 +407,7 @@ test("archive changes only review-list visibility, never lifecycle, Git, or conf
   } finally { router.close(); fixture.close(); }
 });
 
-test("settings are redacted and adapter health is a read-only configured view", async () => {
+test("settings are redacted and adapter health reflects executable availability", async () => {
   const fixture = apiFixture();
   const claude = fixture.config.adapters.claude;
   assert.ok(claude, "the fixture configures a claude adapter");
@@ -352,6 +420,10 @@ test("settings are redacted and adapter health is a read-only configured view", 
     const adapters = await router.dispatch(request("/api/v1/adapters"));
     assert.equal(adapters.status, 200);
     assert.match(JSON.stringify(adapters.body), /claude-code/);
+    const claudeHealth = (adapters.body as AdaptersResponse).adapters.find((entry) => entry.id === "claude");
+    assert.deepEqual({ status: claudeHealth?.status, code: claudeHealth?.code }, {
+      status: "blocked", code: "ExecutableNotFound",
+    });
   } finally {
     router.close();
     fixture.close();

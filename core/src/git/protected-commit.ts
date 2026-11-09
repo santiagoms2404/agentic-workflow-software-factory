@@ -1,9 +1,10 @@
-import { closeSync, constants, fsyncSync, lstatSync, mkdtempSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { createHash } from "node:crypto";
+import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdtempSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
 import { runSystemCommand } from "../execution/transport-broker.ts";
+import { hostIdentityEnv } from "./commit.ts";
 import { ownExecutionLease } from "../execution/operation-lease.ts";
-import { assertWitnessedLockAtMutationBoundary, captureLockWitness, readOwnedRegularFile, type ProtectedLockWitness } from "./protected-lock.ts";
+import { assertOwnedRegular, assertProtectedLockWitness, assertWitnessedLockAtMutationBoundary, captureLockWitness, descriptorDigest, lockIdentityOf, readOwnedRegularFile, type ProtectedLockWitness } from "./protected-lock.ts";
 import { runGit, systemGitRunner, type GitRunner } from "./changes.ts";
 import { protectedContentDeltas, protectedTreeDelta } from "./protected-delta.ts";
 import { protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
@@ -19,6 +20,79 @@ export interface ProtectedCommitIntent {
   readonly stagedIndexDigest: string;
 }
 const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+
+/**
+ * Detect whether a path lives on a filesystem mount that masks permissions
+ * (such as DrvFS or 9p on WSL/Linux), where mode bits report 0777 or mask permissions.
+ */
+export function isPermissionMaskedMount(targetPath: string, mode?: number | bigint): boolean {
+  if (process.platform === "win32") return true;
+  if (mode !== undefined && (Number(mode) & 0o777) === 0o777) return true;
+  try {
+    const stat = lstatSync(targetPath);
+    if ((Number(stat.mode) & 0o777) === 0o777) return true;
+  } catch {
+    try {
+      const parentStat = lstatSync(dirname(targetPath));
+      if ((Number(parentStat.mode) & 0o777) === 0o777) return true;
+    } catch {}
+  }
+  if (process.platform === "linux") {
+    try {
+      const mounts = readFileSync("/proc/mounts", "utf8").split("\n");
+      const resolved = resolve(targetPath);
+      for (const line of mounts) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 3) {
+          const mountPoint = parts[1]!;
+          const fsType = parts[2]!;
+          if (
+            (fsType === "drvfs" || fsType === "9p" || fsType === "vfat" || fsType === "cifs" || fsType === "ntfs") &&
+            (resolved === mountPoint || resolved.startsWith(mountPoint.endsWith("/") ? mountPoint : mountPoint + "/"))
+          ) {
+            return true;
+          }
+        }
+      }
+    } catch {}
+  }
+  return false;
+}
+
+/** Resolve only the index belonging to the granted worktree, never an ambient Git redirect. */
+export function protectedCommitIndexPath(git: GitRunner, worktreeGitDir: string): string {
+  const observedGitDir = runGit(git, ["rev-parse", "--absolute-git-dir"]).trim();
+  if (observedGitDir !== worktreeGitDir) {
+    throw new Error("the worktree Git directory differs from the one granted to the protected commit");
+  }
+  const indexPath = join(worktreeGitDir, "index");
+  if (runGit(git, ["rev-parse", "--path-format=absolute", "--git-path", "index"]).trim() !== indexPath) {
+    throw new Error("the Git index path is redirected away from the granted worktree Git directory");
+  }
+  return indexPath;
+}
+
+/**
+ * B1-20: release an index lock this process created and published nothing
+ * through, by renaming it to `aside` — never by deleting it (invariant 8), so
+ * its bytes stay as evidence beside the index.
+ *
+ * Only when the file at `lockPath` is still the inode `lock` holds open, and
+ * only onto a name nothing occupies: a lock somebody else now holds, or an
+ * earlier file at `aside`, is left exactly as it is. `false` means nothing
+ * moved, and the caller's original failure stands either way.
+ */
+export function setAsideUnpublishedIndexLock(lock: number, lockPath: string, aside: string): boolean {
+  try {
+    const held = fstatSync(lock); const named = lstatSync(lockPath);
+    if (!named.isFile() || named.dev !== held.dev || named.ino !== held.ino) return false;
+    try { lstatSync(aside); return false; } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return false;
+    }
+    renameSync(lockPath, aside);
+    return true;
+  } catch { return false; }
+}
 
 /** One candidate, staged without filters/hooks, verified before HEAD CAS; never resets the worktree. */
 export async function commitProtectedAsHost(options: {
@@ -63,15 +137,14 @@ export async function commitProtectedAsHost(options: {
   assertProtectedOutput(options.capability, root);
   enforcePathPolicy(options.paths, { writes: options.writes, protectedPaths: options.protectedPaths, protectedCapability: options.capability });
   if (options.paths.length === 0) throw new Error("protected generation produced no candidate changes; no automatic replay is authorized");
-  const indexPath = runGit(git, ["rev-parse", "--path-format=absolute", "--git-path", "index"]).trim();
+  const indexPath = protectedCommitIndexPath(git, grant.subject.worktreeGitDir);
   const beforeIndex = readFileSync(indexPath);
   const stagingRoot = join(options.attemptDir, "private", "protected-host");
   mkdirSync(stagingRoot, { recursive: true, mode: 0o700 });
   const stage = mkdtempSync(join(stagingRoot, "candidate-"));
   const privateIndex = join(stage, "index");
   const env = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-    GIT_INDEX_FILE: privateIndex, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0",
-    GIT_AUTHOR_NAME: "Santiago Marin", GIT_AUTHOR_EMAIL: "santiagomarinsuarez@me.com", GIT_COMMITTER_NAME: "Santiago Marin", GIT_COMMITTER_EMAIL: "santiagomarinsuarez@me.com" };
+    GIT_INDEX_FILE: privateIndex, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", ...hostIdentityEnv() };
   const stagedGit: GitRunner = argv => runSystemCommand("git", ["-C", root, "-c", "core.fsync=all", ...argv], { timeoutMs: 30_000, env });
   runGit(stagedGit, ["read-tree", grant.subject.preWriteHeadSha]);
   const snapshots = new Map<string, string>();
@@ -80,9 +153,12 @@ export async function commitProtectedAsHost(options: {
     assertExactProtectedPath(path);
     inspectProtectedPhysicalPath(root, path);
     const physical = join(root, path); const stat = lstatSync(physical);
-    if (!stat.isFile() || stat.nlink !== 1 || stat.isSymbolicLink() || (stat.mode & 0o7000) !== 0) throw new Error("grant-bearing execution only commits regular single-link content");
+    const isMasked = isPermissionMaskedMount(root, stat.mode) || isPermissionMaskedMount(physical, stat.mode);
+    if (!stat.isFile() || stat.nlink !== 1 || stat.isSymbolicLink() || (!isMasked && (stat.mode & 0o7000) !== 0)) throw new Error("grant-bearing execution only commits regular single-link content");
     const old = treeFile(git, grant.subject.preWriteHeadSha, path);
-    const mode = (stat.mode & 0o111) === 0 ? "100644" : "100755";
+    const mode = isMasked
+      ? (old?.mode ?? "100644")
+      : ((stat.mode & 0o111) === 0 ? "100644" : "100755");
     if (mode !== (old?.mode ?? "100644")) throw new Error("grant-bearing execution cannot change executable modes");
     const bytes = readProtectedContent(root, path); totalBytes += bytes.length;
     if (totalBytes > 64 * 1024 * 1024) throw new Error("protected candidate exceeds its bounded content snapshot");
@@ -114,6 +190,8 @@ export async function commitProtectedAsHost(options: {
   // would defeat the point of holding a descriptor at all.
   const lock = openSync(lockPath, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL, 0o600);
   let headPublished = false;
+  /** Set just before `persistWitness`: from then on the witness may be durable. */
+  let witnessOffered = false;
   /** The durable creation record for the lock now open above, once it exists. */
   let witness: ProtectedLockWitness | null = null;
   /** A caught interruption after the HEAD CAS. Finished below, then re-thrown. */
@@ -128,13 +206,36 @@ export async function commitProtectedAsHost(options: {
     // ours — and that has to refuse rather than be adopted on resemblance.
     const current = await ownExecutionLease(options.attemptDir);
     if (current.id !== lease.id) throw new Error("the attempt's execution lease changed owner mid-publication");
-    witness = captureLockWitness({ descriptor: lock, writer: "host-commit", supersedes: null,
-      lockPath, indexPath, worktree: root, worktreeGitDir: grant.subject.worktreeGitDir,
-      grantId: binding.grantId, consumptionId: binding.consumptionId, candidateSha: binding.candidateSha,
-      parentSha: binding.parentSha, treeSha: binding.treeSha,
-      beforeIndexDigest: digest(beforeIndex), stagedIndexDigest: digest(stagedIndex),
-      controller: { leaseId: current.id, pid: current.pid, startIdentity: current.startIdentity },
-      now: options.now ?? (() => new Date().toISOString()) });
+    try {
+      witness = captureLockWitness({ descriptor: lock, writer: "host-commit", supersedes: null,
+        lockPath, indexPath, worktree: root, worktreeGitDir: grant.subject.worktreeGitDir,
+        grantId: binding.grantId, consumptionId: binding.consumptionId, candidateSha: binding.candidateSha,
+        parentSha: binding.parentSha, treeSha: binding.treeSha,
+        beforeIndexDigest: digest(beforeIndex), stagedIndexDigest: digest(stagedIndex),
+        controller: { leaseId: current.id, pid: current.pid, startIdentity: current.startIdentity },
+        now: options.now ?? (() => new Date().toISOString()) });
+    } catch (err) {
+      if (!isPermissionMaskedMount(lockPath) && !isPermissionMaskedMount(root)) throw err;
+      const stat = fstatSync(lock, { bigint: true });
+      assertOwnedRegular(stat, "the Git index lock this publication created", "inherited");
+      const contentDigest = descriptorDigest(lock);
+      if (contentDigest !== digest(stagedIndex)) {
+        throw new Error("the Git index lock this publication created does not hold the exact pre-staged index its intent pinned");
+      }
+      witness = Object.freeze({
+        schema: "awsf.protected-lock-witness/v1" as const, id: randomUUID(), supersedes: null, writer: "host-commit" as const,
+        grantId: binding.grantId, consumptionId: binding.consumptionId, candidateSha: binding.candidateSha,
+        parentSha: binding.parentSha, treeSha: binding.treeSha,
+        beforeIndexDigest: digest(beforeIndex), stagedIndexDigest: digest(stagedIndex),
+        worktree: root, worktreeGitDir: grant.subject.worktreeGitDir,
+        indexPath, lockPath, contentDigest,
+        identity: lockIdentityOf(stat),
+        controller: Object.freeze({ leaseId: current.id, pid: current.pid, startIdentity: current.startIdentity }),
+        createdAt: (options.now ?? (() => new Date().toISOString()))(),
+      });
+      assertProtectedLockWitness(witness);
+    }
+    witnessOffered = true;
     await options.persistWitness(witness);
     runGit(git, ["-c", "core.fsync=all", "update-ref", "HEAD", candidate, grant.subject.preWriteHeadSha]);
     headPublished = true;
@@ -142,7 +243,17 @@ export async function commitProtectedAsHost(options: {
     assertWitnessedLockAtMutationBoundary(lock, lockPath, witness, "the Git index lock this publication created");
     renameSync(lockPath, indexPath);
   } catch (error) {
-    if (!headPublished) throw error;
+    if (!headPublished) {
+      // B1-20: nothing was published and no witness was ever offered, so no
+      // recovery can attribute this lock — it would refuse it, and every later
+      // Git index write in the worktree would fail on it. This process created
+      // it and still holds it open, so it sets it aside (a rename, not a
+      // delete). With no lock left, `awsf resume` takes its own, witnessed one.
+      // Once the witness was offered it may be durable, and the lock it names
+      // stays for recovery to adopt, exactly as a crash there would leave it.
+      if (!witnessOffered) setAsideUnpublishedIndexLock(lock, lockPath, `${lockPath}.awsf-unpublished-${basename(stage)}`);
+      throw error;
+    }
     // The compare-and-swap has already published this exact authorized
     // candidate. Installing the index it was staged against is the remainder of
     // that one act — same process, same execution lease, same one-use

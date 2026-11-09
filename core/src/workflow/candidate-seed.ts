@@ -17,6 +17,7 @@ import { HOST_AUTHOR } from "../git/commit.ts";
 import { IntegrationRefused, planIntegration, verifyIntegrationCommit } from "../git/integration.ts";
 import type { AttemptEvidence } from "../observability/attempt-evidence.ts";
 import type { JournalRecord } from "../persistence/journal.ts";
+import { scanJournalText } from "../persistence/replay.ts";
 import { readAttempt, withLegacyDefaults, type AttemptEvent, type AttemptStatus } from "../cli/commands/attempt.ts";
 import { compiledWorkflow, workflowRecipe } from "./catalog.ts";
 import type { WorkflowRecipe } from "./compiler.ts";
@@ -38,9 +39,13 @@ export const observeQuiescence: ProcessQuiescence = (identity) => {
 
 /** Refuse stale/torn projections without repairing or writing a sealed source. */
 export async function readVerifiedAttempt(dir: string) {
-  const text = await readFile(join(dir, "journal.jsonl"), "utf8");
+  const path = join(dir, "journal.jsonl");
+  const text = await readFile(path, "utf8");
   if (!text.endsWith("\n")) throw new CandidateSeedRejected("journal has a torn tail");
-  const records = text.trimEnd().split("\n").map((line) => JSON.parse(line) as JournalRecord<AttemptEvent>);
+  const scan = scanJournalText<AttemptEvent>(text, path);
+  if (!scan.ok) throw new CandidateSeedRejected(`journal is invalid at ${scan.badKey}: ${scan.detail}`);
+  if (scan.tornTail !== null) throw new CandidateSeedRejected("journal has a torn tail");
+  const records = scan.records;
   const status = await readAttempt(dir);
   for (const [index, record] of records.entries()) {
     if (record.source_seq !== index + 1 || record.event?.next?.revision !== index + 1 || record.event.next.lastSourceSeq !== index + 1 ||
@@ -431,7 +436,12 @@ export async function verifiedTargetSeed(dir: string, status: AttemptStatus): Pr
 
 export async function validateSeedStartup(seed: CandidateSeed, status: AttemptStatus, config: AwsfConfig, configPath: string, attemptDir: string): Promise<void> {
   assertSeedTarget(status);
-  const source = await inspectSeedSource(join(dirname(dirname(attemptDir)), seed.source.taskId, String(seed.source.attempt)), status.repository, {
+  // The source is named by the seed record, so it must be a sealed attempt beside this one, as
+  // assertIntegrationSource requires, before anything is read from it (B6-14).
+  const tasks = dirname(dirname(attemptDir));
+  const sourceDir = join(tasks, seed.source.taskId, String(seed.source.attempt));
+  if (dirname(dirname(sourceDir)) !== tasks) throw new CandidateSeedRejected("seed source is not a sealed attempt beside the target");
+  const source = await inspectSeedSource(sourceDir, status.repository, {
     project: seed.source.project, taskId: seed.source.taskId, attempt: seed.source.attempt, candidateSha: seed.seedCandidateSha,
   });
   if (source.journalDigest !== seed.source.journalDigest || source.status.sessionId !== seed.source.sessionId || source.status.revision !== seed.source.revision) {

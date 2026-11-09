@@ -11,6 +11,7 @@
 // event, a snippet, the journal or a projection.
 
 import { createHash } from "node:crypto";
+import { summarize } from "./snippet.ts";
 
 export interface ToolResultImage {
   readonly mediaType: string;
@@ -21,25 +22,45 @@ export interface ToolResultImage {
 interface ImageBlock {
   readonly mediaType: string;
   readonly data: string;
+  readonly decodedBytes: number;
 }
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
+/**
+ * The payload of an image block, wherever the shape keeps it.
+ *
+ * One provider nests it under `source`, the other keeps it at the top level. The shape decides
+ * only where the payload is read from. It never decides whether the payload is
+ * hidden: a block that is an image and carries a payload is always an image to
+ * redact, even when its source names no media type (B11-25). A block with no
+ * payload at all has nothing to redact and is not an image here.
+ */
 function imageBlock(block: unknown): ImageBlock | null {
   if (block === null || typeof block !== "object") return null;
   const candidate = block as { type?: unknown; source?: unknown; mimeType?: unknown; data?: unknown };
   if (candidate.type !== "image") return null;
-  if (candidate.source !== null && typeof candidate.source === "object") {
-    const source = candidate.source as { type?: unknown; media_type?: unknown; data?: unknown };
-    if (source.type === "base64" && typeof source.media_type === "string" && typeof source.data === "string") {
-      return { mediaType: source.media_type, data: source.data };
-    }
-    return null;
-  }
-  if (typeof candidate.mimeType === "string" && typeof candidate.data === "string") {
-    return { mediaType: candidate.mimeType, data: candidate.data };
-  }
-  return null;
+  const source =
+    candidate.source !== null && typeof candidate.source === "object"
+      ? (candidate.source as { media_type?: unknown; data?: unknown })
+      : undefined;
+  const sourceData = source?.data;
+  const data =
+    typeof sourceData === "string" ? sourceData : typeof candidate.data === "string" ? candidate.data : null;
+  if (data === null) return null;
+  const sourceMediaType = source?.media_type;
+  const declared =
+    typeof sourceMediaType === "string"
+      ? sourceMediaType
+      : typeof candidate.mimeType === "string"
+        ? candidate.mimeType
+        : null;
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  return {
+    mediaType: declared ?? "unknown",
+    data,
+    decodedBytes: Math.max(0, Math.floor((data.length * 3) / 4) - padding),
+  };
 }
 
 function blocksOf(content: unknown): readonly unknown[] {
@@ -64,7 +85,7 @@ export function toolResultImages(content: unknown): readonly ToolResultImage[] {
     const bytes = Buffer.from(image.data, "base64");
     images.push(Object.freeze({
       mediaType: image.mediaType,
-      bytes: bytes.length,
+      bytes: image.decodedBytes,
       sha256: createHash("sha256").update(bytes).digest("hex"),
     }));
   }
@@ -76,11 +97,27 @@ export function redactToolImages(content: unknown): unknown {
   const redact = (block: unknown): unknown => {
     const image = imageBlock(block);
     if (image === null) return block;
-    return { type: "image", mediaType: image.mediaType, bytes: Math.floor((image.data.length * 3) / 4) };
+    return { type: "image", mediaType: image.mediaType, bytes: image.decodedBytes };
   };
   if (Array.isArray(content)) return content.map(redact);
   if (content !== null && typeof content === "object" && Array.isArray((content as { content?: unknown }).content)) {
     return { ...(content as Record<string, unknown>), content: ((content as { content: unknown[] }).content).map(redact) };
   }
   return redact(content);
+}
+
+/**
+ * Summarize text blocks without spending the snippet on their content envelope.
+ * Image-only and unstructured results keep the redacted JSON fallback.
+ */
+export function summarizeToolResult(result: unknown): string {
+  const blocks = blocksOf(result);
+  const texts = blocks
+    .filter((block): block is { text: string } => {
+      return block !== null && typeof block === "object" && typeof (block as { text?: unknown }).text === "string";
+    })
+    .map((block) => block.text);
+  return texts.length === 0
+    ? summarize(redactToolImages(result))
+    : summarize(texts.join("\n"));
 }

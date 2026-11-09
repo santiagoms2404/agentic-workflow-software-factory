@@ -25,6 +25,9 @@ test("workflow selection adopts the recipe tier and rejects unknown, disabled, o
   assert.deepEqual(selectWorkflow(config, "simple-sdlc", "T2"), { workflow: "simple-sdlc", tier: 2 });
   assert.throws(() => selectWorkflow(config, "simple-sdlc", "1"), /requires --tier T2; got T1/);
   assert.throws(() => selectWorkflow(config, "missing", undefined), /no shipped recipe/);
+  for (const tier of ["", "T", "  ", "1.0", "1e0"]) {
+    assert.throws(() => selectWorkflow(config, "build", tier), /tier must be 0, 1, or 2/);
+  }
   assert.throws(
     () => selectWorkflow({ ...config, workflows: { enabled: ["build"] } }, "simple-sdlc"),
     /is not enabled/,

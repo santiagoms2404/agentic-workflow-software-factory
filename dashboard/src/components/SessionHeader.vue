@@ -2,14 +2,10 @@
 import { computed } from "vue";
 import type { SessionDetailResponse } from "../../shared/types.ts";
 import { costAuthorityLabel, formatCost, formatDate, formatDuration, formatTokens, formatUsage, stateLabel, stateTone } from "../display.ts";
+import { sessionExtent } from "../presentation.ts";
 import StateRibbon from "./StateRibbon.vue";
 const props = defineProps<{ session: SessionDetailResponse }>();
-const runtimeEnd = computed(() => {
-  if (props.session.endedAt) return props.session.endedAt;
-  return ["RUNNING", "GATING", "REVIEWING", "LANDING"].includes(props.session.state)
-    ? null
-    : props.session.updatedAt;
-});
+const runtimeEnd = computed(() => sessionExtent(props.session, Date.now()).runtimeEnd);
 </script>
 
 <template>

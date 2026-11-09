@@ -165,12 +165,34 @@ export interface AttemptStatus {
   readonly requiredReviewPresent: boolean;
   readonly journeyApproved: boolean;
   readonly protectedApprovalsValid: boolean;
+  /**
+   * The persistent mark `awsf start --stub true` leaves on the attempt it
+   * prepares (owner call O7). `awsf run --stub true` runs only an attempt that
+   * carries it. Absent on every other attempt, historical ones included.
+   */
+  readonly stub?: StubMark | null;
+  /**
+   * Who wrote the four flags above when it was not a gate run, a reviewer and
+   * the owner. Only the stub run sets it, to `"stub"`; L20 refuses a T2 landing
+   * whose evidence carries it, so a fixture attestation never stands in for a
+   * real one.
+   */
+  readonly attestationProvenance?: AttestationProvenance | null;
   readonly process: ProcessIdentity | null;
   readonly landingApproval: LandingApproval | null;
   readonly blocker: AttemptBlocker | null;
   readonly revision: number;
   readonly lastSourceSeq: number;
 }
+
+/** The command that prepared a stub attempt, and when. */
+export interface StubMark {
+  readonly startedBy: "awsf start --stub true";
+  readonly at: string;
+}
+
+/** The only provenance that is recorded: everything else is a real gate, reviewer or owner act. */
+export type AttestationProvenance = "stub";
 
 /**
  * The owner's written permission for one attempt's review to run on the same

@@ -90,6 +90,13 @@ export class ContinuityUnavailable extends Error {
   }
 }
 
+export class ContinuityStoreUnavailable extends Error {
+  constructor(detail: string) {
+    super(`continuity store is unusable: ${detail}`);
+    this.name = "ContinuityStoreUnavailable";
+  }
+}
+
 export interface ContinuityStoreOptions {
   /** `private/continuity.json` for this attempt. */
   readonly path: string;
@@ -114,6 +121,7 @@ export class ContinuityStore {
   readonly #newSessionId: () => string;
   readonly #now: () => string;
   readonly #records = new Map<string, ContinuityRecord>();
+  #flushChain: Promise<unknown> = Promise.resolve();
 
   constructor(options: ContinuityStoreOptions) {
     this.#path = options.path;
@@ -121,26 +129,43 @@ export class ContinuityStore {
     this.#now = options.now ?? ((): string => new Date().toISOString());
   }
 
-  /** Rehydrates from disk. A missing or unreadable file is an empty store, never a throw. */
+  /** A missing file is a fresh store; an existing mirror that cannot be trusted must not be overwritten. */
   async load(): Promise<void> {
     let text: string;
     try {
       text = await readFile(this.#path, "utf8");
-    } catch {
-      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw new ContinuityStoreUnavailable("the existing private mirror could not be read");
     }
-    let parsed: Partial<ContinuityFile>;
+    let parsed: unknown;
     try {
-      parsed = JSON.parse(text) as Partial<ContinuityFile>;
+      parsed = JSON.parse(text);
     } catch {
-      return;
+      throw new ContinuityStoreUnavailable("the existing private mirror is not valid JSON");
     }
-    if (parsed.schema !== CONTINUITY_SCHEMA || typeof parsed.records !== "object" || parsed.records === null) {
-      return;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new ContinuityStoreUnavailable("the existing private mirror has an unsupported schema");
     }
-    for (const [handle, record] of Object.entries(parsed.records)) {
-      this.#records.set(handle, record);
+    const file = parsed as Partial<ContinuityFile>;
+    if (file.schema !== CONTINUITY_SCHEMA || typeof file.records !== "object" || file.records === null || Array.isArray(file.records)) {
+      throw new ContinuityStoreUnavailable("the existing private mirror has an unsupported schema");
     }
+    const loaded = new Map<string, ContinuityRecord>();
+    for (const [handle, value] of Object.entries(file.records)) {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        throw new ContinuityStoreUnavailable("the existing private mirror contains an invalid conversation");
+      }
+      const record = value as ContinuityRecord;
+      if (typeof record.phaseId !== "string" || record.handle !== handle || record.handle !== continuityHandle(record.phaseId) ||
+          typeof record.adapter !== "string" || typeof record.provider !== "string" || typeof record.model !== "string" ||
+          typeof record.providerSessionId !== "string" || (record.storeDir !== null && typeof record.storeDir !== "string") ||
+          typeof record.openedAt !== "string" || !Number.isSafeInteger(record.turns) || record.turns < 0) {
+        throw new ContinuityStoreUnavailable("the existing private mirror contains an invalid conversation");
+      }
+      loaded.set(handle, record);
+    }
+    for (const [handle, record] of loaded) this.#records.set(handle, record);
   }
 
   get(handle: string): ContinuityRecord | undefined {
@@ -166,6 +191,24 @@ export class ContinuityStore {
     return Object.freeze({ providerSessionId: record.providerSessionId, storeDir: record.storeDir });
   }
 
+  async #serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.#flushChain;
+    let release: () => void;
+    this.#flushChain = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      await previous;
+    } catch {
+      // Allow subsequent operations to proceed even if the prior operation failed.
+    }
+    try {
+      return await operation();
+    } finally {
+      release!();
+    }
+  }
+
   /**
    * Opens a conversation for a phase. Mints the locator; creates no session —
    * the provider does that on its first turn, under the id it is handed.
@@ -181,34 +224,49 @@ export class ContinuityStore {
     model: string;
     storeDir: string | null;
   }): Promise<ContinuityRecord> {
-    const handle = continuityHandle(input.phaseId);
-    if (this.#records.has(handle)) {
-      throw new ContinuityUnavailable(handle, "a conversation is already open under this handle");
-    }
-    const record: ContinuityRecord = Object.freeze({
-      handle,
-      phaseId: input.phaseId,
-      adapter: input.adapter,
-      provider: input.provider,
-      model: input.model,
-      providerSessionId: this.#newSessionId(),
-      storeDir: input.storeDir,
-      openedAt: this.#now(),
-      turns: 0,
+    return await this.#serialize(async () => {
+      const handle = continuityHandle(input.phaseId);
+      if (this.#records.has(handle)) {
+        throw new ContinuityUnavailable(handle, "a conversation is already open under this handle");
+      }
+      const record: ContinuityRecord = Object.freeze({
+        handle,
+        phaseId: input.phaseId,
+        adapter: input.adapter,
+        provider: input.provider,
+        model: input.model,
+        providerSessionId: this.#newSessionId(),
+        storeDir: input.storeDir,
+        openedAt: this.#now(),
+        turns: 0,
+      });
+      this.#records.set(handle, record);
+      try {
+        await this.#flush();
+      } catch (error) {
+        this.#records.delete(handle);
+        throw error;
+      }
+      return record;
     });
-    this.#records.set(handle, record);
-    await this.#flush();
-    return record;
   }
 
   /** Records that a turn completed. The count is what `assertCorrectable` reads. */
   async recordTurn(handle: string): Promise<ContinuityRecord> {
-    const record = this.#records.get(handle);
-    if (record === undefined) throw new ContinuityUnavailable(handle, "no conversation was opened under this handle");
-    const next: ContinuityRecord = Object.freeze({ ...record, turns: record.turns + 1 });
-    this.#records.set(handle, next);
-    await this.#flush();
-    return next;
+    return await this.#serialize(async () => {
+      const record = this.#records.get(handle);
+      if (record === undefined) throw new ContinuityUnavailable(handle, "no conversation was opened under this handle");
+      const previous = record;
+      const next: ContinuityRecord = Object.freeze({ ...record, turns: record.turns + 1 });
+      this.#records.set(handle, next);
+      try {
+        await this.#flush();
+      } catch (error) {
+        this.#records.set(handle, previous);
+        throw error;
+      }
+      return next;
+    });
   }
 
   /**
@@ -250,16 +308,26 @@ function privateFailure(): never {
   throw new InterruptedTurnRefused("checkpoint-invalid", "private checkpoint storage is missing, unsafe, or inconsistent");
 }
 
-function ownerUid(): number {
+function ownerUid(): number | null {
   if (typeof process.getuid !== "function") {
+    if (process.platform === "win32") return null;
     throw new InterruptedTurnRefused("proof-unavailable", "private checkpoint ownership verification is unavailable on this platform");
   }
   return process.getuid();
 }
 
 async function syncDirectory(path: string): Promise<void> {
-  const handle = await fs.open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  try { await handle.sync(); } finally { await handle.close(); }
+  let handle: fs.FileHandle | null = null;
+  try {
+    handle = await fs.open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    await handle.sync();
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EISDIR" || code === "EPERM" || code === "ENOTSUP" || code === "EBADF") return;
+    throw err;
+  } finally {
+    if (handle !== null) await handle.close();
+  }
 }
 
 /** Reject aliases before creating any missing private directory. */
@@ -283,14 +351,15 @@ async function privateDirectory(path: string, create: boolean): Promise<void> {
     if (!stat.isDirectory() || stat.isSymbolicLink()) return privateFailure();
   }
   const stat = await fs.lstat(path);
-  if (stat.uid !== uid || (stat.mode & 0o777) !== CONTINUITY_DIR_MODE) return privateFailure();
+  if ((uid !== null && stat.uid !== uid) || (process.platform !== "win32" && (stat.mode & 0o777) !== CONTINUITY_DIR_MODE)) return privateFailure();
 }
 
 async function privateBytes(path: string): Promise<string> {
   const handle = await fs.open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const stat = await handle.stat();
-    if (!stat.isFile() || stat.nlink !== 1 || stat.uid !== ownerUid() || (stat.mode & 0o777) !== CONTINUITY_FILE_MODE || stat.size > MAX_CHECKPOINT_BYTES) return privateFailure();
+    const uid = ownerUid();
+    if (!stat.isFile() || (process.platform !== "win32" && stat.nlink !== 1) || (uid !== null && stat.uid !== uid) || (process.platform !== "win32" && (stat.mode & 0o777) !== CONTINUITY_FILE_MODE) || stat.size > MAX_CHECKPOINT_BYTES) return privateFailure();
     return await handle.readFile("utf8");
   } finally { await handle.close(); }
 }
@@ -311,7 +380,8 @@ async function writePrivateAtomic(path: string, text: string): Promise<void> {
   await privateDirectory(directory, true);
   try {
     const stat = await fs.lstat(path);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.uid !== ownerUid() || (stat.mode & 0o777) !== CONTINUITY_FILE_MODE) return privateFailure();
+    const uid = ownerUid();
+    if (!stat.isFile() || stat.isSymbolicLink() || (process.platform !== "win32" && stat.nlink !== 1) || (uid !== null && stat.uid !== uid) || (process.platform !== "win32" && (stat.mode & 0o777) !== CONTINUITY_FILE_MODE)) return privateFailure();
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
@@ -400,13 +470,35 @@ export class InterruptedTurnStore {
       await privateDirectory(this.#root, true);
       await privateDirectory(directory, true);
       const path = join(directory, `${checkpoint.generation}.json`);
-      try { await writePrivateExclusive(path, text); }
-      catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-        // Idempotent byte-identical persistence only. Never rewrite a generation
-        // and never let an old retry move a newer disposable mirror backwards.
-        await this.read(reference);
-        return reference;
+      const temporary = join(directory, `.${checkpoint.generation}-${randomUUID()}.tmp`);
+      try {
+        await writePrivateExclusive(temporary, text);
+        try {
+          await fs.link(temporary, path);
+          await fs.unlink(temporary);
+        } catch (linkError) {
+          if ((linkError as NodeJS.ErrnoException).code === "EEXIST") {
+            await fs.unlink(temporary).catch(() => undefined);
+            // Idempotent byte-identical persistence only. Never rewrite a generation
+            // and never let an old retry move a newer disposable mirror backwards.
+            await this.read(reference);
+            return reference;
+          }
+          // Fall back if hardlinks are not supported on this filesystem
+          try {
+            await fs.lstat(path);
+            await fs.unlink(temporary).catch(() => undefined);
+            await this.read(reference);
+            return reference;
+          } catch (statError) {
+            if ((statError as NodeJS.ErrnoException).code !== "ENOENT") throw statError;
+          }
+          await fs.rename(temporary, path);
+        }
+        await syncDirectory(directory);
+      } catch (error) {
+        await fs.unlink(temporary).catch(() => undefined);
+        throw error;
       }
       await writePrivateAtomic(join(directory, "latest.json"), canonicalJson(reference));
       return reference;

@@ -46,7 +46,10 @@ export const DEFAULT_EXIT_WAIT_MS = 5_000;
 export interface StderrDrain {
   /** The captured tail, bounded and trimmed. Empty when the provider said nothing. */
   text: () => string;
-  /** Resolves when stderr closes; awaited so a settled run has the whole tail. */
+  /**
+   * Resolves when stderr closes. Never awaited bare: `awaitStderr` bounds it,
+   * because a descendant holding the pipe can keep it open indefinitely.
+   */
   done: Promise<void>;
 }
 
@@ -105,6 +108,30 @@ export async function awaitExit(
   transport: ProcessTransport,
   waitMs: number = DEFAULT_EXIT_WAIT_MS,
 ): Promise<ProcessExit | null> {
+  return await withinWait(transport.exit.catch(() => null), waitMs);
+}
+
+/**
+ * Waits for stderr to close, for at most `waitMs` — the same bound, and the
+ * same mechanism, as the exit wait.
+ *
+ * Stderr closes only when EVERY holder of the pipe closes it, and a process the
+ * provider started inherits it. A descendant that outlives the provider keeps
+ * it open after the provider has written its terminal, closed stdout and
+ * exited, so an unbounded wait here hung an already-finished run on a process
+ * that is not the provider at all (B11-01, B11-03). When the wait expires the
+ * drain keeps reading in the background; the tail captured so far is what the
+ * run reports, and a stderr that does close in time is still captured whole.
+ */
+export async function awaitStderr(
+  drain: StderrDrain,
+  waitMs: number = DEFAULT_EXIT_WAIT_MS,
+): Promise<void> {
+  await withinWait(drain.done, waitMs);
+}
+
+/** `pending`'s value, or `null` once `waitMs` has passed without one. */
+async function withinWait<T>(pending: Promise<T>, waitMs: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expiry = new Promise<null>((resolve) => {
     // Deliberately NOT unref'd. A child that closes stdout and then hangs
@@ -115,8 +142,36 @@ export async function awaitExit(
     timer = setTimeout(() => resolve(null), waitMs);
   });
   try {
-    return await Promise.race([transport.exit.catch(() => null), expiry]);
+    return await Promise.race([pending, expiry]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
+}
+
+/** Describe an observed exit without substituting an unobserved success. */
+export function describeExit(exit: ProcessExit | null, waitMs: number): string {
+  if (exit === null) {
+    return `neither an exit code nor a signal was observed within ${String(waitMs)} ms`;
+  }
+  if (exit.code !== null) return `the process exited with code ${String(exit.code)}`;
+  if (exit.signal !== null) return `the process was ended by signal ${exit.signal}`;
+  return "the process exited, but reported neither an exit code nor a signal";
+}
+
+/** What the run was cancelled for: the caller's own reason wherever there is one. */
+export function cancellationReason(signal: AbortSignal | undefined, error: unknown): string {
+  const reason = signal?.aborted === true ? describeError(signal.reason) : describeError(error);
+  return `the provider's output stream was cancelled: ${reason}`;
+}
+
+/** Unknown stream errors remain faults rather than being mislabeled as cancellation. */
+export function isCancellation(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return error.name === "AbortError" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE";
+}
+
+/** Render an error value without assuming it is an Error instance. */
+export function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

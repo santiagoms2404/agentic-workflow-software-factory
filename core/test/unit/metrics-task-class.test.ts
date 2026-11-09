@@ -8,7 +8,9 @@ import { TicketSchema, TICKET_TASK_CLASSES } from "../../src/contracts/ticket.ts
 import { sealShiftManifest } from "../../src/contracts/shift-selection-record.ts";
 import { parsePlanTicketData } from "../../src/persistence/plan-tickets.ts";
 import { ticketFileDigest } from "../../src/persistence/plan-ticket-body.ts";
-import { readShiftTaskClasses, shiftTaskClasses } from "../../src/metrics/task-class.ts";
+import { runGit, systemGitRunner } from "../../src/git/changes.ts";
+import { ShiftTicketUnreadable } from "../../src/workflow/shift/compile.ts";
+import { readShiftTaskClasses, readShiftTaskClassResult, shiftTaskClasses } from "../../src/metrics/task-class.ts";
 import { buildRoleRows, readRunFacts } from "../../src/metrics/role-rows.ts";
 import { buildMetricsPayload } from "../../src/metrics/payload.ts";
 import { openDatabase } from "../../src/observability/sqlite.ts";
@@ -84,12 +86,111 @@ test("the shift join uses sealed ticket bytes at the recorded base and excludes 
     const classes = shiftTaskClasses({ repository: f.root, baseSha, shift: f.shift }, (argv) => {
       assert.deepEqual(argv.slice(0, 2), ["cat-file", "blob"]);
       assert.ok(argv[2]!.startsWith(`${baseSha}:`));
-      return { status: 0, stdout: f.bodies.get(argv[2]!.slice(41))!, stderr: "", error: null };
+      return { status: 0, stdout: Buffer.from(f.bodies.get(argv[2]!.slice(41))!), stderr: "", error: null };
     });
     assert.deepEqual([...classes], [["t01-build", TICKET_TASK_CLASSES[0]], ["t02-build", TICKET_TASK_CLASSES[1]]]);
     assert.equal(classes.has("shift-review"), false);
     assert.equal(readShiftTaskClasses(join(f.root, "attempt/journal.jsonl")).size, 0, "digest drift never invents a class");
     assert.equal(readShiftTaskClasses(join(f.root, "missing/journal.jsonl")).size, 0);
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
+// B4-25: the sealed digest covers the bytes Git stored at the recorded base. A
+// text round trip changed a non-UTF-8 ticket's bytes, so it refused as a digest
+// mismatch that named the wrong cause. Real Git, so the bytes cross the real runner.
+function committedTickets(root: string, files: Readonly<Record<string, Buffer>>) {
+  const git = systemGitRunner(root);
+  runGit(git, ["init", "--quiet", "-b", "main"]);
+  for (const [name, bytes] of Object.entries(files)) writeFileSync(join(root, name), bytes);
+  runGit(git, ["add", "--", ...Object.keys(files)]);
+  runGit(git, ["-c", "user.name=Santiago Marin", "-c", "user.email=santiagomarinsuarez@me.com",
+    "commit", "--quiet", "--no-gpg-sign", "-m", "base"]);
+  const shift = sealShiftManifest({ plan: "fixture", milestones: ["M1"], tickets: Object.entries(files).map(([path, bytes]) => ({
+    id: path.slice(0, 3), path, digest: ticketFileDigest(bytes),
+  })) });
+  return { baseSha: runGit(git, ["rev-parse", "HEAD"]).trim(), shift };
+}
+
+test("B4-25: a sealed ticket that is not UTF-8 refuses on its own UTF-8 rule, never as a digest mismatch", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-task-class-bytes-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  // 0x93 is a Windows-1252 quotation mark: a sealed ticket whose bytes are not UTF-8.
+  const bytes = Buffer.from(ticket("T01", TICKET_TASK_CLASSES[0]).replace("Fixture", "Fixture \x93quoted\x93"), "latin1");
+  const { baseSha, shift } = committedTickets(root, { "T01.md": bytes });
+  assert.throws(() => shiftTaskClasses({ repository: root, baseSha, shift }), (error: unknown) => {
+    assert.ok(error instanceof ShiftTicketUnreadable, `expected an unreadable-ticket refusal, got ${String(error)}`);
+    assert.equal(error.message, "ticket T01 cannot be compiled: its bytes are not valid UTF-8");
+    return true;
+  });
+});
+
+test("B4-25 residual: metrics warn on an unreadable sealed ticket and never guess its task class", () => {
+  const f = fixture();
+  const db = openDatabase(":memory:");
+  try {
+    const malformed = Buffer.from(ticket("T01", TICKET_TASK_CLASSES[0]).replace("Fixture", "Fixture \x93quoted\x93"), "latin1");
+    writeFileSync(join(f.root, "T01.md"), malformed);
+    const shift = sealShiftManifest({ plan: f.shift.plan, milestones: f.shift.milestones,
+      tickets: f.shift.tickets.map(item => item.id === "T01" ? { ...item, digest: ticketFileDigest(malformed) } : item) });
+    writeFileSync(join(f.root, "attempt/status.json"), JSON.stringify({ repository: f.root, baseSha: null, shift }));
+    const direct = readShiftTaskClassResult(join(f.root, "attempt/journal.jsonl"));
+    assert.equal(direct.classes.size, 0);
+    assert.deepEqual(direct.diagnostics.map(({ code, ticketId, path }) => [code, ticketId, path]), [
+      ["ticket-invalid-utf8", "T01", "T01.md"],
+    ]);
+    run(f.root).project(db);
+    const payload = buildMetricsPayload(db, { extractedAt: AT });
+    assert.equal(payload.diagnostics.length, 1, "one corrupt ticket does not fail the whole metrics read");
+    assert.equal(payload.diagnostics[0]?.ticketId, "T01");
+    assert.deepEqual(payload.roleRows.filter(row => row.role === "builder").map(row => row.taskClass), ["unclassified"],
+      "an unreadable selection cannot borrow either ticket's category");
+    const shown = metricsReadout(payload, metricsFilter({ role: "builder" })).join("\n");
+    assert.match(shown, /Warning: .*ticket T01 \(T01\.md\): sealed ticket bytes are not valid UTF-8/u);
+  } finally { db.close(); rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("B4-25: a valid non-ASCII ticket at the recorded base still classifies its builder", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-task-class-utf8-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const bytes = Buffer.from(ticket("T01", TICKET_TASK_CLASSES[0]).replace("Fixture", "Fixture Café —"), "utf8");
+  const { baseSha, shift } = committedTickets(root, { "T01.md": bytes });
+  assert.deepEqual([...shiftTaskClasses({ repository: root, baseSha, shift })], [["t01-build", TICKET_TASK_CLASSES[0]]]);
+});
+
+test("sealed ticket classification is memoized by immutable inputs without exposing the cached map", () => {
+  const f = fixture();
+  const baseSha = "c".repeat(40);
+  writeFileSync(join(f.root, "attempt/status.json"), JSON.stringify({ repository: f.root, baseSha, shift: f.shift }));
+  let reads = 0;
+  const runner = (argv: readonly string[]) => {
+    reads += 1;
+    assert.equal(argv[0], "cat-file");
+    assert.equal(argv[1], "blob");
+    assert.ok(argv[2]!.startsWith(`${baseSha}:`));
+    const ticketPath = argv[2]!.slice(baseSha.length + 1);
+    return { status: 0, stdout: Buffer.from(f.bodies.get(ticketPath)!), stderr: "", error: null };
+  };
+  try {
+    const journalPath = join(f.root, "attempt/journal.jsonl");
+    const first = readShiftTaskClasses(journalPath, runner) as Map<string, (typeof TICKET_TASK_CLASSES)[number]>;
+    first.clear();
+    const second = readShiftTaskClasses(journalPath, runner);
+    assert.equal(reads, 2, "the second read uses the sealed-input classification");
+    assert.deepEqual([...second], [["t01-build", TICKET_TASK_CLASSES[0]], ["t02-build", TICKET_TASK_CLASSES[1]]]);
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
+test("working-tree ticket classifications are not memoized across reads", () => {
+  const f = fixture();
+  try {
+    const journalPath = join(f.root, "attempt/journal.jsonl");
+    assert.equal(readShiftTaskClasses(journalPath).size, 2);
+    writeFileSync(join(f.root, "T01.md"), ticket("T01", TICKET_TASK_CLASSES[2]));
+    assert.equal(readShiftTaskClasses(journalPath).size, 0, "a changed working-tree ticket must not reuse the prior class");
   } finally {
     rmSync(f.root, { recursive: true, force: true });
   }

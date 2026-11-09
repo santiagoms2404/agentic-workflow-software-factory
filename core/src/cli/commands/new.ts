@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { assertPlanAuthorSelection, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
 import { assertTicketSelection, type TicketSelection } from "../../contracts/ticket-selection-record.ts";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { Value } from "@sinclair/typebox/value";
 import { assertCandidateSeed, type CandidateSeed } from "../../contracts/candidate-seed.ts";
 import { assertReplayRecord, type ReplayRecord } from "../../contracts/proving-ground.ts";
@@ -9,7 +9,8 @@ import { ShiftManifestSchema, shiftManifestDigest, type ShiftManifest } from "..
 import { PROVE_WORKFLOW_ID } from "../../workflow/prove/compile.ts";
 import { SHIFT_WORKFLOW_ID } from "../../workflow/shift/compile.ts";
 import { sha256 } from "../../contracts/owner-amendment.ts";
-import { attemptDir as attemptDirectory } from "../../persistence/platform-paths.ts";
+import { attemptDir as attemptDirectory, statusFilePath } from "../../persistence/platform-paths.ts";
+import { tryReadStatus } from "../../persistence/status-store.ts";
 import { correctionAllowance } from "../../state/task-machine.ts";
 import { assertCeiling, ceilingFor, type CallCeilings, type Tier } from "../../state/tiers.ts";
 import type { PhaseRouteOverrides } from "../../workflow/route-flags.ts";
@@ -113,7 +114,13 @@ export async function newCommand(options: NewCommandOptions): Promise<{ attemptD
   if (options.workflow === PLAN_AUTHOR_WORKFLOW_ID) assertPlanAuthorSelection(options.planRef, options.ticketSelection);
   const existing = await latestAttemptNumber(root);
   if (existing !== null) {
-    throw new Error(`${options.project}/${options.taskId} already has attempt ${existing}; use \`awsf retry\` after it is terminal`);
+    const existingDir = join(root, String(existing));
+    const status = await tryReadStatus<AttemptStatus>(statusFilePath(existingDir));
+    if (status !== null) {
+      throw new Error(`${options.project}/${options.taskId} already has attempt ${existing}; use \`awsf retry\` after it is terminal`);
+    }
+    // B9-27: If status.json is absent, the directory was created by an interrupted or failed
+    // attempt creation. Reusing it allows retry/new to proceed without violating invariant 8.
   }
   const attempt = 1;
   const dir = attemptDirectory(options.stateRoot, options.project, options.taskId, String(attempt));

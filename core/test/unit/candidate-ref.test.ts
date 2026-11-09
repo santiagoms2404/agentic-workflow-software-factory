@@ -190,10 +190,25 @@ test("every ticket's own candidate SHA is projected against its ticket id from t
 test("invariant 8's scans sweep candidate-ref.ts with no exemption added", () => {
   const module = "core/src/git/candidate-ref.ts";
   assert.ok(walkFiles(join(repoRoot(), "core", "src")).map(relRepo).includes(module), "no-destructive-paths walks every core/src file, this one included");
+  const fenceText = (fence: string) => readFileSync(join(repoRoot(), "core", "test", "unit", "meta", fence), "utf8");
   for (const fence of ["no-destructive-paths.test.ts", "no-land-route.test.ts"]) {
-    const text = readFileSync(join(repoRoot(), "core", "test", "unit", "meta", fence), "utf8");
-    assert.doesNotMatch(text, /candidate[-_]ref|refs\/awsf|exempt|allow(?:ed|list)/iu, `${fence} names no exemption`);
+    assert.doesNotMatch(fenceText(fence), /candidate[-_]ref|refs\/awsf/iu, `${fence} names no exemption for this module`);
   }
+  assert.doesNotMatch(fenceText("no-land-route.test.ts"), /exempt|allow(?:ed|list)/iu, "no-land-route.test.ts names no exemption");
+  // O2 permits lock releases; the 2026-11-06 D1 amendment permits the
+  // existing private-temp and failed-admission cleanup, and its owner-resolution
+  // amendment adds the two exact atomic-writer temp sites. None authorizes a
+  // candidate-ref write, so the inventory must account for all six cleanup
+  // modules without adding an exemption for this one.
+  const excused = [...fenceText("no-destructive-paths.test.ts").matchAll(/\{ file: "([^"]+)", line: /gu)].map((m) => m[1]);
+  assert.deepEqual([...new Set(excused)].sort(), [
+    "core/src/cli/commands/metrics-export.ts",
+    "core/src/execution/continuity-store.ts",
+    "core/src/execution/operation-lease.ts",
+    "core/src/persistence/attempt-lock.ts",
+    "core/src/persistence/status-store.ts",
+    "core/src/registry/plan-admission.ts",
+  ]);
   // The write's own shape: no delete flag, no batch that could carry one, and
   // every update-ref names the value it expects to replace.
   const source = readFileSync(join(repoRoot(), module), "utf8");

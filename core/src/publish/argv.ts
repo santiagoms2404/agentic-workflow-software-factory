@@ -10,9 +10,22 @@ export const PUBLISH_OUTCOMES = [
 
 export type PublishOutcome = (typeof PUBLISH_OUTCOMES)[number];
 
+const FORBIDDEN_PUSH_FLAGS = new Set(["--mirror", "--delete", "--prune", "--force", "-f", "-d"]);
+
+/** Asserts that a push argv contains no destructive or force flags. */
+export function validatePublishArgv(argv: readonly string[]): void {
+  for (const flag of argv) {
+    if (FORBIDDEN_PUSH_FLAGS.has(flag) || flag.startsWith("--force") || (flag.startsWith("-") && flag.includes("f"))) {
+      throw new Error(`forbidden push flag in publish argv: ${flag}`);
+    }
+  }
+}
+
 /** Builds the sole publication mutation argv from an authorized plan. */
 export function publishArgv(plan: AuthorizedPublishPlan): readonly string[] {
-  return ["push", "--porcelain", plan.remoteName, `${plan.sha}:refs/heads/${plan.branch}`];
+  const argv = ["push", "--porcelain", plan.remoteName, `${plan.sha}:refs/heads/${plan.branch}`];
+  validatePublishArgv(argv);
+  return argv;
 }
 
 function outcomeForFlag(flag: number): PublishOutcome {

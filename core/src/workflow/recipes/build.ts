@@ -28,7 +28,7 @@ export const buildWorkflow = {
       outputSchema: BuildOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("builder"),
+      get prompt() { return loadUserPrompt("builder"); },
     },
     {
       id: "tests",

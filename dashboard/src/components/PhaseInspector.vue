@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
 import type { CompiledPrompt, PhaseDetailResponse } from "../../shared/types.ts";
-import { costAuthorityLabel, formatCost, formatTokens, formatUsage } from "../display.ts";
+import { costAuthorityLabel, formatCost, formatTokens, formatUsage, modelProvenanceLabel } from "../display.ts";
 import DetailSection from "./DetailSection.vue";
 
 const props = defineProps<{ detail: PhaseDetailResponse }>();
@@ -53,7 +53,7 @@ function safeLines(prompt: CompiledPrompt): SafeLine[] {
         <dt>provider</dt><dd>{{ agent.provider }}</dd>
         <dt>requested model</dt><dd>{{ agent.requestedModel }}</dd>
         <dt>resolved model</dt><dd>{{ agent.resolvedModel ?? "not yet recorded" }}</dd>
-        <dt>identity authority</dt><dd>{{ agent.modelProvenance ?? "unrecorded" }}</dd>
+        <dt>identity authority</dt><dd>{{ modelProvenanceLabel(agent.modelProvenance) }}</dd>
         <dt>sandbox</dt><dd>{{ agent.sandboxBadge ? `${agent.sandboxBadge} · ${agent.sandboxMechanism}` : "evidence not recorded" }}</dd>
       </dl>
       <details class="config-snapshot"><summary>Redacted effective config</summary><pre>{{ json(detail.effectiveConfig) }}</pre></details>

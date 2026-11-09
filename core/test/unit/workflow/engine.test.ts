@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BuildOutput } from "../../../src/contracts/build-output.ts";
-import { BuildOutputSchema } from "../../../src/contracts/build-output.ts";
+import { BUILD_OUTPUT_SCHEMA_ID, BuildOutputSchema } from "../../../src/contracts/build-output.ts";
 import type { TokenUsage } from "../../../src/contracts/normalized-events.ts";
 import { CallBudget } from "../../../src/execution/call-budget.ts";
 import { GateReport } from "../../../src/gates/interface.ts";
@@ -13,6 +13,7 @@ import {
   CorrectionTransportFailure,
   type AgentTurn,
   type CorrectionSession,
+  UsageAccumulator,
 } from "../../../src/workflow/corrections.ts";
 import {
   EnvelopeValidationFailure,
@@ -211,6 +212,45 @@ test("at most two in-session parse fixes are attempted and every invalid envelop
   assert.equal(budget.callsSpent, 0);
 });
 
+test("B6-20: a refused saved reply still leaves the observed phase in FAILED, never at QUEUED", async () => {
+  const session = new ScriptedSession([turn(JSON.stringify(payload()))]);
+  const states: PhaseState[] = [];
+  const seeded = new UsageAccumulator();
+  seeded.add(turn(JSON.stringify(payload())));
+  const initialEnvelope = {
+    envelopeId: "env-saved", sessionId: "agent-session-1", phaseId: "another-phase", correctionRound: 0, agent: "fixture",
+    schemaId: BUILD_OUTPUT_SCHEMA_ID, valid: true, createdAt: "2026-08-08T12:00:00.000Z",
+    payload: payload(), violations: [], rawOutputPath: "raw.txt",
+  };
+  await assert.rejects(
+    runAgentPhase(options(session, compiled([]), { persist: () => undefined }, {
+      initialEnvelope,
+      initialUsage: seeded.snapshot(),
+      onPhaseState: (state) => { states.push(state); },
+    })),
+    /saved envelope belongs to another phase/,
+  );
+  assert.equal(states.at(-1), "FAILED", `observed states ${states.join(" -> ")}`);
+});
+
+test("B6-21: a phase whose agent session cannot be recorded is not journalled as accepted", async () => {
+  const session = new ScriptedSession([turn(JSON.stringify(payload()))]);
+  const accepted: unknown[] = [];
+  const states: PhaseState[] = [];
+  await assert.rejects(
+    runAgentPhase(options(session, compiled([]), {
+      persist: () => undefined,
+      persistAgentSession: () => { throw new Error("session record refused"); },
+    }, {
+      onAccepted: async (record) => { accepted.push(record); },
+      onPhaseState: (state) => { states.push(state); },
+    })),
+    /session record refused/,
+  );
+  assert.deepEqual(accepted, [], "onAccepted must not run before the session record is durable");
+  assert.equal(states.at(-1), "FAILED", `observed states ${states.join(" -> ")}`);
+});
+
 test("correction identity is asserted across adapter, provider, model, and provider session", async () => {
   let gateRuns = 0;
   const gate = {
@@ -266,4 +306,28 @@ test("permission enforcement happens after clean gates and a breach aborts witho
     (error: Error) => error instanceof PermissionBreach && error.offendingPaths.includes("AGENTS.md"),
   );
   assert.equal(session.prompts.length, 1);
+});
+
+test("the agent session persisted after a cold correction is the one that produced the accepted envelope (B3-33)", async () => {
+  let gateRuns = 0;
+  const gate = {
+    id: "envelope_valid",
+    run: () => new GateReport("envelope_valid").check("findings state a concrete consequence", gateRuns++ > 0, "missing consequence: F1"),
+  };
+  const coldIdentity = { ...identity, sessionId: "provider-s2" };
+  const session = new ScriptedSession([
+    turn(JSON.stringify(payload("first"))),
+    turn(JSON.stringify(payload("second")), 4, 3, coldIdentity),
+  ]);
+  const recorded: { identity: { sessionId: string } }[] = [];
+  const result = await runAgentPhase(options(session, compiled([gate]), {
+    persist: () => undefined,
+    persistAgentSession: (record) => { recorded.push(record); },
+  }, {
+    authorizeCorrection: () => ({ actor: "host", transport: "cold" }),
+  }));
+
+  assert.equal(result.state, "SUCCEEDED");
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0]?.identity.sessionId, "provider-s2", "the accepted envelope came from the cold session, not the original");
 });

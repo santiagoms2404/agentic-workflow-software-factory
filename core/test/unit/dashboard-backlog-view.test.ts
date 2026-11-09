@@ -38,7 +38,7 @@ test("ticket source display is byte-faithful and its overlay closes by control o
   const card = source("dashboard/src/components/TicketCard.vue");
   assert.match(overlay, /role="dialog"/u);
   assert.match(overlay, /aria-modal="true"/u);
-  assert.match(overlay, /@click\.self="emit\('close'\)"/u);
+  assert.match(overlay, /class="ticket-source-overlay"[\s\S]*?emit\('close'\)/u);
   assert.match(overlay, /aria-label="Close ticket source"[^>]*@click="emit\('close'\)"/u);
   assert.match(overlay, /const sourceText = computed\(\(\) => view\.value\?\.source\)/u);
   assert.match(overlay, /class="ticket-source">\{\{ sourceText \}\}<\/pre>/u);
@@ -75,16 +75,18 @@ test("plan controls use accessible dashboard toggle buttons", () => {
   assert.doesNotMatch(selected, /background\s*:|--accent/su);
 });
 
-test("backlog selection seeds once from the first non-empty response", () => {
+test("backlog selection seeds from the first non-empty response, and again only when the requested plan changes", () => {
   const route = source("dashboard/src/routes/backlog.vue");
   assert.match(route, /let hasSeededSelection = false;/u);
   // The rule itself moved into `initialPlanSelection` when the sessions view
   // gained plan cards that navigate here carrying a plan; the route keeps the
-  // seed-once guard and delegates the choice. `dashboard-session-plans.test.ts`
-  // holds the behaviour, and this keeps the guard from being lost with it.
+  // seed guard and delegates the choice. A poll that repeats the same request
+  // is not a reseed, so the reader's selection survives it.
+  // `dashboard-session-plans.test.ts` holds the behaviour, and this keeps the
+  // guard from being lost with it.
   assert.match(
     route,
-    /if \(hasSeededSelection \|\| plans\.length === 0\) return;[^]*selectedPlans\.value = initialPlanSelection\(plans, requested\);[^]*hasSeededSelection = true;/u,
+    /if \(!hasSeededSelection \|\| requestedId !== appliedRequest\) \{[^]*selectedPlans\.value = initialPlanSelection\(plans, requestedId\);[^]*hasSeededSelection = true;/u,
   );
   assert.equal(route.match(/selectedPlans\.value = initialPlanSelection/gu)?.length, 1);
 });

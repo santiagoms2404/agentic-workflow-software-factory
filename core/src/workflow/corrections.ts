@@ -57,15 +57,24 @@ export class CorrectionTransportFailure extends Error {
 }
 
 const IDENTITY_FIELDS = ["adapter", "provider", "model", "sessionId"] as const;
+type IdentityField = (typeof IDENTITY_FIELDS)[number];
+
+function identityDifferences(expected: AgentSessionIdentity, actual: AgentSessionIdentity,
+  fields: readonly IdentityField[]): string[] {
+  return fields
+    .filter((field) => expected[field] !== actual[field])
+    .map((field) => `${field} ${JSON.stringify(expected[field])} became ${JSON.stringify(actual[field])}`);
+}
+
+function assertNoIdentityDifferences(differences: readonly string[]): void {
+  if (differences.length > 0) throw new CorrectionIdentityMismatch(differences);
+}
 
 export function assertCorrectionIdentity(
   expected: AgentSessionIdentity,
   actual: AgentSessionIdentity,
 ): void {
-  const differences = IDENTITY_FIELDS
-    .filter((field) => expected[field] !== actual[field])
-    .map((field) => `${field} ${JSON.stringify(expected[field])} became ${JSON.stringify(actual[field])}`);
-  if (differences.length > 0) throw new CorrectionIdentityMismatch(differences);
+  assertNoIdentityDifferences(identityDifferences(expected, actual, IDENTITY_FIELDS));
 }
 
 /** A paid cold correction may open a new session, but never change its configured route. */
@@ -73,16 +82,18 @@ export function assertCorrectionRouteIdentity(
   expected: AgentSessionIdentity,
   actual: AgentSessionIdentity,
 ): void {
-  const differences = IDENTITY_FIELDS
-    .filter((field) => field !== "sessionId" && expected[field] !== actual[field])
-    .map((field) => `${field} ${JSON.stringify(expected[field])} became ${JSON.stringify(actual[field])}`);
-  if (differences.length > 0) throw new CorrectionIdentityMismatch(differences);
+  assertNoIdentityDifferences(identityDifferences(expected, actual, IDENTITY_FIELDS.filter((field) => field !== "sessionId")));
 }
 
 function tail(value: string): string {
-  return value.length <= MAX_GATE_OUTPUT_TAIL_CHARS
-    ? value
-    : value.slice(value.length - MAX_GATE_OUTPUT_TAIL_CHARS);
+  if (value.length <= MAX_GATE_OUTPUT_TAIL_CHARS) return value;
+  let start = value.length - MAX_GATE_OUTPUT_TAIL_CHARS;
+  // A cut between the halves of a surrogate pair would open the tail with a lone
+  // low surrogate, which reaches the prompt as U+FFFD or a bare escape. Drop that
+  // orphan unit so the tail starts on a whole character (B6-17).
+  const first = value.charCodeAt(start);
+  if (first >= 0xdc00 && first <= 0xdfff) start += 1;
+  return value.slice(start);
 }
 
 export interface CorrectionGateCheck extends GateCheck {
@@ -218,7 +229,16 @@ export function renderCorrectionRequest(request: CorrectionRequest): string {
       ].join("\n"),
     );
   }
-  parts.push(JSON.stringify(request, null, 2));
+  // Each command's evidence is already in the prose above; the JSON keeps the
+  // command's identity and exit code only, so one prompt carries it once (B6-18).
+  const structured = request.candidate === undefined ? request : {
+    ...request,
+    candidate: {
+      ...request.candidate,
+      commands: request.candidate.commands.map(({ gateId, argv, exitCode }) => ({ gateId, argv, exitCode })),
+    },
+  };
+  parts.push(JSON.stringify(structured, null, 2));
   return parts.join("\n\n");
 }
 
@@ -293,7 +313,8 @@ export class UsageAccumulator {
     reasoningTokens: null,
   };
   #last: TokenUsage | null = null;
-  #costUsd: number | null = null;
+  #costUsd = 0;
+  #costUnknown = false;
   #sends = 0;
 
   add(turn: Pick<AgentTurn, "usage" | "costUsd">): void {
@@ -303,14 +324,16 @@ export class UsageAccumulator {
       const value = turn.usage[field];
       if (value !== null) this.#totals[field] = (this.#totals[field] ?? 0) + value;
     }
-    if (turn.costUsd !== null) this.#costUsd = (this.#costUsd ?? 0) + turn.costUsd;
+    if (turn.costUsd === null) this.#costUnknown = true;
+    else this.#costUsd += turn.costUsd;
   }
 
   snapshot(): PhaseUsage {
     if (this.#last === null) throw new Error("phase usage is unavailable before the first send");
     return Object.freeze({
       spend: Object.freeze({ ...this.#totals, reasoningRelation: "unknown" as const }),
-      costUsd: this.#costUsd,
+      // One unpriced send makes the phase cost unknown: a partial sum would read as complete (B6-19).
+      costUsd: this.#costUnknown ? null : this.#costUsd,
       contextOccupancy: Object.freeze({ ...this.#last }),
       sends: this.#sends,
     });

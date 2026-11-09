@@ -113,11 +113,13 @@ export interface DegradeReviewCommandResult {
 export function assertDegradeReason(reason: string): string {
   const normalized = reason.trim().replace(/\s+/g, " ");
   if (normalized.length === 0) throw new ReviewDegradeReasonRequired();
-  const bounded = normalized.length <= MAX_REASON ? normalized : normalized.slice(0, MAX_REASON);
-  if (scrubCredentialString(bounded) !== bounded || bounded.includes(REDACTED_VALUE)) {
+  if (scrubCredentialString(normalized) !== normalized || normalized.includes(REDACTED_VALUE)) {
     throw new ReviewDegradeCredentialRejected("owner degrade-review reason");
   }
-  return bounded;
+  if (normalized.length <= MAX_REASON) return normalized;
+  const last = normalized.charCodeAt(MAX_REASON - 1);
+  const end = last >= 0xd800 && last <= 0xdbff ? MAX_REASON - 1 : MAX_REASON;
+  return normalized.slice(0, end);
 }
 
 /** Whether this attempt's workflow buys a review at all. */

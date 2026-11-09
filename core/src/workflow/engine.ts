@@ -166,6 +166,7 @@ export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
   readonly onGateReport?: (report: GateReport, correctionRound: number) => Promise<void> | void;
   /** Called after the phase budget authorizes a correction and before its transport launches. */
   readonly onCorrectionAuthorized?: (input: {
+    readonly actor: CorrectionActor;
     readonly correctionRound: number;
     readonly transport: CorrectionTransport;
   }) => Promise<void> | void;
@@ -174,7 +175,7 @@ export interface RunAgentPhaseOptions<T extends EnvelopeBase> {
     cause: "schema-violation" | "gate-violation";
     correctionRound: number;
     reports: readonly GateReport[];
-  }) => CorrectionDecision;
+  }) => CorrectionDecision | Promise<CorrectionDecision>;
   /**
    * Runs the host's deterministic gates against the exact candidate this phase
    * just committed. Absent means the phase ends at its commit, which is the
@@ -354,18 +355,22 @@ async function runGates<T extends EnvelopeBase>(
 export async function runAgentPhase<T extends EnvelopeBase>(
   options: RunAgentPhaseOptions<T>,
 ): Promise<AgentPhaseResult<T>> {
-  if (options.initialEnvelope !== undefined && options.initialUsage === undefined) throw new Error("saved reply lost its original usage accounting");
   const execution = new PhaseExecution(options.phase.id, options.onPhaseState);
-  const usage = new UsageAccumulator();
-  const envelopes: StoredEnvelope<T>[] = [];
-  const expectedSession = phaseSession(options.session.identity);
-  let correctionRound = options.initialEnvelope?.correctionRound ?? 0;
-  let parseFixes = 0;
-  let gateRound = 0;
-  let lastReports: readonly GateReport[] = [];
-  if (options.initialEnvelope === undefined) options.budget.beginPhase();
-  else if (options.initialEnvelope.phaseId !== options.phase.id || options.initialEnvelope.sessionId !== options.agentSessionId ||
-      options.initialEnvelope.schemaId !== options.phase.schemaId) throw new Error("saved envelope belongs to another phase");
+  try {
+    if (options.initialEnvelope !== undefined && options.initialUsage === undefined) throw new Error("saved reply lost its original usage accounting");
+    const usage = new UsageAccumulator();
+    const envelopes: StoredEnvelope<T>[] = [];
+    // The session the phase is bound to now. A cold correction rebinds it to the
+    // session that produced the next turn, so later checks and the persisted
+    // agent session follow the accepted envelope rather than the original (B3-33).
+    let boundSession: PhaseSession = phaseSession(options.session.identity);
+    let correctionRound = options.initialEnvelope?.correctionRound ?? 0;
+    let parseFixes = 0;
+    let gateRound = 0;
+    let lastReports: readonly GateReport[] = [];
+    if (options.initialEnvelope === undefined) options.budget.beginPhase();
+    else if (options.initialEnvelope.phaseId !== options.phase.id || options.initialEnvelope.sessionId !== options.agentSessionId ||
+        options.initialEnvelope.schemaId !== options.phase.schemaId) throw new Error("saved envelope belongs to another phase");
 
   const correct = async (
     cause: "schema-violation" | "gate-violation",
@@ -378,7 +383,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     const nextRound = correctionRound + 1;
     const decision: CorrectionDecision = options.authorizeCorrection === undefined
       ? "host"
-      : options.authorizeCorrection({ cause, correctionRound: nextRound, reports });
+      : await options.authorizeCorrection({ cause, correctionRound: nextRound, reports });
     if (decision === null || (typeof decision === "object" && decision.actor === null)) {
       const reason = decision === null
         ? "the caller exposed no correction transport"
@@ -399,12 +404,12 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       phase: options.phase.id,
       from: "VALIDATING",
       to: "CORRECTING",
-      session: expectedSession,
+      session: boundSession,
       cause,
       actor: authorization.actor,
       correctionTransport: authorization.transport,
     });
-    await options.onCorrectionAuthorized?.({ correctionRound: nextRound, transport: authorization.transport });
+    await options.onCorrectionAuthorized?.({ actor: authorization.actor, correctionRound: nextRound, transport: authorization.transport });
     execution.correcting();
     const request = createCorrectionRequest({
       phase: options.phase.id,
@@ -428,14 +433,15 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       nextRound,
       authorization.transport,
     );
-    options.budget.recordPhaseTransition({
+    const resumed = options.budget.recordPhaseTransition({
       phase: options.phase.id,
       from: "CORRECTING",
       to: "RUNNING",
-      session: expectedSession,
+      session: boundSession,
       resumeSession: phaseSession(turn.identity),
       correctionTransport: authorization.transport,
     });
+    boundSession = resumed.session;
     execution.running();
     correctionRound = nextRound;
     usage.add(turn);
@@ -443,9 +449,8 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     return turn;
   };
 
-  try {
-    execution.running();
-    let turn: AgentTurn;
+  execution.running();
+  let turn: AgentTurn;
     if (options.initialEnvelope === undefined) {
       turn = await send(options as RunAgentPhaseOptions<EnvelopeBase>, options.phase.renderPrompt(options.previousEnvelope), 0);
       usage.add(turn);
@@ -461,7 +466,9 @@ export async function runAgentPhase<T extends EnvelopeBase>(
     let changedPaths: readonly string[] = [];
     let candidateSha: string | null = null;
     let verification: CandidateVerification | null = null;
+    let priorVerification: CandidateVerification | null = null;
     while (accepted === null) {
+      verification = null;
       const recovering = saved !== undefined;
       const envelope = saved ?? await store(options, turn, correctionRound);
       saved = undefined;
@@ -520,7 +527,19 @@ export async function runAgentPhase<T extends EnvelopeBase>(
       // durable stage proving the configured commands already finished. The
       // last case is why `verified` exists: re-dispatching an owner-configured
       // command that has already run is exactly what recovery must not do.
-      if (options.verifyCandidate === undefined || candidateSha === null || reconciled?.verified === true) {
+      if (options.verifyCandidate === undefined || reconciled?.verified === true) {
+        await options.onValidationStage?.("accept", stageContext());
+        accepted = envelope;
+        break;
+      }
+      if (candidateSha === null) {
+        if (priorVerification !== null && !priorVerification.passed) {
+          throw new PhaseGateFailure(options.phase.id, [...lastReports, ...priorVerification.reports], {
+            correctionRound,
+            maxCorrections: options.phase.maxCorrections,
+            terminalReason: "candidate stayed red: correction round produced no commit",
+          });
+        }
         await options.onValidationStage?.("accept", stageContext());
         accepted = envelope;
         break;
@@ -532,6 +551,7 @@ export async function runAgentPhase<T extends EnvelopeBase>(
         accepted = envelope;
         break;
       }
+      priorVerification = verification;
       // The candidate exists and is red. It stays — a failed candidate is
       // evidence, and the next round builds on it rather than replacing it.
       if (gateRound >= options.phase.maxCorrections) {
@@ -554,16 +574,16 @@ export async function runAgentPhase<T extends EnvelopeBase>(
 
     // Non-null by construction: the loop only leaves through a break that runs
     // strictly after both.
-    await options.onAccepted?.({ envelope: accepted, candidateSha, gateReports: lastReports, correctionRounds: correctionRound });
-    execution.succeed();
     const phaseUsage = options.initialEnvelope === undefined ? usage.snapshot() : options.initialUsage;
     if (phaseUsage === undefined) throw new Error("saved reply lost its original usage accounting");
     await options.persistence.persistAgentSession?.({
       phaseId: options.phase.id,
-      identity: expectedSession,
+      identity: boundSession,
       usage: phaseUsage,
       candidateSha,
     });
+    await options.onAccepted?.({ envelope: accepted, candidateSha, gateReports: lastReports, correctionRounds: correctionRound });
+    execution.succeed();
     return Object.freeze({
       state: "SUCCEEDED",
       envelope: accepted,

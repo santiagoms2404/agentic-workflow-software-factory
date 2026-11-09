@@ -5,9 +5,19 @@ import { assertExactProtectedPath, type ProtectedFileBaseline, type ProtectedFil
 import { runSystemCommand } from "../execution/transport-broker.ts";
 import { runGit, type GitRunner } from "../git/changes.ts";
 
+const STRIPPED_GIT_ENV = new Set(["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"]);
+
 export function protectedReadOnlyGit(root: string): GitRunner {
   return argv => runSystemCommand("git", ["-C", root, ...(argv[0] === "diff" ? ["diff", "--no-ext-diff", "--no-textconv", ...argv.slice(1)] : argv)], { timeoutMs: 30000,
-    env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" } });
+    env: {
+      ...Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] =>
+          entry[1] !== undefined && !STRIPPED_GIT_ENV.has(entry[0].toUpperCase()),
+        ),
+      ),
+      GIT_OPTIONAL_LOCKS: "0",
+      GIT_TERMINAL_PROMPT: "0",
+    } });
 }
 /** Linux grant execution reads through held directory descriptors, never through a raced parent symlink. */
 export function readProtectedContent(root: string, path: string): Buffer {

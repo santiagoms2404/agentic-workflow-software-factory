@@ -75,13 +75,26 @@ export function isCanvasRoute(hash: string): boolean {
   return hash === CANVAS_PATH || hash.startsWith(`${CANVAS_PATH}?`) || hash.startsWith(`${CANVAS_PATH}/`);
 }
 
+/**
+ * A malformed percent sequence keeps its raw text. A stray `%` in a pasted
+ * link must not throw out of the route parser, which runs inside onMounted
+ * before the hashchange listener exists (B13-20).
+ */
+function decodeSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 /** `#/canvas/run:abc?kinds=run,plan&sel=run:abc&cam=12,-40,1.2` */
 export function parseCanvasRoute(hash: string): CanvasRoute {
   const split = hash.includes("?") ? hash.indexOf("?") : hash.length;
   const path = hash.slice(0, split);
   const params = new URLSearchParams(hash.slice(split + 1));
   const selected = params.get("sel");
-  const segment = path.startsWith(`${CANVAS_PATH}/`) ? decodeURIComponent(path.slice(CANVAS_PATH.length + 1)) : "";
+  const segment = path.startsWith(`${CANVAS_PATH}/`) ? decodeSegment(path.slice(CANVAS_PATH.length + 1)) : "";
   return {
     kinds: readKinds(params.get("kinds")),
     selected: selected !== null && selected.length > 0 ? selected : null,
@@ -124,7 +137,7 @@ export function filterGraph(graph: CanvasGraph, kinds: readonly CanvasNodeKind[]
   const shown = new Set(kinds);
   const nodes = graph.nodes.filter((node) => shown.has(node.kind));
   const live = new Set(nodes.map((node) => node.id));
-  return {
+  const filtered: CanvasGraph = {
     nodes,
     edges: graph.edges.filter((edge) => live.has(edge.from) && live.has(edge.to)),
     clusters: graph.clusters
@@ -133,6 +146,13 @@ export function filterGraph(graph: CanvasGraph, kinds: readonly CanvasNodeKind[]
       .filter((cluster) => cluster.nodeIds.length > 1),
     unplaced: graph.unplaced.filter((node) => shown.has(node.kind)),
   };
+  Object.defineProperty(filtered, "allNodes", {
+    value: graph.allNodes ?? [...graph.nodes, ...graph.unplaced],
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+  return filtered;
 }
 
 export interface Viewport {

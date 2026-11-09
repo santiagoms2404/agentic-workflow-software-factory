@@ -16,6 +16,12 @@
 // mistaken for progress. A provider that talks without working is silent as far
 // as this file is concerned — bytes are bytes — and a provider that works
 // without talking stays alive because the CPU counter moves.
+//
+// Production builds one per provider turn (production-run.ts), fed by the
+// broker's supervisor and by `countingStream` around the transport (B1-13,
+// B1-14). It replaced a timer re-armed on every decoded event, which cut off a
+// provider working through one long silent tool call and kept alive one that
+// only streamed thinking tokens.
 
 import type { ProcessIdentity, TerminationReport } from "./launcher-barrier.ts";
 import type { TerminateOptions } from "./process-controller.ts";
@@ -25,6 +31,39 @@ export const SILENCE_WINDOW_MS = 2_700 * 1_000;
 
 /** How often liveness is sampled. Well below any window it is checking. */
 export const MONITOR_POLL_MS = 1_000;
+
+/**
+ * The poll for a given window: {@link MONITOR_POLL_MS}, or a quarter of the
+ * window when that is shorter.
+ *
+ * CPU is a DELTA, so the first sample after a quiet stretch can only set a
+ * baseline. A poll as long as the window would let a provider that burned CPU
+ * the whole time trip on its first comparison, which is the defect the CPU
+ * reading exists to prevent.
+ */
+export function livenessPollMs(silenceMs: number): number {
+  return Math.max(1, Math.min(MONITOR_POLL_MS, Math.floor(silenceMs / 4)));
+}
+
+/**
+ * A stream that reports each chunk's LENGTH and hands the chunk on untouched.
+ *
+ * This is how a live transport's output reaches `noteOutput` without the
+ * monitor ever seeing a byte of it (see the header): the reader downstream —
+ * an adapter's decoder — gets exactly what the provider wrote, and the monitor
+ * gets a number.
+ */
+export function countingStream(
+  source: AsyncIterable<Uint8Array>,
+  note: (byteCount: number) => void,
+): AsyncIterable<Uint8Array> {
+  return (async function* () {
+    for await (const chunk of source) {
+      note(chunk.byteLength);
+      yield chunk;
+    }
+  })();
+}
 
 export type TripReason = "record-update-failed" | "timeout" | "silence";
 
@@ -93,7 +132,7 @@ export class LivenessMonitor {
     this.#silenceMs = options.silenceMs ?? SILENCE_WINDOW_MS;
     this.#timeoutMs = options.timeoutMs ?? 0;
     this.#pollMs = options.pollMs ?? MONITOR_POLL_MS;
-    this.#now = options.now ?? ((): number => Date.now());
+    this.#now = options.now ?? ((): number => Number(process.hrtime.bigint() / 1_000_000n));
     this.#terminate = options.terminate;
     this.#startedAt = this.#now();
     this.#lastActivityAt = this.#startedAt;
@@ -149,7 +188,7 @@ export class LivenessMonitor {
       this.#blindPolls += 1;
     }
     if (cpu !== null) {
-      if (this.#lastCpu !== null && cpu !== this.#lastCpu) this.#lastActivityAt = this.#now();
+      if (this.#lastCpu !== null && cpu > this.#lastCpu) this.#lastActivityAt = this.#now();
       this.#lastCpu = cpu;
     }
 

@@ -23,6 +23,7 @@ import {
   CeilingRaiseNotInteractive,
   CeilingRaiseReasonRequired,
   MAX_GRANT_CALLS,
+  assertGrantReason,
   raiseCommand,
 } from "../../../src/cli/commands/raise.ts";
 import { retryCommand } from "../../../src/cli/commands/retry.ts";
@@ -99,6 +100,10 @@ test("a piped owner is refused before anything is written", async () => {
     assert.deepEqual(after.ceilingGrants, []);
     assert.deepEqual(grants(dir), []);
   });
+});
+
+test("reason bounding never splits an astral code point", () => {
+  assert.equal(assertGrantReason(`${"x".repeat(1_999)}😀tail`), "x".repeat(1_999));
 });
 
 test("the reason is required, bounded and credential-checked", async () => {

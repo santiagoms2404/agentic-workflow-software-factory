@@ -4,7 +4,7 @@ import {
   assertAdvancementPermitted,
   observabilityDegraded,
 } from "../../observability/rebuild.ts";
-import { projectAttemptStatus, projectAttribution, projectDecision, projectTaskRelation } from "../../observability/projector.ts";
+import { hasDegradedMarker, persistDegradedMarker, projectAttemptStatus, projectAttribution, projectDecision, projectTaskRelation } from "../../observability/projector.ts";
 import type { AttributionRecord } from "../../contracts/attribution-record.ts";
 import type { DecisionRecord } from "../../contracts/decision-record.ts";
 import { openDatabase, type DatabaseSync } from "../../observability/sqlite.ts";
@@ -48,6 +48,18 @@ export function createDashboardProjection(
     return db;
   };
 
+  const isSessionDegraded = (sessionId: string): boolean => {
+    if (degraded.has(sessionId)) return true;
+    try {
+      const writer = database();
+      if (observabilityDegraded(writer, sessionId)) return true;
+      const row = writer.prepare("SELECT journal_path FROM sessions WHERE session_id = ?").get(sessionId) as { journal_path: string } | undefined;
+      return row?.journal_path ? hasDegradedMarker(row.journal_path) : false;
+    } catch {
+      return true;
+    }
+  };
+
   const reportUnavailable = (sessionId: string): void => {
     degraded.add(sessionId);
     notice(`sqlite-projection-failed: session ${sessionId} is journaled but its dashboard projection is unavailable; ${renderProjectionAdvice()}.`);
@@ -62,10 +74,19 @@ export function createDashboardProjection(
           toAttemptStatusProjection(stateRoot, status, record.event),
           record.source_seq,
         );
-        if (!outcome.ok) reportUnavailable(status.sessionId);
-        else if (observabilityDegraded(writer, status.sessionId)) degraded.add(status.sessionId);
-      } catch {
+        if (!outcome.ok) {
+          reportUnavailable(status.sessionId);
+          if (outcome.degraded && !outcome.flagPersisted) {
+            const dir = join(stateRoot, "projects", status.project, "tasks", status.taskId, String(status.attempt));
+            persistDegradedMarker(dir, status.sessionId, outcome.notice?.detail);
+          }
+        } else if (observabilityDegraded(writer, status.sessionId)) {
+          degraded.add(status.sessionId);
+        }
+      } catch (err) {
         reportUnavailable(status.sessionId);
+        const dir = join(stateRoot, "projects", status.project, "tasks", status.taskId, String(status.attempt));
+        persistDegradedMarker(dir, status.sessionId, err);
       }
     },
     projectRelation(relation): void {
@@ -96,23 +117,10 @@ export function createDashboardProjection(
       }
     },
     assertAdvancement(sessionId, to): void {
-      let isDegraded = degraded.has(sessionId);
-      if (!isDegraded) {
-        try {
-          isDegraded = observabilityDegraded(database(), sessionId);
-        } catch {
-          isDegraded = true;
-        }
-      }
-      assertAdvancementPermitted({ sessionId, to, degraded: isDegraded });
+      assertAdvancementPermitted({ sessionId, to, degraded: isSessionDegraded(sessionId) });
     },
     assertLaunchPermitted(sessionId): void {
-      let isDegraded = degraded.has(sessionId);
-      if (!isDegraded) {
-        try { isDegraded = observabilityDegraded(database(), sessionId); }
-        catch { isDegraded = true; }
-      }
-      if (isDegraded) throw new Error(`session ${sessionId} process registration was not acknowledged by SQLite before GO`);
+      if (isSessionDegraded(sessionId)) throw new Error(`session ${sessionId} process registration was not acknowledged by SQLite before GO`);
     },
     close(): void {
       if (db === null) return;

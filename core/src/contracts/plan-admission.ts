@@ -1,6 +1,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { WorktreeRelativePath } from "./envelope-base.ts";
+import { OBJECT_ID_PATTERN, SHA256_HEX_PATTERN } from "./typebox.ts";
 
 /** Author-supplied frontmatter table. State and prompt bytes belong to the host. */
 export const PlanAdmissionTicketSchema = Type.Object({
@@ -19,11 +20,11 @@ export const PLAN_ADMISSION_SCHEMA_ID = "awsf.plan-admission/v1";
 export const PlanAdmissionRecordSchema = Type.Object({
   schema: Type.Literal(PLAN_ADMISSION_SCHEMA_ID),
   stem: Type.String({ pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$" }),
-  baseSha: Type.String({ pattern: "^[a-f0-9]{40}$" }),
+  baseSha: Type.String({ pattern: OBJECT_ID_PATTERN }),
   at: Type.String({ minLength: 1 }),
   files: Type.Array(Type.Object({
     path: WorktreeRelativePath,
-    sha256: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+    sha256: Type.String({ pattern: SHA256_HEX_PATTERN }),
   }, { additionalProperties: false }), { minItems: 4 }),
 }, { additionalProperties: false });
 export type PlanAdmissionRecord = Static<typeof PlanAdmissionRecordSchema>;

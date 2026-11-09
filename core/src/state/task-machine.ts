@@ -1,4 +1,4 @@
-// The task lifecycle: eleven states, twenty-six legal edges, ninety-five
+// The task lifecycle: eleven states, twenty-seven legal edges, ninety-four
 // rejected ordered pairs, one ordered rejection contract.
 //
 // `transition()` is a pure function. It starts no process, reads no file, asks
@@ -27,6 +27,8 @@ import {
 } from "./errors.ts";
 import { ceilingFor, fitsCeiling, type Tier } from "./tiers.ts";
 import type { ReviewFinding, ReviewVerdict } from "../contracts/index.ts";
+import type { PLAN_OUTPUT_SCHEMA_ID } from "../contracts/plan-output.ts";
+import type { SCOUT_OUTPUT_SCHEMA_ID } from "../contracts/scout-output.ts";
 
 // ---------------------------------------------------------------------------
 // Vocabulary.
@@ -52,6 +54,7 @@ export const TASK_STATES = [
 ] as const;
 export type TaskState = (typeof TASK_STATES)[number];
 
+export const LANDED_STATES = ["LANDED", "PUBLISHED"] as const;
 export const TERMINAL_STATES = ["LANDED", "PUBLISHED", "BLOCKED", "CANCELLED"] as const;
 
    /** States after which this attempt permits no further transition. */
@@ -91,7 +94,7 @@ export interface LegalEdge {
   readonly interactive: boolean;
 }
 
-/** The twenty-five legal transitions, in L-order. */
+/** The legal transitions, in L-order. */
 export const LEGAL_EDGES: readonly LegalEdge[] = [
   { id: "L1",  from: "DRAFT",          to: "PREPARED",       actors: ["host"],           spawnSite: false, interactive: false },
   { id: "L2",  from: "DRAFT",          to: "BLOCKED",        actors: ["host"],           spawnSite: false, interactive: false },
@@ -207,12 +210,19 @@ export interface LandingEvidence {
   journeyApproved: boolean;
   protectedApprovalsValid: boolean;
   fastForwardPreflightPasses: boolean;
+  /**
+   * Who wrote the review and journey flags above when it was not a reviewer
+   * and the owner; absent when they did. `"stub"` is the fixture run's mark
+   * (owner call O7). Deliberately `string`, as `TransitionReason.source` is: an
+   * unexpected value is what the guard exists to refuse at RUNTIME.
+   */
+  attestationProvenance?: string;
 }
 
 /** Host-observed proof that a shipped T0 analysis intentionally produced no tree. */
 export interface ReadOnlyResultEvidence {
   /** The two shipped analysis envelopes that intentionally produce no candidate tree. */
-  schema: "awsf.scout-output/v1" | "awsf.plan-output/v1";
+  schema: typeof SCOUT_OUTPUT_SCHEMA_ID | typeof PLAN_OUTPUT_SCHEMA_ID;
   /** Host observation across the managed worktree, never an agent claim. */
   writesObserved: boolean;
 }

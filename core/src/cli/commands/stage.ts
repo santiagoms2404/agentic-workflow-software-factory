@@ -4,9 +4,9 @@ import { loadCatalog } from "../../registry/catalog.ts";
 import { readPlacement } from "../../registry/placement.ts";
 import { resolveProject } from "../../registry/resolve.ts";
 import {
-  envelopesForPhase,
-  listSessions,
   phasesForSession,
+  stageEnvelopesForProject,
+  sessionsForStage,
   transitionsForSession,
 } from "../../observability/queries.ts";
 import { openDatabase } from "../../observability/sqlite.ts";
@@ -47,18 +47,12 @@ export async function stageCommand(input: StageCommandInput): Promise<readonly s
   const project = resolveProject(catalog, placement, input.stateRoot);
   const db = openDatabase(join(input.stateRoot, "awsf.db"), { readonly: true });
   try {
-    const sessions = listSessions(db, { limit: 10_000 })
-      .filter((session) => session.project_slug === project.slug);
+    const sessions = sessionsForStage(db, project.slug);
     const phases = sessions.flatMap((session) => phasesForSession(db, session.session_id));
     const rows: StageJournalRows = {
       sessions,
       phases,
-      envelopes: phases.flatMap((phase) =>
-        envelopesForPhase(db, phase.session_id, phase.phase_id).map((envelope) => ({
-          ...envelope,
-          session_id: phase.session_id,
-          phase_id: phase.phase_id,
-        }))),
+      envelopes: stageEnvelopesForProject(db, project.slug),
       transitions: sessions.flatMap((session) =>
         transitionsForSession(db, session.session_id).map((transition) => ({
           ...transition,

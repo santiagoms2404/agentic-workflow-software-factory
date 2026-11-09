@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { ChartColumn } from "lucide-vue-next";
-import type { ActivityPoint, AgentSummary, PhaseSummary, SessionCard as Session } from "../../shared/types.ts";
+import type { ActivityPoint, AgentSummary, SessionCard as Session } from "../../shared/types.ts";
 import { axisTicks, costAuthorityLabel, formatCalls, formatCost, formatDate, formatDuration, formatTokens, formatUsage, shortSessionId, stateLabel, stateTone } from "../display.ts";
+import { agentFallbackColor, phaseStatusGlyph, sessionExtent } from "../presentation.ts";
 import LaneIcon from "./LaneIcon.vue";
 
 const props = defineProps<{ session: Session; toneClass?: string | undefined }>();
@@ -10,21 +11,13 @@ const emit = defineEmits<{ archived: [sessionId: string] }>();
 const archived = ref(false);
 const archiving = ref(false);
 const archiveError = ref<string | null>(null);
-const start = computed(() => Date.parse(props.session.startedAt));
-const end = computed(() => {
-  const observed = Math.max(
-    Date.parse(props.session.updatedAt),
-    ...props.session.activity.map((point) => Date.parse(point.endedAt ?? point.startedAt)),
-  );
-  const live = ["RUNNING", "GATING", "REVIEWING", "LANDING"].includes(props.session.state);
-  return Math.max(start.value + 1_000, props.session.endedAt ? Date.parse(props.session.endedAt) : live ? Date.now() : observed);
-});
-const span = computed(() => Math.max(1_000, end.value - start.value));
-const runtimeEnd = computed(() => new Date(end.value).toISOString());
+const extent = computed(() => sessionExtent(props.session, Date.now()));
+const start = computed(() => extent.value.start);
+const end = computed(() => extent.value.end);
+const span = computed(() => extent.value.span);
+const runtimeEnd = computed(() => extent.value.runtimeEnd);
 const ticks = computed(() => axisTicks(span.value, 4));
 const phaseById = computed(() => new Map(props.session.phases.map((phase) => [phase.phaseId, phase])));
-const palette = ["var(--purple)", "var(--cyan)", "var(--red)", "var(--amber)", "var(--violet)"];
-
 interface CardLane { key: string; label: string; color: string; agent: string | null; points: ActivityPoint[] }
 
 const lanes = computed<CardLane[]>(() => {
@@ -35,10 +28,10 @@ const lanes = computed<CardLane[]>(() => {
     if (!ordered.includes(key)) ordered.push(key);
     labels.set(key, phase.kind === "code" ? "code / git" : phase.kind === "engineer" ? "engineer" : phase.owner);
   }
-  return ordered.map((key, index) => {
+  return ordered.map((key) => {
     const owner = key.startsWith("agent:") ? key.slice(6) : null;
     const agent = owner === null ? undefined : props.session.agents.find((item) => item.agent === owner);
-    const color = key === "code" ? "var(--green)" : key === "engineer" ? "var(--amber)" : agent?.color ?? palette[index % palette.length]!;
+    const color = key === "code" ? "var(--green)" : key === "engineer" ? "var(--amber)" : agent?.color ?? agentFallbackColor(owner ?? key);
     const points = props.session.activity.filter((point) => {
       const phase = point.phaseId === null ? undefined : phaseById.value.get(point.phaseId);
       if (!phase) return false;
@@ -66,13 +59,6 @@ function pointColor(point: ActivityPoint, lane: CardLane): string {
   else if (point.type === "phase_end" || point.type === "run.completed") color = "var(--green)";
   return displayLaneColor(color);
 }
-function phaseGlyph(phase: PhaseSummary): string {
-  if (phase.status === "SUCCEEDED") return "●";
-  if (["FAILED", "CANCELLED"].includes(phase.status)) return "×";
-  if (["RUNNING", "VALIDATING", "CORRECTING"].includes(phase.status)) return "◐";
-  return "○";
-}
-
 async function archiveSession(): Promise<void> {
   if (archiving.value) return;
   archiving.value = true;
@@ -135,7 +121,7 @@ async function archiveSession(): Promise<void> {
           :class="phase.status.toLowerCase()"
           :title="`${phase.name} — ${phase.status}`"
           :aria-label="`${phase.name}: ${phase.status}`"
-        ><span aria-hidden="true">{{ phaseGlyph(phase) }}</span></span>
+        ><span aria-hidden="true">{{ phaseStatusGlyph(phase.status) }}</span></span>
       </span>
       <span class="started-date">{{ formatDate(session.startedAt) }}</span>
     </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { MetricsResponse } from "../../shared/types.ts";
 import { listPrice } from "../../shared/rate-card.ts";
 import { EVIDENCE_SOURCES } from "../../shared/route-metrics.ts";
@@ -57,7 +57,7 @@ const failed = ref(false);
 // projection read, and these numbers move when a run settles, not per second.
 async function load(): Promise<void> {
   try {
-    const response = await fetch("/api/v1/metrics");
+    const response = await fetch("/api/v1/metrics", { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) throw new Error("Metrics unavailable");
     payload.value = await response.json() as MetricsResponse;
     failed.value = false;
@@ -66,7 +66,8 @@ async function load(): Promise<void> {
     throw reason;
   }
 }
-usePolling(load, () => "idle");
+const { lastPollAt, pollMs } = usePolling(load, () => "idle");
+const isStale = computed(() => payload.value !== null && failed.value);
 
 const RAIL_TITLE: Readonly<Record<RailFacet, string>> = {
   role: "Role",
@@ -106,7 +107,35 @@ const ladders = computed(() => RAIL_FACETS.map((id) => {
 const matrix = computed(() => (payload.value === null ? null : buildMatrix(lensRows.value, payload.value, listPrice, props.route.untested)));
 const ledgerContext = computed(() => ({ ...context.value, priorLabels: payload.value?.priors.modelLabels ?? {} }));
 const ledger = computed(() => buildLedger(lensRows.value, props.route, listPrice, ledgerContext.value));
-const picker = computed(() => (payload.value === null ? null : runPicker(payload.value, props.route)));
+
+const selectedRunId = ref<string | null>(props.route.run);
+watch(() => props.route.run, (run) => {
+  if (run !== null) {
+    selectedRunId.value = run;
+  }
+});
+
+const picker = computed(() => {
+  if (payload.value === null) return null;
+  if (props.route.run !== null) {
+    return runPicker(payload.value, props.route);
+  }
+  const candidate = runPicker(payload.value, props.route);
+  if (selectedRunId.value !== null) {
+    const preserved = candidate.runs.find((run) => run.sessionId === selectedRunId.value);
+    if (preserved !== undefined) {
+      return { ...candidate, selected: preserved };
+    }
+  }
+  return candidate;
+});
+
+watch(() => picker.value?.selected?.sessionId ?? null, (sessionId) => {
+  if (sessionId !== null) {
+    selectedRunId.value = sessionId;
+  }
+});
+
 /** The shown run's own role-rows, every one of them: the lens chooses the run, not its rows. */
 const runRows = computed(() => rows.value.filter((row) => row.sessionId === picker.value?.selected?.sessionId));
 const runView = computed(() => {
@@ -142,10 +171,18 @@ function changeFrontier(change: Partial<FrontierState>): void {
   go(withFrontier(props.route, change));
 }
 function openRun(sessionId: string): void {
+  selectedRunId.value = sessionId;
   go(withRun(props.route, sessionId));
 }
 function runHref(sessionId: string): string {
   return metricsRouteHash(withRun(props.route, sessionId));
+}
+function warningKey(warning: MetricsResponse["diagnostics"][number]): string {
+  return `${warning.sessionId}:${warning.code}:${warning.ticketId}:${warning.path}`;
+}
+function warningTicket(warning: MetricsResponse["diagnostics"][number]): string {
+  return warning.ticketId === null ? "sealed shift metadata" :
+    `ticket ${warning.ticketId}${warning.path === null ? "" : ` (${warning.path})`}`;
 }
 /** The slot hands back the ladder's own entry; these are the rail's, with their dot or glyph. */
 function option(entry: SessionFilterEntry): RailOption {
@@ -220,6 +257,13 @@ function option(entry: SessionFilterEntry): RailOption {
         <button type="button" class="metrics-pill" @click="go(resetLens(route))">Reset lens</button>
       </nav>
 
+      <section v-if="payload?.diagnostics.length" class="metrics-summary" aria-label="Metrics data warnings" role="status">
+        <p v-for="warning in payload.diagnostics" :key="warningKey(warning)" class="metrics-note">
+          Warning: {{ warning.project }}/{{ warning.taskId }} attempt {{ warning.attempt }}: {{ warningTicket(warning) }}:
+          {{ warning.message }}.
+        </p>
+      </section>
+
       <section class="metrics-summary" aria-label="Lens summary">
         <div v-for="stat in summary" :key="stat.id" class="metrics-stat">
           <span class="metrics-stat-label">{{ stat.label }}</span>
@@ -230,6 +274,7 @@ function option(entry: SessionFilterEntry): RailOption {
       </section>
 
       <section class="neu-well metrics-view" :aria-label="`${VIEW_LABEL[route.view]} view`">
+        <p v-if="isStale" class="metrics-note stale-warning" role="alert">Metrics update failed. Showing stale projection; retrying automatically.</p>
         <p v-if="!payload && failed" class="metrics-note" role="alert">Metrics unavailable. The tab retries on its own.</p>
         <p v-else-if="!payload" class="metrics-note">Reading the projection…</p>
         <template v-else-if="route.view === 'run'">

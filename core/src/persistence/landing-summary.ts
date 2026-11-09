@@ -14,14 +14,28 @@ export interface LandingSummary {
 const keyFor = (heading: (typeof LANDING_SUMMARY_SECTIONS)[number]): keyof LandingSummary =>
   heading.toLowerCase() as keyof LandingSummary;
 
+const TITLE = "# Landing Summary";
+const ESCAPED_FORMAT = "<!-- awsf-landing-summary: escaped-v1 -->";
+const sectionHeading = (line: string): boolean => LANDING_SUMMARY_SECTIONS.some(heading => line === `## ${heading}`);
+
+// land.ts supplies the owner's free-text request and Git's summary, not a restricted
+// Markdown grammar. Escape delimiter lines even inside code fences; a fence-aware
+// reader cannot recover boundaries the old writer never distinguished. Escape leading
+// backslashes too, and version the encoding so legacy literal backslashes stay literal.
+const encodeBody = (body: string): string => body.trim().split("\n")
+  .map(line => line.startsWith("\\") || sectionHeading(line) ? `\\${line}` : line).join("\n");
+const decodeLine = (line: string): string => line.startsWith("\\\\") ||
+  (line.startsWith("\\") && sectionHeading(line.slice(1))) ? line.slice(1) : line;
+
 /** The portable review record has one fixed, human-copyable Markdown shape. */
 export function renderLandingSummary(summary: LandingSummary): string {
   return [
-    "# Landing Summary",
+    TITLE,
+    ESCAPED_FORMAT,
     ...LANDING_SUMMARY_SECTIONS.flatMap((heading) => [
       "",
       `## ${heading}`,
-      summary[keyFor(heading)].trim(),
+      encodeBody(summary[keyFor(heading)]),
     ]),
     "",
   ].join("\n");
@@ -40,17 +54,22 @@ export async function readLandingSummary(attemptDir: string): Promise<LandingSum
     return null;
   }
 
+  const lines = source.split("\n");
+  const boundaries = lines.flatMap((line, index) => sectionHeading(line) ? [index] : []);
+  // A legacy duplicate is irrecoverably ambiguous. Do not silently move request
+  // text into Changes (or guess which of several identical headings was intended).
+  if (boundaries.length !== LANDING_SUMMARY_SECTIONS.length) return null;
+  const prefix = lines.slice(0, boundaries[0]).join("\n").trim();
+  const escaped = prefix === `${TITLE}\n${ESCAPED_FORMAT}`;
+  if (!escaped && prefix !== TITLE) return null;
+
   const values: Partial<Record<keyof LandingSummary, string>> = {};
   for (let index = 0; index < LANDING_SUMMARY_SECTIONS.length; index += 1) {
     const heading = LANDING_SUMMARY_SECTIONS[index]!;
-    const startMarker = `## ${heading}\n`;
-    const start = source.indexOf(startMarker);
-    if (start === -1) return null;
-    const bodyStart = start + startMarker.length;
-    const next = LANDING_SUMMARY_SECTIONS[index + 1];
-    const bodyEnd = next === undefined ? source.length : source.indexOf(`\n## ${next}\n`, bodyStart);
-    if (bodyEnd === -1) return null;
-    const value = source.slice(bodyStart, bodyEnd).trim();
+    const start = boundaries[index]!;
+    if (lines[start] !== `## ${heading}`) return null;
+    const body = lines.slice(start + 1, boundaries[index + 1]);
+    const value = (escaped ? body.map(decodeLine) : body).join("\n").trim();
     if (value.length === 0) return null;
     values[keyFor(heading)] = value;
   }

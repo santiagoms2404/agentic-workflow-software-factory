@@ -39,7 +39,7 @@ function envelope(phaseId: string, round: number, producerStatus: EnvelopeFact["
 }
 
 function runPhase(key: string, ordinal: number, kind: string, owner: string, status: string, errorCode: string | null = null): RunPhase {
-  return { key, ordinal, kind, owner, status, errorCode };
+  return { key, ordinal, kind, owner, status, errorCode, startedAt: "2026-09-26T10:00:00.000Z" };
 }
 
 // ---------------------------------------------------------------------------
@@ -389,17 +389,21 @@ test("a role whose phases ran on two routes is marked mixed, with no route to ra
   assert.equal(builder!.firstPass, true);
 });
 
-test("owner rework phases are counted on the run and belong to the builder's row", () => {
+test("owner rework phases are counted only in the owning role's row", () => {
   const run = new SyntheticAttempt(session("s5"));
   run.phase(phase("builder", "builder", { ordinal: 1, status: "SUCCEEDED", endedAt: AT }));
   run.ownerReentries = 1;
   run.phase(phase("owner-rework-1", "builder", { ordinal: 2, maxCorrections: 0, status: "SUCCEEDED", endedAt: AT }));
   run.phase(phase("owner-rework-1-tests", "host", { ordinal: 3, kind: "code", status: "SUCCEEDED", endedAt: AT }));
+  run.phase(phase("reviewer", "reviewer", { ordinal: 4, status: "SUCCEEDED", endedAt: AT }));
   run.transition("AWAITING_OWNER");
-  const [builder] = rowsOf(run);
+  const rows = rowsOf(run);
+  const builder = rows.find((row) => row.role === "builder");
+  const reviewer = rows.find((row) => row.role === "reviewer");
   assert.equal(builder!.phases, 2);
   assert.equal(builder!.reworkPhases, 1);
   assert.equal(builder!.ownerReentries, 1);
+  assert.equal(reviewer!.reworkPhases, 0);
 });
 
 test("an open run's rows are not settled, so they are neither first pass nor clean", () => {
@@ -412,4 +416,39 @@ test("an open run's rows are not settled, so they are neither first pass nor cle
   assert.equal(builder!.firstPass, false);
   assert.equal(builder!.cleanCompletion, false);
   assert.equal(builder!.minutes, 0, "the finished phase's minutes; the open one has none");
+});
+
+// B4-24: a queued rework phase never launched and carries no evidence, so the
+// run did not rework anything. Every other count in the row already skips it.
+test("a queued owner-rework phase that never launched is not counted as a rework", () => {
+  const run = new SyntheticAttempt(session("s6"));
+  run.phase(phase("builder", "builder", { ordinal: 1, status: "SUCCEEDED", endedAt: AT }));
+  run.ownerReentries = 1;
+  run.phase(phase("owner-rework-1", "builder", { ordinal: 2, maxCorrections: 0, status: "QUEUED", startedAt: null }));
+  run.transition("AWAITING_OWNER");
+  const [builder] = rowsOf(run);
+  assert.equal(builder!.reworkPhases, 0);
+});
+
+// B4-32: a stored trap link that no longer validates is skipped the way a bad
+// cause is. Raising it aborted every metrics read, not only this run's.
+test("an owner attribution whose stored trap link no longer validates is skipped, not raised", () => {
+  const run = new SyntheticAttempt(session("s7"));
+  run.phase(phase("builder", "builder", { ordinal: 1, status: "SUCCEEDED", endedAt: AT }));
+  const db = openDatabase(":memory:");
+  try {
+    run.project(db);
+    db.prepare(`INSERT INTO events (event_id, session_id, phase_id, first_source_seq, last_source_seq,
+        type, name, payload_json, started_at)
+      VALUES ('s7:attribution:retired', 's7', NULL, 1, 1, 'attribution', 'owner attribution recorded', ?, ?)`)
+      .run(JSON.stringify({
+        attempt: 1, cause: "model", reason: "recorded before the kind was retired", at: AT,
+        trap: { kind: "none", because: "retired-kind", reason: "recorded before the kind was retired" },
+      }), AT);
+    const rows = readRoleRows(db);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.attributionSource === "owner", false, "a row that does not validate is not an owner attribution");
+  } finally {
+    db.close();
+  }
 });

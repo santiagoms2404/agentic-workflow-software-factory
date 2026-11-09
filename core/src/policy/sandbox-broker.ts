@@ -1,12 +1,14 @@
 import { assertProtectedOutput } from "../workflow/protected-grants.ts";
 import { protectedWriteContext, type ProtectedFilesCapability } from "../contracts/protected-capability.ts";
-import { existsSync, lstatSync, readlinkSync, realpathSync, statSync, type Stats } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { existsSync, lstatSync, readdirSync, readlinkSync, realpathSync, statSync, type BigIntStats, type Stats } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ProcessSpec, SandboxConfinement } from "../adapters/interface.ts";
 import {
   assertClean,
   captureChangeSet,
   changedPaths,
+  changesSinceBase,
+  runGit,
   systemGitRunner,
   type ChangeSetFingerprint,
   type GitRunner,
@@ -16,7 +18,7 @@ import {
   resolvePermissionProfile,
   type PermissionProfile,
 } from "./permission-profiles.ts";
-import { enforcePathPolicy } from "./path-policy.ts";
+import { PermissionBreach, evaluatePathPolicy, normalizeRepositoryPath, type PathViolation } from "./path-policy.ts";
 
 export const SANDBOX_BADGE_STATES = ["os-enforced", "tool-policy", "unavailable"] as const;
 export type SandboxBadge = (typeof SANDBOX_BADGE_STATES)[number];
@@ -65,6 +67,15 @@ export interface SandboxRequest {
    */
   readonly providerReadableRoots?: readonly string[];
   /**
+   * `runtime.seed_paths`, repository-relative, as seeded into `worktree`
+   * (B10-02). They are Git-ignored, so the change-set diff in `enforce()`
+   * never sees them, yet host gates run what they hold (a seeded
+   * `node_modules/.bin/tsc`). Under bwrap each one present is bound read-only
+   * over the worktree; without an OS sandbox `PermissionSession` fingerprints
+   * them instead. Omitted, the argv is the reviewed one byte for byte.
+   */
+  readonly seedPaths?: readonly string[];
+  /**
    * `host` (the default) binds the whole filesystem read-only and masks the
    * state root. `worktree` binds no host root, so the canonical checkout, other
    * worktrees and every CLI transcript store are absent rather than merely
@@ -96,13 +107,19 @@ function hostProbe(executable: string): boolean {
   return result.status === 0;
 }
 
+/** The one platform and probe decision shared by broker grants and host preconditions. */
+export function osSandboxAvailable(platform: NodeJS.Platform, probe: SandboxProbe = hostProbe): boolean {
+  return platform === "linux" && probe("bwrap");
+}
+
 function physical(path: string): string {
   return existsSync(path) ? realpathSync.native(path) : resolve(path);
 }
 
 function inside(parent: string, child: string): boolean {
   const path = relative(parent, child);
-  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
+  // Only a leading `..` segment escapes; a name that merely begins with two dots is inside.
+  return path === "" || ((path !== ".." && !path.startsWith(`..${sep}`)) && !isAbsolute(path));
 }
 
 /** Q8 plus layer seven: execution and runtime roots are disjoint from the canonical checkout. */
@@ -119,21 +136,30 @@ export function assertSandboxRoots(request: Omit<SandboxRequest, "writes" | "pla
   const canonical = physical(request.canonicalRepository);
   const worktree = physical(request.worktree);
   const runtime = physical(request.sessionRuntime);
+  const canonicalState = physical(request.stateRoot);
   if (inside(worktree, canonical) || inside(canonical, worktree)) {
     throw new Error("the canonical repository and managed worktree must be disjoint");
   }
   if (inside(worktree, runtime) || inside(runtime, worktree)) {
     throw new Error("session runtime and the managed worktree must be disjoint writable roots");
   }
-  if (inside(canonical, runtime)) {
+  if (inside(canonical, runtime) || inside(runtime, canonical)) {
     throw new Error("session runtime may not make part of the canonical repository writable");
   }
-  const canonicalState = physical(request.stateRoot);
+  if (inside(canonical, canonicalState) || inside(canonicalState, canonical)) {
+    throw new Error("the state root and canonical repository must be disjoint");
+  }
+  if (inside(worktree, canonicalState) || inside(canonicalState, worktree)) {
+    throw new Error("the state root and managed worktree must be disjoint");
+  }
+  if (canonicalState === runtime || inside(runtime, canonicalState)) {
+    throw new Error("the state root may not reside inside session runtime");
+  }
   for (const [label, roots] of [["provider state root", request.providerWritableRoots], ["provider start file", request.providerReadableRoots]] as const) {
     for (const root of roots ?? []) {
       if (!isAbsolute(root)) throw new Error(`${label}s must be absolute machine-local paths`);
       const provider = physical(root);
-      for (const [name, other] of [["managed worktree", worktree], ["canonical repository", canonical], ["state root", canonicalState]] as const) {
+      for (const [name, other] of [["managed worktree", worktree], ["canonical repository", canonical], ["state root", canonicalState], ["session runtime", runtime]] as const) {
         if (inside(other, provider) || inside(provider, other)) {
           throw new Error(`a ${label} may not overlap the ${name}`);
         }
@@ -154,33 +180,72 @@ function providerRoots(request: SandboxRequest): readonly string[] {
   return (request.providerWritableRoots ?? []).filter((root) => existsSync(root));
 }
 
-function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
+/** Each configured seed as [repository path, absolute path in the worktree]; the spelling is the config loader's. */
+function seedRoots(request: Pick<SandboxRequest, "worktree" | "seedPaths">): readonly (readonly [string, string])[] {
+  return (request.seedPaths ?? []).map((seed) => {
+    const path = normalizeRepositoryPath(seed);
+    return [path, resolve(request.worktree, path)] as const;
+  });
+}
+
+/**
+ * B10-02: the seeds present, bound read-only. bwrap applies binds in argv
+ * order, so these must follow the worktree bind they narrow. A missing seed
+ * cannot be bound; `PermissionSession` fingerprints it as absent instead.
+ */
+function seedBinds(request: SandboxRequest): string[] {
+  return seedRoots(request).filter(([, path]) => existsSync(path)).flatMap(([, path]) => ["--ro-bind", path, path]);
+}
+
+/**
+ * size, mtime and inode of every entry under each seed, keyed by repository
+ * path. Not a content hash: the walk runs twice a phase over a whole
+ * `node_modules`, and an in-place rewrite moves mtime or size while a
+ * replacement moves the inode. Symlinks are stamped, never followed; a link
+ * into the seed is covered by its target's own entry.
+ */
+function fingerprintSeeds(seeds: readonly (readonly [string, string])[]): ReadonlyMap<string, string> {
+  const prints = new Map<string, string>();
+  const visit = (key: string, path: string): void => {
+    let stat: BigIntStats;
+    try {
+      stat = lstatSync(path, { bigint: true });
+    } catch {
+      prints.set(key, "absent");
+      return;
+    }
+    prints.set(key, `${String(stat.size)}:${String(stat.mtimeNs)}:${String(stat.ino)}`);
+    if (!stat.isDirectory()) return;
+    for (const name of readdirSync(path).sort()) visit(`${key}/${name}`, join(path, name));
+  };
+  for (const [key, path] of seeds) visit(key, path);
+  return prints;
+}
+
+function seedMutations(before: ReadonlyMap<string, string>, after: ReadonlyMap<string, string>): readonly PathViolation[] {
+  const changed = [...new Set([...before.keys(), ...after.keys()])].filter((key) => before.get(key) !== after.get(key));
+  // A seed is host-provisioned execution input, protected for every profile.
+  return changed.sort().map((path) => Object.freeze({ path, reasons: Object.freeze(["protected-path"] as const) }));
+}
+
+function bwrapCommand(
+  spec: ProcessSpec,
+  request: SandboxRequest,
+  prefix: readonly string[],
+  beforeReadOnlyRoots: readonly string[],
+  writableProviderBinds: readonly string[],
+): ProcessSpec {
   const worktreeBind = request.writes.length === 0 ? "--ro-bind" : "--bind";
   return {
     executable: "bwrap",
     argv: [
-      "--die-with-parent",
-      "--new-session",
-      "--unshare-all",
-      "--share-net",
-      "--ro-bind", "/", "/",
-      // The whole host filesystem is readable above; `writes: []` confines
-      // WRITES and confines reads not at all. A profile carrying a model-driven
-      // `Read` that can name an absolute path therefore reaches every other
-      // attempt's directory and this attempt's own `private/` — including the
-      // continuity locator, whose 0600 is protection against other users, not
-      // against a process running as the owner. bwrap applies binds in argv
-      // ORDER, so an empty tmpfs over the state root here, before the runtime
-      // bind below, hides all of it while leaving this phase's own writable
-      // runtime intact. The order is asserted by the descriptor test.
-      "--tmpfs", request.stateRoot,
-      "--proc", "/proc",
-      "--dev", "/dev",
+      ...prefix,
       worktreeBind, request.worktree, request.worktree,
       "--bind", request.sessionRuntime, request.sessionRuntime,
-      "--ro-bind", request.canonicalRepository, request.canonicalRepository,
+      ...beforeReadOnlyRoots,
       ...(request.readOnlyRoots ?? []).flatMap((root) => ["--ro-bind", root, root]),
-      ...providerRoots(request).flatMap((root) => ["--bind", root, root]),
+      ...seedBinds(request),
+      ...writableProviderBinds,
       "--chdir", spec.cwd,
       "--",
       spec.executable,
@@ -193,6 +258,29 @@ function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
     stdin: spec.stdin,
     shell: false,
   };
+}
+
+function bwrapSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
+  return bwrapCommand(spec, request, [
+    "--die-with-parent",
+    "--new-session",
+    "--unshare-all",
+    "--share-net",
+    "--ro-bind", "/", "/",
+    // The whole host filesystem is readable above; `writes: []` confines
+    // WRITES and confines reads not at all. A profile carrying a model-driven
+    // `Read` that can name an absolute path therefore reaches every other
+    // attempt's directory and this attempt's own `private/` — including the
+    // continuity locator, whose 0600 is protection against other users, not
+    // against a process running as the owner. bwrap applies binds in argv
+    // ORDER, so an empty tmpfs over the state root here, before the runtime
+    // bind below, hides all of it while leaving this phase's own writable
+    // runtime intact. The order is asserted by the descriptor test.
+    "--tmpfs", request.stateRoot,
+    "--proc", "/proc",
+    "--dev", "/dev",
+  ], ["--ro-bind", request.canonicalRepository, request.canonicalRepository],
+  providerRoots(request).flatMap((root) => ["--bind", root, root]));
 }
 
 /** System directories a confined phase reads, in bind order; each only when it exists. */
@@ -328,36 +416,20 @@ function confinedSpec(spec: ProcessSpec, request: SandboxRequest): ProcessSpec {
       installs.push(operation, source, destination);
     }
   }
-  const worktreeBind = request.writes.length === 0 ? "--ro-bind" : "--bind";
-  return {
-    executable: "bwrap",
-    argv: [
-      "--die-with-parent",
-      "--new-session",
-      "--unshare-all",
-      "--share-net",
-      ...systemMounts,
-      "--proc", "/proc",
-      "--dev", "/dev",
-      "--tmpfs", "/tmp",
-      ...(home === undefined ? [] : ["--tmpfs", home]),
-      ...linkTargets,
-      ...installs,
-      ...providerFiles(request.providerReadableRoots).flatMap((file) => ["--ro-bind", file, file]),
-      worktreeBind, request.worktree, request.worktree,
-      "--bind", request.sessionRuntime, request.sessionRuntime,
-      ...(request.readOnlyRoots ?? []).flatMap((root) => ["--ro-bind", root, root]),
-      ...providerFiles(request.providerWritableRoots).flatMap((file) => ["--bind", file, file]),
-      "--chdir", spec.cwd,
-      "--",
-      spec.executable,
-      ...spec.argv,
-    ],
-    cwd: request.worktree,
-    env: { ...spec.env, TMPDIR: request.sessionRuntime },
-    stdin: spec.stdin,
-    shell: false,
-  };
+  return bwrapCommand(spec, request, [
+    "--die-with-parent",
+    "--new-session",
+    "--unshare-all",
+    "--share-net",
+    ...systemMounts,
+    "--proc", "/proc",
+    "--dev", "/dev",
+    "--tmpfs", "/tmp",
+    ...(home === undefined ? [] : ["--tmpfs", home]),
+    ...linkTargets,
+    ...installs,
+    ...providerFiles(request.providerReadableRoots).flatMap((file) => ["--ro-bind", file, file]),
+  ], [], providerFiles(request.providerWritableRoots).flatMap((file) => ["--bind", file, file]));
 }
 
 /**
@@ -373,7 +445,7 @@ export function grantSandbox(
   assertSandboxRoots(request);
   const platform = request.platform ?? process.platform;
   const confined = request.confinement === "worktree";
-  if (platform === "linux" && probe("bwrap")) {
+  if (osSandboxAvailable(platform, probe)) {
     return Object.freeze({
       badge: "os-enforced",
       mechanism: "linux-bwrap",
@@ -421,6 +493,10 @@ export class PermissionSession {
   readonly #request: PermissionSessionRequest;
   readonly #git: GitRunner;
   readonly #osEnforced: boolean;
+  /** B10-02: the seeds no read-only bind protects, with their phase-start fingerprint. */
+  readonly #seeds: readonly (readonly [string, string])[];
+  readonly #seedsBefore: ReadonlyMap<string, string>;
+  readonly #initialHead: string | null;
 
   constructor(request: PermissionSessionRequest) {
     assertSandboxRoots(request);
@@ -429,12 +505,24 @@ export class PermissionSession {
     this.profile = resolvePermissionProfile(request.profile, request.tools, request.writes);
     assertClean(request.worktree, "before", this.#git);
     this.before = captureChangeSet(request.worktree, this.#git);
+    let initialHead: string | null = null;
+    try {
+      initialHead = runGit(this.#git, ["rev-parse", "HEAD"]).trim();
+    } catch {
+      initialHead = null;
+    }
+    this.#initialHead = initialHead;
     const linux = request.platform === "linux" || (request.platform === undefined && process.platform === "linux");
-    this.#osEnforced = linux && (request.sandboxProbe ?? hostProbe)("bwrap");
+    this.#osEnforced = osSandboxAvailable(request.platform ?? process.platform, request.sandboxProbe ?? hostProbe);
     this.sandboxBadge = linux ? (this.#osEnforced ? "os-enforced" : "tool-policy") : "unavailable";
     if (request.confinement === "worktree" && !this.#osEnforced) {
       throw new WorktreeConfinementUnavailable(request.platform ?? process.platform);
     }
+    // Under bwrap a present seed is bound read-only (`seedBinds`), so only a
+    // missing one, which cannot be bound, needs watching; without an OS
+    // sandbox every seed is fingerprinted.
+    this.#seeds = seedRoots(request).filter(([, path]) => !this.#osEnforced || !existsSync(path));
+    this.#seedsBefore = fingerprintSeeds(this.#seeds);
     if (request.protectedCapability !== undefined) {
       const proof = protectedWriteContext(request.protectedCapability);
       if (this.sandboxBadge !== "os-enforced" || proof?.grant.subject.worktree !== physical(request.worktree) ||
@@ -452,12 +540,27 @@ export class PermissionSession {
   enforce(): PermissionResult {
     if (this.#request.protectedCapability !== undefined) assertProtectedOutput(this.#request.protectedCapability, this.#request.worktree);
     const after = captureChangeSet(this.#request.worktree, this.#git);
-    const mutations = changedPaths(this.before, after);
-    enforcePathPolicy(mutations, {
+    const uncommittedMutations = changedPaths(this.before, after);
+    let committedMutations: readonly string[] = [];
+    if (this.#initialHead !== null) {
+      try {
+        committedMutations = changesSinceBase(this.#request.worktree, this.#initialHead, this.#git);
+      } catch {
+        committedMutations = [];
+      }
+    }
+    const mutations = Object.freeze([...new Set([...uncommittedMutations, ...committedMutations])].sort());
+    const violations = evaluatePathPolicy(mutations, {
       writes: this.profile.writes,
       protectedPaths: this.#request.protectedPaths,
+      caseSensitive: (this.#request.platform ?? process.platform) !== "win32",
       ...(this.#request.protectedCapability === undefined ? {} : { protectedCapability: this.#request.protectedCapability }),
     });
+    // Git-ignored seeds never reach `mutations`; their fingerprint diff joins
+    // the same single terminal breach (B10-02).
+    const policyPaths = new Set(violations.map((violation) => violation.path));
+    const seeded = seedMutations(this.#seedsBefore, fingerprintSeeds(this.#seeds)).filter((violation) => !policyPaths.has(violation.path));
+    if (violations.length > 0 || seeded.length > 0) throw new PermissionBreach([...violations, ...seeded]);
     if (this.#request.protectedCapability !== undefined) assertProtectedOutput(this.#request.protectedCapability, this.#request.worktree);
     return Object.freeze({ changedPaths: mutations, sandboxBadge: this.sandboxBadge });
   }

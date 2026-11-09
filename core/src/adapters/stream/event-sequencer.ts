@@ -42,9 +42,20 @@ import {
 } from "../../contracts/normalized-events.ts";
 import { OutputBudget } from "./output-budget.ts";
 import { isRepresentableIdentity, type ModelIdentity } from "./model-identity.ts";
+import { boundText } from "./snippet.ts";
 import { normalizeUsage } from "./usage.ts";
 
 const NO_EVENTS: readonly NormalizedEvent[] = Object.freeze([]);
+
+/**
+ * The most provider-supplied text one terminal, notice or quota event may carry.
+ *
+ * The output budget charges text DELTAS. A refusal's message, a cancel reason, a
+ * notice and a reset string all come from the provider too, and none of them is
+ * charged, so one of them could carry a megabyte past `max_output_bytes`. They
+ * are cut rather than dropped: a terminal is never refused, and the cut says so.
+ */
+export const TERMINAL_TEXT_LIMIT = 4_096;
 
 /**
  * An event minus the four fields the host stamps on every one of them.
@@ -133,6 +144,11 @@ export class EventSequencer {
 
   get openToolCount(): number {
     return this.#openTools.size;
+  }
+
+  /** Whether the provider id currently names a call the host actually opened. */
+  hasOpenTool(providerToolId: string): boolean {
+    return this.#openTools.has(providerToolId);
   }
 
   get budget(): OutputBudget {
@@ -355,8 +371,8 @@ export class EventSequencer {
       {
         kind: "quota",
         scope: nonEmpty(input.scope, "provider"),
-        resetAt: input.resetAt,
-        message: input.message,
+        resetAt: input.resetAt === null ? null : boundText(input.resetAt, TERMINAL_TEXT_LIMIT),
+        message: boundText(input.message, TERMINAL_TEXT_LIMIT),
       },
       input.providerAt ?? null,
     );
@@ -370,7 +386,12 @@ export class EventSequencer {
   ): readonly NormalizedEvent[] {
     if (this.#terminal !== null) return NO_EVENTS;
     return this.#optional(
-      { kind: "notice", code, message: nonEmpty(message, code), detail },
+      {
+        kind: "notice",
+        code,
+        message: boundText(nonEmpty(message, code), TERMINAL_TEXT_LIMIT),
+        detail: detail === null ? null : boundText(detail, TERMINAL_TEXT_LIMIT),
+      },
       providerAt,
     );
   }
@@ -424,7 +445,10 @@ export class EventSequencer {
     out.push(...this.#settleAll("error", "the run's terminal arrived while this call was still open"));
     return [
       ...out,
-      ...this.#terminate({ kind: "run.failed", errorCode, message: nonEmpty(message, errorCode) }, providerAt),
+      ...this.#terminate(
+        { kind: "run.failed", errorCode, message: boundText(nonEmpty(message, errorCode), TERMINAL_TEXT_LIMIT) },
+        providerAt,
+      ),
     ];
   }
 
@@ -440,7 +464,13 @@ export class EventSequencer {
     if (this.#terminal !== null) return NO_EVENTS;
     const out = [...this.#clockAdvisory(providerAt)];
     out.push(...this.#settleAll("cancelled", "the run was cancelled while this call was open"));
-    return [...out, ...this.#terminate({ kind: "run.cancelled", reason: nonEmpty(reason, "cancelled") }, providerAt)];
+    return [
+      ...out,
+      ...this.#terminate(
+        { kind: "run.cancelled", reason: boundText(nonEmpty(reason, "cancelled"), TERMINAL_TEXT_LIMIT) },
+        providerAt,
+      ),
+    ];
   }
 
   /**

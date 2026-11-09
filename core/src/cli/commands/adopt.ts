@@ -20,6 +20,7 @@ import { ledgerGovernanceFailure, planCommandRecovery } from "../../workflow/com
 import { occurrenceKeyForAdoption, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
 import { existsSync, promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
+import { gateEnv } from "../../adapters/env.ts";
 import { registeredAdapter } from "../../adapters/registry.ts";
 import { writeSystemPromptFile } from "../../adapters/system-prompt-file.ts";
 import type { AwsfConfig } from "../../config/schema.ts";
@@ -30,13 +31,14 @@ import { parseEnvelope } from "../../contracts/parse-envelope.ts";
 import { TEST_OUTPUT_TAIL_MAX_CHARS, type TestOutput } from "../../contracts/test-output.ts";
 import { wrapEnvelope } from "../../contracts/stored-envelope.ts";
 import { CallBudget } from "../../execution/call-budget.ts";
-import type { BarrierRecord, TerminationReport } from "../../execution/launcher-barrier.ts";
+import type { BarrierRecord, ProcessIdentity, TerminationReport } from "../../execution/launcher-barrier.ts";
+import { createHostPort } from "../../execution/process-controller.ts";
 import { ProcessTransportBroker, runSystemCommand } from "../../execution/transport-broker.ts";
 import { candidateHygiene } from "../../gates/candidate-hygiene.ts";
 import { commandsPass } from "../../gates/commands.ts";
 import { noProtectedPaths, writesWithinGlobs } from "../../gates/git-diff.ts";
-import { GateReport, type GateId } from "../../gates/interface.ts";
-import { assertClean, runGit, systemGitRunner, type GitResult } from "../../git/changes.ts";
+import { GateReport, gateKindFor } from "../../gates/interface.ts";
+import { assertClean, isWorktreeClean, runGit, systemGitRunner, type GitResult } from "../../git/changes.ts";
 import { HOST_AUTHOR } from "../../git/commit.ts";
 import {
   IntegrationRefused,
@@ -45,7 +47,10 @@ import {
   writeIntegrationCommit,
   type IntegrationPlan,
 } from "../../git/integration.ts";
-import { createWorktree, seedWorktreePaths } from "../../git/worktrees.ts";
+import {
+  createWorktree,
+  seedWorktreePaths,
+} from "../../git/worktrees.ts";
 import { scrubCredentialString } from "../../policy/redaction.ts";
 import type { AttemptEvidence, PhaseEvidenceRecord } from "../../observability/attempt-evidence.ts";
 import { diagnoseRecovery } from "../../observability/recovery-diagnostics.ts";
@@ -72,8 +77,9 @@ import {
 } from "./attempt.ts";
 import { requestOutput } from "./production-run.ts";
 import { newCommand } from "./new.ts";
+import { writeDurableFile } from "./durable-file.ts";
 import { enforceK1 } from "./start.ts";
-import { readAttemptEvidence, recordedReviews, recordedRoutes } from "./review-record.ts";
+import { candidateGateEvidence, readAttemptEvidence, recordedReviews, recordedRoutes } from "./review-record.ts";
 import {
   REVIEW_HEADROOM_CALLS,
   lastTestOutputFrom,
@@ -84,11 +90,12 @@ import {
   reviewFailureBlocker,
   reviewPhasesOf,
   type ReviewPhaseInfrastructure,
+  type ObservedProcessOutcome,
 } from "./review-phase.ts";
 import { candidatePathsBetween } from "../../workflow/review-evidence.ts";
 import { completedShift } from "../../workflow/candidate-seed.ts";
 
-const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
+const { mkdir, readFile, realpath, writeFile } = fs;
 
 /**
  * Observe the candidate pins without throwing; see the note on the twin in
@@ -97,7 +104,7 @@ const { chmod, mkdir, open, readFile, realpath, writeFile } = fs;
 function observePins(worktree: string, candidateSha: string): { clean: boolean; head: string | null } {
   try {
     const runner = systemGitRunner(worktree);
-    const clean = runGit(runner, ["status", "--porcelain"]).trim().length === 0;
+    const clean = isWorktreeClean(runner);
     const head = runGit(runner, ["rev-parse", "HEAD"]).trim();
     return { clean: clean && head === candidateSha, head: /^[0-9a-f]{40}$/u.test(head) ? head : null };
   } catch {
@@ -107,12 +114,6 @@ function observePins(worktree: string, candidateSha: string): { clean: boolean; 
 
 /** This dispatch site's ledger identity. */
 const ADOPT_DISPATCHER = "adopt/adoption-tests" as const;
-
-/** Make one path's bytes durable before any journal record cites their digest. */
-async function fsyncPath(path: string): Promise<void> {
-  const handle = await open(path, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
-}
 
 /**
  * A configured command whose recovery the ledger refuses to decide, or a ledger
@@ -162,9 +163,10 @@ export interface AdoptionCommandInfrastructure extends ReviewPhaseInfrastructure
     readonly timeoutMs: number;
     readonly cwd: string;
     readonly maxBuffer: number;
+    readonly env: Readonly<Record<string, string>>;
   }): GitResult;
   sessionId(): string;
-  pidIsLive(pid: number): boolean;
+  pidIsLive(pid: number, expected?: ProcessIdentity): boolean;
 }
 
 export interface AdoptCommandOptions {
@@ -226,6 +228,43 @@ interface TargetPair {
   readonly candidateSha: string;
 }
 
+type PidProbe = (pid: number) => void;
+type ProcessIdentityProbe = (pid: number) => ProcessIdentity | null;
+
+function observeHostIdentity(pid: number): ProcessIdentity | null {
+  const port = createHostPort({ command: runSystemCommand });
+  const row = port.census().find((candidate) => candidate.pid === pid && candidate.alive);
+  return row === undefined ? null : {
+    pid, pgid: row.pgid ?? pid, startIdentity: row.startIdentity, startIdentitySource: port.identitySource,
+  };
+}
+
+/** EPERM is uncertain, not dead. A comparable start identity resolves PID reuse; unknown stays fail-closed. */
+export function recordedControllerIsLive(
+  expected: ProcessIdentity,
+  probe: PidProbe = (pid) => { process.kill(pid, 0); },
+  observe: ProcessIdentityProbe = observeHostIdentity,
+): boolean {
+  try {
+    probe(expected.pid);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ESRCH") return false;
+    if (code !== "EPERM") return true;
+  }
+  try {
+    const current = observe(expected.pid);
+    if (current === null) return true;
+    if (expected.startIdentity !== null && current.startIdentity !== null) {
+      return expected.startIdentity === current.startIdentity;
+    }
+    return true;
+  } catch {
+    // A failed identity observation cannot turn a possibly-live controller into a dead one.
+    return true;
+  }
+}
+
 const DEFAULT_INFRASTRUCTURE: AdoptionCommandInfrastructure = {
   adapterFor: (_entry, adapterId, config) => registeredAdapter(config.adapters, adapterId, config.runtime),
   createBroker: (options) => new ProcessTransportBroker(options),
@@ -233,17 +272,10 @@ const DEFAULT_INFRASTRUCTURE: AdoptionCommandInfrastructure = {
   runCommand: (executable, argv, options) => runSystemCommand(executable, argv, options),
   now: () => new Date().toISOString(),
   sessionId: randomUUID,
-  pidIsLive: (pid) => {
-    try { process.kill(pid, 0); return true; } catch { return false; }
-  },
+  pidIsLive: (pid, expected) => expected === undefined
+    ? recordedControllerIsLive({ pid, pgid: pid, startIdentity: null, startIdentitySource: "unknown" })
+    : recordedControllerIsLive(expected),
 };
-
-function gateKind(gateId: GateId): "pure" | "filesystem" | "git" | "subprocess" | "journey" {
-  if (gateId === "commands_pass") return "subprocess";
-  if (["head_advanced", "diff_matches_claims", "candidate_hygiene"].includes(gateId)) return "git";
-  if (["artifacts_exist", "files_non_empty", "json_parses", "no_protected_paths", "writes_within_globs"].includes(gateId)) return "filesystem";
-  return gateId === "journey_passes" ? "journey" : "pure";
-}
 
 /** Persist target-defining tokens, not a hand-written sentence or the source route. */
 function repeatAdoptionArgv(options: AdoptCommandOptions, source: AttemptStatus): readonly string[] {
@@ -259,6 +291,10 @@ function bounded(value: string, maximum = 2_000): string {
   if (value.length <= maximum) return value;
   if (maximum <= 0) return "";
   return `${value.slice(0, maximum - 1)}…`;
+}
+
+function safeTail(value: string, maximum = TEST_OUTPUT_TAIL_MAX_CHARS): string {
+  return value.length <= maximum ? value : value.slice(value.length - maximum);
 }
 
 function credentialSafeGateOutput(value: string): string {
@@ -783,7 +819,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       phaseId,
       round: 0,
       gateId: report.gateId,
-      kind: gateKind(report.gateId),
+      kind: gateKindFor(report.gateId),
       candidateSha: pair.candidateSha,
       passed: report.passed,
       exitCode,
@@ -816,279 +852,286 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
   });
   let measurement: Measurement;
   if (resumed === null) {
-  await persist("attempt.updated", {}, { type: "phase", phase: phase("QUEUED") });
-  await persist("attempt.updated", {
-    phase: { name: "adoption tests", state: "RUNNING", round: 0, maximumRounds: 0 },
-    lastActivityAt: phaseAt,
-    lastActivity: `running fresh configured gates against ${pair.candidateSha}`,
-  }, { type: "phase", phase: phase("RUNNING") });
-
-  const measure = async (): Promise<Measurement> => {
-    assertCandidatePinned(candidate, pair, status.worktree!, "before fresh gates");
-    const git = systemGitRunner(status.worktree!);
-    const hygieneResult = git(["diff", "--check", `${pair.baseSha}..${pair.candidateSha}`, "--"]);
-    // Read before this run's own hygiene record exists, so a dispatch point in
-    // the snapshot belongs to an earlier run.
-    const ledger = await ledgerStep("ledger read", () => readCommandLedger(attemptDir));
-    const hygiene = candidateHygiene({
-      expectedBaseSha: pair.baseSha,
-      observedBaseSha: runGit(git, ["rev-parse", `${pair.baseSha}^{commit}`]).trim(),
-      expectedCandidateSha: pair.candidateSha,
-      headBefore: runGit(git, ["rev-parse", "HEAD"]).trim(),
-      headAfter: runGit(git, ["rev-parse", "HEAD"]).trim(),
-      cleanBefore: runGit(git, ["status", "--porcelain"]).trim().length === 0,
-      cleanAfter: runGit(git, ["status", "--porcelain"]).trim().length === 0,
-      exitCode: hygieneResult.status ?? -1,
-      output: `${hygieneResult.stdout}${hygieneResult.stderr}${hygieneResult.error ?? ""}`,
-    });
-    await persistGate(phaseId, hygiene, hygieneResult.status ?? -1);
-    const changed = candidatePathsBetween(status.worktree!, pair.baseSha, pair.candidateSha);
-    const protectedReport = noProtectedPaths(changed, options.config.policy.protected_paths);
-    await persistGate(phaseId, protectedReport);
-    // L7 proves the source recipe's producer phases passed their own per-phase
-    // write gates. Revalidate the cumulative immutable candidate against the
-    // union of every current non-review writer in that recipe. Charging the
-    // whole diff only to the builder rejects valid simple-sdlc documenter paths.
-    const writesReport = writesWithinGlobs(
-      changed,
-      candidateWriteGlobs(candidate.sourceRecipe, reviewPhasesOf(candidate.sourceRecipe).review, options.config),
-    );
-    await persistGate(phaseId, writesReport);
-
-    const commands: TestOutput["commands"] = [];
-    const failures: string[] = [];
-    const sections: string[] = [];
-    const structuralReports = [hygiene, protectedReport, writesReport];
-    // `adopt` creates this attempt directory in this process and no other
-    // controller can hold its lease, so there is nothing to assert ownership
-    // against — unlike the production and rework dispatchers, which run inside
-    // an existing attempt another process could be driving. Two concurrent
-    // adoptions of one source produce two distinct target attempts with
-    // distinct directories, so neither can see the other's ledger.
-    const occurrenceKey = occurrenceKeyForAdoption(phaseId, pair.candidateSha);
-    // Decided before the opening is written; see the note at the same point in
-    // production-run.ts. A refusal must not leave behind its own exculpation.
-    const ungoverned = ledgerGovernanceFailure(ledger, ADOPT_DISPATCHER, occurrenceKey);
-    if (ungoverned !== null) throw new CommandLedgerRefusal("adoption tests", ungoverned);
-    await ledgerStep("occurrence opening", () => persist("attempt.updated", {}, { type: "command-occurrence-opened", opening: {
-      schema: "awsf.command-occurrence-opened/v1", dispatcherId: ADOPT_DISPATCHER,
-      occurrenceKey, protocolVersion: COMMAND_LEDGER_PROTOCOL_VERSION, openedAt: infra.now(),
-    } }));
-    if (structuralReports.every((report) => report.passed)) {
-      const gateIds = Object.keys(options.config.gates);
-      const gatesDigest = gatesConfigDigest(options.config.gates);
-      const worktreeRealPath = await realpath(status.worktree!);
-      for (const [gateId, configured] of Object.entries(options.config.gates)) {
-        try {
-          assertCandidatePinned(candidate, pair, status.worktree!, `before ${gateId}`);
-        } catch (error) {
-          await closeOccurrence(occurrenceKey, `the candidate moved before ${gateId} was dispatched`);
-          throw error;
-        }
-        const started = Date.now();
-        const relative = join("raw", `command-adoption-tests-${pair.candidateSha}-${gateId}-0.txt`);
-        const absolute = join(attemptDir, relative);
-        const planned = planCommandRecovery(ledger, {
-          dispatcherId: ADOPT_DISPATCHER, occurrenceKey, gateId, gateIds,
-          argvDigest: argvDigest(configured.argv), gateConfigDigest: gateConfigDigest(configured),
-          gatesConfigDigest: gatesDigest, cwd: status.worktree!, worktreeRealPath,
-          timeoutMs: configured.timeout_seconds * 1_000, maxOutputBytes: options.config.runtime.max_output_bytes,
-          candidateSha: pair.candidateSha, attempt: status.attempt, sessionId: status.sessionId,
-        });
-        if (planned.action === "refuse") throw new CommandLedgerRefusal(gateId, planned.reason);
-        let output: string;
-        let exitCode: number;
-        let durationMs: number;
-        if (planned.action === "restore") {
-          output = await readFile(join(attemptDir, planned.result.outputRef!), "utf8");
-          exitCode = planned.result.exitCode;
-          durationMs = planned.result.durationMs;
-        } else {
-        const intentId = randomUUID();
-        await ledgerStep(`${gateId} intent`, () => persist("attempt.updated", {}, { type: "command-dispatch-intent", intent: {
-          schema: "awsf.command-dispatch-intent/v1", intentId, dispatcherId: ADOPT_DISPATCHER,
-          occurrenceKey, gateId, origin: "phase-dispatch", phaseKey: "adoption-tests", phaseOrdinal: 0, round: 0,
-          attempt: status.attempt, sessionId: status.sessionId,
-          argv: [...configured.argv], argvDigest: argvDigest(configured.argv),
-          cwd: status.worktree!, worktreeRealPath, timeoutMs: configured.timeout_seconds * 1_000,
-          maxOutputBytes: options.config.runtime.max_output_bytes,
-          gateConfigDigest: gateConfigDigest(configured), gatesConfigDigest: gatesDigest,
-          candidateSha: pair.candidateSha, headBefore: pair.candidateSha, cleanBefore: true,
-          dispatchedAt: infra.now(),
-        } }));
-        const [executable, ...argv] = configured.argv;
-        const result = infra.runCommand(executable!, argv, {
-          timeoutMs: configured.timeout_seconds * 1_000,
-          cwd: status.worktree!,
-          maxBuffer: options.config.runtime.max_output_bytes,
-        });
-        const raw = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
-        exitCode = result.status ?? -1;
-        durationMs = Date.now() - started;
-        try {
-          output = credentialSafeGateOutput(raw);
-        } catch (error) {
-          const withheldPins = observePins(status.worktree!, pair.candidateSha);
-          await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
-            schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
-            exitCode, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
-            headAfter: withheldPins.head ?? pair.candidateSha, cleanAfter: withheldPins.clean,
-            descendantQuiescence: "unproved", settledAt: infra.now(),
-          } });
-          throw error;
-        }
-        await mkdir(dirname(absolute), { recursive: true });
-        await writeFile(absolute, output, { mode: 0o600 });
-        await chmod(absolute, 0o600);
-        await fsyncPath(absolute);
-        await fsyncPath(dirname(absolute));
-        // Observed, not assumed. Recording `cleanAfter: true` unread is how a
-        // command that dirtied the tree becomes a restorable clean measurement.
-        const pins = observePins(status.worktree!, pair.candidateSha);
-        await ledgerStep(`${gateId} result`, () => persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
-          schema: "awsf.command-dispatch-result/v1", intentId,
-          outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
-          exitCode, durationMs, outputRef: relative,
-          outputBytes: Buffer.byteLength(output), outputDigest: retainedOutputDigest(output),
-          headAfter: pins.head ?? pair.candidateSha, cleanAfter: pins.clean,
-          descendantQuiescence: "unproved", settledAt: infra.now(),
-        } }));
-        }
-        commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs, outputRef: relative });
-        sections.push(`### ${gateId} (exit ${String(exitCode)})\n${bounded(output, TEST_OUTPUT_TAIL_MAX_CHARS)}`);
-        if (exitCode !== 0) failures.push(`${gateId} exited ${String(exitCode)}`);
-        try {
-          assertCandidatePinned(candidate, pair, status.worktree!, `after ${gateId}`);
-        } catch (error) {
-          failures.push(`${gateId} moved or dirtied the candidate: ${safeFailure(error).message}`);
-          // The remaining gates are withheld deliberately, not left undone.
-          await closeOccurrence(occurrenceKey, `${gateId} moved or dirtied the candidate`);
-          break;
-        }
-      }
-    } else {
-      failures.push(...structuralReports.filter((report) => !report.passed).map((report) => `${report.gateId} failed`));
-      // Hygiene passed and was recorded, so this occurrence reached its dispatch
-      // point; the structural gates then withheld every command. This is the
-      // ordinary outcome for a candidate that touches a protected path, and
-      // without the marker its silence would read as an ungoverned dispatch.
-      await closeOccurrence(occurrenceKey, "structural gates failed before any configured command was dispatched");
-    }
-    const testOutput: TestOutput = {
-      schema: "awsf.test-output/v1",
-      producerStatus: failures.length === 0 ? "success" : "failure",
-      summary: failures.length === 0 ? "all current configured commands passed" : "current configured commands failed",
-      artifacts: [],
-      notesForNextPhase: failures.length === 0 ? "compose fresh review evidence" : "adopted candidate retained blocked",
-      passed: failures.length === 0,
-      candidateSha: pair.candidateSha,
-      commands,
-      failures,
-      outputTail: bounded(sections.join("\n\n"), TEST_OUTPUT_TAIL_MAX_CHARS),
-    };
-    const aggregate = new GateReport("commands_pass");
-    for (const [gateId, configured] of Object.entries(options.config.gates)) {
-      const report = commandsPass(testOutput, { gateId, argv: configured.argv }, {
-        candidateSha: pair.candidateSha,
-        cleanBefore: true,
-        cleanAfter: failures.every((failure) => !failure.startsWith(`${gateId} moved or dirtied`)),
-      });
-      for (const check of report.checks) aggregate.check(`${gateId}:${check.item}`, check.ok, check.note);
-    }
-    if (Object.keys(options.config.gates).length === 0) aggregate.check("configured commands", true, "no commands configured");
-    await persistGate(phaseId, aggregate, failures.length === 0 ? 0 : -1);
-    const reports = Object.freeze([hygiene, protectedReport, writesReport, aggregate]);
-    return { testOutput, reports, passed: reports.every((report) => report.passed) && testOutput.passed };
-  };
-
-  try {
-    measurement = await measure();
-  } catch (error) {
-    // A ledger refusal or a failed ledger write is not a gate failure. Reporting
-    // it as one would hide the real cause and leave a half-written occurrence
-    // behind for the next recovery to misread.
-    if (error instanceof CommandLedgerRefusal) throw error;
-    const failure = safeFailure(error);
-    measurement = {
-      testOutput: {
-        schema: "awsf.test-output/v1",
-        producerStatus: "failure",
-        summary: "fresh adoption gates aborted",
-        artifacts: [],
-        notesForNextPhase: "adopted candidate retained blocked",
-        passed: false,
-        candidateSha: pair.candidateSha,
-        commands: [],
-        failures: [failure.message],
-        outputTail: "",
-      },
-      reports: [],
-      passed: false,
-    };
-  }
-
-  const rawRelative = join("raw", "host-adoption-tests.txt");
-  await mkdir(dirname(join(attemptDir, rawRelative)), { recursive: true });
-  await writeFile(join(attemptDir, rawRelative), JSON.stringify(measurement.testOutput), { mode: 0o600 });
-  const parsedTests = parseEnvelope(JSON.stringify(measurement.testOutput), "awsf.test-output/v1");
-  const storedTests = wrapEnvelope({
-    envelopeId: `${status.sessionId}:adoption-tests:0`,
-    sessionId: status.sessionId,
-    phaseId: "adoption-tests",
-    correctionRound: 0,
-    agent: "host",
-    schemaId: "awsf.test-output/v1",
-    createdAt: infra.now(),
-    rawOutputPath: rawRelative,
-  }, parsedTests);
-  const envelopePath = join(attemptDir, "envelopes", "adoption-tests-0.json");
-  await mkdir(dirname(envelopePath), { recursive: true });
-  if (existsSync(envelopePath)) throw new CandidateAdoptionRejected("immutable adoption test envelope already exists");
-  await writeFile(envelopePath, JSON.stringify(storedTests), { mode: 0o600 });
-  await persist("attempt.updated", {}, { type: "envelope", phaseId, envelope: storedTests as typeof storedTests & { payload: EnvelopeBase | null } });
-
-  if (!measurement.passed) {
-    const failure = new Error(measurement.testOutput.failures.join("; ") || "fresh candidate gates failed");
+    await persist("attempt.updated", {}, { type: "phase", phase: phase("QUEUED") });
     await persist("attempt.updated", {
-      phase: { name: "adoption tests", state: "FAILED", round: 0, maximumRounds: 0 },
-      lastActivityAt: infra.now(),
-      lastActivity: "fresh adoption gates failed; exact candidate retained",
-    }, { type: "phase", phase: phase("FAILED", failure) });
-    const detail = `immutable adopted candidate failed fresh gates: ${failure.message}`;
-    const l13 = transition({
-      from: "GATING",
-      to: "BLOCKED",
-      actor: "host",
-      tier: 2,
-      reason: { source: "gate", code: "correction-budget-exhausted", detail },
-      interactive: false,
-      budget: status.budget,
-      evidence: { gatesPass: false },
-    });
-    await persistTransition("GATING", "BLOCKED", l13.edge, "gate", "correction-budget-exhausted", detail, false, {
-      gatesPass: false,
-      blocker: { code: "correction-budget-exhausted", detail, ahead: null, behind: null },
-      phase: null,
-      lastActivity: detail,
-    });
-    await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
-    return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: false };
-  }
+      phase: { name: "adoption tests", state: "RUNNING", round: 0, maximumRounds: 0 },
+      lastActivityAt: phaseAt,
+      lastActivity: `running fresh configured gates against ${pair.candidateSha}`,
+    }, { type: "phase", phase: phase("RUNNING") });
 
-  await persist("attempt.updated", {
-    gatesPass: true,
-    phase: null,
-    protectedApprovalsValid: true,
-    lastActivityAt: infra.now(),
-    lastActivity: pendingGrant
-      ? `fresh gates passed; awaiting explicit owner review-degradation grant for ${pair.candidateSha}`
-      : `fresh current gates passed against adopted candidate ${pair.candidateSha}`,
-    advice: pendingGrant ? { kind: "adoption-grant", repeatArgv: repeatAdoptionArgv(options, candidate.source) } : null,
-  }, { type: "phase", phase: phase("SUCCEEDED") });
-  if (pendingGrant) {
-    await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
-    return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: false };
-  }
+    const measure = async (): Promise<Measurement> => {
+      assertCandidatePinned(candidate, pair, status.worktree!, "before fresh gates");
+      const git = systemGitRunner(status.worktree!);
+      // HEAD and cleanliness are read on both sides of the check, the same
+      // bracket production runs and owner rework keep around it.
+      const headBeforeHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
+      const cleanBeforeHygiene = isWorktreeClean(git);
+      const hygieneResult = git(["diff", "--check", `${pair.baseSha}..${pair.candidateSha}`, "--"]);
+      const headAfterHygiene = runGit(git, ["rev-parse", "HEAD"]).trim();
+      const cleanAfterHygiene = isWorktreeClean(git);
+      // Read before this run's own hygiene record exists, so a dispatch point in
+      // the snapshot belongs to an earlier run.
+      const ledger = await ledgerStep("ledger read", () => readCommandLedger(attemptDir));
+      const hygiene = candidateHygiene({
+        expectedBaseSha: pair.baseSha,
+        observedBaseSha: runGit(git, ["rev-parse", `${pair.baseSha}^{commit}`]).trim(),
+        expectedCandidateSha: pair.candidateSha,
+        headBefore: headBeforeHygiene,
+        headAfter: headAfterHygiene,
+        cleanBefore: cleanBeforeHygiene,
+        cleanAfter: cleanAfterHygiene,
+        exitCode: hygieneResult.status ?? -1,
+        output: `${hygieneResult.stdout}${hygieneResult.stderr}${hygieneResult.error ?? ""}`,
+      });
+      await persistGate(phaseId, hygiene, hygieneResult.status ?? -1);
+      const changed = candidatePathsBetween(status.worktree!, pair.baseSha, pair.candidateSha);
+      const protectedReport = noProtectedPaths(changed, options.config.policy.protected_paths);
+      await persistGate(phaseId, protectedReport);
+      // L7 proves the source recipe's producer phases passed their own per-phase
+      // write gates. Revalidate the cumulative immutable candidate against the
+      // union of every current non-review writer in that recipe. Charging the
+      // whole diff only to the builder rejects valid simple-sdlc documenter paths.
+      const writesReport = writesWithinGlobs(
+        changed,
+        candidateWriteGlobs(candidate.sourceRecipe, reviewPhasesOf(candidate.sourceRecipe).review, options.config),
+      );
+      await persistGate(phaseId, writesReport);
+
+      const commands: TestOutput["commands"] = [];
+      const failures: string[] = [];
+      const sections: string[] = [];
+      const structuralReports = [hygiene, protectedReport, writesReport];
+      // `adopt` creates this attempt directory in this process and no other
+      // controller can hold its lease, so there is nothing to assert ownership
+      // against — unlike the production and rework dispatchers, which run inside
+      // an existing attempt another process could be driving. Two concurrent
+      // adoptions of one source produce two distinct target attempts with
+      // distinct directories, so neither can see the other's ledger.
+      const occurrenceKey = occurrenceKeyForAdoption(phaseId, pair.candidateSha);
+      // Decided before the opening is written; see the note at the same point in
+      // production-run.ts. A refusal must not leave behind its own exculpation.
+      const ungoverned = ledgerGovernanceFailure(ledger, ADOPT_DISPATCHER, occurrenceKey);
+      if (ungoverned !== null) throw new CommandLedgerRefusal("adoption tests", ungoverned);
+      // Built before the opening, as in production-run.ts: gates get the
+      // allowlisted env, never the host's whole environment (O6, B7-03).
+      const gateEnvironment = gateEnv(process.env);
+      await ledgerStep("occurrence opening", () => persist("attempt.updated", {}, { type: "command-occurrence-opened", opening: {
+        schema: "awsf.command-occurrence-opened/v1", dispatcherId: ADOPT_DISPATCHER,
+        occurrenceKey, protocolVersion: COMMAND_LEDGER_PROTOCOL_VERSION, openedAt: infra.now(),
+      } }));
+      if (structuralReports.every((report) => report.passed)) {
+        const gateIds = Object.keys(options.config.gates);
+        const gatesDigest = gatesConfigDigest(options.config.gates);
+        const worktreeRealPath = await realpath(status.worktree!);
+        for (const [gateId, configured] of Object.entries(options.config.gates)) {
+          try {
+            assertCandidatePinned(candidate, pair, status.worktree!, `before ${gateId}`);
+          } catch (error) {
+            await closeOccurrence(occurrenceKey, `the candidate moved before ${gateId} was dispatched`);
+            throw error;
+          }
+          const started = Date.now();
+          const relative = join("raw", `command-adoption-tests-${pair.candidateSha}-${gateId}-0.txt`);
+          const absolute = join(attemptDir, relative);
+          const planned = planCommandRecovery(ledger, {
+            dispatcherId: ADOPT_DISPATCHER, occurrenceKey, gateId, gateIds,
+            argvDigest: argvDigest(configured.argv), gateConfigDigest: gateConfigDigest(configured),
+            gatesConfigDigest: gatesDigest, cwd: status.worktree!, worktreeRealPath,
+            timeoutMs: configured.timeout_seconds * 1_000, maxOutputBytes: options.config.runtime.max_output_bytes,
+            candidateSha: pair.candidateSha, attempt: status.attempt, sessionId: status.sessionId,
+          });
+          if (planned.action === "refuse") throw new CommandLedgerRefusal(gateId, planned.reason);
+          let output: string;
+          let exitCode: number;
+          let durationMs: number;
+          if (planned.action === "restore") {
+            output = await readFile(join(attemptDir, planned.result.outputRef!), "utf8");
+            exitCode = planned.result.exitCode;
+            durationMs = planned.result.durationMs;
+          } else {
+          const intentId = randomUUID();
+          await ledgerStep(`${gateId} intent`, () => persist("attempt.updated", {}, { type: "command-dispatch-intent", intent: {
+            schema: "awsf.command-dispatch-intent/v1", intentId, dispatcherId: ADOPT_DISPATCHER,
+            occurrenceKey, gateId, origin: "phase-dispatch", phaseKey: "adoption-tests", phaseOrdinal: 0, round: 0,
+            attempt: status.attempt, sessionId: status.sessionId,
+            argv: [...configured.argv], argvDigest: argvDigest(configured.argv),
+            cwd: status.worktree!, worktreeRealPath, timeoutMs: configured.timeout_seconds * 1_000,
+            maxOutputBytes: options.config.runtime.max_output_bytes,
+            gateConfigDigest: gateConfigDigest(configured), gatesConfigDigest: gatesDigest,
+            candidateSha: pair.candidateSha, headBefore: pair.candidateSha, cleanBefore: true,
+            dispatchedAt: infra.now(),
+          } }));
+          const [executable, ...argv] = configured.argv;
+          const result = infra.runCommand(executable!, argv, {
+            timeoutMs: configured.timeout_seconds * 1_000,
+            cwd: status.worktree!,
+            maxBuffer: options.config.runtime.max_output_bytes,
+            env: gateEnvironment,
+          });
+          const raw = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
+          exitCode = result.status ?? -1;
+          durationMs = Date.now() - started;
+          try {
+            output = credentialSafeGateOutput(raw);
+          } catch (error) {
+            const withheldPins = observePins(status.worktree!, pair.candidateSha);
+            await persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+              schema: "awsf.command-dispatch-result/v1", intentId, outcome: "withheld",
+              exitCode, durationMs, outputRef: null, outputBytes: null, outputDigest: null,
+              headAfter: withheldPins.head ?? pair.candidateSha, cleanAfter: withheldPins.clean,
+              descendantQuiescence: "unproved", settledAt: infra.now(),
+            } });
+            throw error;
+          }
+          await mkdir(dirname(absolute), { recursive: true });
+          await writeDurableFile(absolute, output);
+          // Observed, not assumed. Recording `cleanAfter: true` unread is how a
+          // command that dirtied the tree becomes a restorable clean measurement.
+          const pins = observePins(status.worktree!, pair.candidateSha);
+          await ledgerStep(`${gateId} result`, () => persist("attempt.updated", {}, { type: "command-dispatch-result", result: {
+            schema: "awsf.command-dispatch-result/v1", intentId,
+            outcome: result.status === null || pins.head === null ? "no-exit" : "exited",
+            exitCode, durationMs, outputRef: relative,
+            outputBytes: Buffer.byteLength(output), outputDigest: retainedOutputDigest(output),
+            headAfter: pins.head ?? pair.candidateSha, cleanAfter: pins.clean,
+            descendantQuiescence: "unproved", settledAt: infra.now(),
+          } }));
+          }
+          commands.push({ gateId, argv: [...configured.argv], exitCode, durationMs, outputRef: relative });
+          sections.push(`### ${gateId} (exit ${String(exitCode)})\n${bounded(output, TEST_OUTPUT_TAIL_MAX_CHARS)}`);
+          if (exitCode !== 0) failures.push(`${gateId} exited ${String(exitCode)}`);
+          try {
+            assertCandidatePinned(candidate, pair, status.worktree!, `after ${gateId}`);
+          } catch (error) {
+            failures.push(`${gateId} moved or dirtied the candidate: ${safeFailure(error).message}`);
+            // The remaining gates are withheld deliberately, not left undone.
+            await closeOccurrence(occurrenceKey, `${gateId} moved or dirtied the candidate`);
+            break;
+          }
+        }
+      } else {
+        failures.push(...structuralReports.filter((report) => !report.passed).map((report) => `${report.gateId} failed`));
+        // Hygiene passed and was recorded, so this occurrence reached its dispatch
+        // point; the structural gates then withheld every command. This is the
+        // ordinary outcome for a candidate that touches a protected path, and
+        // without the marker its silence would read as an ungoverned dispatch.
+        await closeOccurrence(occurrenceKey, "structural gates failed before any configured command was dispatched");
+      }
+      const testOutput: TestOutput = {
+        schema: "awsf.test-output/v1",
+        producerStatus: failures.length === 0 ? "success" : "failure",
+        summary: failures.length === 0 ? "all current configured commands passed" : "current configured commands failed",
+        artifacts: [],
+        notesForNextPhase: failures.length === 0 ? "compose fresh review evidence" : "adopted candidate retained blocked",
+        passed: failures.length === 0,
+        candidateSha: pair.candidateSha,
+        commands,
+        failures,
+        outputTail: safeTail(sections.join("\n\n"), TEST_OUTPUT_TAIL_MAX_CHARS),
+      };
+      const aggregate = new GateReport("commands_pass");
+      for (const [gateId, configured] of Object.entries(options.config.gates)) {
+        const report = commandsPass(testOutput, { gateId, argv: configured.argv }, {
+          candidateSha: pair.candidateSha,
+          cleanBefore: true,
+          cleanAfter: failures.every((failure) => !failure.startsWith(`${gateId} moved or dirtied`)),
+        });
+        for (const check of report.checks) aggregate.check(`${gateId}:${check.item}`, check.ok, check.note);
+      }
+      if (Object.keys(options.config.gates).length === 0) aggregate.check("configured commands", true, "no commands configured");
+      await persistGate(phaseId, aggregate, failures.length === 0 ? 0 : -1);
+      const reports = Object.freeze([hygiene, protectedReport, writesReport, aggregate]);
+      return { testOutput, reports, passed: reports.every((report) => report.passed) && testOutput.passed };
+    };
+
+    try {
+      measurement = await measure();
+    } catch (error) {
+      // A ledger refusal or a failed ledger write is not a gate failure. Reporting
+      // it as one would hide the real cause and leave a half-written occurrence
+      // behind for the next recovery to misread.
+      if (error instanceof CommandLedgerRefusal) throw error;
+      const failure = safeFailure(error);
+      measurement = {
+        testOutput: {
+          schema: "awsf.test-output/v1",
+          producerStatus: "failure",
+          summary: "fresh adoption gates aborted",
+          artifacts: [],
+          notesForNextPhase: "adopted candidate retained blocked",
+          passed: false,
+          candidateSha: pair.candidateSha,
+          commands: [],
+          failures: [failure.message],
+          outputTail: "",
+        },
+        reports: [],
+        passed: false,
+      };
+    }
+
+    const rawRelative = join("raw", "host-adoption-tests.txt");
+    await mkdir(dirname(join(attemptDir, rawRelative)), { recursive: true });
+    await writeFile(join(attemptDir, rawRelative), JSON.stringify(measurement.testOutput), { mode: 0o600 });
+    const parsedTests = parseEnvelope(JSON.stringify(measurement.testOutput), "awsf.test-output/v1");
+    const storedTests = wrapEnvelope({
+      envelopeId: `${status.sessionId}:adoption-tests:0`,
+      sessionId: status.sessionId,
+      phaseId: "adoption-tests",
+      correctionRound: 0,
+      agent: "host",
+      schemaId: "awsf.test-output/v1",
+      createdAt: infra.now(),
+      rawOutputPath: rawRelative,
+    }, parsedTests);
+    const envelopePath = join(attemptDir, "envelopes", "adoption-tests-0.json");
+    await mkdir(dirname(envelopePath), { recursive: true });
+    if (existsSync(envelopePath)) throw new CandidateAdoptionRejected("immutable adoption test envelope already exists");
+    await writeFile(envelopePath, JSON.stringify(storedTests), { mode: 0o600 });
+    await persist("attempt.updated", {}, { type: "envelope", phaseId, envelope: storedTests as typeof storedTests & { payload: EnvelopeBase | null } });
+
+    if (!measurement.passed) {
+      const failure = new Error(measurement.testOutput.failures.join("; ") || "fresh candidate gates failed");
+      await persist("attempt.updated", {
+        phase: { name: "adoption tests", state: "FAILED", round: 0, maximumRounds: 0 },
+        lastActivityAt: infra.now(),
+        lastActivity: "fresh adoption gates failed; exact candidate retained",
+      }, { type: "phase", phase: phase("FAILED", failure) });
+      const detail = `immutable adopted candidate failed fresh gates: ${failure.message}`;
+      const l13 = transition({
+        from: "GATING",
+        to: "BLOCKED",
+        actor: "host",
+        tier: 2,
+        reason: { source: "gate", code: "correction-budget-exhausted", detail },
+        interactive: false,
+        budget: status.budget,
+        evidence: { gatesPass: false },
+      });
+      await persistTransition("GATING", "BLOCKED", l13.edge, "gate", "correction-budget-exhausted", detail, false, {
+        gatesPass: false,
+        blocker: { code: "correction-budget-exhausted", detail, ahead: null, behind: null },
+        phase: null,
+        lastActivity: detail,
+      });
+      await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
+      return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: false };
+    }
+
+    await persist("attempt.updated", {
+      gatesPass: true,
+      phase: null,
+      protectedApprovalsValid: true,
+      lastActivityAt: infra.now(),
+      lastActivity: pendingGrant
+        ? `fresh gates passed; awaiting explicit owner review-degradation grant for ${pair.candidateSha}`
+        : `fresh current gates passed against adopted candidate ${pair.candidateSha}`,
+      advice: pendingGrant ? { kind: "adoption-grant", repeatArgv: repeatAdoptionArgv(options, candidate.source) } : null,
+    }, { type: "phase", phase: phase("SUCCEEDED") });
+    if (pendingGrant) {
+      await writeRunReport(attemptDir, status, await readAttemptEvidence(attemptDir));
+      return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: false };
+    }
   } else {
     assertCandidatePinned(candidate, pair, status.worktree!, "before resumed review");
     const testOutput = lastTestOutputFrom(await readAttemptEvidence(attemptDir), pair.candidateSha);
@@ -1159,13 +1202,14 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
       ownerReentries: status.budget.ownerReentries,
     },
   });
+  const gateEvidence = candidateGateEvidence(await readAttemptEvidence(attemptDir), pair.candidateSha, status.sessionId);
   const l11 = budget.authorize({
     from: "GATING",
     to: "REVIEWING",
     actor: "host",
     reason: { source: "gate" },
     interactive: false,
-    evidence: { gatesPass: true, candidateSha: pair.candidateSha },
+    evidence: { gatesPass: true, candidateSha: pair.candidateSha, gateEvidence },
     spawn: { cost: 1 },
   });
   const reviewState = createReviewRunState();
@@ -1223,36 +1267,62 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
     await writeQueue;
     const failure = safeFailure(error);
     let termination: TerminationReport | null = null;
-    if (reviewState.activeTransport !== null && reviewState.observed?.settled !== true) {
+    let terminationCouldNotBeVerified = false;
+    const exitObserved = reviewState.observed !== null
+      && reviewState.observed.settled
+      && reviewState.observed.status === "EXITED";
+    if (reviewState.activeTransport !== null && !exitObserved) {
       try { termination = await reviewState.activeTransport.cancel("candidate adoption review failed closed"); }
-      catch { termination = null; }
+      catch {
+        termination = null;
+        terminationCouldNotBeVerified = true;
+      }
     }
     for (const held of budget.outstanding()) budget.releaseOnRegistrationFailure(held.id);
     status = await readAttempt(attemptDir);
     if (status.lifecycleState !== "REVIEWING") throw failure;
     const registered = reviewState.processRecord as BarrierRecord | null;
-    if (registered !== null && !reviewState.processSettled) {
+    if (registered !== null && (!reviewState.processSettled || (reviewState.observed as ObservedProcessOutcome | null)?.settled === false)) {
       const at = infra.now();
-      await persist("attempt.updated", { process: null, budget: budget.snapshot(), lastActivityAt: at }, {
-        type: "process",
-        phaseId: reviewPhaseId,
-        adapterId: route.adapterId,
-        role: route.agent.name,
-        record: registered,
-        status: termination?.terminated === true ? "CANCELLED" : "FAILED",
-        registeredAt: reviewState.releasedAt ?? at,
-        releasedAt: reviewState.releasedAt,
-        endedAt: at,
-        exitCode: reviewState.observed?.exitCode ?? null,
-        exitSignal: null,
+      try {
+        await persist("attempt.updated", { process: null, budget: budget.snapshot(), lastActivityAt: at }, {
+          type: "process",
+          phaseId: reviewPhaseId,
+          adapterId: route.adapterId,
+          role: route.agent.name,
+          record: registered,
+          status: termination?.terminated === true ? "CANCELLED" : "FAILED",
+          registeredAt: reviewState.releasedAt ?? at,
+          releasedAt: reviewState.releasedAt,
+          endedAt: at,
+          exitCode: reviewState.observed?.exitCode ?? null,
+          exitSignal: null,
+        });
+      } catch {
+        // A projection fault after commit leaves the journal one revision ahead
+        // of this view, so re-read before the halt below writes against it. The
+        // halt is the mandatory durable settlement, so this write is not.
+        status = await readAttempt(attemptDir);
+      }
+    }
+    if (reviewState.answered) {
+      await persist("attempt.updated", {
+        process: null,
+        budget: budget.snapshot(),
+        blocker: { code: "sqlite-projection-failed", detail: failure.message, ahead: null, behind: null },
+        lastActivityAt: infra.now(),
+        lastActivity: "advancement held at REVIEWING until observability rebuild",
       });
+      return { source: candidate.source, status, attemptDir, confirmed: true, reusedTarget: resumed !== null };
     }
     const classified = failure instanceof CandidateAdoptionRejected
       ? { code: "review-evidence-invalid", detail: failure.message }
       : reviewFailureBlocker(failure, `${failure.name}: ${failure.message}`) ?? { code: "phase-abort", detail: `${failure.name}: ${failure.message}` };
-    const detail = termination !== null && !termination.terminated
-      ? `${classified.detail}; surviving processes [${termination.survivors.join(", ")}]`
-      : classified.detail;
+    const detail = terminationCouldNotBeVerified
+      ? `${classified.detail}; registered process termination could not be verified`
+      : termination !== null && !termination.terminated
+        ? `${classified.detail}; surviving processes [${termination.survivors.join(", ")}]`
+        : classified.detail;
     const l17 = transition({
       from: "REVIEWING",
       to: "BLOCKED",

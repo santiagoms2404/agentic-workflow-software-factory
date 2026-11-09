@@ -29,12 +29,18 @@ import {
   type ProcessTransport,
   type TransportBroker,
 } from "./interface.ts";
-import type { NormalizedEvent } from "../contracts/normalized-events.ts";
+import { isTerminalKind, type NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { UnionOf } from "../contracts/typebox.ts";
 import { LineFramer } from "./stream/line-framer.ts";
 import { EventSequencer } from "./stream/event-sequencer.ts";
 import { OutputBudget, type OutputBudgetOptions } from "./stream/output-budget.ts";
-import { drainStderr } from "./stream/transport-loop.ts";
+import {
+  awaitExit,
+  cancellationReason,
+  describeError,
+  drainStderr,
+  isCancellation,
+} from "./stream/transport-loop.ts";
 
 /**
  * The eight behaviours. Each is a real failure mode of a real provider:
@@ -109,13 +115,18 @@ interface StubLine {
   text?: string;
   kind?: string;
   message?: string;
-  exitCode?: number;
   pid?: number;
 }
 
-/** What the run carries forward across lines. The host remembers what it asked for. */
+/** What the run carries forward across lines. */
 interface ParseContext {
-  requestedModel: string;
+  /** The host's request when the host made one; otherwise the stub's own `started` line decides. */
+  requestedModel: string | null;
+}
+
+export interface StubParseOptions {
+  /** What the host ASKED for, as `stub/<script>`. The stream says what answered. */
+  requestedModel?: string;
 }
 
 export class StubAdapter implements HarnessAdapter {
@@ -202,17 +213,25 @@ export class StubAdapter implements HarnessAdapter {
    * host-minted ids, `null ≠ 0`, fail-closed model identity — belongs to the
    * sequencer, so no adapter can get one of them subtly wrong on its own.
    */
-  async *parse(transport: ProcessTransport, signal?: AbortSignal): AsyncIterable<NormalizedEvent> {
+  async *parse(
+    transport: ProcessTransport,
+    signal?: AbortSignal,
+    options: StubParseOptions = {},
+  ): AsyncIterable<NormalizedEvent> {
     const framer = new LineFramer();
     const sequencer = new EventSequencer({
       runId: transport.runId,
       now: this.#now,
       budget: new OutputBudget(this.#limits),
     });
-    // The requested model is carried forward from `run.started` rather than
-    // re-read per line: a real provider names the model it RESOLVED, and the
-    // host is the one that remembers what it asked for.
-    const context: ParseContext = { requestedModel: `${STUB_MODEL_PREFIX}unknown` };
+    // The requested model is the one the HOST asked for, and a `started` line
+    // that names another script cannot rename it: a real provider names the model
+    // it RESOLVED, and the host is the one that remembers what it asked for
+    // (B11-23). Without a host request the stub's own `started` line stands.
+    const context: ParseContext = { requestedModel: options.requestedModel ?? null };
+    // The terminal is held back until the process's exit is measured, so the
+    // exit code the run reports is the one the process really made (B11-24).
+    let held: NormalizedEvent | null = null;
     // Drained for the same reason the real adapters drain it: a pipe nobody
     // reads fills, and a child blocked writing to a full stderr never reaches
     // the part where it writes its result. The stub is where every journey test
@@ -223,24 +242,42 @@ export class StubAdapter implements HarnessAdapter {
 
     try {
       for await (const chunk of transport.stdout) {
-        for (const line of framer.push(chunk)) yield* this.#line(line, sequencer, context);
+        for (const line of framer.push(chunk)) {
+          for (const event of this.#line(line, sequencer, context)) {
+            if (isTerminalKind(event.kind)) held = event;
+            else yield event;
+          }
+        }
       }
       // Abrupt EOF: the tail a provider died in the middle of writing is
       // released as a line, and stays visible as a malformed one.
-      for (const line of framer.flush()) yield* this.#line(line, sequencer, context);
+      for (const line of framer.flush()) {
+        for (const event of this.#line(line, sequencer, context)) {
+          if (isTerminalKind(event.kind)) held = event;
+          else yield event;
+        }
+      }
     } catch (error) {
       // The stream itself failed. A run whose bytes stopped arriving still owes
       // exactly one terminal, and it still owes a settlement for every tool call
       // it left open — which is what makes cancellation legible rather than a
-      // stream that simply stops.
+      // stream that simply stops. A terminal already decoded stands.
       await stderr.done;
+      if (held !== null) {
+        yield* this.#settle(transport, held);
+        return;
+      }
       yield* isCancellation(error) || signal?.aborted === true
         ? sequencer.cancel(cancellationReason(signal, error))
-        : sequencer.fail("E_BACKEND_FAILURE", `the provider's output stream failed: ${describe(error)}`);
+        : sequencer.fail("E_BACKEND_FAILURE", `the provider's output stream failed: ${describeError(error)}`);
       return;
     }
 
     await stderr.done;
+    if (held !== null) {
+      yield* this.#settle(transport, held);
+      return;
+    }
     // A killed process group closes its pipes cleanly, so a cancelled run and a
     // provider that simply stopped talking look identical from here. The signal
     // is the only thing that can tell them apart, and it is the host's own.
@@ -249,6 +286,18 @@ export class StubAdapter implements HarnessAdapter {
       return;
     }
     yield* sequencer.finish();
+  }
+
+  /**
+   * The held terminal, with the process's measured exit code in it.
+   *
+   * A `result` line says the run completed; the exit code is the process's own,
+   * on `transport.exit`. `null` when the exit was not observed in time, because
+   * a run whose exit nobody saw did not exit cleanly, it exited unobserved.
+   */
+  async *#settle(transport: ProcessTransport, held: NormalizedEvent): AsyncIterable<NormalizedEvent> {
+    const exit = await awaitExit(transport);
+    yield held.kind === "run.completed" ? { ...held, exitCode: exit?.code ?? null } : held;
   }
 
   #line(line: string, sequencer: EventSequencer, context: ParseContext): readonly NormalizedEvent[] {
@@ -266,15 +315,25 @@ export class StubAdapter implements HarnessAdapter {
         text.slice(0, 200),
       );
     }
+    // A bare JSON value (`null`, a number) is not a line this vocabulary can read,
+    // and reading a property off it would throw out of the stream (B11-22).
+    if (parsed === null || typeof parsed !== "object") {
+      return sequencer.notice(
+        "non-json-output",
+        "the stub emitted a bare JSON value",
+        text.slice(0, 200),
+      );
+    }
+    const requested = (): string => context.requestedModel ?? `${STUB_MODEL_PREFIX}unknown`;
     switch (parsed.type) {
       case "started":
-        context.requestedModel = `${STUB_MODEL_PREFIX}${parsed.script ?? "unknown"}`;
-        return sequencer.started({ adapter: this.id, requestedModel: context.requestedModel });
+        context.requestedModel ??= `${STUB_MODEL_PREFIX}${parsed.script ?? "unknown"}`;
+        return sequencer.started({ adapter: this.id, requestedModel: requested() });
       case "model":
         return sequencer.resolveModel({
           adapter: this.id,
           provider: "stub",
-          requestedModel: context.requestedModel,
+          requestedModel: requested(),
           // No fallback: a `model` line that names nothing is an identity the
           // harness cannot represent, and it fails closed rather than resolving
           // to a placeholder that would render as a confirmed answer.
@@ -290,7 +349,9 @@ export class StubAdapter implements HarnessAdapter {
           `${parsed.kind ?? "error"}: ${parsed.message ?? "the stub provider failed"}`,
         );
       case "result":
-        return sequencer.complete(parsed.exitCode ?? 0);
+        // The exit code is not read from the line. `#settle` measures it on the
+        // process, once the stream has ended (B11-24).
+        return sequencer.complete(null);
       default:
         return sequencer.notice(
           "unknown-provider-event",
@@ -308,33 +369,8 @@ export class StubAdapter implements HarnessAdapter {
     signal: AbortSignal,
   ): AsyncIterable<NormalizedEvent> {
     const transport = await broker.startProcess(registration, this.buildSpec(request), signal);
-    yield* this.parse(transport, signal);
+    yield* this.parse(transport, signal, {
+      requestedModel: `${STUB_MODEL_PREFIX}${scriptFor(request.model)}`,
+    });
   }
-}
-
-/** What the run was cancelled for: the caller's own reason wherever there is one. */
-function cancellationReason(signal: AbortSignal | undefined, error: unknown): string {
-  const reason = signal?.aborted === true ? describe(signal.reason) : describe(error);
-  return `the provider's output stream was cancelled: ${reason}`;
-}
-
-/**
- * Whether a stream failure was a cancellation rather than a fault.
- *
- * A cancelled run and a broken one produce different terminals and mean
- * different things to the lifecycle, so the distinction is made on the error's
- * own code rather than on the fact that reading stopped. Anything unrecognized
- * is a failure: calling an unknown fault a cancellation would let a real defect
- * arrive as an intentional stop.
- */
-function isCancellation(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const code = (error as { code?: unknown }).code;
-  return (
-    error.name === "AbortError" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE"
-  );
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -3,6 +3,8 @@ import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { WorktreeRelativePath } from "./envelope-base.ts";
 import { canonicalJson } from "./owner-amendment.ts";
+import { sha256 } from "./hash.ts";
+import { SHA256_HEX_PATTERN } from "./typebox.ts";
 import { SHA_PATTERN } from "./test-output.ts";
 import { stringUnion } from "./typebox.ts";
 
@@ -118,7 +120,7 @@ export function assertProvingGroundItem(value: unknown): asserts value is Provin
  */
 export function provingGroundItemDigest(item: ProvingGroundItem, patch: Uint8Array | null): string {
   const patchDigest = patch === null ? null : createHash("sha256").update(patch).digest("hex");
-  return createHash("sha256").update(canonicalJson({ item, patch: patchDigest }), "utf8").digest("hex");
+  return sha256(canonicalJson({ item, patch: patchDigest }));
 }
 
 /**
@@ -130,7 +132,7 @@ export function provingGroundItemDigest(item: ProvingGroundItem, patch: Uint8Arr
 export const ReplayRecordSchema = Type.Object(
   {
     itemId: slug,
-    itemDigest: Type.String({ pattern: "^[0-9a-f]{64}$" }),
+    itemDigest: Type.String({ pattern: SHA256_HEX_PATTERN }),
     arm: Type.String({ minLength: 1, maxLength: 256 }),
     repetition: Type.Integer({ minimum: 1 }),
     order: Type.Integer({ minimum: 1 }),

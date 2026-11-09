@@ -1,11 +1,12 @@
 import type { MetricsRoleRow, RateCardRow } from "../shared/types.ts";
-import { STATE_GROUPS, TOOL_CLASSES, routeKey, stats, taskClassOf, type FacetValue, type RowPrice, type StateGroup, type Stats } from "../shared/route-metrics.ts";
+import { compareText, STATE_GROUPS, TOOL_CLASSES, formatPercent, routeKey, stats, taskClassOf, type FacetValue, type RowPrice, type StateGroup, type Stats } from "../shared/route-metrics.ts";
 import { formatListEquivalent } from "../shared/rate-card.ts";
 import { formatTokens, shortSessionId } from "./display.ts";
 import {
   COLUMN_FAMILIES,
   DEFAULT_SORT,
   EFFORT_ORDER,
+  rankIn,
   ROLE_ORDER,
   STATE_LABEL,
   STATE_TONE,
@@ -74,10 +75,6 @@ export interface LedgerColumn {
   readonly strip?: true;
 }
 
-function pct(value: number | null): string {
-  return value === null ? "–" : `${Math.round(value * 100)}%`;
-}
-
 function fixed(value: number | null, digits: number): LedgerCell {
   return value === null ? { text: "–", empty: true } : { text: value.toFixed(digits) };
 }
@@ -91,11 +88,11 @@ function ratio(part: number, whole: number): number | null {
 }
 
 function interval(s: Stats["firstPass"]): LedgerCell {
-  return s.p === null ? { text: "–", empty: true } : { text: pct(s.p), note: `${pct(s.lo)}–${pct(s.hi)}` };
+  return s.p === null ? { text: "–", empty: true } : { text: formatPercent(s.p), note: `${formatPercent(s.lo)}–${formatPercent(s.hi)}` };
 }
 
 function tally(counts: Readonly<Record<string, number>>, rename: (key: string) => string = (key) => key): LedgerCell {
-  const entries = Object.entries(counts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+  const entries = Object.entries(counts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1] || compareText(a[0], b[0]));
   return entries.length === 0 ? { text: "–", empty: true } : { text: entries.map(([key, n]) => `${rename(key)} ${n}`).join(" · ") };
 }
 
@@ -136,7 +133,7 @@ export const LEDGER_COLUMNS: readonly LedgerColumn[] = Object.freeze([
   { id: "rework", family: "outcome", label: "Owner rework runs", value: (s) => s.reworkRuns, cell: (s) => count(s.reworkRuns) },
 
   { id: "gates", family: "verification", label: "Gate checks", value: (s) => s.gateChecks, cell: (s) => count(s.gateChecks) },
-  { id: "gate-pass", family: "verification", label: "Gate pass", value: (s) => s.gatePassRate, cell: (s) => (s.gatePassRate === null ? { text: "–", empty: true } : { text: pct(s.gatePassRate) }) },
+  { id: "gate-pass", family: "verification", label: "Gate pass", value: (s) => s.gatePassRate, cell: (s) => (s.gatePassRate === null ? { text: "–", empty: true } : { text: formatPercent(s.gatePassRate) }) },
   {
     id: "refuted", family: "verification", label: "Refuted claims",
     value: (s) => ratio(s.refuted, s.claims),
@@ -162,7 +159,7 @@ export const LEDGER_COLUMNS: readonly LedgerColumn[] = Object.freeze([
     }),
   },
   { id: "landed-per-hour", family: "work", label: "Landed per agent-hour", value: (s) => s.landedPerAgentHour, cell: (s) => fixed(s.landedPerAgentHour, 2) },
-  { id: "tool-errors", family: "work", label: "Tool errors", value: (s) => s.toolErrorRate, cell: (s) => (s.toolErrorRate === null ? { text: "–", empty: true } : { text: pct(s.toolErrorRate) }) },
+  { id: "tool-errors", family: "work", label: "Tool errors", value: (s) => s.toolErrorRate, cell: (s) => (s.toolErrorRate === null ? { text: "–", empty: true } : { text: formatPercent(s.toolErrorRate) }) },
 
   { id: "input", family: "tokens", label: "Input", value: (s) => s.tokens.input, cell: (s) => tokens(s.tokens.input) },
   { id: "cache-read", family: "tokens", label: "Cache read", value: (s) => s.tokens.cacheRead, cell: (s) => tokens(s.tokens.cacheRead) },
@@ -171,7 +168,7 @@ export const LEDGER_COLUMNS: readonly LedgerColumn[] = Object.freeze([
   {
     id: "reasoning-share", family: "tokens", label: "Reasoning share",
     value: (s) => (s.tokens.reasoning === null || !s.tokens.output ? null : s.tokens.reasoning / s.tokens.output),
-    cell: (s) => (s.tokens.reasoning === null || !s.tokens.output ? { text: "–", empty: true } : { text: pct(s.tokens.reasoning / s.tokens.output) }),
+    cell: (s) => (s.tokens.reasoning === null || !s.tokens.output ? { text: "–", empty: true } : { text: formatPercent(s.tokens.reasoning / s.tokens.output) }),
   },
   {
     id: "cache-ratio", family: "tokens", label: "Cache read ÷ input + output",
@@ -241,15 +238,6 @@ export interface LedgerRow {
   readonly stats: Stats;
 }
 
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
-function rankIn(order: readonly string[], value: string): number {
-  const index = order.indexOf(value);
-  return index < 0 ? order.length : index;
-}
-
 function describe(group: LedgerGroup, value: FacetValue, rows: readonly MetricsRoleRow[], all: readonly MetricsRoleRow[], context: LedgerContext):
   Pick<LedgerRow, "title" | "provider" | "dot" | "run"> & { readonly detail?: string } {
   const first = rows[0]!;
@@ -312,12 +300,27 @@ export function sortRows(rows: readonly LedgerRow[], sort: LedgerSort, columns: 
  * The flat-line rule: with two groups or more, a column whose value is the
  * same in every group carries no signal in this lens. One group compares
  * nothing, so nothing is flat.
+ *
+ * Both the sort value AND the rendered cell content (cell text and note,
+ * and for the terminal strip column, the state counts) must match across all rows.
  */
 export function flatColumns(rows: readonly LedgerRow[], columns: readonly LedgerColumn[]): Set<string> {
   if (rows.length < 2) return new Set();
+  const firstRow = rows[0]!;
   return new Set(columns.filter((column) => {
-    const first = column.value(rows[0]!.stats);
-    return rows.every((row) => column.value(row.stats) === first);
+    const firstValue = column.value(firstRow.stats);
+    const firstCell = column.cell(firstRow.stats);
+    return rows.every((row) => {
+      if (column.value(row.stats) !== firstValue) return false;
+      const cell = column.cell(row.stats);
+      if (cell.text !== firstCell.text || cell.note !== firstCell.note) return false;
+      if (column.strip) {
+        for (const group of STATE_GROUPS) {
+          if (row.stats.states[group] !== firstRow.stats.states[group]) return false;
+        }
+      }
+      return true;
+    });
   }).map((column) => column.id));
 }
 

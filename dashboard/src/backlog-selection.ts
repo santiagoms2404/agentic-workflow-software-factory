@@ -1,7 +1,13 @@
 import type { BacklogPlan, BacklogTicket } from "../shared/types.ts";
+import {
+  selectAllState as filterSelectAllState,
+  toggleAllFilterValues,
+  toggleFilterValue,
+  type SelectAllState,
+} from "./session-filters.ts";
 
 export type PlanFilter = "both" | "spine" | "deep";
-export type SelectAllState = "none" | "some" | "all";
+export type { SelectAllState } from "./session-filters.ts";
 
 export interface BacklogGroup {
   readonly plan: BacklogPlan;
@@ -37,11 +43,7 @@ export function selectAllState(
   selected: readonly string[],
   filter: PlanFilter,
 ): SelectAllState {
-  const visible = visiblePlans(plans, filter);
-  const selectedIds = new Set(selected);
-  const count = visible.filter((plan) => selectedIds.has(plan.id)).length;
-  if (count === 0) return "none";
-  return count === visible.length ? "all" : "some";
+  return filterSelectAllState(visiblePlans(plans, filter).map((plan) => plan.id), selected);
 }
 
 /**
@@ -62,9 +64,7 @@ export function initialPlanSelection(
 }
 
 export function togglePlan(selected: readonly string[], planId: string): readonly string[] {
-  return selected.includes(planId)
-    ? selected.filter((id) => id !== planId)
-    : [...selected, planId];
+  return toggleFilterValue(selected, planId);
 }
 
 /** Adds or removes every visible card while preserving hidden selections. */
@@ -74,9 +74,5 @@ export function toggleAllPlans(
   filter: PlanFilter,
 ): readonly string[] {
   const visibleIds = visiblePlans(plans, filter).map((plan) => plan.id);
-  const visible = new Set(visibleIds);
-  if (selectAllState(plans, selected, filter) === "all") {
-    return selected.filter((id) => !visible.has(id));
-  }
-  return [...new Set([...selected, ...visibleIds])];
+  return toggleAllFilterValues(visibleIds, selected);
 }

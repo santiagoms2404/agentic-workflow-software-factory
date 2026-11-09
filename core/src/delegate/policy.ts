@@ -12,7 +12,8 @@
 // never executable, whatever the input (INV-3).
 
 import type { StopJudgmentResult, StopJudgmentWaitReason } from "../decision/question-sets/stop-judgment.ts";
-import { raiseActsNeeded } from "../cli/commands/shift.ts";
+import { severityRank } from "../contracts/review-output.ts";
+import { raiseActsNeeded } from "../state/tiers.ts";
 import type { ReviewFindingFact, StopFacts, StopFactsConfig, StopKind } from "./stop-facts.ts";
 
 export const PROPOSED_ACT_NAMES = [
@@ -171,15 +172,18 @@ export function replacementReviewEligible(facts: StopFacts): boolean {
   return row === undefined || !row.passed;
 }
 
-const SEVERITY_ORDER = ["critical", "high", "medium", "low"] as const;
-
 /** The first finding of the highest severity present. Task 13 lets Jev pick instead. */
 export function topFindingIndex(findings: readonly ReviewFindingFact[]): number {
-  for (const severity of SEVERITY_ORDER) {
-    const index = findings.findIndex((finding) => finding.severity === severity);
-    if (index >= 0) return index;
+  let bestIndex = 0;
+  let bestRank = -1;
+  for (const [index, finding] of findings.entries()) {
+    const rank = severityRank(finding.severity);
+    if (rank > bestRank) {
+      bestIndex = index;
+      bestRank = rank;
+    }
   }
-  return 0;
+  return bestIndex;
 }
 
 function waitReason(reason: StopJudgmentWaitReason): RationaleCode {

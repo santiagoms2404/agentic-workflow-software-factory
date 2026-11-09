@@ -25,7 +25,7 @@ import type { NormalizedEvent } from "../contracts/normalized-events.ts";
 import type { ObservedToolImage } from "./interface.ts";
 import type { EventSequencer } from "./stream/event-sequencer.ts";
 import { summarize } from "./stream/snippet.ts";
-import { redactToolImages, toolResultImages } from "./stream/tool-images.ts";
+import { summarizeToolResult, toolResultImages } from "./stream/tool-images.ts";
 
 interface ClaudeContentBlock {
   type?: string;
@@ -55,8 +55,11 @@ interface ClaudeLine {
   error?: unknown;
   api_error_status?: unknown;
   usage?: Record<string, unknown>;
-  message?: { model?: string; content?: readonly ClaudeContentBlock[] };
-  event?: { type?: string; delta?: ClaudeStreamDelta; usage?: Record<string, unknown> };
+  // Nested values are typed nullable where the decoder reads them: a line is
+  // parsed from untrusted bytes, and a JSON `null` is read as absent, never
+  // dereferenced (B11-10).
+  message?: { model?: string; content?: readonly (ClaudeContentBlock | null)[] } | null;
+  event?: { type?: string; delta?: ClaudeStreamDelta | null; usage?: Record<string, unknown> } | null;
   rate_limit_info?: { status?: string; resetsAt?: unknown; rateLimitType?: string };
 }
 
@@ -88,12 +91,6 @@ export class ClaudeStreamDecoder {
   readonly #provider: string;
   readonly #requestedModel: string;
   readonly #session: ClaudeSessionRecord;
-  /**
-   * Mirrors the sequencer's own map rather than reaching into it: the decoder
-   * needs to know whether it has already opened a provider tool id, and the
-   * sequencer's bookkeeping is its own.
-   */
-  readonly #openTools = new Set<string>();
   /** Tool names by provider id; a `tool_result` names only the id it settles. */
   readonly #toolNames = new Map<string, string>();
   readonly #images: ObservedToolImage[] | undefined;
@@ -297,14 +294,14 @@ export class ClaudeStreamDecoder {
    */
   #streamEvent(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const event = line.event;
-    if (event === undefined) return [];
+    if (event === undefined || event === null) return [];
     if (event.type === "message_delta") {
       this.#accumulate(event.usage);
       return [];
     }
     if (event.type !== "content_block_delta") return [];
     const delta = event.delta;
-    if (delta === undefined) return [];
+    if (delta === undefined || delta === null) return [];
     if (delta.type === "text_delta" && typeof delta.text === "string") {
       return sequencer.text("text.delta", delta.text);
     }
@@ -336,6 +333,7 @@ export class ClaudeStreamDecoder {
     const out: NormalizedEvent[] = [];
     const model = line.message?.model;
     if (typeof model === "string" && model.length > 0) {
+      this.#session.resolvedModel = model;
       out.push(
         ...sequencer.resolveModel({
           adapter: this.#adapter,
@@ -348,9 +346,8 @@ export class ClaudeStreamDecoder {
       );
     }
     for (const block of line.message?.content ?? []) {
-      if (block.type !== "tool_use" || typeof block.id !== "string" || block.id.length === 0) continue;
-      if (this.#openTools.has(block.id)) continue;
-      this.#openTools.add(block.id);
+      if (block === null || block.type !== "tool_use" || typeof block.id !== "string" || block.id.length === 0) continue;
+      if (sequencer.hasOpenTool(block.id)) continue;
       this.#toolNames.set(block.id, typeof block.name === "string" ? block.name : "tool");
       out.push(
         ...sequencer.toolRequested({
@@ -368,16 +365,15 @@ export class ClaudeStreamDecoder {
   #user(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const out: NormalizedEvent[] = [];
     for (const block of line.message?.content ?? []) {
-      if (block.type !== "tool_result") continue;
+      if (block === null || block.type !== "tool_result") continue;
       const id = block.tool_use_id;
       if (typeof id !== "string" || id.length === 0) continue;
-      this.#openTools.delete(id);
       const outcome = block.is_error === true ? "error" : "ok";
       const settled = sequencer.toolCompleted({
         providerToolId: id,
         outcome,
         // An image result would otherwise put its base64 payload in the journal.
-        resultSnippet: summarize(redactToolImages(block.content)),
+        resultSnippet: summarizeToolResult(block.content),
         providerAt: providerAt(line),
       });
       out.push(...settled);
@@ -436,14 +432,15 @@ export class ClaudeStreamDecoder {
     // never meant to let the word `allowed` outrank the rest of the sentence,
     // and reading it that way is fail-open on an invented vocabulary in the one
     // direction that matters.
-    // The status is a snake_case identifier and `QUOTA_SHAPED` reads prose, so
+    // The status is a snake_case identifier and `RATE_LIMIT_EXHAUSTED_STATUS` reads prose, so
     // the separators are normalized before the two meet — without it,
     // `allowed_usage_limit_reached` is one long word that matches nothing.
-    if (status.startsWith("allowed") && !QUOTA_SHAPED.test(status.replace(/[_-]+/g, " "))) {
+    if (status.startsWith("allowed") && !RATE_LIMIT_EXHAUSTED_STATUS.test(status.replace(/[_-]+/g, " "))) {
       return out;
     }
     return [
       ...out,
+      ...this.flushUsage(sequencer),
       ...sequencer.fail(
         "E_QUOTA_EXHAUSTED",
         `the ${scope} subscription window reports ${JSON.stringify(status)}` +
@@ -455,10 +452,9 @@ export class ClaudeStreamDecoder {
   /**
    * The terminal line.
    *
-   * Usage is emitted from HERE and nowhere else. Every `message_delta` in the
-   * stream carries a usage block too, and summing them would double-count a run
-   * that made two API calls to answer one prompt — which the probe's own
-   * two-turn tool run did.
+   * A terminal's own usage is authoritative when present. The accumulated
+   * deltas are emitted only when the terminal has no usage block, so they are
+   * not double-counted.
    */
   #result(line: ClaudeLine, sequencer: EventSequencer): readonly NormalizedEvent[] {
     const at = providerAt(line);
@@ -474,7 +470,7 @@ export class ClaudeStreamDecoder {
     if (reported) this.#usageReported = true;
     const out = reported
       ? [...sequencer.usage(mapUsage(line.usage, this.#deltaUsage?.reasoning ?? null), at)]
-      : [];
+      : [...this.flushUsage(sequencer)];
     // `null`, not `0`. The process's real exit code lives on `transport.exit`
     // and this decoder never sees it, so a `0` here would be a measurement it
     // did not take — and a CLI that emits a success result and then exits
@@ -561,6 +557,17 @@ function mapUsage(usage: unknown, reasoningFromDeltas: number | null): unknown {
 }
 
 /**
+ * Rate-limit statuses that read as exhausted.
+ *
+ * Unlike `#result` error messages, `rate_limit_info.status` never carries
+ * "context token limit reached" — it is subscription rate telemetry only. So
+ * any `*_limit_reached` or quota-exhausted shape here is quota exhaustion, not
+ * context overflow.
+ */
+const RATE_LIMIT_EXHAUSTED_STATUS =
+  /\b(?:usage limit|rate limit|quota)\b|\blimit reached\b/i;
+
+/**
  * Quota-shaped error text.
  *
  * Carried from `my-agentic-workflow/src/providers/claude-code.mjs:15`, which is
@@ -626,9 +633,11 @@ function resetFromMessage(message: string): string | null {
   const raw = RESET_IN_MESSAGE.exec(message)?.[1]?.trim();
   if (raw === undefined || raw.length === 0) return null;
   const epoch = Number(raw);
-  // Passed through as the provider wrote it rather than reformatted into a
-  // timestamp nobody verified.
-  return Number.isInteger(epoch) && epoch > 0 ? epochSecondsToIso(epoch) : raw;
+  if (Number.isInteger(epoch) && epoch > 0) return epochSecondsToIso(epoch);
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(raw) &&
+      Number.isFinite(Date.parse(raw))
+    ? raw
+    : null;
 }
 
 /**

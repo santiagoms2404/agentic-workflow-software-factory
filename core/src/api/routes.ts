@@ -1,18 +1,23 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { basename, dirname, resolve } from "node:path";
 import { queryPlanBacklog } from "../backlog.ts";
+import { adapterFor } from "../adapters/registry.ts";
 import { PlanTicketReader } from "../persistence/plan-tickets.ts";
 import { loadCatalog } from "../registry/catalog.ts";
+import type { ProjectCatalog } from "../registry/catalog-schema.ts";
+import type { Placement } from "../registry/placement-schema.ts";
 import { resolvePlanSources, type ResolvedPlanSource } from "../registry/plan-source.ts";
 import { classifyPlans } from "../registry/plan-kind.ts";
 import { readLandingSummary } from "../persistence/landing-summary.ts";
 import { locateRunReport } from "../observability/run-report.ts";
 import { attemptDir } from "../persistence/platform-paths.ts";
+import { TASK_STATES } from "../state/task-machine.ts";
 import type { DatabaseSync } from "../observability/sqlite.ts";
 import { openDatabase, setSessionArchived } from "../observability/sqlite.ts";
 import {
   agentsForSession,
   backlogSessionCosts,
+  candidateDiffStatForSession,
   compactActivityForSession,
   compiledPromptEvents,
   configSnapshotForSession,
@@ -25,6 +30,7 @@ import {
   pollEvents,
   processesForSession,
   projectionHealth,
+  replayPayloadsForSession,
   transitionsForSession,
   type AgentRow,
   type EventRow,
@@ -34,7 +40,7 @@ import {
   type SessionRow,
 } from "../observability/queries.ts";
 import { buildEffectiveConfig } from "../config/effective-config.ts";
-import { buildMetricsPayload } from "../metrics/payload.ts";
+import { createMetricsPayloadReader } from "../metrics/payload.ts";
 import { assertReplayRecord } from "../contracts/proving-ground.ts";
 import type { AwsfConfig } from "../config/schema.ts";
 import type {
@@ -54,6 +60,7 @@ import type {
   PhaseDetailResponse,
   PhaseStatus,
   PhaseSummary,
+  PlanResolutionError,
   ProcessSummary,
   GroupsResponse,
   GroupTree,
@@ -67,7 +74,7 @@ import type {
   TicketSourceResponse,
 } from "../../../dashboard/shared/types.ts";
 import { listGroupSummaries, readGroupDecisionTree } from "./planning-route.ts";
-import { ApiRequestError, jsonResponse, safely, type ApiHandler, type ApiResponse, type HandlerRequest } from "./responses.ts";
+import { ApiRequestError, jsonResponse, safely, verbatimJsonResponse, type ApiHandler, type ApiResponse, type HandlerRequest } from "./responses.ts";
 import { decodePathSegments, validateAuthority } from "./security.ts";
 
 export const API_ROUTE_TABLE = Object.freeze([
@@ -86,10 +93,9 @@ export const API_ROUTE_TABLE = Object.freeze([
 
 export type ApiRouteName = (typeof API_ROUTE_TABLE)[number]["name"];
 
-const LIFECYCLE_STATES: readonly LifecycleState[] = [
-  "DRAFT", "PREPARED", "RUNNING", "GATING", "REVIEWING", "AWAITING_OWNER",
-  "LANDING", "LANDED", "BLOCKED", "CANCELLED",
-];
+// The machine's own vocabulary, so a state the machine adds (PUBLISHED, B13-16)
+// is filterable without a second copy here to fall behind.
+const LIFECYCLE_STATES: readonly LifecycleState[] = TASK_STATES;
 
 function parseJson(value: string): unknown {
   try { return JSON.parse(value) as unknown; } catch { return null; }
@@ -108,6 +114,54 @@ function usage(row: SessionRow): UsageTotals {
     estimatedCostUsd: row.estimated_cost_usd,
     costAuthority: row.cost_authority,
     costPartial: row.cost_partial === 1,
+  };
+}
+
+function phaseUsage(db: DatabaseSync, sessionId: string, phaseId: string): UsageTotals {
+  const row = db.prepare(`SELECT
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.inputTokens') END) AS input_tokens,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.outputTokens') END) AS output_tokens,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.cacheReadTokens') END) AS cache_read_tokens,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.cacheWriteTokens') END) AS cache_write_tokens,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.reasoningTokens') END) AS reasoning_tokens,
+      MIN(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.usage.reasoningRelation') END) AS reasoning_relation,
+      SUM(CASE WHEN type = 'usage' THEN json_extract(payload_json, '$.costUsd') END) AS estimated_cost_usd
+    FROM events WHERE session_id = ? AND phase_id = ?`).get(sessionId, phaseId) as {
+      input_tokens: number | null;
+      output_tokens: number | null;
+      cache_read_tokens: number | null;
+      cache_write_tokens: number | null;
+      reasoning_tokens: number | null;
+      reasoning_relation: string | null;
+      estimated_cost_usd: number | null;
+    } | undefined;
+
+  const input = row?.input_tokens ?? null;
+  const output = row?.output_tokens ?? null;
+  const cacheRead = row?.cache_read_tokens ?? null;
+  const cacheWrite = row?.cache_write_tokens ?? null;
+  const reasoning = row?.reasoning_tokens ?? null;
+  const relation = (row?.reasoning_relation as "included-in-output" | "additive" | "unknown") ?? "unknown";
+
+  let total: number | null = null;
+  if (input !== null || output !== null || reasoning !== null) {
+    const base = (input ?? 0) + (output ?? 0);
+    total = relation === "additive" ? base + (reasoning ?? 0) : base;
+  }
+
+  const hasUsage = total !== null;
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    cacheReadTokens: cacheRead,
+    cacheWriteTokens: cacheWrite,
+    reasoningTokens: reasoning,
+    totalTokens: total,
+    reasoningRelation: relation,
+    usageAuthority: hasUsage ? "provider" : "none",
+    estimatedCostUsd: row?.estimated_cost_usd ?? null,
+    costAuthority: row?.estimated_cost_usd !== null && row?.estimated_cost_usd !== undefined ? "provider" : "unavailable",
+    costPartial: false,
   };
 }
 
@@ -178,8 +232,7 @@ function activity(db: DatabaseSync, sessionId: string, phases: readonly PhaseSum
 }
 
 function replay(db: DatabaseSync, sessionId: string): SessionCard["replay"] {
-  const rows = db.prepare(`SELECT payload_json FROM events
-    WHERE session_id = ? AND type = 'replay' ORDER BY event_row DESC`).all(sessionId) as unknown as Array<{ payload_json: string }>;
+  const rows = replayPayloadsForSession(db, sessionId);
   for (const row of rows) {
     const payload = parseJson(row.payload_json);
     try { assertReplayRecord(payload); } catch { continue; }
@@ -310,6 +363,8 @@ function allowedNextActions(state: string): string[] {
   if (state === "PREPARED") return ["run in terminal"];
   if (state === "AWAITING_OWNER") return ["inspect owner gate in terminal"];
   if (["RUNNING", "GATING", "REVIEWING", "LANDING"].includes(state)) return ["watch"];
+  // The owner's publish act (L27) is open from LANDED, and nothing else said so (B13-17).
+  if (state === "LANDED") return ["publish in terminal"];
   return [];
 }
 
@@ -317,12 +372,12 @@ export interface ApiRouterOptions {
   readonly dbPath: string;
   readonly config: AwsfConfig;
   /** Resolved catalog plans; the list response never receives paths or bodies. */
-  readonly planSources?: readonly ResolvedPlanSource[];
+  readonly planSources?: readonly ResolvedPlanSource[] | undefined;
   /** Checkout whose catalog is re-resolved on each read when `planSources` is absent. */
-  readonly repository?: string;
+  readonly repository?: string | undefined;
   /** Defaults to the directory containing the projection database. */
-  readonly stateRoot?: string;
-  readonly open?: typeof openDatabase;
+  readonly stateRoot?: string | undefined;
+  readonly open?: typeof openDatabase | undefined;
 }
 
 export interface ApiRouter {
@@ -330,15 +385,114 @@ export interface ApiRouter {
   close(): void;
 }
 
-/** Resolves dashboard ticket stores through the repository's declared catalog. */
-export function resolveTicketPlanSources(repository = process.cwd()): readonly ResolvedPlanSource[] {
-  const catalogPath = resolve(repository, "awsf.project.yaml");
+const CATALOG_FILE = "awsf.project.yaml";
+
+/**
+ * The catalog text, or null when the checkout has none. Only the catalog file's
+ * own absence is null: an ENOENT from resolving the plans root it declares is a
+ * plan that cannot be resolved, which inv 12 makes a failure (B2-03, B2-04).
+ */
+function readCatalogText(catalogPath: string): string | null {
   try {
-    return resolvePlanSources(catalogPath, loadCatalog(readFileSync(catalogPath, "utf8")));
+    return readFileSync(catalogPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return Object.freeze([]);
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
+}
+
+function repositoryPlacement(catalog: ProjectCatalog, repository: string): Placement {
+  const planRepo = Object.entries(catalog.repositories).find(([, r]) => r.role === "plan");
+  const repositoryId = planRepo ? planRepo[0] : "plans";
+  return {
+    version: "awsf.placement/v1",
+    project: catalog.project.slug,
+    repositories: {
+      [repositoryId]: { path: resolve(repository) },
+    },
+  };
+}
+
+/** Resolves dashboard ticket stores through the repository's declared catalog. */
+export function resolveTicketPlanSources(repository = process.cwd()): readonly ResolvedPlanSource[] {
+  const catalogPath = resolve(repository, CATALOG_FILE);
+  const text = readCatalogText(catalogPath);
+  if (text === null) return Object.freeze([]);
+  const catalog = loadCatalog(text);
+  const plansRoot = resolve(repository, catalog.plans.root);
+  readdirSync(plansRoot);
+  return resolvePlanSources(catalogPath, catalog, repositoryPlacement(catalog, repository));
+}
+
+/**
+ * The board's resolution. Unlike the CLI's, a checkout with no catalog is not
+ * an empty plan set: the board reads catalog plans only, so a light-tier
+ * checkout would otherwise show an empty board with nothing said (B2-02).
+ */
+interface BoardPlanResolution {
+  readonly sources: readonly ResolvedPlanSource[];
+  readonly watchPaths: readonly string[];
+}
+
+function resolveBoardPlanSources(repository: string): BoardPlanResolution {
+  const catalogPath = resolve(repository, CATALOG_FILE);
+  const text = readCatalogText(catalogPath);
+  if (text === null) {
+    throw new Error(`no ${CATALOG_FILE} in this checkout: the board shows catalog plans only, `
+      + "so light-tier tickets under specs/tickets are listed by `awsf backlog`, not here");
+  }
+  const catalog = loadCatalog(text);
+  const plansRoot = resolve(repository, catalog.plans.root);
+  readdirSync(plansRoot);
+  const sources = resolvePlanSources(catalogPath, catalog, repositoryPlacement(catalog, repository));
+  // A declared default plan whose ticket directory is missing used to read as
+  // an empty group, so the board was empty with HTTP 200 (B2-02's second case).
+  // The CLI refuses the same layout since W04 task 20 landed (B7-06, owner call
+  // O8), so the board does too rather than show the default plan as ticketless.
+  // A non-default plan with no directory yet is only a plan not ticketed yet.
+  const defaultSource = sources.find((source) => basename(source.planPath, ".html") === catalog.plans.default);
+  if (defaultSource !== undefined && !existsSync(defaultSource.ticketsPath)) {
+    throw new Error(`default plan ${JSON.stringify(catalog.plans.default)} has no ticket directory at `
+      + `${JSON.stringify(defaultSource.ticketsPath)}; the board does not show it as a plan with no tickets`);
+  }
+  return {
+    sources,
+    // Plan discovery reads the catalog and plan-root entries. The tickets
+    // parents are watched too, so creating or removing a plan's ticket
+    // directory invalidates the cache without rereading stable catalog data.
+    watchPaths: [...new Set([catalogPath, plansRoot, ...sources.map((source) => dirname(source.ticketsPath))])],
+  };
+}
+
+function pathFingerprint(path: string): string {
+  try {
+    const metadata = statSync(path, { bigint: true });
+    return [metadata.dev, metadata.ino, metadata.size, metadata.mtimeNs, metadata.ctimeNs].join(":");
+  } catch (error) {
+    return `!${(error as NodeJS.ErrnoException).code ?? "unreadable"}`;
+  }
+}
+
+function planSourcesFingerprint(paths: readonly string[]): string {
+  return paths.map((path) => `${path}\0${pathFingerprint(path)}`).join("\n");
+}
+
+const PLAN_UNRESOLVED = "PlanUnresolved" satisfies PlanResolutionError["code"];
+
+/** The resolver's own message, with the checkout path shown as `.`: plan reads never send paths. */
+function planResolutionError(error: unknown, repository: string): PlanResolutionError {
+  const message = error instanceof Error ? error.message : String(error);
+  const escapedRepo = JSON.stringify(repository).slice(1, -1);
+  const normalizedRepo = repository.replace(/\\/g, "/");
+  let sanitized = message
+    .split(escapedRepo).join(".")
+    .split(repository).join(".")
+    .split(normalizedRepo).join(".");
+  sanitized = sanitized.replace(/(['"]?)\.(\\[^'"\s]+)(['"]?)/g, (_match, q1, pathPart, q2) => {
+    return `${q1}.${pathPart.replace(/\\/g, "/")}${q2}`;
+  });
+  sanitized = sanitized.replace(/\/{2,}/g, "/");
+  return Object.freeze({ code: PLAN_UNRESOLVED, message: sanitized });
 }
 
 interface PlanCatalog {
@@ -364,6 +518,24 @@ function planCatalog(sources: readonly ResolvedPlanSource[]): PlanCatalog {
   });
 }
 
+/** One read of the plan catalog: the set to serve, if any, and why it is not fresh. */
+interface PlanRead {
+  readonly catalog: PlanCatalog | null;
+  readonly error: PlanResolutionError | null;
+}
+
+/** The fields that say a plan list is stale, or never resolved; none when it is fresh. */
+function planReadFlags(read: PlanRead): { stale?: true; planError?: PlanResolutionError } {
+  if (read.error === null) return {};
+  return read.catalog === null ? { planError: read.error } : { stale: true, planError: read.error };
+}
+
+/** The catalog a plan route serves, or the named refusal when none has resolved. */
+function requireCatalog(read: PlanRead): PlanCatalog {
+  if (read.catalog !== null) return read.catalog;
+  throw new ApiRequestError(503, PLAN_UNRESOLVED, read.error?.message ?? "the plan catalog did not resolve");
+}
+
 function routeParams(routePath: string, segments: readonly string[]): Record<string, string> | null {
   const expected = routePath.split("/").slice(1);
   if (expected.length !== segments.length) return null;
@@ -380,27 +552,56 @@ function routeParams(routePath: string, segments: readonly string[]): Record<str
 export function createApiRouter(options: ApiRouterOptions): ApiRouter {
   const opener = options.open ?? openDatabase;
   const readDb = opener(options.dbPath, { readonly: true });
-  const planningStateRoot = options.stateRoot ?? dirname(options.dbPath);
-  // The catalog is re-resolved on every read rather than once at startup, so a
-  // plan authored while `awsf dash` is up reaches the backlog without a
-  // restart. The reader is rebuilt only when the resolved plan set changes,
-  // keeping its per-file cache across ordinary polls, and a catalog that fails
-  // to resolve mid-edit keeps serving the last good set.
-  let plans = planCatalog(options.planSources ?? resolveTicketPlanSources(options.repository));
-  const currentPlans = (): PlanCatalog => {
-    if (options.planSources !== undefined) return plans;
-    let sources: readonly ResolvedPlanSource[];
-    try {
-      sources = resolveTicketPlanSources(options.repository);
-    } catch {
-      return plans;
-    }
-    if (planCatalogKey(sources) !== plans.key) plans = planCatalog(sources);
-    return plans;
-  };
-  let archiveDb: DatabaseSync | null = null;
+  try {
+    const readMetricsPayload = createMetricsPayloadReader(readDb);
+    const planningStateRoot = options.stateRoot ?? dirname(options.dbPath);
+    // Catalog resolution is checked against the catalog, plan-root, and ticket
+    // directory metadata on each read. A changed input is re-resolved so new
+    // plans reach the backlog without a restart; stable polls avoid synchronous
+    // catalog parsing and directory walks. The reader is rebuilt only when the
+    // resolved plan set changes, keeping its per-file cache across ordinary polls.
+    //
+    // A catalog that fails to resolve is never a silent skip (inv 12, owner
+    // decision O4; B2-02, B2-03, B2-04, B2-17). It used to be one twice over: an
+    // ENOENT anywhere became an empty board with HTTP 200, and any other failure
+    // kept the last good set with nothing said. Now the dashboard stays up but
+    // says what it shows: with no good set yet the plan reads refuse with
+    // `PlanUnresolved` and the resolver's message, and a last good set is served
+    // only beside `stale: true` and that message. The router starts either way.
+    let plans: PlanCatalog | null = options.planSources === undefined ? null : planCatalog(options.planSources);
+    let planError: PlanResolutionError | null = null;
+    let resolvedRepository: string | null = null;
+    let resolvedWatchPaths: readonly string[] | null = null;
+    let resolvedFingerprint: string | null = null;
+    const currentPlans = (): PlanRead => {
+      if (options.planSources !== undefined) return { catalog: plans, error: null };
+      const repository = resolve(options.repository ?? process.cwd());
+      if (plans !== null && resolvedRepository === repository && resolvedWatchPaths !== null &&
+          resolvedFingerprint === planSourcesFingerprint(resolvedWatchPaths)) {
+        planError = null;
+        return { catalog: plans, error: null };
+      }
+      try {
+        const resolution = resolveBoardPlanSources(repository);
+        if (plans === null || planCatalogKey(resolution.sources) !== plans.key) plans = planCatalog(resolution.sources);
+        resolvedRepository = repository;
+        resolvedWatchPaths = resolution.watchPaths;
+        resolvedFingerprint = planSourcesFingerprint(resolvedWatchPaths);
+        planError = null;
+      } catch (error) {
+        // Keep the last good plan set for a stale response, but retry resolution
+        // on the next read rather than caching a transient or malformed failure.
+        resolvedRepository = null;
+        resolvedWatchPaths = null;
+        resolvedFingerprint = null;
+        planError = planResolutionError(error, repository);
+      }
+      return { catalog: plans, error: planError };
+    };
+    currentPlans();
+    let archiveDb: DatabaseSync | null = null;
 
-  const handlers: Readonly<Record<ApiRouteName, ApiHandler>> = {
+    const handlers: Readonly<Record<ApiRouteName, ApiHandler>> = {
     health: safely(() => {
       const status = projectionHealth(readDb);
       return jsonResponse({ ok: true, project: options.config.project.slug, ...status } satisfies HealthResponse);
@@ -412,6 +613,10 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       if (before !== undefined && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(before) || Number.isNaN(Date.parse(before)))) {
         throw new ApiRequestError(400, "invalid-query", "before must be an ISO timestamp");
       }
+      // The database compares canonical ISO timestamps as text. Equivalent
+      // inputs such as a whole-second cursor must use the same millisecond form
+      // as the stored started_at values or the lexical boundary shifts.
+      const canonicalBefore = before === undefined ? undefined : new Date(before).toISOString();
       const beforeId = params.get("beforeId") ?? undefined;
       if (beforeId !== undefined && (before === undefined || beforeId.length === 0 || beforeId.length > 256)) {
         throw new ApiRequestError(400, "invalid-query", "beforeId requires before and a nonempty session id of at most 256 characters");
@@ -426,14 +631,18 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       }
       const rows = listSessions(readDb, {
         limit,
-        ...(before === undefined ? {} : { before }),
+        ...(canonicalBefore === undefined ? {} : { before: canonicalBefore }),
         ...(beforeId === undefined ? {} : { beforeId }),
         ...(state === undefined ? {} : { state }),
         archived: archivedRaw === "true",
       });
+      // Runs are database rows, so a catalog that does not resolve never refuses
+      // this list; the plan list beside them carries the error instead.
+      const planRead = currentPlans();
       return jsonResponse({
         sessions: rows.map((row) => card(readDb, row)),
-        plans: [...currentPlans().sessionPlans],
+        plans: [...(planRead.catalog?.sessionPlans ?? [])],
+        ...planReadFlags(planRead),
       } satisfies SessionsResponse);
     }),
     session: safely(async (_request, params) => {
@@ -464,6 +673,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         ownerReentries: row.owner_reentries,
         stateRevision: row.state_revision,
         landingSummary: summary,
+        candidateDiffStat: candidateDiffStatForSession(readDb, row.session_id, row.base_sha, row.candidate_sha),
         runReportPath: runReport?.taskRelativePath ?? null,
         transitions: transitionsForSession(readDb, row.session_id).map((item) => ({
           id: item.transition_id,
@@ -514,7 +724,7 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         }),
         envelopes,
         gates: gatesForSession(readDb, sessionId, phaseId).map(gate),
-        usage: usage(session),
+        usage: phaseUsage(readDb, sessionId, phaseId),
         agents: agentsForSession(readDb, sessionId).map(agent),
         processes: processesForSession(readDb, sessionId, phaseId).map(processSummary),
       };
@@ -548,20 +758,20 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         if (!/^[TW]\d\d$/u.test(ticket)) {
           throw new ApiRequestError(400, "invalid-query", "ticket must be a zero-padded Tnn or Wnn id");
         }
-        const source = await currentPlans().reader.source(plan, ticket);
+        const source = await requireCatalog(currentPlans()).reader.source(plan, ticket);
         if (source === null) throw new ApiRequestError(404, "ticket-not-found", "ticket not found");
         const body = { uid: `${plan}/${ticket}`, plan, ticket, source } satisfies TicketSourceResponse;
-        // Repository ticket text is intentionally verbatim. Running it through
-        // publicApiValue would rewrite credential-shaped examples in the file.
-        const response = jsonResponse(null);
-        return { ...response, body };
+        // Source text is explicitly exempt from response scrubbing so it stays
+        // byte-exact for repository inspection.
+        return verbatimJsonResponse(body);
       }
 
+      const planRead = currentPlans();
       const backlog = await queryPlanBacklog(
-        currentPlans().reader,
+        requireCatalog(planRead).reader,
         backlogSessionCosts(readDb).map((row) => ({ taskId: row.task_id, estimatedCostUsd: row.estimated_cost_usd, costAuthority: row.cost_authority })),
       );
-      return jsonResponse(backlog satisfies TicketsResponse);
+      return jsonResponse({ ...backlog, ...planReadFlags(planRead) } satisfies TicketsResponse);
     }),
     groups: safely(async (request) => {
       // One route, two shapes, exactly as `tickets` above: the list without a
@@ -592,21 +802,23 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
     metrics: safely((request) => {
       // Read-only and unfiltered: the tab and the CLI apply their lenses to this one payload.
       searchParams(request, []);
-      return jsonResponse(buildMetricsPayload(readDb, { extractedAt: new Date().toISOString() }) satisfies MetricsResponse);
+      return jsonResponse(readMetricsPayload({ extractedAt: new Date().toISOString() }) satisfies MetricsResponse);
     }),
-    adapters: safely(() => {
-      const adapters: AdapterHealth[] = Object.entries(options.config.adapters).map(([id, entry]) => {
+    adapters: safely(async () => {
+      const adapters: AdapterHealth[] = await Promise.all(Object.entries(options.config.adapters).map(async ([id, entry]) => {
         const enabled = entry.enabled !== false;
-        const blocked = entry.kind === "antigravity";
+        const adapter = enabled ? adapterFor(entry, options.config.runtime) : null;
+        const availability = adapter === null ? null : await adapter.isAvailable(undefined, process.env);
+        const blocked = availability?.status === "blocked";
         return {
           id,
           kind: entry.kind,
           provider: entry.provider ?? null,
           enabled,
           status: !enabled ? "disabled" : blocked ? "blocked" : "configured",
-          code: blocked ? "E_ADAPTER_UNVERIFIED" : null,
+          code: blocked ? availability?.code ?? null : null,
         };
-      });
+      }));
       return jsonResponse({ adapters } satisfies AdaptersResponse);
     }),
     archive: safely((_request, params) => {
@@ -642,4 +854,8 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
       archiveDb?.close();
     },
   };
+  } catch (error) {
+    readDb.close();
+    throw error;
+  }
 }

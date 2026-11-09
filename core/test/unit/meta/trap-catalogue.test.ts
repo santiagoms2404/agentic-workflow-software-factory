@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symli
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { test } from "node:test";
+import { after, before, beforeEach, test } from "node:test";
 import { loadConfig } from "../../../src/config/load.ts";
 import { EDGE_BLOCKER_CODES } from "../../../src/state/errors.ts";
 import { BLOCKER_COVERAGE, PENDING, TRAPS, type TrapEntry } from "../../../src/traps/catalogue.ts";
@@ -65,7 +65,15 @@ test("markers must be balanced, non-nested, nonempty and outside protected paths
     "core/src/observability/migrations/demo.ts"]) assert.throws(() => markerPairs([{ ...source, path }]), /protected trap marker/u);
 });
 
-function demonstration() {
+interface Demonstration {
+  readonly root: string;
+  readonly file: string;
+  readonly demoSource: string;
+}
+
+let sharedDemonstration: Demonstration | undefined;
+
+function createDemonstration(): Demonstration {
   const root = mkdtempSync(join(tmpdir(), "awsf-trap-demo-"));
   for (const path of ["core/src", "core/test/fixtures", "core/test/traps/_harness.ts", "core/test/traps/_mutate.ts",
     "dashboard/shared", "prompts", "package.json", "awsf.config.yaml"]) {
@@ -73,12 +81,16 @@ function demonstration() {
   }
   symlinkSync(join(ROOT, "node_modules"), join(root, "node_modules"), "dir");
   const demoSource = join(root, source.path);
+  const file = join(root, "core/test/traps/TR-00-demo.test.ts");
+  return { root, file, demoSource };
+}
+
+function seedDemonstration(demo: Demonstration): void {
   // TR-00 cannot be a real contiguous catalogue id, so T04's adopted
   // TR-01 markers in the copied production source cannot collide with this demo.
-  writeFileSync(demoSource, source.text.replaceAll("TR-01", "TR-00"));
-  const file = join(root, "core/test/traps/TR-00-demo.test.ts");
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `import { test } from 'node:test';
+  writeFileSync(demo.demoSource, source.text.replaceAll("TR-01", "TR-00"));
+  mkdirSync(dirname(demo.file), { recursive: true });
+  writeFileSync(demo.file, `import { test } from 'node:test';
 import { readAttempt } from '../../src/cli/commands/attempt.ts';
 import { refuse } from '../../src/demo.ts';
 import { box, draft, assertRefusedBeforeSpend } from './_harness.ts';
@@ -93,49 +105,62 @@ test('TR-00 refusal assertion', async () => {
 });
 ownMutant({ id: 'TR-00', file: import.meta.filename });
 `);
-  return { root, file, demoSource, close: () => rmSync(root, { recursive: true, force: true }) };
 }
+
+function demonstration(): Demonstration {
+  assert.ok(sharedDemonstration !== undefined);
+  return sharedDemonstration;
+}
+
+before(() => {
+  sharedDemonstration = createDemonstration();
+});
+beforeEach(() => seedDemonstration(demonstration()));
+after(() => {
+  if (sharedDemonstration !== undefined) rmSync(sharedDemonstration.root, { recursive: true, force: true });
+  sharedDemonstration = undefined;
+});
 
 test("a test-only trap is green; its last test runs a red source mutant", context => {
   const demo = demonstration();
-  try {
-    const env = { ...process.env };
-    delete env.NODE_TEST_CONTEXT;
-    const result = spawnSync(process.execPath, ["--experimental-strip-types", "--test", demo.file], {
-      cwd: demo.root, env, encoding: "utf8", timeout: 120_000,
-    });
-    const output = `${result.stdout}${result.stderr}`;
-    assert.equal(result.error, undefined, output);
-    assert.equal(result.status, 0, output);
-    assert.match(output, /ok 2 - TR-00 own mutant/u);
-    assert.match(output, /TR-00 mutant wall time:/u);
-    context.diagnostic(output.match(/TR-00 mutant wall time: [\d.]+ ms/u)?.[0] ?? "mutant timing missing");
-    assert.equal(readFileSync(demo.demoSource, "utf8"), source.text.replaceAll("TR-01", "TR-00"), "mutation never changes its source tree");
-  } finally { demo.close(); }
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, ["--experimental-strip-types", "--test", demo.file], {
+    cwd: demo.root, env, encoding: "utf8", timeout: 120_000,
+  });
+  const output = `${result.stdout}${result.stderr}`;
+  assert.equal(result.error, undefined, output);
+  assert.equal(result.status, 0, output);
+  assert.match(output, /ok 2 - TR-00 own mutant/u);
+  assert.match(output, /TR-00 mutant wall time:/u);
+  context.diagnostic(output.match(/TR-00 mutant wall time: [\d.]+ ms/u)?.[0] ?? "mutant timing missing");
+  assert.equal(readFileSync(demo.demoSource, "utf8"), source.text.replaceAll("TR-01", "TR-00"), "mutation never changes its source tree");
 });
 
 test("a planted unmarked refusal keeps its mutant green and is rejected", () => {
   const demo = demonstration();
-  try {
-    // The markers are balanced but surround irrelevant code, not the refusal.
-    writeFileSync(demo.demoSource, `export function refuse() {
+  // The markers are balanced but surround irrelevant code, not the refusal.
+  const irrelevantMarker = `export function refuse() {
 return 'DemonstrationRefused';
 // trap-refusal-begin TR-00
 void 0;
 // trap-refusal-end TR-00
 }
-`);
-    assert.throws(() => runMutant({ id: "TR-00", file: demo.file, sourceRoot: demo.root }), /mutant stayed green/u);
-    writeFileSync(demo.demoSource, "export function refuse() { return 'DemonstrationRefused'; }\n");
-    assert.throws(() => runMutant({ id: "TR-00", file: demo.file, sourceRoot: demo.root }), /expected exactly one refusal marker pair/u);
-  } finally { demo.close(); }
+`;
+  writeFileSync(demo.demoSource, irrelevantMarker);
+  assert.throws(() => runMutant({ id: "TR-00", file: demo.file, sourceRoot: demo.root, reuseSourceTree: true }), /mutant stayed green/u);
+  assert.equal(readFileSync(demo.demoSource, "utf8"), irrelevantMarker, "the shared tree is restored after a red mutant");
+  const missingMarker = "export function refuse() { return 'DemonstrationRefused'; }\n";
+  writeFileSync(demo.demoSource, missingMarker);
+  assert.throws(() => runMutant({ id: "TR-00", file: demo.file, sourceRoot: demo.root, reuseSourceTree: true }), /expected exactly one refusal marker pair/u);
+  assert.equal(readFileSync(demo.demoSource, "utf8"), missingMarker, "marker discovery failure does not alter the shared tree");
 });
 
 test("a loader failure is not evidence of a failing refusal assertion", () => {
   const demo = demonstration();
-  try {
-    writeFileSync(demo.file, "import './missing-module.ts';\n");
-    assert.throws(() => runMutant({ id: "TR-00", file: demo.file, sourceRoot: demo.root }), /did not fail its refusal assertion/u);
-    assert.ok(existsSync(demo.demoSource));
-  } finally { demo.close(); }
+  writeFileSync(demo.file, "import './missing-module.ts';\n");
+  const beforeMutation = readFileSync(demo.demoSource, "utf8");
+  assert.throws(() => runMutant({ id: "TR-00", file: demo.file, sourceRoot: demo.root, reuseSourceTree: true }), /did not fail its refusal assertion/u);
+  assert.equal(readFileSync(demo.demoSource, "utf8"), beforeMutation, "loader failure restores the shared source");
+  assert.ok(existsSync(demo.demoSource));
 });

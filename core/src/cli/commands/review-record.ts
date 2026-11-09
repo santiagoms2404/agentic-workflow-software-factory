@@ -10,10 +10,15 @@
 // Nothing here decides anything. It reports what was written down.
 
 import { promises as fs } from "node:fs";
+import { Type } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import { join } from "node:path";
-import { REVIEW_OUTPUT_SCHEMA_ID, type ReviewOutput } from "../../contracts/review-output.ts";
+import type { EnvelopeBase } from "../../contracts/envelope-base.ts";
+import { isEnvelopeSchemaId, schemaForId } from "../../contracts/registry.ts";
+import { REVIEW_OUTPUT_SCHEMA_ID, ReviewOutputSchema, type ReviewOutput } from "../../contracts/review-output.ts";
+import { StoredEnvelopeSchema, type EnvelopeExtraction, type StoredEnvelope, type ValidationViolation } from "../../contracts/stored-envelope.ts";
 import type { ReviewEvidenceDefect } from "../../state/errors.ts";
-import type { GateEvidenceRow } from "../../state/task-machine.ts";
+import type { GateEvidence, GateEvidenceRow } from "../../state/task-machine.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import {
   promptSha256,
@@ -26,6 +31,93 @@ const { readFile } = fs;
 export const REVIEW_EVIDENCE_GATE_ID = "review_evidence_present";
 
 /**
+ * The host gate rows every green-consuming candidate edge requires. The
+ * `commands_pass` row aggregates each configured command, so no edge demands
+ * per-command rows the host never writes.
+ */
+export const CANDIDATE_GATE_IDS = Object.freeze(["candidate_hygiene", "commands_pass"] as const);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+function isEnvelopeExtraction(value: unknown): value is EnvelopeExtraction | null {
+  return value === null || value === "exact" || value === "fence-stripped" ||
+    value === "outermost-object" || value === "trailing-object";
+}
+
+function storedEnvelopeViolations(errors: readonly { path: string; message: string }[]): ValidationViolation[] {
+  const selected = errors.slice(0, 64);
+  return selected.length === 0
+    ? [{ kind: "schema-mismatch", path: "", message: "stored envelope does not satisfy its registered schema", received: null }]
+    : selected.map((error) => ({
+        kind: "schema-mismatch",
+        path: error.path,
+        message: error.message.length > 0 ? error.message : "stored envelope does not satisfy its registered schema",
+        received: null,
+      }));
+}
+
+/**
+ * Validate registered envelopes as they cross the journal read boundary.
+ * Unknown schema ids remain retained exactly as before; a known legacy or
+ * malformed record becomes an explicit invalid envelope without rewriting its
+ * original journal bytes.
+ */
+function readEnvelopeEvidence(value: unknown): AttemptEvidence | null {
+  if (!isRecord(value) || value.type !== "envelope") return value as AttemptEvidence;
+  const rawEnvelope = value.envelope;
+  if (!isRecord(rawEnvelope)) return null;
+  const schemaId = rawEnvelope.schemaId;
+  if (typeof schemaId !== "string" || !isEnvelopeSchemaId(schemaId)) {
+    // Unknown envelopes are intentionally retained; this boundary must not
+    // turn a future schema into a dropped record or a current-schema verdict.
+    return value as AttemptEvidence;
+  }
+
+  const payloadSchema = schemaForId(schemaId);
+  const storedSchema = StoredEnvelopeSchema(payloadSchema);
+  const envelopeCandidate: unknown = rawEnvelope;
+  if (Value.Check(storedSchema, envelopeCandidate)) {
+    // Every property, including payload, has now passed its current schema.
+    return value as AttemptEvidence;
+  }
+
+  const envelopeErrors = [...Value.Errors(storedSchema, rawEnvelope)];
+  const payloadErrors = rawEnvelope.valid === true
+    ? [...Value.Errors(payloadSchema, rawEnvelope.payload)]
+    : [];
+  const violations = storedEnvelopeViolations(payloadErrors.length > 0 ? payloadErrors : envelopeErrors);
+  const phaseId = nonEmptyString(value.phaseId, nonEmptyString(rawEnvelope.phaseId, "unknown-phase"));
+  const sessionId = nonEmptyString(rawEnvelope.sessionId, "unknown-session");
+  const invalidEnvelope: StoredEnvelope<EnvelopeBase> = {
+    envelopeId: nonEmptyString(rawEnvelope.envelopeId, `${sessionId}:${phaseId}:read-validation`),
+    sessionId,
+    phaseId: nonEmptyString(rawEnvelope.phaseId, phaseId),
+    correctionRound: typeof rawEnvelope.correctionRound === "number" &&
+      Number.isInteger(rawEnvelope.correctionRound) && rawEnvelope.correctionRound >= 0
+      ? rawEnvelope.correctionRound
+      : 0,
+    agent: nonEmptyString(rawEnvelope.agent, "unknown-agent"),
+    schemaId,
+    valid: false,
+    createdAt: nonEmptyString(rawEnvelope.createdAt, "unknown-time"),
+    payload: null,
+    violations,
+    rawOutputPath: nonEmptyString(rawEnvelope.rawOutputPath, "unknown-output"),
+    ...(isEnvelopeExtraction(rawEnvelope.extraction) ? { extraction: rawEnvelope.extraction } : {}),
+  };
+  // Validate the normalized failure shape too. This keeps read-side legacy
+  // handling within the same stored-envelope contract as newly written data.
+  if (!Value.Check(StoredEnvelopeSchema(Type.Null()), invalidEnvelope)) return null;
+  return { type: "envelope", phaseId, envelope: invalidEnvelope };
+}
+
+/**
  * Every evidence record the attempt journal carries, oldest first.
  *
  * Read from the journal rather than from SQLite: the journal is the record of
@@ -35,12 +127,28 @@ export const REVIEW_EVIDENCE_GATE_ID = "review_evidence_present";
 export async function readAttemptEvidence(attemptDir: string): Promise<readonly AttemptEvidence[]> {
   const text = await readFile(join(attemptDir, "journal.jsonl"), "utf8");
   const evidence: AttemptEvidence[] = [];
-  for (const line of text.split("\n")) {
-    if (line.length === 0) continue;
-    const record = JSON.parse(line) as { event?: { evidence?: AttemptEvidence } };
-    const carried = record.event?.evidence;
-    if (carried !== undefined) evidence.push(carried);
+  const appendLine = (line: string): void => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line) as unknown;
+    } catch {
+      return;
+    }
+    if (!isRecord(parsed) || !isRecord(parsed.event)) return;
+    const carried = parsed.event.evidence;
+    if (carried === undefined) return;
+    const normalized = readEnvelopeEvidence(carried);
+    if (normalized !== null) evidence.push(normalized);
+  };
+  const lines = text.split("\n");
+  // Like scanJournalText, valid journal lines end with a newline so the last element
+  // is empty for clean journals; a non-empty last line indicates a torn trailing fragment.
+  const complete = lines.slice(0, -1);
+  for (const line of complete) {
+    if (line.length > 0) appendLine(line);
   }
+  const lastLine = lines[lines.length - 1] ?? "";
+  if (lastLine.length > 0) appendLine(lastLine);
   return Object.freeze(evidence);
 }
 
@@ -84,12 +192,13 @@ export function recordedReviews(
     if (record.type !== "envelope") continue;
     const envelope = record.envelope;
     if (envelope.schemaId !== REVIEW_OUTPUT_SCHEMA_ID || !envelope.valid || envelope.payload === null) continue;
+    if (!Value.Check(ReviewOutputSchema, envelope.payload)) continue;
     if (seen.has(record.phaseId)) continue;
     seen.add(record.phaseId);
     reviews.push({
       phaseId: record.phaseId,
       phaseKey: phaseKeyOf(record.phaseId, sessionId),
-      output: envelope.payload as ReviewOutput,
+      output: Value.Parse(ReviewOutputSchema, envelope.payload),
       evidenceDefect: evidenceDefectFor(evidence, record.phaseId),
     });
   }
@@ -138,6 +247,20 @@ export function candidateGateRows(
     rows.push({ gateId: record.gateId, passed: record.passed, candidateSha: record.candidateSha });
   }
   return Object.freeze(rows);
+}
+
+/** Host-authored gate evidence for a green-consuming edge, read from journal rows. */
+export function candidateGateEvidence(
+  evidence: readonly AttemptEvidence[],
+  candidateSha: string,
+  sessionId: string,
+): GateEvidence {
+  const reviewPhaseIds = new Set(recordedReviews(evidence, sessionId).map((review) => review.phaseId));
+  const configured: ReadonlySet<string> = new Set(CANDIDATE_GATE_IDS);
+  return {
+    configured: CANDIDATE_GATE_IDS,
+    rows: candidateGateRows(evidence, candidateSha, reviewPhaseIds).filter((row) => configured.has(row.gateId)),
+  };
 }
 
 export interface RecordedSystemPrompt {
@@ -214,6 +337,7 @@ export function recordedRoutes(
   }
 
   let worker: RecordedRoute | null = null;
+  let workerIsBuilder = false;
   let review: RecordedRoute | null = null;
   for (const record of evidence) {
     if (record.type !== "agent") continue;
@@ -227,9 +351,10 @@ export function recordedRoutes(
     };
     if (reviewPhaseIds.has(record.phaseId) || record.purpose === "review") {
       review = route;
-    } else if (record.purpose === "build") {
+    } else if (record.purpose === "build" || record.agent === "builder" || record.phaseId.endsWith(":" + "builder")) {
       worker = route;
-    } else if (record.purpose !== "support" && worker === null) {
+      workerIsBuilder = true;
+    } else if (record.purpose !== "support" && (worker === null || !workerIsBuilder)) {
       // Legacy journals did not distinguish build from support. Preserve their
       // one recorded worker route without allowing a modern planner or
       // documenter to overwrite the candidate-producing provider.

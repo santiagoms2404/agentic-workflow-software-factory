@@ -1,4 +1,5 @@
 // Host-owned change-set capture. Agents never receive a Git command capability.
+import { createHash } from "node:crypto";
 import { runSystemCommand } from "../execution/transport-broker.ts";
 
 export interface GitResult {
@@ -8,10 +9,16 @@ export interface GitResult {
   error: string | null;
 }
 
+/** Git's output as the bytes it wrote. A blob's digest covers exactly these bytes, so decoding them is lossy. */
+export interface GitByteResult extends Omit<GitResult, "stdout"> {
+  readonly stdout: Uint8Array;
+}
+
 export type GitRunner = (argv: readonly string[]) => GitResult;
+export type GitByteRunner = (argv: readonly string[]) => GitByteResult;
 export type ChangeSetFingerprint = Readonly<Record<string, string>>;
 
-export function systemGitRunner(repository: string): GitRunner {
+function gitEnvironment(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined) env[key] = value;
@@ -20,11 +27,25 @@ export function systemGitRunner(repository: string): GitRunner {
   // would hang until the timeout rather than reach anybody. This is a process
   // liveness setting, not a credential control.
   env["GIT_TERMINAL_PROMPT"] = "0";
+  return env;
+}
 
+export function systemGitRunner(repository: string): GitRunner {
+  const env = gitEnvironment();
   return (argv) => runSystemCommand("git", ["-C", repository, ...argv], {
     timeoutMs: 30_000,
     env,
   });
+}
+
+/** The same host Git as systemGitRunner, for reads whose stored bytes are the value (blob reads). */
+export function systemGitByteRunner(repository: string): GitByteRunner {
+  const env = gitEnvironment();
+  return (argv) => {
+    // latin1 maps each byte to one character, so the round trip back to bytes is exact.
+    const result = runSystemCommand("git", ["-C", repository, ...argv], { timeoutMs: 30_000, env, encoding: "latin1" });
+    return { ...result, stdout: Buffer.from(result.stdout, "latin1") };
+  };
 }
 
 export class GitCommandFailed extends Error {
@@ -46,7 +67,13 @@ export function runGit(runner: GitRunner, argv: readonly string[]): string {
  * vanishes because an agent restored it after it was already dirty.
  */
 export function captureChangeSet(repository: string, runner = systemGitRunner(repository)): ChangeSetFingerprint {
-  const fingerprint: Record<string, string> = {};
+  // A path is attacker-chosen data, so it never goes through a property
+  // assignment: `obj["__proto__"] = v` hits the Object.prototype setter and a
+  // root file named `__proto__` silently left the snapshot, and with it the
+  // path policy (B1-06). Paths collect in a Map, and `Object.fromEntries`
+  // defines each one as an own data property, so the snapshot stays the plain
+  // object every consumer compares and serializes, with `__proto__` included.
+  const fingerprint = new Map<string, string>();
   // `-z` is a safety property, not an optimization: newline, tab, quotes and
   // non-ASCII bytes in a filename must reach path policy as the path Git saw,
   // never as a display-quoted approximation. Disabling rename detection makes
@@ -59,18 +86,32 @@ export function captureChangeSet(repository: string, runner = systemGitRunner(re
     const added = record.slice(0, first);
     const deleted = record.slice(first + 1, second);
     const path = record.slice(second + 1);
-    if (path) fingerprint[path] = `${added},${deleted}`;
+    if (path) {
+      let contentHash = "";
+      try {
+        const diffOutput = runGit(runner, ["diff", "HEAD", "--", path]);
+        contentHash = ":" + createHash("sha256").update(diffOutput).digest("hex").slice(0, 16);
+      } catch {
+        // Fall back to line counts if diff command is unavailable (e.g. minimal mock runner)
+      }
+      fingerprint.set(path, `${added},${deleted}${contentHash}`);
+    }
   }
   for (const path of runGit(runner, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")) {
-    if (path) fingerprint[path] = "untracked";
+    if (path) fingerprint.set(path, "untracked");
   }
-  return Object.freeze(fingerprint);
+  return Object.freeze(Object.fromEntries(fingerprint));
+}
+
+/** An own entry only: a path absent from a snapshot never reads an inherited member. */
+function entry(fingerprint: ChangeSetFingerprint, path: string): string | undefined {
+  return Object.hasOwn(fingerprint, path) ? fingerprint[path] : undefined;
 }
 
 /** Paths whose state changed, including appearances, removals, and reversions. */
 export function changedPaths(before: ChangeSetFingerprint, after: ChangeSetFingerprint): readonly string[] {
   return Object.freeze([...new Set([...Object.keys(before), ...Object.keys(after)])]
-    .filter((path) => before[path] !== after[path])
+    .filter((path) => entry(before, path) !== entry(after, path))
     .sort());
 }
 
@@ -114,8 +155,18 @@ export class WorktreeNotClean extends Error {
   }
 }
 
+/** Porcelain status with untracked visibility independent of Git configuration. */
+export function worktreeStatus(runner: GitRunner): string {
+  return runGit(runner, ["status", "--porcelain", "--untracked-files=all"]);
+}
+
+/** A safety-cleanliness predicate must not inherit status.showUntrackedFiles. */
+export function isWorktreeClean(runner: GitRunner): boolean {
+  return worktreeStatus(runner).trim().length === 0;
+}
+
 export function assertClean(repository: string, when: "before" | "after", runner = systemGitRunner(repository)): void {
-  const status = runGit(runner, ["status", "--porcelain"]);
+  const status = worktreeStatus(runner);
   if (status.trim()) throw new WorktreeNotClean(when, status);
 }
 

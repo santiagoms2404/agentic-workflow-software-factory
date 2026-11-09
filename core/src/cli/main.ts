@@ -1,10 +1,11 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "./command-table.ts";
+export { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "./command-table.ts";
+import { existsSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
 import { toConfigSnapshotJson } from "../config/effective-config.ts";
 import { loadConfig } from "../config/load.ts";
 import { loadCatalog } from "../registry/catalog.ts";
@@ -55,6 +56,7 @@ import { TRAPS_USAGE, trapsCommand } from "./commands/traps.ts";
 import { stageCommand } from "./commands/stage.ts";
 import { locateAttempt, readAttempt } from "./commands/attempt.ts";
 import { recordShadowProposal } from "../delegate/shadow.ts";
+import type { DecisionRecord } from "../contracts/decision-record.ts";
 import { retryCommand } from "./commands/retry.ts";
 import { seedCommand } from "./commands/seed.ts";
 import { reviewCommand } from "./commands/review.ts";
@@ -68,16 +70,7 @@ import { watchCommand } from "./commands/watch.ts";
 import { selectWorkflow, workflowsCommand } from "./commands/workflows.ts";
 import { assertShiftAdmission, assessShiftAdmission, parseMilestoneSelection, sealShiftSelection, shiftPlanReadout } from "./commands/shift.ts";
 
-/** The complete owner-facing command table; documentation reconciles against it. */
-export const CLI_COMMANDS = Object.freeze([
-  "init", "project", "new", "seed", "preflight", "confirm", "start", "run", "resume", "next", "status", "watch", "rework", "review", "raise", "grant", "degrade-review", "attribute", "prove", "journey", "preview", "land", "close", "publish", "cancel", "retry",
-  "relate", "doctor", "traps", "gc", "dash", "routes", "metrics", "metrics export", "db rebuild", "ticket", "backlog", "quota", "stage", "workflows", "shift plan", "group",
-]);
-
 const USAGE = `usage: awsf init [path] --project <slug>\n       awsf <${CLI_COMMANDS.join("|")}> [task] [options]`;
-
-/** Flags that take no value. Documentation reconciles against this too. */
-export const CLI_BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence", "json", "advise"]);
 
 interface ParsedArgs {
   readonly positionals: readonly string[];
@@ -101,7 +94,7 @@ interface ParsedArgs {
   readonly noTrap?: { readonly because: string; readonly reason: string };
 }
 
-function parseArgs(args: readonly string[]): ParsedArgs {
+export function parseArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = [];
   const flags: Record<string, string> = {};
   const repositories: string[] = [];
@@ -110,6 +103,15 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   const milestones: string[] = [];
   const tickets: string[] = [];
   const lists = { where: [] as string[], read: [] as string[], consulted: [] as string[] };
+  const assign = (key: string, value: string): void => {
+    if (key === "repository") repositories.push(value);
+    else if (key === "route") routes.push(value);
+    else if (key === "file") files.push(value);
+    else if (key === "milestone") milestones.push(value);
+    else if (key === "ticket") tickets.push(value);
+    else if (Object.hasOwn(lists, key)) lists[key as keyof typeof lists].push(value);
+    else flags[key] = value;
+  };
   let noTrap: ParsedArgs["noTrap"];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
@@ -133,13 +135,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
     if (equals > 2) {
       const key = arg.slice(2, equals);
       const value = arg.slice(equals + 1);
-      if (key === "repository") repositories.push(value);
-      else if (key === "route") routes.push(value);
-      else if (key === "file") files.push(value);
-      else if (key === "milestone") milestones.push(value);
-      else if (key === "ticket") tickets.push(value);
-      else if (Object.hasOwn(lists, key)) lists[key as keyof typeof lists].push(value);
-      else flags[key] = value;
+      assign(key, value);
       continue;
     }
     const key = arg.slice(2);
@@ -158,13 +154,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
       continue;
     }
     if (value === undefined || value.startsWith("--")) throw new Error(`--${key} requires a value`);
-    if (key === "repository") repositories.push(value);
-    else if (key === "route") routes.push(value);
-    else if (key === "file") files.push(value);
-    else if (key === "milestone") milestones.push(value);
-    else if (key === "ticket") tickets.push(value);
-    else if (Object.hasOwn(lists, key)) lists[key as keyof typeof lists].push(value);
-    else flags[key] = value;
+    assign(key, value);
     index += 1;
   }
   return { positionals, flags, repositories, routes, files, milestones, tickets, ...lists,
@@ -200,13 +190,48 @@ class PlanSelectionRequiredError extends Error {
   }
 }
 
+/**
+ * The line that heads a listing read from the flat store because the
+ * repository has no awsf.project.yaml (B7-05, owner call O8). That store is
+ * the light tier and belongs to no plan (inv 12), so the listing says so
+ * rather than passing for a plan's ticket set; a `--plan` it could not
+ * resolve is named, not silently dropped.
+ */
+export function lightTierListingLabel(requestedPlan: string | undefined): string {
+  const label = "light tier: no awsf.project.yaml, so this is the flat specs/tickets set, which belongs to no plan";
+  return requestedPlan === undefined ? label : `${label}; --plan ${requestedPlan} was not resolved`;
+}
+
+/**
+ * The refusal for a declared default plan whose registered ticket directory
+ * does not exist (B7-06, owner call O8). The flat specs/tickets set is not
+ * substituted for it: that set is the light tier and belongs to no plan.
+ */
+export class DefaultPlanTicketsMissing extends Error {
+  constructor(planStem: string, directory: string) {
+    super(`default plan ${JSON.stringify(planStem)} has no ticket directory at ${JSON.stringify(directory)}; `
+      + "the flat specs/tickets set is the light tier and belongs to no plan, so it is not listed in its place");
+    this.name = "DefaultPlanTicketsMissing";
+  }
+}
+
+interface TicketListing {
+  readonly store: ReturnType<typeof ticketStoreFor>;
+  /** Printed before the listing when the store is not a resolved plan's set. */
+  readonly label?: string;
+}
+
 /** Uses a catalog when present, while retaining the original self-placed store otherwise. */
-async function ticketStoreForList(repository: string, requestedPlan: string | undefined) {
+async function ticketStoreForList(repository: string, requestedPlan: string | undefined): Promise<TicketListing> {
+  const listing = (store: ReturnType<typeof ticketStoreFor>): TicketListing => ({ store });
   let source: string;
   try {
     source = await readFile(resolve(repository, "awsf.project.yaml"), "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return ticketStoreFor(repository);
+    // Owner call O8 (R): with no catalog the flat store stays readable, labelled light tier.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { store: ticketStoreFor(repository), label: lightTierListingLabel(requestedPlan) };
+    }
     throw error;
   }
 
@@ -217,19 +242,28 @@ async function ticketStoreForList(repository: string, requestedPlan: string | un
   if (planStem === undefined) {
     if (candidates.length > 1) throw new PlanSelectionRequiredError(candidates);
     if (candidates.length === 0) throw new Error(`catalog ${JSON.stringify(resolve(repository, "awsf.project.yaml"))} resolved no plan sources`);
-    return ticketStoreForPlan(resolved, candidates[0]!);
+    return listing(ticketStoreForPlan(resolved, candidates[0]!));
   }
 
   const store = ticketStoreForPlan(resolved, planStem);
-  // Task 20 moves the existing flat default set after this resolver exists.
-  // Until then, the declared default retains the single-repository behaviour.
-  return !existsSync(store.directory) && planStem === catalog.plans.default
-    ? ticketStoreFor(repository)
-    : store;
+  // B7-06, owner call O8 (R): this used to fall back to the flat store "until
+  // Task 20 moves the existing flat default set". W04 task 20 has landed
+  // (b4fca7a), so the shim's reason is gone, and reading the flat set here
+  // would present the light tier, which belongs to no plan, as the default
+  // plan's tickets — pairing by directory existence, which inv 12 forbids.
+  if (!existsSync(store.directory) && planStem === catalog.plans.default) {
+    throw new DefaultPlanTicketsMissing(planStem, store.directory);
+  }
+  return listing(store);
 }
 
-function adoptionTerminal(provided: OwnerTerminal | undefined): OwnerTerminal {
+function ownerTerminal(provided: OwnerTerminal | undefined): OwnerTerminal {
   return provided ?? processOwnerTerminal();
+}
+
+export function cliWorktreeRoot(flag: string | undefined, envVal: string | undefined, stateRoot: string): string {
+  const envClean = envVal !== undefined && envVal.trim() !== "" ? envVal : undefined;
+  return resolve(flag ?? envClean ?? defaultWorktreeRoot(stateRoot));
 }
 
 export interface CliMainOptions {
@@ -253,14 +287,24 @@ export interface CliMainOptions {
  * is withheld, so no test run can make a live Jev call; the proposal records
  * jev-unavailable instead.
  */
-async function shadowStop(
+export function shadowStopEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+  underTest = process.env.NODE_TEST_CONTEXT !== undefined,
+): Readonly<Record<string, string | undefined>> {
+  return underTest || env.NODE_TEST_CONTEXT !== undefined
+    ? { ...env, OPENROUTER_API_KEY: undefined }
+    : env;
+}
+
+export async function shadowStop(
   attemptDir: string,
   config: Parameters<typeof stopFactsPhases>[0]["config"],
   configPath: string,
   env: Readonly<Record<string, string | undefined>>,
+  projectDecision?: (record: DecisionRecord) => void,
 ): Promise<void> {
   try {
-    const jevEnv = env.NODE_TEST_CONTEXT === undefined ? env : { ...env, OPENROUTER_API_KEY: undefined };
+    const jevEnv = shadowStopEnvironment(env);
     await recordShadowProposal({
       attemptDir,
       env: jevEnv,
@@ -268,6 +312,7 @@ async function shadowStop(
         const { phases, roles } = await stopFactsPhases({ config, configPath }, await readAttempt(attemptDir));
         return { config: { phases }, roles };
       },
+      ...(projectDecision === undefined ? {} : { projectDecision }),
     });
   } catch {
     // The shadow owner only observes. A failure here leaves the run exactly as it returned.
@@ -284,6 +329,8 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const command = argv[0];
     if (command === undefined) throw new Error(USAGE);
     const parsed = parseArgs(argv.slice(1));
+    if (parsed.flags["state-root"] !== undefined && parsed.flags["state-root"].trim() === "") throw new Error("--state-root must not be empty");
+    if (parsed.flags["worktree-root"] !== undefined && parsed.flags["worktree-root"].trim() === "") throw new Error("--worktree-root must not be empty");
     if (parsed.tickets.length > 0 && command !== "new" && command !== "close") throw new Error("--ticket is supported only by awsf new and awsf close");
     const stateRoot = parsed.flags["state-root"] === undefined
       ? resolveStateRoot(env)
@@ -308,9 +355,13 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       return result.exitCode;
     }
     if (command === "doctor") {
+      const [operatorDoctor, decisionDoctor] = await Promise.all([
+        doctorCommand(stateRoot),
+        jevDoctorRow({ catalogPath: resolve(cwd, "awsf.project.yaml"), env }),
+      ]);
       const report = buildDoctorReport(
-        await doctorCommand(stateRoot),
-        await jevDoctorRow({ catalogPath: resolve(cwd, "awsf.project.yaml"), env }),
+        operatorDoctor,
+        decisionDoctor,
         await gatherDoctorRows({ cwd, stateRoot, env: commandEnvironment(env) }),
       );
       for (const line of parsed.flags.json === "true" ? [JSON.stringify(report)] : report.lines) out(line);
@@ -363,7 +414,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     if (command === "backlog") {
       if (parsed.positionals.length !== 0) throw new Error("usage: awsf backlog [--state-root PATH] [--plan <stem>]");
       try {
-        for (const line of await backlogCommand(await ticketStoreForList(cwd, parsed.flags.plan), resolve(stateRoot, "awsf.db"))) out(line);
+        const listing = await ticketStoreForList(cwd, parsed.flags.plan);
+        if (listing.label !== undefined) out(listing.label);
+        for (const line of await backlogCommand(listing.store, resolve(stateRoot, "awsf.db"))) out(line);
         return 0;
       } catch (error) {
         if (!(error instanceof PlanSelectionRequiredError)) throw error;
@@ -375,7 +428,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const action = parsed.positionals[0];
       if (action === "list" && parsed.positionals.length === 1) {
         try {
-          for (const line of await listTickets(await ticketStoreForList(cwd, parsed.flags.plan))) out(line);
+          const listing = await ticketStoreForList(cwd, parsed.flags.plan);
+          if (listing.label !== undefined) out(listing.label);
+          for (const line of await listTickets(listing.store)) out(line);
           return 0;
         } catch (error) {
           if (!(error instanceof PlanSelectionRequiredError)) throw error;
@@ -384,7 +439,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
       }
       if (action === "show" && parsed.positionals.length === 2) {
-        for (const line of await showTicket(await ticketStoreForList(cwd, parsed.flags.plan), parsed.positionals[1]!)) out(line);
+        const listing = await ticketStoreForList(cwd, parsed.flags.plan);
+        if (listing.label !== undefined) out(listing.label);
+        for (const line of await showTicket(listing.store, parsed.positionals[1]!)) out(line);
         return 0;
       }
       if (action !== "new" && action !== "refine") {
@@ -420,19 +477,26 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         // enforces K1's closure field before preparing a tree or buying a call.
         await startCommand({
           attemptDir: created.attemptDir,
-          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+          worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
           configPath,
           ...(options.intakeExecution === undefined ? {} : { preflight: options.intakeExecution.preflight }),
           projectRecord: projection.project,
         });
-        const status = await runProductionCommand({
-          attemptDir: created.attemptDir, stateRoot, config, configPath,
-          ...(options.intakeExecution === undefined ? {} : { infrastructure: options.intakeExecution.infrastructure }),
-          projectRecord: projection.project,
-          assertAdvancement: projection.assertAdvancement,
-          assertLaunchProjection: projection.assertLaunchPermitted,
-        });
-        await shadowStop(created.attemptDir, config, configPath, env);
+        let status;
+        try {
+          status = await runProductionCommand({
+            attemptDir: created.attemptDir, stateRoot, config, configPath,
+            ...(options.intakeExecution === undefined ? {} : { infrastructure: options.intakeExecution.infrastructure }),
+            projectRecord: projection.project,
+            assertAdvancement: projection.assertAdvancement,
+            assertLaunchProjection: projection.assertLaunchPermitted,
+          });
+        } catch (error) {
+          // A run that seals the attempt and then reports it by throwing still stopped (B7-36).
+          await shadowStop(created.attemptDir, config, configPath, env, projection.projectDecision);
+          throw error;
+        }
+        await shadowStop(created.attemptDir, config, configPath, env, projection.projectDecision);
         out(`${status.lifecycleState}: ${status.nextAction}`);
         if (status.lifecycleState === "AWAITING_OWNER") out(`Validated intake result for ${id}; ${status.nextAction}`);
         return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
@@ -593,7 +657,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const located = await locateAttempt(stateRoot, project, taskId, selectedAttempt);
       const result = await nextCommand(located.attemptDir, {
         stateRoot, config,
-        worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+        worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
       });
       if (parsed.flags.json === "true") out(JSON.stringify(result.model));
       else for (const line of result.lines) out(line);
@@ -612,7 +676,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         sourceTaskId: parsed.flags.from, sourceAttempt: Number(parsed.flags["source-attempt"]), candidateSha: parsed.flags.sha,
         request: parsed.flags.request, workflow: parsed.flags.workflow ?? "build-review",
         ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
-        routes: parsed.routes, config, configPath, terminal: options.terminal ?? processOwnerTerminal(), projectRecord: projection.project,
+        routes: parsed.routes, config, configPath, terminal: ownerTerminal(options.terminal), projectRecord: projection.project,
       });
       if (!result.confirmed) { out("Seed declined. No target created and no call spent."); return 1; }
       out(`Created ${project}/${taskId} in DRAFT, seeded from exact candidate ${result.status.seed!.seedCandidateSha}.`);
@@ -620,6 +684,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       return 0;
     }
     if (command === "new") {
+      if (parsed.repositories.length !== 0) throw new Error("--repository is not supported by awsf new");
       const request = parsed.positionals.slice(1).join(" ").trim();
       if (request.length === 0) throw new Error("awsf new requires a request after the task id");
       const selection = selectWorkflow(
@@ -738,7 +803,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const result = await proveCommand({
           stateRoot, project, taskId, repository: cwd, itemId, arm, repetition: Number(parsed.flags.rep),
           ...(parsed.flags.order === undefined ? {} : { order: Number(parsed.flags.order) }),
-          reason, terminal: options.terminal ?? processOwnerTerminal(), config, projectRecord: projection.project,
+          reason, terminal: ownerTerminal(options.terminal), config, projectRecord: projection.project,
         });
         if (!result.confirmed) {
           out(`Replay declined; ${project}/${taskId} was not created and nothing was recorded.`);
@@ -760,7 +825,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
             Object.keys(parsed.flags).some(flag => !allowed.has(flag))) {
           throw new Error("usage: awsf close <task> [--attempt <n>] | awsf close --commit <sha> --plan <stem> [--ticket <id>[,<id>...]]");
         }
-        const terminal = options.terminal ?? processOwnerTerminal();
+        const terminal = ownerTerminal(options.terminal);
         const result = byCommit
           ? await closeCommand({
             commit: parsed.flags.commit!, repository: cwd, projectDir: join(stateRoot, "projects", project), project,
@@ -789,13 +854,18 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
     const located = await locateAttempt(stateRoot, project, taskId, selectedAttempt);
     switch (command) {
       case "start": {
+        if (parsed.routes.length !== 0) throw new Error("--route is not supported by awsf start");
         const status = await startCommand({
           attemptDir: located.attemptDir,
-          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+          worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
           configPath,
-          // --stub replaces only the adapter's availability probe. K1 runs before
-          // it inside startCommand, and no flag of this arm reaches past K1.
-          ...(parsed.flags.stub === "true" ? { preflight: () => ({ adapter: true, sandbox: true, observability: true }) } : {}),
+          // --stub replaces only adapter availability. K1 and configured prompt
+          // path/containment checks remain production checks before any worktree.
+          // The attempt mark is persistent (owner call O7): only a marked attempt
+          // takes `run --stub true`, and its attestations cannot satisfy T2 land.
+          ...(parsed.flags.stub === "true"
+            ? { adapterAvailability: () => true, stub: true }
+            : {}),
           ...(parsed.flags["visual-references"] === undefined ? {} : { visualReferences: parsed.flags["visual-references"] }),
           projectRecord: projection.project,
         });
@@ -814,7 +884,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const result = await preflightCommand({
           attemptDir: located.attemptDir,
           stateRoot,
-          worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
+          worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
           configPath,
           where: parsed.where,
           read: parsed.read,
@@ -826,6 +896,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         return result.measuredPassed ? 0 : 1;
       }
       case "run": {
+        if (parsed.routes.length !== 0) throw new Error("--route is not supported by awsf run");
         if (parsed.flags.stub === "true") {
           const liveMs = parsed.flags["live-ms"] === undefined ? 0 : Number(parsed.flags["live-ms"]);
           if (!Number.isInteger(liveMs) || liveMs < 0 || liveMs > 60_000) throw new Error("--live-ms must be an integer from 0 through 60000");
@@ -847,26 +918,35 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
             projectRecord: projection.project,
             assertAdvancement: projection.assertAdvancement,
             assertLaunchProjection: projection.assertLaunchPermitted,
+            terminal: ownerTerminal(options.terminal),
           });
         } catch (error) {
           // A run that seals the attempt and then reports it by throwing still stopped.
-          await shadowStop(located.attemptDir, config, configPath, env);
+          await shadowStop(located.attemptDir, config, configPath, env, projection.projectDecision);
           throw error;
         }
-        await shadowStop(located.attemptDir, config, configPath, env);
+        await shadowStop(located.attemptDir, config, configPath, env, projection.projectDecision);
         out(`${status.lifecycleState}: ${status.nextAction}`);
         const reportLine = (await statusCommand(located.attemptDir)).find((line) => line.startsWith("Run report:"));
         if (reportLine !== undefined) out(reportLine);
         return status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
       case "resume": {
+        if (parsed.routes.length !== 0) throw new Error("--route is not supported by awsf resume");
         if (parsed.flags.stub !== undefined) throw new Error("resume does not support stub execution");
-        const result = await resumeProductionCommand({ attemptDir: located.attemptDir, stateRoot, config, configPath,
-          reason: parsed.flags.reason ?? "", ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
-          terminal: options.terminal ?? processOwnerTerminal(),
-          projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
-          assertLaunchProjection: projection.assertLaunchPermitted });
-        if (result.confirmed) await shadowStop(located.attemptDir, config, configPath, env);
+        let result;
+        try {
+          result = await resumeProductionCommand({ attemptDir: located.attemptDir, stateRoot, config, configPath,
+            reason: parsed.flags.reason ?? "", ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
+            terminal: ownerTerminal(options.terminal),
+            projectRecord: projection.project, assertAdvancement: projection.assertAdvancement,
+            assertLaunchProjection: projection.assertLaunchPermitted });
+        } catch (error) {
+          // A resume that seals the attempt and then reports it by throwing still stopped (B7-37).
+          await shadowStop(located.attemptDir, config, configPath, env, projection.projectDecision);
+          throw error;
+        }
+        if (result.confirmed) await shadowStop(located.attemptDir, config, configPath, env, projection.projectDecision);
         out(`${result.status.lifecycleState}: ${result.status.nextAction}`);
         return result.confirmed && result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
@@ -883,7 +963,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           attemptDir: located.attemptDir,
           stateRoot,
           defect, ...(parsed.flags.instruction === undefined ? {} : { instruction: parsed.flags.instruction }),
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           config,
           configPath,
           projectRecord: projection.project,
@@ -906,7 +986,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           attemptDir: located.attemptDir,
           stateRoot,
           reason,
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           config,
           configPath,
           projectRecord: projection.project,
@@ -921,11 +1001,9 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         return result.status.lifecycleState === "AWAITING_OWNER" ? 0 : 1;
       }
       case "grant": {
-        const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
-        const config = loadConfig(await readFile(configPath, "utf8"));
         const result = await grantCommand({ attemptDir: located.attemptDir, config, configPath, stateRoot,
           phase: parsed.flags.phase ?? "", files: parsed.files, reason: parsed.flags.reason ?? "",
-          terminal: options.terminal ?? processOwnerTerminal(), projectRecord: projection.project });
+          terminal: ownerTerminal(options.terminal), projectRecord: projection.project });
         out(result.confirmed ? "Exact one-use protected grant recorded. Landing still requires separate approval." : "Protected grant declined; nothing recorded.");
         return result.confirmed ? 0 : 1;
       }
@@ -939,7 +1017,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           attemptDir: located.attemptDir,
           calls,
           reason,
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           projectRecord: projection.project,
         });
         if (!result.confirmed) {
@@ -958,7 +1036,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const result = await degradeReviewCommand({
           attemptDir: located.attemptDir,
           reason,
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           projectRecord: projection.project,
         });
         if (!result.confirmed) {
@@ -981,7 +1059,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
         const result = await confirmCommand({
           stateRoot, project, taskId, attempt: located.attempt,
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           projectRecord: projection.project,
         });
         if (!result.confirmed) {
@@ -1003,7 +1081,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           stateRoot, project, taskId, attempt, cause, reason,
           ...(parsed.flags.trap === undefined ? {} : { trap: parsed.flags.trap }),
           ...(parsed.noTrap === undefined ? {} : { noTrap: parsed.noTrap }),
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           projectAttribution: projection.projectAttribution,
         });
         if (!result.confirmed) {
@@ -1022,7 +1100,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
         const result = await journeyCommand({
           attemptDir: located.attemptDir,
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           journeyId,
           observedSha,
           projectRecord: projection.project,
@@ -1049,7 +1127,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       case "land": {
         const result = await landCommand({
           attemptDir: located.attemptDir,
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           projectRecord: projection.project,
           assertAdvancement: projection.assertAdvancement,
         });
@@ -1064,7 +1142,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         const result = await publishCommand({
           attemptDir: located.attemptDir,
           stateRoot,
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           projectRecord: projection.project,
           assertAdvancement: projection.assertAdvancement,
         });
@@ -1089,7 +1167,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           attemptDir: located.attemptDir, cause, reason,
           ...(parsed.flags.trap === undefined ? {} : { trap: parsed.flags.trap }),
           ...(parsed.noTrap === undefined ? {} : { noTrap: parsed.noTrap }),
-          terminal: options.terminal ?? processOwnerTerminal(),
+          terminal: ownerTerminal(options.terminal),
           projectRecord: projection.project,
           projectAttribution: projection.projectAttribution,
         });
@@ -1107,8 +1185,8 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
             request: parsed.flags.request ?? "",
             routes: parsed.routes,
             ...(parsed.flags.group === undefined ? {} : { groupId: parsed.flags.group }),
-            worktreeRoot: resolve(parsed.flags["worktree-root"] ?? env.AWSF_WORKTREE_ROOT ?? defaultWorktreeRoot(stateRoot)),
-            terminal: adoptionTerminal(options.terminal),
+            worktreeRoot: cliWorktreeRoot(parsed.flags["worktree-root"], env.AWSF_WORKTREE_ROOT, stateRoot),
+            terminal: ownerTerminal(options.terminal),
             config,
             configPath,
             projectRecord: projection.project,
@@ -1159,7 +1237,19 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
   }
 }
 
-const invokedPath = process.argv[1];
-if (invokedPath !== undefined && import.meta.url === pathToFileURL(invokedPath).href) {
+function isDirectRun(): boolean {
+  const invokedPath = process.argv[1];
+  if (invokedPath === undefined) return false;
+  try {
+    // npm bin links leave argv[1] symlinked while the module URL is resolved.
+    // Compare file identities, not their spellings, without executing on import.
+    return realpathSync(invokedPath) === realpathSync(new URL(import.meta.url));
+  } catch {
+    // Eval/import hosts may supply an argv[1] that is not a resolvable file.
+    return false;
+  }
+}
+
+if (isDirectRun()) {
   process.exitCode = await main();
 }

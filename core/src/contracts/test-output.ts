@@ -1,5 +1,6 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { phaseEnvelope } from "./envelope-base.ts";
+import { OBJECT_ID_PATTERN } from "./typebox.ts";
 
 export const TEST_OUTPUT_SCHEMA_ID = "awsf.test-output/v1";
 
@@ -7,7 +8,7 @@ export const TEST_OUTPUT_SCHEMA_ID = "awsf.test-output/v1";
 export const TEST_OUTPUT_TAIL_MAX_CHARS = 4000;
 
 /** 40-hex git object id. The test envelope names the exact SHA it ran against. */
-export const SHA_PATTERN = "^[0-9a-f]{40}$";
+export const SHA_PATTERN = OBJECT_ID_PATTERN;
 
 export const TestOutputSchema = phaseEnvelope(
   TEST_OUTPUT_SCHEMA_ID,

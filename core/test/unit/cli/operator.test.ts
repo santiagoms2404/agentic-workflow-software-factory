@@ -78,6 +78,56 @@ test("doctor only reads a stale recorded PID, while gc only lists terminal candi
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("a non-human actor cannot resume a pending landing", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-operator-land-actor-"));
+  try {
+    const created = await newCommand({
+      stateRoot: join(root, "state"), project: "project", taskId: "T24", repository: root,
+      request: "operator landing authorization test", workflow: "simple-sdlc", tier: 1,
+    });
+    const landing = nextRevision(created.status, {
+      lifecycleState: "LANDING", baseSha: "a".repeat(40), candidateSha: "b".repeat(40),
+    });
+    await persistAttempt(created.attemptDir, created.status.revision, { kind: "attempt.updated", next: landing });
+
+    await assert.rejects(landCommand({
+      attemptDir: created.attemptDir,
+      terminal: { interactive: false, write: () => {}, confirm: async () => false },
+      actor: "delegate" as unknown as "host" | "owner" | "human",
+    }));
+    assert.equal((await readAttempt(created.attemptDir)).lifecycleState, "LANDING");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("doctor treats EPERM as a live recorded process", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-operator-eperm-"));
+  try {
+    const stateRoot = join(root, "state");
+    const created = await newCommand({
+      stateRoot, project: "project", taskId: "T23", repository: root,
+      request: "operator process liveness test", workflow: "simple-sdlc", tier: 1,
+      sessionId: () => "operator-eperm-session",
+    });
+    const terminal = nextRevision(created.status, {
+      lifecycleState: "CANCELLED",
+      process: { pid: 42, pgid: 42, startIdentity: null, startIdentitySource: "test" },
+    });
+    await persistAttempt(created.attemptDir, created.status.revision, { kind: "attempt.updated", next: terminal });
+
+    const originalKill = process.kill;
+    process.kill = (() => { throw Object.assign(new Error("permission denied"), { code: "EPERM" }); }) as typeof process.kill;
+    let report: Awaited<ReturnType<typeof doctorCommand>>;
+    try {
+      report = await doctorCommand(stateRoot);
+    } finally {
+      process.kill = originalKill;
+    }
+    assert.equal(report.healthy, false);
+    assert.ok(report.lines.some((line) => line.includes("42 is live")));
+    assert.ok(report.lines.some((line) => line.includes("orphan pid 42")));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("dash gives a clear message rather than building or serving a missing dashboard", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-dash-"));
   try {
@@ -182,8 +232,12 @@ test("dash initializes an absent disposable projection before listening", async 
     assert.equal(response.status, 200);
     // A fresh projection in a directory that registers no plans: both lists are
     // empty, and `plans` is present rather than absent, so the sessions view
-    // reads "no registered plan" instead of undefined.
-    assert.deepEqual(JSON.parse(response.body), { sessions: [], plans: [] });
+    // reads "no registered plan" instead of undefined. Since O4 (B2-02) the
+    // missing catalog is named rather than silent: the board stays up and carries
+    // a PlanUnresolved planError for its banner.
+    const body = JSON.parse(response.body) as { sessions: unknown[]; plans: unknown[]; planError?: { code: string; message: string } };
+    assert.deepEqual({ sessions: body.sessions, plans: body.plans, code: body.planError?.code }, { sessions: [], plans: [], code: "PlanUnresolved" });
+    assert.match(body.planError?.message ?? "", /no awsf\.project\.yaml in this checkout/);
   } finally {
     if (server?.listening) await new Promise<void>((done) => server?.close(() => done()));
     rmSync(root, { recursive: true, force: true });
@@ -204,7 +258,7 @@ test("dash refuses a projection newer than this binary before listening", async 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("the fixture simple-sdlc reaches the interactive owner boundary without a provider", async () => {
+test("the fixture simple-sdlc reaches the interactive owner boundary without a provider, and its stub attestations cannot land at T2", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-stub-sdlc-"));
   try {
     const canonical = join(root, "canonical");
@@ -216,12 +270,19 @@ test("the fixture simple-sdlc reaches the interactive owner boundary without a p
     mkdirSync(join(canonical, "node_modules", "fixture"), { recursive: true });
     writeFileSync(join(canonical, "node_modules", "fixture", "index.js"), "dependency\n");
     const created = await newCommand({ stateRoot: join(root, "state"), project: "agentic-workflow-software-factory", taskId: "T22", repository: canonical, request: k1Request("stub", "core/src/example.ts"), workflow: "simple-sdlc", tier: 2 });
-    await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath: "awsf.config.yaml", preflight: () => ({ adapter: true, sandbox: true, observability: true }) });
+    await startUnderK1({ attemptDir: created.attemptDir, worktreeRoot: join(root, "worktrees"), configPath: "awsf.config.yaml", preflight: () => ({ adapter: true, sandbox: true, observability: true }), stub: true });
     const status = await runStubCommand(created.attemptDir);
     assert.equal(status.lifecycleState, "AWAITING_OWNER");
     assert.ok(status.candidateSha !== null);
-    const landed = await landCommand({ attemptDir: created.attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => true } });
-    assert.equal(landed.status.lifecycleState, "LANDED");
+    // Owner call O7: the stub's review and journey are fixture attestations, so
+    // the T2 land guard refuses them and the canonical branch never moves.
+    const head = execFileSync("git", ["-C", canonical, "rev-parse", "HEAD"], { encoding: "utf8" });
+    await assert.rejects(
+      landCommand({ attemptDir: created.attemptDir, terminal: { interactive: true, write: () => {}, confirm: async () => true } }),
+      /"stub" provenance/u,
+    );
+    assert.equal((await readAttempt(created.attemptDir)).lifecycleState, "AWAITING_OWNER");
+    assert.equal(execFileSync("git", ["-C", canonical, "rev-parse", "HEAD"], { encoding: "utf8" }), head);
     assert.equal(execFileSync("git", ["-C", canonical, "status", "--porcelain"], { encoding: "utf8" }), "");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -250,6 +311,7 @@ test("the bounded fixture window is RUNNING in WAL and rebuild preserves its fin
       configPath: "awsf.config.yaml",
       preflight: () => ({ adapter: true, sandbox: true, observability: true }),
       projectRecord: projection.project,
+      stub: true,
     });
 
     const final = await runStubCommand(created.attemptDir, {

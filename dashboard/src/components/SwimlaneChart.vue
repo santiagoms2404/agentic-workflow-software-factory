@@ -1,25 +1,18 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { AgentSummary, PhaseSummary, SessionDetailResponse } from "../../shared/types.ts";
-import { axisTicks, contextMeterPercent, formatDuration, formatTokens, providerMark } from "../display.ts";
+import { axisTicks, contextMeterPercent, formatDuration, formatTokens, modelProvenanceLabel, providerMark } from "../display.ts";
+import { agentFallbackColor, phaseStatusGlyph, sessionExtent } from "../presentation.ts";
 import { layoutTimeline } from "../timeline.ts";
 import LaneIcon from "./LaneIcon.vue";
 
 const props = defineProps<{ session: SessionDetailResponse; selectedPhaseId: string | null }>();
 const emit = defineEmits<{ inspect: [phaseId: string] }>();
-const palette = ["var(--purple)", "var(--cyan)", "var(--red)", "var(--violet)", "var(--amber)"];
-
 const scroller = ref<HTMLElement | null>(null);
-const start = computed(() => Date.parse(props.session.startedAt));
-const end = computed(() => {
-  const observed = Math.max(
-    Date.parse(props.session.updatedAt),
-    ...props.session.activity.map((point) => Date.parse(point.endedAt ?? point.startedAt)),
-  );
-  const live = ["RUNNING", "GATING", "REVIEWING", "LANDING"].includes(props.session.state);
-  return Math.max(start.value + 1_000, props.session.endedAt ? Date.parse(props.session.endedAt) : live ? Date.now() : observed);
-});
-const span = computed(() => Math.max(1_000, end.value - start.value));
+const extent = computed(() => sessionExtent(props.session, Date.now()));
+const start = computed(() => extent.value.start);
+const end = computed(() => extent.value.end);
+const span = computed(() => extent.value.span);
 const requestPhase = computed(() => props.session.phases.find((phase) => phase.kind === "engineer" && phase.startedAt !== null) ?? null);
 const ticks = computed(() => axisTicks(span.value, 7));
 
@@ -68,9 +61,9 @@ const lanes = computed<Lane[]>(() => {
   if (code.length || props.session.gates.length || props.session.candidateSha) result.push({ key: "code", label: "code / git", role: "host workspace", color: "var(--green)", agent: null, phases: code });
   const owners: string[] = [];
   for (const phase of props.session.phases) if (phase.kind === "agent" && !owners.includes(phase.owner)) owners.push(phase.owner);
-  owners.forEach((owner, index) => {
+  owners.forEach((owner) => {
     const agent = props.session.agents.find((item) => item.agent === owner) ?? null;
-    result.push({ key: `agent:${owner}`, label: owner, role: "agent", color: agent?.color ?? palette[index % palette.length]!, agent, phases: props.session.phases.filter((phase) => phase.kind === "agent" && phase.owner === owner) });
+    result.push({ key: `agent:${owner}`, label: owner, role: "agent", color: agent?.color ?? agentFallbackColor(owner), agent, phases: props.session.phases.filter((phase) => phase.kind === "agent" && phase.owner === owner) });
   });
   return result;
 });
@@ -103,12 +96,6 @@ function blockStyle(phase: PhaseSummary, lane: Lane): Record<string, string> | u
   const item = geometry(phase, lane);
   if (!item) return undefined;
   return { ...item, "--lane-color": lane.color };
-}
-function statusGlyph(status: string): string {
-  if (status === "SUCCEEDED") return "✓";
-  if (["FAILED", "CANCELLED"].includes(status)) return "×";
-  if (["RUNNING", "VALIDATING", "CORRECTING"].includes(status)) return "●";
-  return "○";
 }
 function phaseDuration(phase: PhaseSummary): string {
   return formatDuration(phase.startedAt ?? phase.createdAt, phase.endedAt);
@@ -176,7 +163,7 @@ function wheelTimeline(event: WheelEvent): void {
             <span>{{ lane.role }}</span>
             <template v-if="lane.agent">
               <span class="lane-provider"><b aria-hidden="true">{{ providerMark(lane.agent.provider) }}</b>{{ lane.agent.provider }}</span>
-              <span class="lane-model" :title="`${lane.agent.resolvedModel ?? lane.agent.requestedModel} · ${lane.agent.modelProvenance ?? 'unrecorded'}`">{{ lane.agent.resolvedModel ?? lane.agent.requestedModel }}</span>
+              <span class="lane-model" :title="`${lane.agent.resolvedModel ?? lane.agent.requestedModel} · ${modelProvenanceLabel(lane.agent.modelProvenance)}`">{{ lane.agent.resolvedModel ?? lane.agent.requestedModel }}</span>
               <span v-if="context(lane.agent) !== null" class="lane-context" :title="`${formatTokens(lane.agent.contextTokens)} / ${formatTokens(lane.agent.contextWindow)} tokens`">
                 <span>Context <b>{{ Math.round(context(lane.agent)!) }}%</b></span>
                 <i><b :style="{ width: `${Math.max(context(lane.agent)!, 2)}%`, background: lane.color }" /></i>
@@ -210,7 +197,7 @@ function wheelTimeline(event: WheelEvent): void {
                   <span class="phase-description">queued · {{ phase.description }}</span>
                 </template>
                 <template v-else>
-                  <span class="phase-block-top"><b :class="phase.status.toLowerCase()">{{ statusGlyph(phase.status) }}</b><strong>{{ phase.name }}</strong><small>{{ phaseDuration(phase) }}</small></span>
+                  <span class="phase-block-top"><b :class="phase.status.toLowerCase()">{{ phaseStatusGlyph(phase.status) }}</b><strong>{{ phase.name }}</strong><small>{{ phaseDuration(phase) }}</small></span>
                   <span class="phase-description">{{ phase.description }}</span>
                   <i v-for="point in eventsFor(phase)" :key="point.id" class="event-tick" :class="{ error: point.error }" :style="{ left: point.left }" :title="point.title" />
                 </template>

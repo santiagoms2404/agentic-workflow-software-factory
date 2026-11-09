@@ -74,8 +74,10 @@ const CLASSIFIED: Readonly<Record<string, FailureClass>> = {
 const QUOTA_TOKEN = /E_QUOTA_EXHAUSTED|usage limit (?:has been )?reached|hit your .* usage limit/iu;
 
 export function classifyFailure(code: string | null, message: string | null = null): FailureClass {
-  if (code !== null && QUOTA_TOKEN.test(`${code} ${message ?? ""}`)) return "quota";
-  if (code === null) return "unclassified";
+  // The message is read even when the code is absent: a provider's "not now" can arrive without one (B13-26).
+  if (QUOTA_TOKEN.test(`${code ?? ""} ${message ?? ""}`)) return "quota";
+  // An own-property check, so a code named like an Object.prototype member stays unclassified (B13-27).
+  if (code === null || !Object.hasOwn(CLASSIFIED, code)) return "unclassified";
   return CLASSIFIED[code] ?? "unclassified";
 }
 

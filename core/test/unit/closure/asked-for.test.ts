@@ -2,12 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compareAskedFor, planTicketAsk, lightTicketAsk, withoutHandoffs,
   type AskedForSelection } from "../../../src/closure/asked-for.ts";
+import { proposeClosure } from "../../../src/closure/propose.ts";
 import { PLAN, TICKET, LIGHT, registry, lightRegistry, plan, ticket, light, tree, change } from "./_fixtures.ts";
 
 const selected: readonly AskedForSelection[] = [{ kind: "plan", plan: "sample", ticket: "T01" }];
 const lightSelected: readonly AskedForSelection[] = [{ kind: "light", ticket: "T02" }];
 function fields(before: ReadonlyMap<string, Uint8Array>, after: ReadonlyMap<string, Uint8Array>): readonly string[] {
-  const result = compareAskedFor(before, after, registry, selected);
+  const result = compareAskedFor(before, after, registry, selected, registry);
   assert.equal(result.ok, false);
   if (result.ok || result.refusal.code !== "E_CLOSURE_ASK_CHANGED") throw new Error(JSON.stringify(result));
   return result.refusal.differences.map((difference) => difference.field);
@@ -28,7 +29,7 @@ test("state, checklist markers, milestone markers, handoff and unrelated files a
   after = change(after, PLAN, '<li><code class="status">[]', '<li><code class="status">[x]');
   after = change(after, PLAN, '[]</code> Milestone', '[x]</code> Milestone');
   after.set("unrelated.txt", Buffer.from("changed outside the ask"));
-  assert.deepEqual(compareAskedFor(before, after, registry, selected), { ok: true, differences: [] });
+  assert.deepEqual(compareAskedFor(before, after, registry, selected, registry), { ok: true, differences: [] });
 });
 
 for (const [path, from, to, field] of [
@@ -65,18 +66,20 @@ test("a non-parser status lookalike inside a checklist row remains part of the a
 test("a link element cannot truncate the protected acceptance row before a token", () => {
   const before = change(tree(), PLAN, '<li><code class="status">', '<li>Fixed prefix <link href="fixture.css"><code class="status">');
   assert.deepEqual(fields(before, change(before, PLAN, "Fixed prefix", "Changed prefix")), ["checklist"]);
+  const proposed = proposeClosure(before, registry, "sample", ["T01"]);
+  assert.equal(proposed.rows[0]?.text, '<li>Fixed prefix <link href="fixture.css"><code class="status">[]</code> Acceptance row.</li>');
 });
 
 test("the parser's bare-line checklist rows protect their texts and mask only their tokens", () => {
   const before = change(tree(), PLAN, '<ul><li><code class="status">[]</code> Acceptance row.</li></ul>', '<code class="status">[]</code> A bare acceptance row.');
-  assert.deepEqual(compareAskedFor(before, change(before, PLAN, '[]</code> A bare', '[wip]</code> A bare'), registry, selected), { ok: true, differences: [] });
+  assert.deepEqual(compareAskedFor(before, change(before, PLAN, '[]</code> A bare', '[wip]</code> A bare'), registry, selected, registry), { ok: true, differences: [] });
   assert.deepEqual(fields(before, change(before, PLAN, "A bare acceptance row.", "A bare changed row.")), ["checklist"]);
 });
 
 test("a duplicate or missing selected task is refused rather than silently choosing one", () => {
   for (const after of [change(tree(), PLAN, "<h4>1. A task", "<h4>2. A task"),
     change(tree(), PLAN, "</section>\n<p>", '<h4>1. Duplicate\n<code class="status">[]</code> Row\n</section>\n<p>')]) {
-    const result = compareAskedFor(tree(), after, registry, selected);
+    const result = compareAskedFor(tree(), after, registry, selected, registry);
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.refusal.code, "E_CLOSURE_TREE");
   }
@@ -91,7 +94,7 @@ test("extracts every light frontmatter field except state, and excludes its Hand
   const before = tree(true);
   let after = change(before, LIGHT, "state: todo", "state: done");
   after = change(after, LIGHT, "Old findings.", "New dated findings.");
-  assert.deepEqual(compareAskedFor(before, after, lightRegistry, lightSelected), { ok: true, differences: [] });
+  assert.deepEqual(compareAskedFor(before, after, lightRegistry, lightSelected, lightRegistry), { ok: true, differences: [] });
 });
 
 for (const [from, to, field] of [
@@ -106,7 +109,7 @@ for (const [from, to, field] of [
 ] as const) {
   test(`names a changed light ask field: ${field}`, () => {
     const before = tree(true);
-    const result = compareAskedFor(before, change(before, LIGHT, from, to), lightRegistry, lightSelected);
+    const result = compareAskedFor(before, change(before, LIGHT, from, to), lightRegistry, lightSelected, lightRegistry);
     assert.equal(result.ok, false);
     if (result.ok || result.refusal.code !== "E_CLOSURE_ASK_CHANGED") throw new Error(JSON.stringify(result));
     assert.deepEqual(result.refusal.differences.map((difference) => difference.field), [field]);
@@ -116,15 +119,15 @@ for (const [from, to, field] of [
 test("light fields are compared recursively, with mapping order immaterial and array order retained", () => {
   const before = change(tree(true), LIGHT, "context: [A fixed context]", "context: [{first: one, second: two}, tail]");
   const same = change(before, LIGHT, "{first: one, second: two}", "{second: two, first: one}");
-  assert.equal(compareAskedFor(before, same, lightRegistry, lightSelected).ok, true);
+  assert.equal(compareAskedFor(before, same, lightRegistry, lightSelected, lightRegistry).ok, true);
   const different = change(before, LIGHT, "[{first: one, second: two}, tail]", "[tail, {first: one, second: two}]");
-  assert.equal(compareAskedFor(before, different, lightRegistry, lightSelected).ok, false);
+  assert.equal(compareAskedFor(before, different, lightRegistry, lightSelected, lightRegistry).ok, false);
 });
 
 test("light comparison names added and removed frontmatter fields", () => {
   const before = tree(true);
   const after = change(change(before, LIGHT, "tier: 0\n", ""), LIGHT, "state: todo", "state: todo\nextra: ask");
-  const result = compareAskedFor(before, after, lightRegistry, lightSelected);
+  const result = compareAskedFor(before, after, lightRegistry, lightSelected, lightRegistry);
   if (result.ok || result.refusal.code !== "E_CLOSURE_ASK_CHANGED") throw new Error(JSON.stringify(result));
   assert.deepEqual(result.refusal.differences.map((difference) => difference.field), ["frontmatter.extra", "frontmatter.tier"]);
 });
@@ -134,8 +137,8 @@ test("adding or removing a light Handoff section leaves its ask unchanged", () =
   const noHandoff = change(before, LIGHT, "\n## Handoff\n\nOld findings.\n", "");
   // The extra blank separator introducing a Handoff belongs to that section.
   noHandoff.set(LIGHT, Buffer.from(Buffer.from(noHandoff.get(LIGHT)!).toString().replace(/\n\n$/u, "\n")));
-  assert.equal(compareAskedFor(before, noHandoff, lightRegistry, lightSelected).ok, true);
-  assert.equal(compareAskedFor(noHandoff, before, lightRegistry, lightSelected).ok, true);
+  assert.equal(compareAskedFor(before, noHandoff, lightRegistry, lightSelected, lightRegistry).ok, true);
+  assert.equal(compareAskedFor(noHandoff, before, lightRegistry, lightSelected, lightRegistry).ok, true);
 });
 
 test("Handoff exclusion ends at the next heading and leaves fenced headings untouched", () => {
@@ -153,15 +156,28 @@ test("comparison resolves registered sources independently on both trees, never 
   assert.deepEqual(compareAskedFor(before, after, registry, selected, relocated), { ok: true, differences: [] });
 });
 
+test("B12-16: the after snapshot's registry is named by the caller, never reused from the before snapshot", () => {
+  const before = tree();
+  const after = new Map(before);
+  after.set("moved/plan.html", after.get(PLAN)!); after.delete(PLAN);
+  after.set("moved/tickets/T01.md", after.get(TICKET)!); after.delete(TICKET);
+  const relocated = { plans: [{ ...registry.plans[0]!, planPath: "moved/plan.html", ticketsPath: "moved/tickets" }] };
+  assert.deepEqual(compareAskedFor(before, after, registry, selected, relocated), { ok: true, differences: [] });
+  // Omitting the after registry is a type error, so the moved tree can never resolve through the stale before registry.
+  // @ts-expect-error the after registry has no default
+  const omittedAfterRegistry = (): unknown => compareAskedFor(before, after, registry, selected);
+  assert.equal(typeof omittedAfterRegistry, "function");
+});
+
 test("unresolved selection, missing file, malformed ticket and wrong file identity refuse by name", () => {
   const missing = tree(); missing.delete(TICKET);
   const malformed = change(tree(), TICKET, "---\nid: T01", "---\nid: [");
   const wrong = change(tree(), TICKET, "id: T01", "id: T02");
-  for (const result of [compareAskedFor(tree(), missing, registry, selected),
-    compareAskedFor(tree(), malformed, registry, selected), compareAskedFor(tree(), wrong, registry, selected),
-    compareAskedFor(tree(), tree(), { plans: [] }, selected),
-    compareAskedFor(tree(true), tree(true), registry, lightSelected),
-    compareAskedFor(tree(), tree(), registry, [{ kind: "plan", plan: "sample", ticket: "../T01" }])]) {
+  for (const result of [compareAskedFor(tree(), missing, registry, selected, registry),
+    compareAskedFor(tree(), malformed, registry, selected, registry), compareAskedFor(tree(), wrong, registry, selected, registry),
+    compareAskedFor(tree(), tree(), { plans: [] }, selected, { plans: [] }),
+    compareAskedFor(tree(true), tree(true), registry, lightSelected, registry),
+    compareAskedFor(tree(), tree(), registry, [{ kind: "plan", plan: "sample", ticket: "../T01" }], registry)]) {
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.refusal.code, "E_CLOSURE_TREE");
   }

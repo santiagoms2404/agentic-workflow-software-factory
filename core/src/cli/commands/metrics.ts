@@ -79,13 +79,28 @@ const CHECKOUT = fileURLToPath(new URL("../../../../", import.meta.url));
 export const METRICS_USAGE =
   "usage: awsf metrics [--role R] [--task-class CLASS] [--source production|proving-ground] [--started-before ISO] [--json] [--state-root PATH] | awsf metrics --advise [--plan STEM --milestone Mx[,...]] [--role builder|reviewer] [--config PATH] [--state-root PATH]";
 
+/**
+ * Parses an ISO 8601 date or date-time string.
+ * Date-time strings without an explicit offset are treated as UTC rather than machine-local time (B9-14).
+ */
+export function parseUtcInstant(value: string): number {
+  const trimmed = value.trim();
+  if (/[zZ]$|[+-]\d{2}(?::?\d{2})?$/.test(trimmed)) {
+    return Date.parse(trimmed);
+  }
+  if (/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(trimmed)) {
+    return Date.parse(`${trimmed.replace(/\s+/, "T")}Z`);
+  }
+  return Date.parse(trimmed);
+}
+
 /** The filter the flags spell. Statistics compare within one evidence source, so `production` is the default. */
 export function metricsFilter(options: Pick<MetricsCommandOptions, "role" | "taskClass" | "source" | "startedBefore">): MetricsFilter {
   const source = options.source ?? "production";
   if (!(EVIDENCE_SOURCES as readonly string[]).includes(source)) {
     throw new Error(`--source must be one of ${EVIDENCE_SOURCES.join(", ")}; got ${JSON.stringify(source)}`);
   }
-  if (options.startedBefore !== undefined && Number.isNaN(Date.parse(options.startedBefore))) {
+  if (options.startedBefore !== undefined && Number.isNaN(parseUtcInstant(options.startedBefore))) {
     throw new Error(`--started-before must be an ISO 8601 instant; got ${JSON.stringify(options.startedBefore)}`);
   }
   if (options.role !== undefined && options.role.length === 0) throw new Error("--role must name a role");
@@ -130,7 +145,7 @@ export function metricsCommand(options: MetricsCommandOptions): readonly string[
 
 function inScope(item: Pick<MetricsRun, "workflow" | "startedAt">, filter: MetricsFilter): boolean {
   return evidenceSource(item) === filter.source &&
-    (filter.startedBefore === null || Date.parse(item.startedAt) < Date.parse(filter.startedBefore));
+    (filter.startedBefore === null || parseUtcInstant(item.startedAt) < parseUtcInstant(filter.startedBefore));
 }
 
 /** The runs in scope. `--role` narrows rows only: a run blocked before any agent phase ran has no role. */
@@ -201,6 +216,12 @@ export function metricsReadout(payload: MetricsResponse, filter: MetricsFilter, 
     `${cover.cells} cells · ${all.refuted} refuted of ${all.claims} claims`);
   lines.push(`Blocked runs by heuristic attribution: ${tallyText(heuristicSplit(runs))}`);
   lines.push(...causeReadout(runs));
+  const visibleSessions = new Set(runs.map((item) => item.sessionId));
+  const diagnostics = payload.diagnostics.filter((item) => visibleSessions.has(item.sessionId));
+  for (const item of diagnostics) {
+    const ticket = item.ticketId === null ? "sealed shift metadata" : `ticket ${item.ticketId}${item.path === null ? "" : ` (${item.path})`}`;
+    lines.push(`Warning: ${item.project}/${item.taskId} attempt ${item.attempt}: ${ticket}: ${item.message}.`);
+  }
   if (cover.unkeyed > 0) lines.push(`${cover.unkeyed} role-row(s) have no route key (route-mixed or unknown) and enter no cell.`);
   if (all.n === 0) {
     lines.push("No role-rows in this scope.");

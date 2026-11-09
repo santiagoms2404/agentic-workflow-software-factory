@@ -102,4 +102,4 @@ After each landed ticket, the owner makes one commit: the task rows and the mile
 the plan, the ticket's `state`, the Handoff entries the builder returned, and a dated Amendment
 (invariant 12). A milestone stays `[wip]` until every task in it is `[x]`. Only T16's landing moves
 the spine's Milestone M2 / W02 marker and `../awsf-v3-plan/W02.md`, in that same commit, and that
-commit opens gate GR. Current plan-aligned states: **T01–T16 `todo`** (M1–M6 `[]`).
+commit opens gate GR. Historical snapshot, retained from earlier documentation: **T01–T16 `todo`** (M1–M6 `[]`). Read the [registered plan](../../awsf-v3-w02-trap-suite.html) for current completion.

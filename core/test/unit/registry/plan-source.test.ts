@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { test } from "node:test";
@@ -416,4 +416,14 @@ test("a declared v1 source with Phase headings fails loudly instead of parsing z
   });
 
   assert.equal(existsSync(removedRoot), false, `temporary fixture remains at ${removedRoot}`);
+});
+
+test("B10-39: a plan HTML that is a symbolic link to a plan file is resolved, not dropped without a trace", () => {
+  withForeignRepository((_root, repository, catalogPath) => {
+    symlinkSync(join(repository, "specs", "alpha.html"), join(repository, "specs", "linked.html"));
+    const stems = resolvePlanSources(catalogPath, foreignCatalog(), foreignPlacement(repository))
+      .map((source) => basename(source.planPath, ".html"))
+      .sort();
+    assert.deepEqual(stems, ["alpha", "linked"]);
+  });
 });

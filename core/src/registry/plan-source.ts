@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { ProjectCatalog } from "./catalog-schema.ts";
 import type { Placement } from "./placement-schema.ts";
@@ -57,10 +57,12 @@ export class PlanGrammarMismatchError extends Error {
   readonly plan: string;
   readonly format: ImplementedPlanFormat;
 
-  constructor(plan: string) {
+  constructor(plan: string, reason?: string) {
     super(
-      `plan ${JSON.stringify(plan)} declares format ${JSON.stringify("awsf-plan-html/v1")} `
-      + "but contains no Milestone M<digits> headings",
+      reason
+        ? `plan ${JSON.stringify(plan)} declares format ${JSON.stringify("awsf-plan-html/v1")} but ${reason}`
+        : `plan ${JSON.stringify(plan)} declares format ${JSON.stringify("awsf-plan-html/v1")} `
+          + "but contains no Milestone M<digits> headings",
     );
     this.name = "PlanGrammarMismatchError";
     this.plan = plan;
@@ -80,6 +82,20 @@ export class PlanIdentifierGrammarError extends Error {
     this.plan = plan;
     this.format = "awsf-plan-html/v1";
     this.identifier = identifier;
+  }
+}
+
+export class PlanCheckoutUnresolvedError extends Error {
+  readonly code = "E_PLAN_CHECKOUT_UNRESOLVED";
+  readonly start: string;
+
+  constructor(start: string) {
+    super(
+      `directory ${JSON.stringify(start)} is not inside a git checkout (no .git at or above it); `
+      + "plan sources resolve only from a git checkout, so run awsf from inside one",
+    );
+    this.name = "PlanCheckoutUnresolvedError";
+    this.start = start;
   }
 }
 
@@ -246,12 +262,18 @@ export function scanAwsfPlanHtmlV1(html: string): {
   return Object.freeze({ milestones: Object.freeze(milestones), tasks: Object.freeze(tasks) });
 }
 
+/**
+ * The nearest directory at or above `start` holding a `.git` entry (a directory,
+ * or a worktree's gitfile). A directory with none above it is not a checkout:
+ * falling back to `start` would let any folder holding a catalog self-place its
+ * own plan root and shadow the registered placement, so it is refused by name.
+ */
 function checkoutRoot(start: string): string {
   let candidate = resolve(start);
   while (true) {
     if (existsSync(join(candidate, ".git"))) return candidate;
     const parent = dirname(candidate);
-    if (parent === candidate) return resolve(start);
+    if (parent === candidate) throw new PlanCheckoutUnresolvedError(resolve(start));
     candidate = parent;
   }
 }
@@ -268,8 +290,12 @@ function planRepositoryId(catalog: ProjectCatalog): string {
 }
 
 function planStems(plansRoot: string): string[] {
+  if (!existsSync(plansRoot)) return [];
   return readdirSync(plansRoot, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".html"))
+    // A symbolic link is a plan when it resolves to a file. A dangling link throws from statSync:
+    // a plan that cannot be resolved is a hard failure, never a silent skip.
+    .filter((entry) => entry.name.endsWith(".html")
+      && (entry.isFile() || (entry.isSymbolicLink() && statSync(join(plansRoot, entry.name)).isFile())))
     .map((entry) => entry.name.slice(0, -".html".length))
     .sort();
 }
@@ -300,7 +326,7 @@ export function resolvePlanSources(
     repositoryRoot = located.path;
   }
 
-  const plansRoot = join(repositoryRoot, catalog.plans.root);
+  const plansRoot = resolve(repositoryRoot, catalog.plans.root);
   const stems = planStems(plansRoot);
   return Object.freeze(stems.map((stem) => {
     const format = implementedFormat(catalog.plans.format, stem);

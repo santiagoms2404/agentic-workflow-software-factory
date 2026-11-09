@@ -6,7 +6,7 @@ import {
   compileWorkflow,
   type WorkflowRecipe,
 } from "../../../src/workflow/compiler.ts";
-import { WORKFLOW_RECIPES } from "../../../src/workflow/catalog.ts";
+import { minimumCallsFor, WORKFLOW_RECIPES } from "../../../src/workflow/catalog.ts";
 import { buildReviewWorkflow } from "../../../src/workflow/recipes/build-review.ts";
 import { buildWorkflow } from "../../../src/workflow/recipes/build.ts";
 import { planBuildTestWorkflow } from "../../../src/workflow/recipes/plan-build-test.ts";
@@ -42,6 +42,7 @@ test("all recipe prompts compile from TypeBox schemas and render their handoff",
   for (const recipe of recipes) {
     const compiled = compileWorkflow(recipe, recipe.tier);
     assert.equal(compiled.minimumCalls, expected[recipe.id as keyof typeof expected].calls);
+    assert.equal(minimumCallsFor(recipe), compiled.minimumCalls);
     for (const phase of compiled.phases) {
       if (phase.kind !== "agent") continue;
       assert.ok(!phase.promptTemplate.includes(OUTPUT_SCHEMA_PLACEHOLDER));

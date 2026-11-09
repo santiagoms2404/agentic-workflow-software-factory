@@ -1,6 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { parse as parseYaml } from "yaml";
-import { normalizeRepositoryPath } from "../policy/path-policy.ts";
+import { normalizeGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { containsCredential } from "../policy/redaction.ts";
 import {
   AwsfConfigSchema,
@@ -89,6 +89,13 @@ export class ConfigUnknownGateError extends ConfigError {
   constructor(id: string) {
     super("E_CONFIG_UNKNOWN_GATE", `unknown gate id: "${id}"`);
     this.name = "ConfigUnknownGateError";
+  }
+}
+
+export class ConfigDuplicateAgentNameError extends ConfigError {
+  constructor(name: string) {
+    super("E_CONFIG_DUPLICATE_AGENT", `duplicate agent name: "${name}"`);
+    this.name = "ConfigDuplicateAgentNameError";
   }
 }
 
@@ -196,10 +203,10 @@ function assertKnownReferences(config: AwsfConfig): void {
     if (!(KNOWN_ADAPTER_KINDS as readonly string[]).includes(adapter.kind)) {
       throw new ConfigUnknownAdapterError(adapter.kind);
     }
-    // Q1's default is a shipped but inert slot. `enabled: true` therefore
-    // needs a separate, explicit attestation; otherwise a typo turns an
-    // unread provider protocol into a run path.
-    if (adapter.kind === "antigravity" && adapter.enabled === true && adapter.verified !== true) {
+    // Q1's default is a shipped but inert slot. An omitted `enabled` is on, as
+    // the registry reads it, so only an explicit `enabled: false` skips the
+    // attestation; otherwise a typo turns an unread provider protocol into a run path.
+    if (adapter.kind === "antigravity" && adapter.enabled !== false && adapter.verified !== true) {
       throw new ConfigUnverifiedAdapterError(adapterId);
     }
   }
@@ -208,7 +215,20 @@ function assertKnownReferences(config: AwsfConfig): void {
     throw new ConfigUnknownAdapterReferenceError("routing.default_worker", config.routing.default_worker);
   }
 
+  if (config.routing.quota_stop?.by_adapter !== undefined) {
+    for (const adapterId of Object.keys(config.routing.quota_stop.by_adapter)) {
+      if (!declaredAdapterIds.has(adapterId)) {
+        throw new ConfigUnknownAdapterReferenceError(`routing.quota_stop.by_adapter.${adapterId}`, adapterId);
+      }
+    }
+  }
+
+  const seenAgentNames = new Set<string>();
   for (const agent of config.agents) {
+    if (seenAgentNames.has(agent.name)) {
+      throw new ConfigDuplicateAgentNameError(agent.name);
+    }
+    seenAgentNames.add(agent.name);
     if (!declaredAdapterIds.has(agent.harness.adapter)) {
       throw new ConfigUnknownAdapterReferenceError(`agents["${agent.name}"].harness.adapter`, agent.harness.adapter);
     }
@@ -290,6 +310,20 @@ function assertThinkingNeverPersisted(config: AwsfConfig): void {
   }
 }
 
+function assertValidGlobs(config: AwsfConfig): void {
+  for (const glob of Object.keys(config.risk.paths)) {
+    normalizeGlob(glob);
+  }
+  for (const glob of config.policy.protected_paths) {
+    normalizeGlob(glob);
+  }
+  for (const agent of config.agents) {
+    for (const glob of agent.writes) {
+      normalizeGlob(glob);
+    }
+  }
+}
+
 /**
  * Parses and validates `awsf.config.yaml` text against the `awsf/v1`
  * schema (specs/awsf-architecture-proposal.md §7.3.5), then applies the
@@ -313,6 +347,7 @@ export function loadConfig(yamlText: string): AwsfConfig {
   assertNoCredentialShapedValues(doc);
   assertValidSeedPaths(config);
   assertKnownReferences(config);
+  assertValidGlobs(config);
   assertValidCeilings(config);
   assertNoFallbackIsTrue(config);
   assertThinkingNeverPersisted(config);

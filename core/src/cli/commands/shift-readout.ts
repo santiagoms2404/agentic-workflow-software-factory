@@ -17,7 +17,7 @@ import { candidateRefName, readCandidateRef } from "../../git/candidate-ref.ts";
 import type { PreviewRecord } from "../../contracts/preview-record.ts";
 import type { AttemptEvidence } from "../../observability/attempt-evidence.ts";
 import type { PhaseDefinition } from "../../workflow/phase.ts";
-import { bindShiftRecipe, shiftPhaseRole, shiftTicketOf } from "../../workflow/shift/bind.ts";
+import { bindShiftRecipe, bindShiftRecipeAt, shiftPhaseRole, shiftTicketOf } from "../../workflow/shift/bind.ts";
 import type { ShiftBriefPhase } from "../../workflow/shift/compile.ts";
 import type { AttemptStatus } from "./attempt.ts";
 import { processAlive, readPreviewRecord } from "./preview.ts";
@@ -185,7 +185,17 @@ export async function shiftReadout(
   let phases: ShiftReadoutInput["phases"];
   try {
     // The prompts shape no ticket's membership, title or order, so none are read.
-    phases = (await bindShiftRecipe(status.repository, status.shift, { prompts: { builder: "", reviewer: "" } })).phases;
+    // The recipe is rebuilt from the ticket blobs of the attempt's recorded
+    // base, the bytes the run compiled from, never from today's checkout: the
+    // landing commit flips each landed ticket's `state:` (invariant 12) and the
+    // sealed digest covers every byte, so the checkout would refuse every landed
+    // shift. A base whose bytes are not the sealed ones still refuses by digest.
+    // An attempt with no base recorded has not started, so the checkout is the
+    // source its start would compile, and the readout reads it as a start would.
+    const config = { prompts: { builder: "", reviewer: "" } };
+    phases = (status.baseSha === null
+      ? await bindShiftRecipe(status.repository, status.shift, config)
+      : bindShiftRecipeAt(status.repository, status.shift, status.baseSha, config)).phases;
   } catch (error) {
     phases = { refused: error instanceof Error ? error.message : String(error) };
   }

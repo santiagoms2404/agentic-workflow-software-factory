@@ -1,13 +1,13 @@
 // Read-only gatherer. Provider processes and the trap layer are never started.
 // quota-axi's failure bytes are discarded, not retained in the state root.
-import { readFile, stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { loadConfig } from "../config/load.ts";
 import type { AwsfConfig } from "../config/schema.ts";
 import type { DoctorReadout, DoctorRow } from "../contracts/doctor-readout.ts";
 import { resolveExecutable, runSystemCommand } from "../execution/transport-broker.ts";
 import { scrubCredentials } from "../policy/redaction.ts";
-import type { StorageMode } from "../preflight/fields.ts";
+import { storageMode } from "../preflight/storage-mode.ts";
 import { DEFAULT_QUOTA_PROBE_TIMEOUTS, probeQuota, type RunQuotaCommand, type ResolveQuotaExecutable } from "../quota/probe.ts";
 import { configuredQuotaProbeRoutes, mapConfiguredQuotaRoutes, resolveProjectQuotaRoutes } from "../quota/routes.ts";
 import { loadCatalog } from "../registry/catalog.ts";
@@ -28,18 +28,6 @@ export interface GatherDoctorInput {
   readonly runCommand?: RunQuotaCommand;
   readonly resolveExecutable?: ResolveQuotaExecutable;
   readonly now?: string;
-}
-
-async function modeOf(path: string, nearest = false): Promise<StorageMode> {
-  let cursor = path;
-  for (;;) {
-    try { return { path: cursor, mode: (await stat(cursor)).mode }; }
-    catch (error) {
-      const parent = dirname(cursor);
-      if (!nearest || (error as NodeJS.ErrnoException).code !== "ENOENT" || parent === cursor) return { path: cursor, mode: null };
-      cursor = parent;
-    }
-  }
 }
 
 async function configuration(input: GatherDoctorInput): Promise<{ config: AwsfConfig | null; cwd: string; detail: string | null }> {
@@ -99,11 +87,11 @@ export async function gatherDoctorRows(input: GatherDoctorInput): Promise<Enviro
     } catch { /* No readable Git root: storage reports not measured. */ }
   }
   const gitEntries = await Promise.all([
-    ...(common === null ? [] : [modeOf(join(common, "HEAD")), modeOf(join(common, "config"))]),
-    modeOf(worktreeRoot),
+    ...(common === null ? [] : [storageMode(join(common, "HEAD")), storageMode(join(common, "config"))]),
+    storageMode(worktreeRoot),
   ]);
   const storage = storageRow({ commonDirectory: common, worktreeRoot, stateRoot: input.stateRoot, gitEntries,
-    stateEntry: await modeOf(input.stateRoot, true) });
+    stateEntry: await storageMode(input.stateRoot, true) });
   const executableRow = executablesRow(facts);
   if (configured.detail !== null) executableRow.detail.push(configured.detail);
   let diagnostics: readonly string[] = [];
@@ -115,7 +103,10 @@ export async function gatherDoctorRows(input: GatherDoctorInput): Promise<Enviro
     const start = performance.now();
     result = await probeQuota({
       routes: configuredQuotaProbeRoutes(routes), purpose: "interactive-preflight", now: input.now ?? new Date().toISOString(),
-      timeouts: { interactivePreflightMs: Math.max(...timeouts), phaseBoundaryMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.phaseBoundaryMs },
+      timeouts: {
+        interactivePreflightMs: Math.max(DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs, ...timeouts),
+        phaseBoundaryMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.phaseBoundaryMs,
+      },
       options: { cwd: configured.cwd, env: input.env, maxBuffer: 4 * 1024 * 1024 },
       resolveExecutable: resolver,
       runCommand: (executable, argv, options) => {
@@ -138,5 +129,6 @@ export async function gatherDoctorRows(input: GatherDoctorInput): Promise<Enviro
   catch { coverage = { status: "finding", detail: ["coverage not measured: unreadable trap evidence; no repair performed"] }; }
   return scrubCredentials({ storage, executables: executableRow, providers: providersRow(routes, result),
     quota: quotaRow(routes, result, configured.config?.routing.quota_stop, latencyMs, diagnostics), coverage,
-    ...await gatherRepositoryRows({ ...input, cwd: configured.cwd, config: configured.config }) });
+    ...await gatherRepositoryRows({ ...input, cwd: configured.cwd, config: configured.config,
+      ...(common === null ? {} : { gitCommonDirectory: common }) }) });
 }

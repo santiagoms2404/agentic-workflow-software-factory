@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { Value } from "@sinclair/typebox/value";
-import { admitPlanSet, planAdmissionDocuments, verifyPlanAdmission, type PlanAdmissionInput } from "../../../src/registry/plan-admission.ts";
+import { admitPlanSet, planAdmissionDocuments, rollbackPlanAdmission, verifyPlanAdmission, type PlanAdmissionInput } from "../../../src/registry/plan-admission.ts";
 import { noProtectedPaths } from "../../../src/gates/git-diff.ts";
 import { renderPlanDocument } from "../../../src/registry/plan-render.ts";
 import { validDesignPlanOutput, validPlanContext } from "../contracts/fixtures.ts";
@@ -50,6 +50,69 @@ test("admission derives fenced prompt bytes, idle markers and todo states from o
   const plan = parseAwsfPlanHtmlV1(value.planHtml, stem);
   assert.deepEqual(planAgreement({ label: stem, plan, tickets, sectionB: sectionBBlocks(value.buildPrompts), knownStems: [stem] }), []);
   assert.ok(plan.every(task => task.milestoneMarker === "" && task.checklist.every(marker => marker === "")));
+});
+
+test("B7-28 rollback removes an unchanged exclusive admission set and its now-empty created directories", () => {
+  const w = world();
+  try {
+    const admitted = admitPlanSet({ ...input(), worktree: w.root, baseSha: w.baseSha, at });
+    const paths = [...admitted.documents.keys()];
+    const result = rollbackPlanAdmission(admitted.rollback);
+    assert.deepEqual(result, { removed: [...paths].reverse(), retained: [] });
+    assert.equal(existsSync(join(w.root, "specs")), false);
+    assert.equal(git(w.root, "rev-parse", "HEAD"), w.baseSha);
+  } finally { w.close(); }
+});
+
+test("B7-28 rollback removes only unchanged exclusive admission files and retains changed, linked and redirected paths", () => {
+  const w = world();
+  try {
+    const admitted = admitPlanSet({ ...input(), worktree: w.root, baseSha: w.baseSha, at });
+    const paths = [...admitted.documents.keys()];
+    const changedPath = join(w.root, paths[0]!);
+    const linkedPath = join(w.root, paths[1]!);
+    const redirectedPath = join(w.root, paths[2]!);
+    writeFileSync(changedPath, "owner modification\n");
+    const hardlink = join(w.root, "preserved-link");
+    linkSync(linkedPath, hardlink);
+    rmSync(redirectedPath);
+    symlinkSync(join(w.root, "README.md"), redirectedPath);
+
+    const result = rollbackPlanAdmission(admitted.rollback);
+    assert.ok(result !== null);
+    assert.deepEqual([...result.removed].sort(), paths.slice(3).sort());
+    assert.deepEqual([...result.retained].sort(), paths.slice(0, 3).sort());
+    assert.equal(readFileSync(changedPath, "utf8"), "owner modification\n");
+    assert.equal(readFileSync(hardlink, "utf8"), readFileSync(linkedPath, "utf8"));
+    assert.equal(readFileSync(join(w.root, "README.md"), "utf8"), "seed\n");
+    assert.equal(readFileSync(redirectedPath, "utf8"), "seed\n");
+    assert.equal(git(w.root, "rev-parse", "HEAD"), w.baseSha);
+  } finally { w.close(); }
+});
+
+test("B7-28 rollback refuses to remove an admission set with any staged member", () => {
+  const w = world();
+  try {
+    const admitted = admitPlanSet({ ...input(), worktree: w.root, baseSha: w.baseSha, at });
+    const paths = [...admitted.documents.keys()];
+    git(w.root, "add", paths[0]!);
+    const result = rollbackPlanAdmission(admitted.rollback);
+    assert.deepEqual(result, { removed: [], retained: paths });
+    for (const path of paths) assert.equal(existsSync(join(w.root, path)), true);
+    assert.equal(git(w.root, "rev-parse", "HEAD"), w.baseSha);
+  } finally { w.close(); }
+});
+
+test("B7-28 rollback refuses to remove admission paths after a commit exists", () => {
+  const w = world();
+  try {
+    const admitted = admitPlanSet({ ...input(), worktree: w.root, baseSha: w.baseSha, at });
+    const paths = [...admitted.documents.keys()];
+    commit(w.root);
+    const result = rollbackPlanAdmission(admitted.rollback);
+    assert.deepEqual(result, { removed: [], retained: paths });
+    for (const path of paths) assert.equal(existsSync(join(w.root, path)), true);
+  } finally { w.close(); }
 });
 
 test("admission journals a closed host record, not a provider envelope", () => {
@@ -176,3 +239,12 @@ for (const defect of ["bytes", "mode", "hardlink", "symlink", "missing", "other-
     } finally { w.close(); }
   });
 }
+
+test("B10-38: a whitespace-only build prompt is refused at admission rather than admitted as an empty ticket", () => {
+  const plan = validDesignPlanOutput();
+  plan.steps[0]!.buildPrompt = " \n ";
+  const docs = renderPlanDocument({ stem, plan, identifierSet: validPlanContext().identifierSet });
+  const blank: PlanAdmissionInput = { stem, planHtml: docs.get(`specs/${stem}.html`)!, buildPrompts: docs.get(`specs/${stem}-build-prompts.md`)!,
+    tickets: plan.steps.map(step => ({ id: step.id, title: step.title, milestone: step.milestone, depends_on: step.dependsOn, serves: step.serves })) };
+  assert.throws(() => planAdmissionDocuments(blank), /Section B title or prompt differs/u);
+});

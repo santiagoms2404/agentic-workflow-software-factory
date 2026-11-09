@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repoRoot, walkFiles, relRepo } from "./_walk.ts";
 
@@ -28,16 +28,23 @@ test("no module under core/src/workflow/shift/ imports raise.ts", () => {
 // drops its pair, so a prove module that could widen the ceiling would turn
 // that pause into spend no other arm was given. `awsf prove` and the compiled
 // `prove` workflow are fenced the same way the shift is.
-const PROVE_MODULES = ["core/src/cli/commands/prove.ts"] as const;
+const PROVE_COMMANDS = join(repoRoot(), "core", "src", "cli", "commands");
 const PROVE_DIRECTORY = join(repoRoot(), "core", "src", "workflow", "prove");
 
+/** Every prove command module, found on disk: `prove.ts` and any sibling such as `prove-readout.ts`. */
+function proveCommandModules(): string[] {
+  return readdirSync(PROVE_COMMANDS)
+    .filter((name) => /^prove(?:[.-][\w.-]*)?\.ts$/u.test(name))
+    .map((name) => `core/src/cli/commands/${name}`);
+}
+
 function proveFiles(): string[] {
-  return [...PROVE_MODULES, ...walkFiles(PROVE_DIRECTORY).map(relRepo)].sort();
+  return [...proveCommandModules(), ...walkFiles(PROVE_DIRECTORY).map(relRepo)].sort();
 }
 
 test("no prove module imports raise.ts", () => {
   const scope = proveFiles();
-  for (const file of PROVE_MODULES) assert.ok(existsSync(join(repoRoot(), file)), `${file} is gone; update the fence`);
+  assert.ok(scope.includes("core/src/cli/commands/prove.ts"), "prove.ts is fenced");
   for (const file of ["bind.ts", "compile.ts", "corpus.ts"]) assert.ok(scope.includes(`core/src/workflow/prove/${file}`), `prove/${file} is fenced`);
   const offenders = scope.filter((f) => PATTERN.test(readFileSync(join(repoRoot(), f), "utf8")));
   assert.deepEqual(offenders, []);

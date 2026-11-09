@@ -2,7 +2,10 @@ import { Type, type Static } from "@sinclair/typebox";
 import { PUBLISH_OUTCOMES } from "../publish/argv.ts";
 import { phaseEnvelope } from "./envelope-base.ts";
 import { CandidateSeedSchema } from "./candidate-seed.ts";
-import { PhaseRecoverySchema } from "./phase-recovery.ts";
+import { assertPhaseRecovery, PhaseRecoverySchema } from "./phase-recovery.ts";
+import { ReplayRecordSchema } from "./proving-ground.ts";
+import { ShiftManifestSchema } from "./shift-selection-record.ts";
+import { TicketSelectionSchema } from "./ticket-selection-record.ts";
 import { SHA_PATTERN } from "./test-output.ts";
 import { stringUnion } from "./typebox.ts";
 import { PhaseRouteSelectionSchema } from "../config/schema.ts";
@@ -29,7 +32,12 @@ const BudgetSchema = Type.Object(
       },
       { additionalProperties: false },
     ),
-    ceiling: Type.Integer({ minimum: 1 }),
+    // Optional because a status written before the ceiling became a dial records
+    // none (B3-02), and `withLegacyDefaults` deliberately leaves it ABSENT:
+    // `ceilingFor` reads absence as the tier default, which IS the legacy
+    // default. Writing a number in to satisfy this schema would claim the
+    // attempt recorded a ceiling it never did.
+    ceiling: Type.Optional(Type.Integer({ minimum: 1 })),
   },
   { additionalProperties: false },
 );
@@ -50,6 +58,15 @@ const ReviewDegradationSchema = Type.Object(
   {
     reason: Type.String({ minLength: 1 }),
     attempt: Type.Integer({ minimum: 1 }),
+    at: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+/** The persistent mark `awsf start --stub true` leaves on the attempt it prepares. */
+const StubMarkSchema = Type.Object(
+  {
+    startedBy: Type.Literal("awsf start --stub true"),
     at: Type.String({ minLength: 1 }),
   },
   { additionalProperties: false },
@@ -111,6 +128,13 @@ export const PublishedAttemptStatusSchema = Type.Object(
     lifecycleState: Type.Literal("PUBLISHED"),
     baseSha: NullableShaSchema,
     candidateSha: NullableShaSchema,
+    // The creation-time selections `awsf new` copies onto the status and every
+    // later revision carries (B3-03). Each is absent on every other workflow,
+    // so each is optional; this object is closed, and a key the status really
+    // carries but this schema omits refuses every such attempt's publication.
+    shift: Type.Optional(Type.Union([ShiftManifestSchema, Type.Null()])),
+    ticketSelection: Type.Optional(Type.Union([TicketSelectionSchema, Type.Null()])),
+    replay: Type.Optional(Type.Union([ReplayRecordSchema, Type.Null()])),
     phase: Type.Union([PhaseMeterSchema, Type.Null()]),
     budget: BudgetSchema,
     ceilingGrants: Type.Array(CeilingGrantSchema),
@@ -141,6 +165,10 @@ export const PublishedAttemptStatusSchema = Type.Object(
     requiredReviewPresent: Type.Boolean(),
     journeyApproved: Type.Boolean(),
     protectedApprovalsValid: Type.Boolean(),
+    // Optional for the same reason as above: only a stub attempt carries them
+    // (owner call O7), and a T1 stub demonstration may still land and publish.
+    stub: Type.Optional(Type.Union([StubMarkSchema, Type.Null()])),
+    attestationProvenance: Type.Optional(Type.Union([Type.Literal("stub"), Type.Null()])),
     process: Type.Null(),
     landingApproval: Type.Union([LandingApprovalSchema, Type.Null()]),
     blocker: Type.Union([BlockerSchema, Type.Null()]),
@@ -158,6 +186,24 @@ export const PublishResultSchema = Type.Object(
   },
   { additionalProperties: false },
 );
+
+/**
+ * The cross-field rules of the checkpoint a published status carries. The
+ * structural schema cannot state them, and publish validates only structure, so
+ * the parser applies this after the schema pass (B3-32). Returns the refusal,
+ * or null when the checkpoint is consistent or absent.
+ */
+export function publishedRecoveryRefusal(output: unknown): string | null {
+  const status = (output as { result?: { status?: { recovery?: unknown } } } | null)?.result?.status;
+  const recovery = status?.recovery;
+  if (recovery === undefined || recovery === null) return null;
+  try {
+    assertPhaseRecovery(recovery);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
 
 export const PublishOutputSchema = phaseEnvelope(
   PUBLISH_OUTPUT_SCHEMA_ID,

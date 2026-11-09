@@ -3,7 +3,7 @@
 // not. It is a record of what the Delegate would have done. Nothing reads it
 // to act; tasks 6 and 11 read it to measure agreement and to drive.
 
-import { PROPOSED_ACT_NAMES, RATIONALE_CODES, type ProposedAct, type RationaleCode } from "./policy.ts";
+import { isExecutableAct, PROPOSED_ACT_NAMES, RATIONALE_CODES, type ProposedAct, type ProposedActName, type RationaleCode } from "./policy.ts";
 import { STOP_KINDS, type StopFacts, type StopKind } from "./stop-facts.ts";
 
 export const DELEGATE_PROPOSAL_TYPE = "delegate.proposal";
@@ -40,6 +40,20 @@ function fail(detail: string): never {
   throw new Error(`delegate proposal record is invalid: ${detail}`);
 }
 
+/** Shared by live proposals and replay records, which carry the same proposal shape. */
+export function delegateProposalShapeIssue(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) return "act";
+  const proposal = value as Record<string, unknown>;
+  const act = proposal.act;
+  if (typeof act !== "object" || act === null || !(PROPOSED_ACT_NAMES as readonly unknown[]).includes((act as Record<string, unknown>).act)) {
+    return "act";
+  }
+  if (!(RATIONALE_CODES as readonly unknown[]).includes(proposal.rationale)) return "rationale";
+  const actName = (act as { act: ProposedActName }).act;
+  if (typeof proposal.executable !== "boolean" || (proposal.executable && !isExecutableAct(actName))) return "executable";
+  return null;
+}
+
 export function assertDelegateProposal(value: unknown): asserts value is DelegateProposalRecord {
   if (typeof value !== "object" || value === null) fail("not an object");
   const record = value as Record<string, unknown>;
@@ -50,13 +64,7 @@ export function assertDelegateProposal(value: unknown): asserts value is Delegat
   if (!Number.isInteger(record.attempt) || !Number.isInteger(record.statusRevision)) fail("attempt or statusRevision");
   if (!(STOP_KINDS as readonly unknown[]).includes(record.stopKind)) fail("stopKind");
   if (typeof record.leased !== "boolean") fail("leased");
-  const proposal = record.proposal as Record<string, unknown> | undefined;
-  const act = proposal?.act as Record<string, unknown> | undefined;
-  if (proposal === undefined || act === undefined || !(PROPOSED_ACT_NAMES as readonly unknown[]).includes(act.act)) fail("proposal.act");
-  if (!(RATIONALE_CODES as readonly unknown[]).includes(proposal.rationale)) fail("proposal.rationale");
-  // INV-3: no record may claim land-shadow or wait-for-owner is executable.
-  if (typeof proposal.executable !== "boolean" || (proposal.executable && (act.act === "land-shadow" || act.act === "wait-for-owner"))) {
-    fail("proposal.executable");
-  }
+  const proposalIssue = delegateProposalShapeIssue(record.proposal);
+  if (proposalIssue !== null) fail(`proposal.${proposalIssue}`);
   if (!Array.isArray(record.allowedActs) || typeof record.facts !== "object" || record.facts === null) fail("allowedActs or facts");
 }

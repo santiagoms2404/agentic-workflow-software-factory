@@ -2,6 +2,14 @@
 
 ## Authority and scope
 
+**Reading this design after implementation changes:** the contracts and dated
+amendments below distinguish desired recovery from demonstrated capability.
+Current CLI support and tests, including
+[host-validation recovery](awsf-a3-host-validation-recovery.md), determine what
+can actually be recovered. A described `rescue` path is not a shipped CLI
+command or permission to bypass a refusal. See the
+[documentation map](../docs/README.md).
+
 This is the Task 8B2 design, not a protected-write grant. Owner acceptance of this document, acceptance of a planning amendment, and authorization to execute a task are separate acts. No factory task state is represented here.
 
 The design unifies exact protected-file grants, between-phase quota re-entry, and proof-gated reconnection of interrupted worker and review turns. The owner-directed D10 extension supersedes the earlier blanket interrupted-turn refusal. Every crash cut must yield a proved continuation, reconstruction of an already completed result, or a named safe refusal that preserves retained work and economic liability. Provider-session reuse alone is insufficient. D11 defines optional owner instructions shared by resume, rescue, rework and seeded continuation.

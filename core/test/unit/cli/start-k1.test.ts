@@ -1,11 +1,11 @@
 // `awsf start` under K1 (specs/awsf-v3-w01-driver-checks.html, task 11): after
-// the DRAFT check and before any recipe, L2, worktree or adapter, start applies
-// the freshness rule to the attempt's latest driver-preflight record and its own
-// confirmations, with `git-storage` and `duplicate` re-measured. Each refusal
-// leaves the attempt DRAFT with zero calls reserved, appends exactly one
-// preflight-refused record naming the field or the stale binding, requests no
-// transition, and throws an error naming the command that clears it. The stub
-// adapter does not skip any of it; prove and intake are exempt by workflow id.
+// read-only seed-provenance and exclusive-worktree checks, and before normal
+// recipe resolution, L2, worktree creation or adapter contact, start applies
+// freshness to the latest driver-preflight record and its own confirmations, re-measuring
+// `git-storage` and `duplicate`. Each K1 refusal leaves DRAFT with zero reserved
+// calls, appends one preflight-refused record naming the field or stale binding,
+// requests no transition, and names the command that clears it. The stub does
+// not skip K1; prove and intake are exempt by workflow id.
 
 import assert from "node:assert/strict";
 import { selectedLanding } from "../../fixtures/closure-readers.ts";
@@ -21,6 +21,8 @@ import { newCommand } from "../../../src/cli/commands/new.ts";
 import { nextCommand } from "../../../src/cli/commands/next.ts";
 import { readAttemptEvidence } from "../../../src/cli/commands/review-record.ts";
 import { StartPreflightRefused, startCommand, type StartCommandOptions } from "../../../src/cli/commands/start.ts";
+import { AttemptWorktreeExists } from "../../../src/git/worktrees.ts";
+import { journalFilePath } from "../../../src/persistence/platform-paths.ts";
 import { loadConfig } from "../../../src/config/load.ts";
 import {
   assertPreflightRefusedRecord,
@@ -73,6 +75,15 @@ function box(label: string): Box {
   assert.notEqual(configText, source);
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, configText);
+  for (const agent of loadConfig(configText).agents) {
+    for (const promptPath of [agent.prompt.system, agent.prompt.user]) {
+      const destination = join(root, promptPath);
+      mkdirSync(join(destination, ".."), { recursive: true });
+      writeFileSync(destination, readFileSync(resolve(promptPath), "utf8"));
+    }
+  }
+  mkdirSync(join(root, "prompts", "shared"), { recursive: true });
+  writeFileSync(join(root, "prompts", "shared", "headless-role.md"), readFileSync(resolve("prompts/shared/headless-role.md"), "utf8"));
   return {
     root, repository, stateRoot: join(root, "state"), worktreeRoot: join(root, "worktrees"), configPath,
     close: () => rmSync(root, { recursive: true, force: true }),
@@ -134,6 +145,31 @@ test("the preflight-refused record is a registered host record, and a field is n
   assert.throws(() => assertPreflightRefusedRecord({ ...base, refusal: "no-record", field: "invented" }), /invalid awsf.preflight-refused/u);
 });
 
+test("a legacy absent ceiling uses the enforcement default, not the current config dial", async () => {
+  const b = box("legacy-ceiling");
+  try {
+    const configured = readFileSync(b.configPath, "utf8");
+    const lowerDial = configured.replace("T2: 5", "T2: 2");
+    assert.notEqual(lowerDial, configured);
+    writeFileSync(b.configPath, lowerDial);
+
+    const created = await draft(b, "legacy-ceiling");
+    const statusPath = join(created.attemptDir, "status.json");
+    const persisted = JSON.parse(readFileSync(statusPath, "utf8")) as { budget: Record<string, unknown> };
+    delete persisted.budget.ceiling;
+    writeFileSync(statusPath, JSON.stringify(persisted));
+    const legacy = await readAttempt(created.attemptDir);
+    await persistAttempt(created.attemptDir, legacy.revision, {
+      kind: "attempt.updated",
+      next: nextRevision(legacy, { lastActivity: "legacy status read without a persisted ceiling" }),
+    });
+
+    const prepared = await startUnderK1(startOptions(b, created.attemptDir));
+    assert.equal(prepared.lifecycleState, "PREPARED");
+    assert.equal(prepared.budget.ceiling, undefined, "the preflight does not invent a persisted legacy dial");
+  } finally { b.close(); }
+});
+
 test("a fresh preflight and the owner's confirmation let start prepare the attempt", async () => {
   const b = box("pass");
   try {
@@ -142,6 +178,34 @@ test("a fresh preflight and the owner's confirmation let start prepare the attem
     assert.equal(prepared.lifecycleState, "PREPARED");
     assert.equal(prepared.baseSha, git(b.repository, "rev-parse", "HEAD").trim());
     assert.deepEqual(await refusals(created.attemptDir), []);
+  } finally { b.close(); }
+});
+
+test("an interrupted exclusive worktree refuses without writing K1 refusal state", async () => {
+  const b = box("interrupted-worktree");
+  try {
+    const created = await draft(b, "interrupted-worktree");
+    const tree = join(b.worktreeRoot, created.status.sessionId);
+    mkdirSync(b.worktreeRoot, { recursive: true });
+    git(b.repository, "worktree", "add", "--detach", tree, git(b.repository, "rev-parse", "HEAD").trim());
+
+    const before = await readAttempt(created.attemptDir);
+    const journal = readFileSync(journalFilePath(created.attemptDir));
+    let preflightCalled = false;
+    await assert.rejects(startCommand({ ...startOptions(b, created.attemptDir),
+      preflight: () => { preflightCalled = true; return { adapter: true, sandbox: true, observability: true }; },
+    }), (error: unknown) => {
+      assert.ok(error instanceof AttemptWorktreeExists);
+      assert.equal(error.path, tree);
+      assert.equal(error.registered, true);
+      return true;
+    });
+
+    assert.equal(preflightCalled, false, "adapter availability is not probed after the retained tree refusal");
+    assert.deepEqual(await readAttempt(created.attemptDir), before);
+    assert.deepEqual(readFileSync(journalFilePath(created.attemptDir)), journal);
+    assert.deepEqual(await refusals(created.attemptDir), []);
+    assert.equal(existsSync(tree), true, "the interrupted tree remains available for owner recovery");
   } finally { b.close(); }
 });
 

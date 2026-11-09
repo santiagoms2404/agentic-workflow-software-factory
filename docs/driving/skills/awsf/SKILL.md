@@ -22,8 +22,8 @@ Run `/prime-awsf` first if this session has not been primed.
 - **Reference, never restate.** No schema, edge id, tier ceiling, gate id,
   blocker code or model id belongs in these documents. Point at
   `core/src/contracts/`, `core/src/state/`, `awsf.config.yaml` and the plans
-  under `specs/` (the v2 spine and its deep plans; v1 is complete), all of which
-  are single-sourced and tested.
+  under `specs/` (the current v3 spine and its deep plans, with v1/v2 retained
+  for history), all of which are single-sourced and tested.
 
 ## What you may run freely
 
@@ -46,7 +46,9 @@ the moment the session opens, and this one is not.
 Rebuilding the projection is **not** read-only, and must never be described as
 such. It is **non-destructive and idempotent**: it builds a fresh database
 aside, links the live one out of the way under a retained name, and renames the
-new file into place. Safe to run at any time, still a write.
+new file into place. It can refuse corrupt evidence or active database
+handles. Read the result and retain refused candidates. It is not a routine
+priming step.
 
 ```bash
 just awsf db rebuild
@@ -54,9 +56,12 @@ just awsf db rebuild
 
 ## What only the owner may do
 
-`journey`, `land`, `cancel`, `rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`, `confirm` and `close` are owner acts.
+`journey`, `land`, `cancel`, `rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `run`, `grant`, `confirm`, `close`, `seed`, `group apply` and `retry --adopt-as` are owner acts.
+The canonical list is `docs/driving/marimba/owner-acts.mts`.
 Prepare them and explain them; never perform one, and never recommend
-performing one without the evidence its edge requires. Landing is authorised
+performing one without the evidence its edge requires. `run` can proceed
+automatically, but may request an explicit owner correction; the driving boundary
+still denies it so a session cannot answer that prompt. Landing is authorised
 by the owner at a terminal — the terminal check is a shape test, not the
 authorisation boundary, and the boundary marimba operates under is the
 per-invocation tool-surface denial.
@@ -93,7 +98,7 @@ one question is how a session arrives with a summary instead of an answer.
 | launch a run, watch it, or work out whether it is stuck | `cookbooks/run_and_observe.md` |
 | the owner names a model, an effort or a provider for a phase | `cookbooks/select_a_route.md` |
 | an attempt is blocked or waiting, and something has to be decided | `cookbooks/read_a_blocked_attempt.md` |
-| the owner is weighing `journey`, `land`, `cancel`, `rework`, `review`, `degrade-review`, `attribute`, `prove`, `raise`, `publish`, `resume`, `grant`, `confirm` or `close` | `cookbooks/owner_acts.md` |
+| the owner is weighing an owner act | `cookbooks/owner_acts.md` |
 | where does a journal, envelope, gate row, process record or raw capture live | `references/evidence_map.md` |
 | which source owns a state, an edge, a guard, a ceiling or a recipe | `references/lifecycle.md` |
 | something behaved surprisingly, or a refusal looks like a bug | `references/gotchas.md` |

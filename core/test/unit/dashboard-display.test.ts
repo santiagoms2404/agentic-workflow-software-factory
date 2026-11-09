@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { contextMeterPercent, costAuthorityLabel, formatCost, formatUsage, modelProvenanceLabel } from "../../../dashboard/src/display.ts";
+import { contextMeterPercent, costAuthorityLabel, formatCost, formatDate, formatUsage, modelProvenanceLabel } from "../../../dashboard/src/display.ts";
 
 test("dashboard never turns a subscription cost into a bare number", () => {
   assert.equal(formatCost("unavailable", 0), "— subscription");
@@ -16,6 +16,13 @@ test("dashboard marks catalog arithmetic as an estimate with its authority", () 
 test("dashboard exposes partial totals rather than inventing a token total", () => {
   assert.equal(formatUsage({ totalTokens: null } as never), "—");
   assert.equal(formatUsage({ totalTokens: 3_480_000 } as never), "3.48M");
+});
+
+test("date formatting matches the existing locale and invalid dates stay absent", () => {
+  const value = "2026-09-30T12:34:56.000Z";
+  const date = new Date(Date.parse(value));
+  assert.equal(formatDate(value), `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${date.toLocaleTimeString([], { hour12: false })}`);
+  assert.equal(formatDate("not-a-date"), "—");
 });
 
 test("dashboard labels model provenance and does not draw an unknown context window", () => {

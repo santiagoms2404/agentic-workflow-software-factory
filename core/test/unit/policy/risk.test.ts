@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { admitRisk, classifyRisk } from "../../../src/policy/risk.ts";
+import { KNOWN_RISK_TIERS } from "../../../src/config/schema.ts";
+import { admitRisk, classifyRisk, RISK_TIERS } from "../../../src/policy/risk.ts";
 import { riskTierSufficient } from "../../../src/gates/risk.ts";
+
+test("policy ranking shares the config schema's risk-tier vocabulary", () => {
+  assert.equal(RISK_TIERS, KNOWN_RISK_TIERS);
+});
 
 const policy = {
   default: "T0" as const,

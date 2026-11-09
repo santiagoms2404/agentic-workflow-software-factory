@@ -33,6 +33,20 @@ export function relationsFilePath(taskRoot: string): string {
   return join(taskRoot, "relations.jsonl");
 }
 
+function assertTaskRelation(value: unknown): asserts value is TaskRelation {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("invalid task relation record");
+  }
+  const relation = value as Record<string, unknown>;
+  const safeComponent = (part: unknown): part is string =>
+    typeof part === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(part);
+  if (relation.schema !== "awsf/task-relation/v1" || !safeComponent(relation.project) ||
+    !safeComponent(relation.taskId) || !safeComponent(relation.continuesTask) ||
+    typeof relation.reason !== "string" || typeof relation.at !== "string" || relation.at.length === 0) {
+    throw new Error("invalid task relation record");
+  }
+}
+
 /**
  * Every declaration this task has recorded, oldest first.
  *
@@ -47,7 +61,10 @@ export async function readTaskRelations(taskRoot: string): Promise<readonly Task
   if (scanned.tornTail !== null) {
     throw new Error(`interrupted task relation append at ${relationsFilePath(taskRoot)}: the file is retained unchanged`);
   }
-  return scanned.records.map((record) => record.event);
+  return scanned.records.map((record) => {
+    assertTaskRelation(record.event);
+    return record.event;
+  });
 }
 
 /** The declaration in force, or null. The latest wins; none is not an error. */
@@ -56,6 +73,7 @@ export async function declaredContinuation(taskRoot: string): Promise<TaskRelati
 }
 
 export async function appendTaskRelation(taskRoot: string, relation: TaskRelation): Promise<void> {
+  assertTaskRelation(relation);
   const journal = new Journal<TaskRelation>(relationsFilePath(taskRoot));
   try {
     await journal.append(relation);

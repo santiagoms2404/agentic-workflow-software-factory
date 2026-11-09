@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { lstat, open, readFile, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { AttemptLock } from "../persistence/attempt-lock.ts";
 import { Journal } from "../persistence/journal.ts";
@@ -31,8 +31,15 @@ export function utf8(bytes: Uint8Array): string {
   return text;
 }
 export async function readInput(path: string): Promise<string> {
-  const bytes = await readFile(path);
-  if (bytes.byteLength > 1_048_576) throw new Error("input exceeds 1 MiB admission limit: request a narrower input");
+  const file = await open(path, "r");
+  let bytes: Buffer;
+  try {
+    if ((await file.stat()).size > 1_048_576) throw new Error("input exceeds 1 MiB admission limit: request a narrower input");
+    const bounded = Buffer.alloc(1_048_577);
+    const { bytesRead } = await file.read(bounded, 0, bounded.byteLength, 0);
+    if (bytesRead > 1_048_576) throw new Error("input exceeds 1 MiB admission limit: request a narrower input");
+    bytes = bounded.subarray(0, bytesRead);
+  } finally { await file.close(); }
   const text = utf8(bytes);
   safe(text);
   return text;

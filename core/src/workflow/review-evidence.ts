@@ -14,6 +14,7 @@
 import { createHash } from "node:crypto";
 import { deliverReviewDiff, type ReviewDeliveryLocation } from "./review-diff-delivery.ts";
 import { parseEnvelope } from "../contracts/parse-envelope.ts";
+import { utf8ByteLength } from "../contracts/typebox.ts";
 import {
   REVIEW_CONTEXT_DIFF_MAX_CHARS,
   REVIEW_CONTEXT_SCHEMA_ID,
@@ -24,7 +25,37 @@ import type { TestOutput } from "../contracts/test-output.ts";
 import { runGit, systemGitRunner } from "../git/changes.ts";
 import { GateReport } from "../gates/interface.ts";
 import { reviewEvidenceFitness, type ReviewEvidenceExpectation } from "../gates/review.ts";
-import { boundReviewDiff, diffRemovesLines, type DiffFileSection } from "../gates/review-diff.ts";
+import { boundReviewDiff, diffRemovesLines, type BoundedReviewDiff, type DiffFileSection } from "../gates/review-diff.ts";
+
+/**
+ * The UTF-8 bytes the bounded diff may take inside the envelope. The envelope
+ * cap is 256 KiB; the diff is most of it, and the stat tail, the output tail,
+ * paths and prose take what remains.
+ */
+export const REVIEW_DIFF_BYTE_ALLOWANCE = 192 * 1024;
+
+/**
+ * Bounds the diff in characters, then tightens the budget while its JSON form
+ * would exceed REVIEW_DIFF_BYTE_ALLOWANCE. The character budget does not bound
+ * bytes: a diff of mostly three-byte characters serialized past the envelope
+ * cap, so the candidate could not be reviewed (B3-15). An ASCII diff already sits
+ * well under the allowance and keeps its full budget.
+ */
+export function boundReviewDiffForEnvelope(
+  sections: readonly DiffFileSection[],
+  charBudget: number = REVIEW_CONTEXT_DIFF_MAX_CHARS,
+): BoundedReviewDiff {
+  let budget = charBudget;
+  let bounded = boundReviewDiff(sections, budget);
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const bytes = utf8ByteLength(JSON.stringify(bounded.diff));
+    if (bytes <= REVIEW_DIFF_BYTE_ALLOWANCE || budget <= 0) break;
+    // Strictly smaller each round, so the loop always makes progress.
+    budget = Math.max(0, Math.min(budget - 1, Math.floor((budget * REVIEW_DIFF_BYTE_ALLOWANCE) / bytes)));
+    bounded = boundReviewDiff(sections, budget);
+  }
+  return bounded;
+}
 
 export function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -42,8 +73,10 @@ function tail(value: string, maximum: number): string {
  * unusual bytes in a filename intact, and `--no-renames` makes both sides of a
  * rename explicit.
  */
+const DIFF_ISOLATION_FLAGS = ["--no-color", "--no-ext-diff", "--no-textconv", "--no-renames"] as const;
+
 export function candidatePathsBetween(worktree: string, baseSha: string, candidateSha: string): readonly string[] {
-  const output = runGit(systemGitRunner(worktree), ["diff", "--name-only", "--no-renames", "-z", `${baseSha}..${candidateSha}`]);
+  const output = runGit(systemGitRunner(worktree), ["diff", "--name-only", ...DIFF_ISOLATION_FLAGS, "-z", `${baseSha}..${candidateSha}`]);
   return Object.freeze([...new Set(output.split("\0").filter((path) => path.length > 0))].sort());
 }
 
@@ -63,28 +96,35 @@ function candidateDiff(
   baseSha: string,
   candidateSha: string,
   paths: readonly string[],
-): { readonly whole: string; readonly sections: readonly DiffFileSection[]; readonly stat: string; readonly insertions: number; readonly deletions: number } {
+): { readonly whole: string; readonly sections: readonly DiffFileSection[]; readonly stat: string; readonly insertions: number; readonly deletions: number; readonly binaryFiles: number } {
   const git = systemGitRunner(worktree);
   const range = `${baseSha}..${candidateSha}`;
-  const whole = runGit(git, ["diff", "--no-renames", range, "--"]);
+  const whole = runGit(git, ["diff", ...DIFF_ISOLATION_FLAGS, range, "--"]);
   // A fixed width, because the default depends on the terminal and evidence
   // that changes shape with the caller's window is not evidence.
-  const stat = runGit(git, ["diff", "--no-renames", "--stat=200,160", range, "--"]);
+  const stat = runGit(git, ["diff", ...DIFF_ISOLATION_FLAGS, "--stat=200,160", range, "--"]);
   let insertions = 0;
   let deletions = 0;
-  for (const record of runGit(git, ["diff", "--numstat", "--no-renames", "-z", range, "--"]).split("\0")) {
+  let binaryFiles = 0;
+  for (const record of runGit(git, ["diff", "--numstat", ...DIFF_ISOLATION_FLAGS, "-z", range, "--"]).split("\0")) {
     const fields = record.split("\t");
     if (fields.length < 3) continue;
     // Binary files report `-` for both counts; they are not zero-line changes,
-    // they are unmeasurable ones, and adding them as zero would be a lie.
+    // they are unmeasurable ones, and adding them as zero would be a lie. They are
+    // counted apart, and the review summary names them, so the totals never read as
+    // a complete measure of a change that added a file (B6-31).
+    if (fields[0] === "-" || fields[1] === "-") {
+      binaryFiles += 1;
+      continue;
+    }
     insertions += Number.parseInt(fields[0] ?? "", 10) || 0;
     deletions += Number.parseInt(fields[1] ?? "", 10) || 0;
   }
   const sections = paths.map((path) => ({
     path,
-    text: runGit(git, ["--literal-pathspecs", "diff", "--no-renames", range, "--", path]),
+    text: runGit(git, ["--literal-pathspecs", "diff", ...DIFF_ISOLATION_FLAGS, range, "--", path]),
   }));
-  return { whole, sections: Object.freeze(sections), stat, insertions, deletions };
+  return { whole, sections: Object.freeze(sections), stat, insertions, deletions, binaryFiles };
 }
 
 export async function attachReviewDelivery(context: ReviewContext, location: ReviewDeliveryLocation): Promise<ReviewContext> {
@@ -156,13 +196,14 @@ export interface ComposedReviewEvidence {
 export async function composeReviewEvidence(request: ReviewEvidenceRequest): Promise<ComposedReviewEvidence> {
   const changedFiles = candidatePathsBetween(request.worktree, request.baseSha, request.candidateSha);
   const observed = candidateDiff(request.worktree, request.baseSha, request.candidateSha, changedFiles);
-  const bounded = boundReviewDiff(observed.sections, REVIEW_CONTEXT_DIFF_MAX_CHARS);
+  const bounded = boundReviewDiffForEnvelope(observed.sections);
   const limitationRequiredFiles = new Set([...bounded.omittedFiles, ...bounded.partialFiles]);
   const onDisk = await request.retainFullDiff(request.diffRef, observed.whole);
   const context: ReviewContext = {
     schema: REVIEW_CONTEXT_SCHEMA_ID,
     producerStatus: "success",
-    summary: `Candidate ${request.candidateSha} against base ${request.baseSha}: ${String(changedFiles.length)} file(s), +${String(observed.insertions)}/-${String(observed.deletions)}`,
+    summary: `Candidate ${request.candidateSha} against base ${request.baseSha}: ${String(changedFiles.length)} file(s), +${String(observed.insertions)}/-${String(observed.deletions)}` +
+      (observed.binaryFiles === 0 ? "" : ` (${String(observed.binaryFiles)} binary file(s) not counted)`),
     artifacts: [],
     notesForNextPhase: "Judge this candidate against the recorded request. The diff below is the host's; no command may be run.",
     request: request.intent.request,

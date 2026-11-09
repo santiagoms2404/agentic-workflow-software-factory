@@ -2,10 +2,10 @@
 import { computed } from "vue";
 import type { AgentSummary } from "../../shared/types.ts";
 import { contextMeterPercent, formatTokens, modelProvenanceLabel, providerMark } from "../display.ts";
+import { agentFallbackColor } from "../presentation.ts";
 
 const props = defineProps<{ agent: AgentSummary; index: number }>();
-const palette = ["var(--purple)", "var(--cyan)", "var(--red)", "var(--amber)"];
-const color = computed(() => props.agent.color ?? palette[props.index % palette.length]!);
+const color = computed(() => props.agent.color ?? agentFallbackColor(props.agent.agent));
 const model = computed(() => props.agent.resolvedModel ?? props.agent.requestedModel);
 const provenance = computed(() => modelProvenanceLabel(props.agent.modelProvenance));
 const contextPercent = computed(() => contextMeterPercent(props.agent.contextTokens, props.agent.contextWindow));

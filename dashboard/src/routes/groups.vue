@@ -13,24 +13,34 @@ const error = ref<string | null>(null);
 const view = ref<"graph" | "reading">("graph");
 
 const active = computed(() => props.groups.groups.find((summary) => summary.group === props.selected) ?? null);
+let requestSequence = 0;
 
 watch(
   () => props.selected,
   async (group) => {
+    const sequence = ++requestSequence;
     tree.value = null;
     error.value = null;
-    if (group === null) return;
+    if (group === null) {
+      loading.value = false;
+      return;
+    }
     loading.value = true;
     try {
       const response = await fetch(`/api/v1/groups?group=${encodeURIComponent(group)}`);
       if (!response.ok) throw new Error(response.status === 404 ? "No planning journal exists for this group." : "Decision tree unavailable");
       const payload = await response.json() as GroupTree;
+      if (sequence !== requestSequence || props.selected !== group) return;
       if (payload.group !== group) throw new Error("Decision tree did not match the selected group");
       tree.value = payload;
     } catch (caught) {
-      error.value = caught instanceof Error ? caught.message : "Decision tree unavailable";
+      if (sequence === requestSequence) {
+        error.value = caught instanceof Error ? caught.message : "Decision tree unavailable";
+      }
     } finally {
-      loading.value = false;
+      if (sequence === requestSequence) {
+        loading.value = false;
+      }
     }
   },
   { immediate: true },
@@ -85,7 +95,7 @@ watch(
       <p v-else-if="error" class="absent">{{ error }}</p>
       <template v-else-if="tree">
         <GroupTreeGraph v-show="view === 'graph'" :tree="tree" />
-        <GroupDecisionTree v-show="view === 'reading'" :tree="tree" />
+        <GroupDecisionTree v-if="view === 'reading'" :tree="tree" />
       </template>
     </section>
   </main>

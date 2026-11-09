@@ -159,6 +159,23 @@ test("V1 delivery writes only the verified bytes, read-only, outside any worktre
     await refusedWith("delivery-changed", () => deliverVisualReferences(verified, directory));
     rmSync(join(directory, "stray.png"));
 
+    // A crashed writer may leave a strict prefix at the expected frame path.
+    // Re-entry completes a verified-byte prefix, but refuses unrelated bytes.
+    const interrupted = delivery.frames[1]!;
+    const expected = library.images[interrupted.id]!;
+    chmodSync(interrupted.path, 0o600);
+    writeFileSync(interrupted.path, expected.subarray(0, 40));
+    chmodSync(interrupted.path, 0o444);
+    assert.deepEqual(await deliverVisualReferences(verified, directory), delivery);
+    assert.deepEqual(readFileSync(interrupted.path), expected);
+
+    chmodSync(interrupted.path, 0o600);
+    writeFileSync(interrupted.path, expected.subarray(0, 20).map((byte) => byte ^ 0xff));
+    chmodSync(interrupted.path, 0o444);
+    await refusedWith("delivery-changed", () => deliverVisualReferences(verified, directory));
+    assert.deepEqual(readFileSync(interrupted.path), expected.subarray(0, 20).map((byte) => byte ^ 0xff),
+      "unrelated existing bytes are preserved rather than overwritten");
+
     // A worker running as the same user can defeat mode bits; it cannot defeat the digest.
     chmodSync(delivery.frames[0]!.path, 0o644);
     writeFileSync(delivery.frames[0]!.path, discPng(77));
@@ -176,10 +193,12 @@ test("V2 a source replaced after binding is refused even when its digests were r
   const library = referenceLibrary();
   try {
     const original = await verify(library);
+    const same = await verifyVisualReferences(binding(library), { planRef: null, agentPhases: PHASES, previousBound: original.bound });
+    assert.deepEqual(same.bound.frames, original.bound.frames, "exact bytes retain their host-verified frame facts");
     const replaced = discPng(42);
     writeFileSync(library.paths.f2!, replaced);
     library.writeDigests({ f2: sha256(replaced) });
-    const fresh = await verify(library);
+    const fresh = await verifyVisualReferences(binding(library), { planRef: null, agentPhases: PHASES, previousBound: original.bound });
     await refusedWith("source-changed", () => assertSameFrames(original.bound, fresh.bound));
     const other = await verifyVisualReferences(binding(library, { frames: ["f1"] }), { planRef: null, agentPhases: PHASES });
     await refusedWith("binding-changed", () => assertSameFrames(original.bound, other.bound));
@@ -204,6 +223,23 @@ test("V2 the private binding and its journal record must agree in both direction
     await refusedWith("binding-changed", () => readVisualBinding(attemptDir, { ...bound, bindingDigest: "f".repeat(64) }));
   } finally {
     rmSync(attemptDir, { recursive: true, force: true });
+    rmSync(join(library.root, ".."), { recursive: true, force: true });
+  }
+});
+
+test("B6-26: a reference frame under a root-level directory whose name starts with two dots is admitted", async () => {
+  // The containment test refused any root-relative path starting with "..", so
+  // `..archive/f1.png` was taken for a parent-directory escape (B6-26).
+  const library = referenceLibrary();
+  try {
+    const bytes = library.images.f1!;
+    mkdirSync(join(library.root, "..archive"), { recursive: true });
+    writeFileSync(join(library.root, "..archive", "f1.png"), bytes);
+    writeFileSync(library.indexPath, JSON.stringify({ version: 1, frames: [{ id: "f1", image: "..archive/f1.png" }], ticketFrames: { T01: ["f1"] } }));
+    library.writeDigests(); library.commit("test: dotted directory name");
+    const verified = await verify(library, { frames: ["f1"] });
+    assert.equal(verified.bound.frames[0]?.sha256, sha256(bytes));
+  } finally {
     rmSync(join(library.root, ".."), { recursive: true, force: true });
   }
 });
@@ -269,6 +305,7 @@ test("V2 pi's own image-blocking setting is refused from either file pi reads; o
     writeFileSync(join(agent, "settings.json"), JSON.stringify({ defaultModel: "gpt-6-sol", images: { autoResize: true } }));
     await assertRouteDeliversImages("pi-codex", { home, cwd });
     writeFileSync(join(agent, "settings.json"), JSON.stringify({ images: { blockImages: true } }));
+    await assertRouteDeliversImages("pi-codex", { home: undefined, cwd });
     await refusedWith("route-images-blocked", () => assertRouteDeliversImages("pi-codex", { home, cwd }));
     await assertRouteDeliversImages("claude-code", { home, cwd });
     writeFileSync(join(agent, "settings.json"), "{ not json");

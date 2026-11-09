@@ -86,6 +86,7 @@ function archiveFront(sessionId: string): void {
 }
 
 function restoreDefault(event: MouseEvent): void {
+  if (promotedIds.value === null && promotedFront.value === null) return;
   const stack = element.value;
   if (stack !== null && event.composedPath().includes(stack)) return;
   promotedIds.value = null;

@@ -6,12 +6,12 @@ import { renderNextSteps } from "../../lifecycle/renderer.ts";
 import { evaluateClosure, freshnessRefusals, k1Requirements, PREFLIGHT_RECORD_REQUIREMENT, type K1Requirement } from "../../preflight/fields.ts";
 import { grantOwedAt, writingPhases } from "../../preflight/grant-plan.ts";
 import { workflowRecipe } from "../../workflow/catalog.ts";
-import { readProtectedState } from "../../workflow/protected-grants.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
 import { gatherFreshness, K1_EXEMPT_WORKFLOWS } from "./preflight.ts";
 import { readAttemptEvidence } from "./review-record.ts";
+import { resolveAttemptRecipe } from "./start.ts";
 
-/** What K1's requirements on L1 are measured against. Without it, `requires` stays unmeasured and empty. */
+/** What K1's requirements on L1 are measured against. Without it, `requires` explicitly says unmeasured. */
 export interface NextK1Context {
   readonly stateRoot: string;
   readonly worktreeRoot: string;
@@ -42,12 +42,22 @@ async function k1At(attemptDir: string, status: AttemptStatus, context: NextK1Co
  * it: no second can be issued, so next lists no grant step and says so.
  */
 async function grantOwedNow(attemptDir: string, status: AttemptStatus, config: AwsfConfig): Promise<{ readonly phase: string; readonly paths: readonly string[]; readonly grantId: string | null } | null> {
-  const recipe = workflowRecipe(status.workflow);
+  const recipe = workflowRecipe(status.workflow) ?? await resolveAttemptRecipe(status, config).catch(() => null);
   if (recipe === null) return null;
   try {
-    const preflight = (await readAttemptEvidence(attemptDir)).findLast((evidence) => evidence.type === "driver-preflight");
+    const evidenceList = await readAttemptEvidence(attemptDir);
+    const preflight = evidenceList.findLast((evidence) => evidence.type === "driver-preflight");
     if (preflight?.type !== "driver-preflight") return null;
-    const grants = readProtectedState(attemptDir).grants.map((grant) => ({ id: grant.id, phase: grant.subject.phaseKey, files: grant.files.map((file) => file.path) }));
+    const grants: Array<{ id: string; phase: string; files: string[] }> = [];
+    for (const item of evidenceList) {
+      if (item.type === "protected-grant") {
+        grants.push({
+          id: item.grant.id,
+          phase: item.grant.subject.phaseKey,
+          files: item.grant.files.map((file) => file.path),
+        });
+      }
+    }
     const settled = new Set((status.recovery?.prefix ?? []).map((accepted) => accepted.phaseKey));
     const pending = writingPhases(recipe, config.agents).map((writer) => writer.phase).filter((phase) => !settled.has(phase));
     const owed = grantOwedAt(preflight.record.protectedPlan, grants, pending);

@@ -3,9 +3,10 @@
 // function: lock -> validate -> append+fsync -> atomic status replace ->
 // project -> unlock.
 
-import { mkdir, open, readFile, unlink } from "node:fs/promises";
-import { dirname } from "node:path";
-import type { Journal, JournalRecord } from "./journal.ts";
+import { randomBytes } from "node:crypto";
+import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { readJournalTail, type Journal, type JournalRecord } from "./journal.ts";
 import { writeStatus } from "./status-store.ts";
 
 /** Thrown when a write is attempted against an attempt already sealed by a terminal status. */
@@ -53,9 +54,9 @@ export async function readLockHolder(lockPath: string): Promise<LockHolder | nul
 
 /** Thrown when a reclaim is asked to remove a lock that a different holder now owns. */
 export class LockHolderChanged extends Error {
-  constructor(lockPath: string, expected: LockHolder, found: LockHolder | null) {
+  constructor(lockPath: string, expected: LockHolder | null, found: LockHolder | null) {
     super(
-      `refusing to reclaim ${lockPath}: it was held by pid ${expected.pid} at ${expected.acquiredAt}, ` +
+      `refusing to reclaim ${lockPath}: it was held by ${expected === null ? "an unnamed holder" : `pid ${expected.pid} at ${expected.acquiredAt}`}, ` +
         `and is now held by ${found === null ? "an unnamed holder" : `pid ${found.pid} at ${found.acquiredAt}`}`,
     );
     this.name = "LockHolderChanged";
@@ -68,8 +69,22 @@ export class LockHolderChanged extends Error {
  * file changed hands in between, a live host took it and this throws rather
  * than pulling the lock out from under it.
  */
-export async function reclaimLock(lockPath: string, expected: LockHolder): Promise<void> {
+export async function reclaimLock(lockPath: string, expected: LockHolder | null): Promise<void> {
   const found = await readLockHolder(lockPath);
+  if (expected === null) {
+    if (found !== null) {
+      throw new LockHolderChanged(lockPath, expected, found);
+    }
+    try {
+      await unlink(lockPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new LockHolderChanged(lockPath, expected, null);
+      }
+      throw err;
+    }
+    return;
+  }
   if (found === null || found.pid !== expected.pid || found.acquiredAt !== expected.acquiredAt) {
     throw new LockHolderChanged(lockPath, expected, found);
   }
@@ -77,19 +92,44 @@ export async function reclaimLock(lockPath: string, expected: LockHolder): Promi
 }
 
 /**
+ * The in-process queue of each lock path. Production builds a new `AttemptLock`
+ * per write, so the queue has to outlive any one instance: two instances for
+ * one attempt in one process queue here instead of racing for the file (B4-38).
+ */
+const processQueues = new Map<string, Promise<void>>();
+
+/** How a `withLock` call treats a lock that is already held. */
+export interface LockOptions {
+  /**
+   * `true` (the default) queues behind a holder in this process, so two writers
+   * of one attempt take turns (B4-38). `false` refuses at once, by the lock's
+   * name, when the lock is held here or in another process, for a caller that
+   * reports a busy lock rather than wait on a holder that may never come back.
+   */
+  wait?: boolean;
+}
+
+/** The refusal a `wait: false` caller gets: the same `EEXIST` a held lock file gives, naming the lock. */
+function lockHeld(lockPath: string): NodeJS.ErrnoException {
+  const error = new Error(`EEXIST: lock ${lockPath} is held by another writer in this process`) as NodeJS.ErrnoException;
+  error.code = "EEXIST";
+  error.path = lockPath;
+  return error;
+}
+
+/**
  * The attempt's exclusive lock.
  *
- * Two layers: an in-process queue, so two writers in the SAME process (the
- * shape the 500-concurrent-writes proof exercises) never interleave their
- * critical sections; and a `wx`-created lock file on disk, so a second
- * PROCESS holding the same attempt directory fails loudly instead of
- * corrupting it. Sealing is checked before every acquisition — including
- * ones already queued when `seal` runs — so nothing queued behind a seal
- * sneaks a write through.
+ * Two layers: an in-process queue, shared by every instance for the same lock
+ * path, so two writers in the SAME process (the shape the 500-concurrent-writes
+ * proof exercises) never interleave their critical sections; and a
+ * link-created lock file on disk, so a second PROCESS holding the same attempt
+ * directory fails loudly instead of corrupting it. Sealing is checked before
+ * every acquisition — including ones already queued when `seal` runs — so
+ * nothing queued behind a seal sneaks a write through.
  */
 export class AttemptLock {
   private readonly lockPath: string;
-  private queue: Promise<void> = Promise.resolve();
   private sealedState: string | null = null;
 
   constructor(lockPath: string) {
@@ -105,34 +145,58 @@ export class AttemptLock {
     return this.sealedState !== null;
   }
 
-  async withLock<T>(fn: () => Promise<T>): Promise<T> {
+  async withLock<T>(fn: () => Promise<T>, options: LockOptions = {}): Promise<T> {
     if (this.sealedState !== null) {
       throw new SealedAttempt(this.sealedState);
     }
 
-    const previous = this.queue;
+    const key = this.lockPath;
+    const queued = processQueues.get(key);
+    if (options.wait === false && queued !== undefined) {
+      throw lockHeld(this.lockPath);
+    }
+    const previous = queued ?? Promise.resolve();
     let release = (): void => {};
-    this.queue = new Promise<void>((resolve) => {
+    const tail = new Promise<void>((resolve) => {
       release = resolve;
     });
+    processQueues.set(key, tail);
 
     try {
       await previous;
       if (this.sealedState !== null) {
         throw new SealedAttempt(this.sealedState);
       }
-      await mkdir(dirname(this.lockPath), { recursive: true });
-      const handle = await open(this.lockPath, "wx", 0o600);
+      const dir = dirname(this.lockPath);
+      await mkdir(dir, { recursive: true });
+      const tmpPath = join(dir, `.${randomBytes(8).toString("hex")}.lock.tmp`);
+      const holder: LockHolder = { pid: process.pid, acquiredAt: new Date().toISOString() };
+      await writeFile(tmpPath, JSON.stringify(holder), { mode: 0o600 });
       try {
-        const holder: LockHolder = { pid: process.pid, acquiredAt: new Date().toISOString() };
-        await handle.writeFile(JSON.stringify(holder), "utf8");
-        return await fn();
+        await link(tmpPath, this.lockPath);
       } finally {
-        await handle.close();
-        await unlink(this.lockPath);
+        await unlink(tmpPath).catch(() => {});
       }
+      let outcome: { ok: true; value: T } | { ok: false; error: unknown };
+      try {
+        outcome = { ok: true, value: await fn() };
+      } catch (error) {
+        outcome = { ok: false, error };
+      }
+      // Releasing the file must not replace the callback's own failure (B4-30):
+      // when the callback threw, its error is the one the caller needs, even if
+      // the lock file has already gone. A release that fails after a clean
+      // callback is still reported.
+      try {
+        await unlink(this.lockPath);
+      } catch (error) {
+        if (outcome.ok) throw error;
+      }
+      if (!outcome.ok) throw outcome.error;
+      return outcome.value;
     } finally {
       release();
+      if (processQueues.get(key) === tail) processQueues.delete(key);
     }
   }
 }
@@ -177,6 +241,44 @@ export interface WriteProtocolDeps<Event, Status> {
 }
 
 /**
+ * Thrown when the journal already holds a record the status was not written from (B4-03).
+ *
+ * A crash, or a thrown status write, between the append and the status write leaves the journal one
+ * record ahead of status.json, and the lock is released either way. A writer that then validated
+ * against that status would append a record whose `source_seq` (taken from the journal tail) no
+ * longer matches the revision it carries, forking the journal from the status for good. The write
+ * is refused instead and appends nothing: the journal is the truth, and repairing the status from
+ * it is recovery's job (`recoverAttempt`), not a guess this layer makes. Nothing is removed.
+ */
+export class JournalAheadOfStatus extends Error {
+  constructor(journalPath: string, journalSeq: number, statusSeq: number) {
+    super(
+      `${journalPath} is at source_seq ${journalSeq} but the status was written from source_seq ${statusSeq}; ` +
+        "the status write after the last append was lost, so this write is refused until the status is recovered from the journal",
+    );
+    this.name = "JournalAheadOfStatus";
+  }
+}
+
+/**
+ * The `source_seq` a status was written from. The protocol is generic over the status, so this reads
+ * the attempt status's own `lastSourceSeq`; a status type without one is not checked. No status at
+ * all was written from no record.
+ */
+function statusSourceSeq(status: unknown): number | null {
+  if (status === null) return 0;
+  const seq = (status as { lastSourceSeq?: unknown }).lastSourceSeq;
+  return typeof seq === "number" && Number.isSafeInteger(seq) ? seq : null;
+}
+
+async function refuseJournalAhead(journalPath: string, status: unknown): Promise<void> {
+  const statusSeq = statusSourceSeq(status);
+  if (statusSeq === null) return;
+  const { lastSourceSeq: journalSeq } = await readJournalTail(journalPath);
+  if (journalSeq > statusSeq) throw new JournalAheadOfStatus(journalPath, journalSeq, statusSeq);
+}
+
+/**
  * The write protocol, in one function: lock -> validate -> append+fsync ->
  * atomic status replace -> project -> unlock. Every step after acquiring the
  * lock runs inside the same critical section, so a reader can never observe
@@ -194,6 +296,7 @@ export async function runWriteProtocol<Event, Status>(
     await step("locked");
     const currentStatus = await deps.readCurrentStatus();
     const { event, nextStatus: next } = deps.validate(currentStatus);
+    await refuseJournalAhead(deps.journal.path, currentStatus);
     await step("validated");
     const record = await deps.journal.append(event);
     await step("appended");

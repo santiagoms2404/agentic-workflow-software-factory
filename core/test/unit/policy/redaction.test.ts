@@ -7,7 +7,7 @@ import {
   scrubCredentials,
   scrubJsonText,
 } from "../../../src/policy/redaction.ts";
-import { globalCredentialPattern } from "../../../../dashboard/shared/credential-patterns.ts";
+import { GLOBAL_CREDENTIAL_PATTERNS, globalCredentialPattern } from "../../../../dashboard/shared/credential-patterns.ts";
 
 const shapedAccessId = (): string => `AK${"IA"}${"A".repeat(16)}`;
 const shapedBearer = (): string => `Bear${"er"} ${"opaque".repeat(6)}`;
@@ -17,15 +17,26 @@ test("the shared scrubber catches credential shapes without mutating input", () 
     safe: "visible",
     nested: [{ output: `failed with ${shapedAccessId()}` }],
     password: "format-not-yet-known",
+    authorization: "header-value",
+    authorizationId: "owner-approval-reference",
   };
   const scrubbed = scrubCredentials(input);
   assert.deepEqual(scrubbed, {
     safe: "visible",
     nested: [{ output: `failed with ${REDACTED_VALUE}` }],
     password: REDACTED_VALUE,
+    authorization: REDACTED_VALUE,
+    authorizationId: "owner-approval-reference",
   });
   assert.notEqual(scrubbed, input);
   assert.match(input.nested[0]!.output, /failed with/);
+});
+
+test("authorizationId exemption still scrubs credential-shaped values", () => {
+  const credential = shapedAccessId();
+  assert.deepEqual(scrubCredentials({ authorizationId: credential }), { authorizationId: REDACTED_VALUE });
+  assert.equal(scrubCredentials({ authorizationId: "opaque-owner-approval-reference" }).authorizationId,
+    "opaque-owner-approval-reference");
 });
 
 test("bearer, JWT, private-key, URL-auth, and vendor token shapes are recognized", () => {
@@ -87,6 +98,16 @@ test("global pattern derivation preserves flags without duplicating the global f
   assert.equal(globalCredentialPattern(/ordinary/gi).flags, "gi");
 });
 
+test("precompiled global patterns are reused safely across scrub calls", () => {
+  const first = `AK${"IA"}${"A".repeat(16)}`;
+  const second = `AK${"IA"}${"B".repeat(16)}`;
+  assert.ok(GLOBAL_CREDENTIAL_PATTERNS.length > 0);
+  assert.ok(GLOBAL_CREDENTIAL_PATTERNS.every((pattern) => pattern.global));
+  assert.equal(scrubCredentialString(first), REDACTED_VALUE);
+  assert.equal(scrubCredentialString(second), REDACTED_VALUE);
+  assert.equal(scrubCredentialString(first), REDACTED_VALUE);
+});
+
 test("vendor-key matching requires a word boundary without weakening real key detection", () => {
   const ordinaryIdentifier = [["ta", "sk"].join(""), "owner", "rework"].join("-");
   assert.equal(containsCredential(ordinaryIdentifier), false);
@@ -100,4 +121,17 @@ test("vendor-key matching requires a word boundary without weakening real key de
 test("JSON text remains valid JSON and keeps safe siblings", () => {
   const scrubbed = JSON.parse(scrubJsonText(JSON.stringify({ safe: 1, auth_token: shapedAccessId() }))) as Record<string, unknown>;
   assert.deepEqual(scrubbed, { safe: 1, auth_token: REDACTED_VALUE });
+});
+
+test("B10-41: a credential-named field is redacted in text that is not valid JSON, and other fields survive", () => {
+  const secret = ["zq", "81", "kx", "vb"].join("");
+  const truncated = `{"route": "small-route", "api_key": "${secret}", "note": "clipped mid-str`;
+  const scrubbed = JSON.parse(scrubJsonText(truncated)) as string;
+  assert.ok(!scrubbed.includes(secret), "a truncated body must not keep the credential-named value");
+  assert.ok(scrubbed.includes(`"api_key": "${REDACTED_VALUE}"`));
+  assert.ok(scrubbed.includes(`"route": "small-route"`));
+
+  const prose = `The provider said "token": 4421 and then "password": "${secret} trailing words".`;
+  const scrubbedProse = JSON.parse(scrubJsonText(prose)) as string;
+  assert.ok(!scrubbedProse.includes(secret) && !scrubbedProse.includes("4421"));
 });

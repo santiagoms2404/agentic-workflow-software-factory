@@ -9,31 +9,75 @@
  * launched, so the lists live here once and the suite asserts the shell script's
  * own `for` loops still name exactly these.
  *
- * This file imports nothing. That is deliberate twice over: the meta-test can
- * load it without pulling a harness SDK into this repository's dependency
- * graph, and a reviewer can read the whole boundary without reading a runtime.
+ * This file imports nothing but `owner-acts.mts`, which imports nothing. That
+ * is deliberate twice over: the meta-test can load it without pulling a
+ * harness SDK into this repository's dependency graph, and a reviewer can read
+ * the whole boundary without reading a runtime.
  */
 
+import { OWNER_ACT_LIST, ownerActName } from "./owner-acts.mts";
+
 /**
- * The acts the lifecycle reserves for the owner.
+ * The acts the lifecycle reserves for the owner are `OWNER_ACT_LIST`, declared
+ * once in `owner-acts.mts` (B5-05). This is its case-arm part: the single verbs
+ * whose `cli/main.ts` arm builds the terminal, which is what the shell guard's
+ * `for verb` loop and the next-step owner table name. `ownerActViolation` reads
+ * the whole list, so the acts built outside an arm are denied too.
  *
  * Not a policy preference. `processOwnerTerminal()` checks
  * `process.stdin.isTTY`, which is a terminal-SHAPE check, and a same-user agent
  * with shell access can allocate a PTY and answer the confirmation. This list is
  * what makes the boundary real while a driving session runs with prompts off.
  */
-export const OWNER_ACTS = ["land", "cancel", "rework", "review", "degrade-review", "attribute", "prove", "journey", "raise", "publish", "resume", "grant", "confirm", "close"] as const;
+export const OWNER_ACTS: readonly string[] = OWNER_ACT_LIST
+  .filter((entry) => entry.reach === "case-arm")
+  .map((entry) => entry.verb);
+
+/**
+ * Collapse runs of whitespace and pad, matching the shell guard's
+ * `" ".join(c.split())` followed by its `case " $cmd " in` test.
+ *
+ * Whitespace is the ONLY shell transformation either fence undoes. A variable,
+ * a line continuation, a quoted or split verb each write the act as text this
+ * does not contain, and each passes. That is the design's ceiling, not a set of
+ * holes to plug: closing the two easiest would leave the rest open while reading
+ * as though the fence had started covering intent.
+ */
+export function normalizeCommand(command: string): string {
+  return ` ${command.split(/\s+/u).filter(Boolean).join(" ")} `;
+}
+
+/**
+ * The forms an owner act also takes after a separator or an entry point (G01-G).
+ *
+ * `awsf -- <act>` and `awsf --silent -- <act>` are every npm spelling the
+ * driving docs teach (`npm run awsf -- <act>`, `npm run awsf --silent -- <act>`,
+ * `npm --prefix <dir> run awsf -- <act>`, `npm run --silent awsf -- <act>`), and
+ * `cli/main.ts <act>` is a direct `node … core/src/cli/main.ts <act>`. Each is
+ * matched after `normalizeCommand`, the same text-only way as the substring
+ * rule, and closed by a space after the act. The npm forms are also padded in
+ * front. The entry-point form is not, because a path such as
+ * `core/src/cli/main.ts` puts a `/` before `cli`, never a space. The
+ * over-denial grows by the same shape: a grep for "awsf -- land" is refused
+ * too.
+ */
+const OWNER_ACT_SEPARATED_FORMS = [" awsf --", " awsf --silent --", "cli/main.ts"] as const;
+
+/** Whether normalized text invokes `act` in any spelling the fence reads. */
+function invokesAct(normalized: string, act: string): boolean {
+  return normalized.includes(`awsf ${act}`) ||
+    OWNER_ACT_SEPARATED_FORMS.some((form) => normalized.includes(`${form} ${act} `));
+}
 
 /** Lifecycle commands for which an external controller deadline is forbidden. */
 export const TIMEOUT_GUARDED_LIFECYCLE_COMMANDS = ["run", "rework", "review", "resume"] as const;
 
 function lifecycleCommand(command: string): string | null {
   const normalized = normalizeCommand(command);
-  const direct = TIMEOUT_GUARDED_LIFECYCLE_COMMANDS.find(
-    (verb) => normalized.includes(`awsf ${verb}`),
-  );
-  if (direct !== undefined) return direct;
-  const npm = / npm run awsf(?: --[^\s]+)* -- (run|rework|review|resume) /u.exec(normalized);
+  for (const verb of TIMEOUT_GUARDED_LIFECYCLE_COMMANDS) {
+    if (invokesAct(normalized, verb)) return verb;
+  }
+  const npm = / npm (?:run|exec)(?: --[^\s]+)* awsf(?: --[^\s]+)* -- (run|rework|review|resume) /u.exec(normalized);
   return npm?.[1] ?? null;
 }
 
@@ -86,41 +130,20 @@ export function normalizeToolName(name: string): string {
 }
 
 /**
- * Collapse runs of whitespace and pad, matching the shell guard's
- * `" ".join(c.split())` followed by its `case " $cmd " in` test.
+ * The owner act a shell command invokes, or null. Reads text, never intent.
  *
- * Whitespace is the ONLY shell transformation either fence undoes. A variable,
- * a line continuation, a quoted or split verb each write the act as text this
- * does not contain, and each passes. That is the design's ceiling, not a set of
- * holes to plug: closing the two easiest would leave the rest open while reading
- * as though the fence had started covering intent.
+ * A flagged entry (`retry --adopt-as`) needs the verb in an owner-act spelling
+ * and the flag as its own word anywhere in the command: plain `retry` builds no
+ * owner terminal and stays open, and the flag's position among the arguments
+ * is the CLI parser's business, not this fence's.
  */
-export function normalizeCommand(command: string): string {
-  return ` ${command.split(/\s+/u).filter(Boolean).join(" ")} `;
-}
-
-/**
- * The forms an owner act also takes after a separator or an entry point (G01-G).
- *
- * `awsf -- <act>` and `awsf --silent -- <act>` are every npm spelling the
- * driving docs teach (`npm run awsf -- <act>`, `npm run awsf --silent -- <act>`,
- * `npm --prefix <dir> run awsf -- <act>`, `npm run --silent awsf -- <act>`), and
- * `cli/main.ts <act>` is a direct `node … core/src/cli/main.ts <act>`. Each is
- * matched after `normalizeCommand`, the same text-only way as the substring
- * rule, and closed by a space after the act. The npm forms are also padded in
- * front. The entry-point form is not, because a path such as
- * `core/src/cli/main.ts` puts a `/` before `cli`, never a space. The
- * over-denial grows by the same shape: a grep for "awsf -- land" is refused
- * too.
- */
-const OWNER_ACT_SEPARATED_FORMS = [" awsf --", " awsf --silent --", "cli/main.ts"] as const;
-
-/** The owner act a shell command invokes, or null. Reads text, never intent. */
 export function ownerActViolation(command: string): string | null {
   const normalized = normalizeCommand(command);
-  return OWNER_ACTS.find((act) =>
-    normalized.includes(`awsf ${act}`) ||
-    OWNER_ACT_SEPARATED_FORMS.some((form) => normalized.includes(`${form} ${act} `))) ?? null;
+  const entry = OWNER_ACT_LIST.find((candidate) =>
+    invokesAct(normalized, candidate.verb) &&
+    (candidate.flag === undefined ||
+      normalized.includes(` ${candidate.flag} `) || normalized.includes(` ${candidate.flag}=`)));
+  return entry === undefined ? null : ownerActName(entry);
 }
 
 /** Whether a tool name is delegation-shaped and must be refused. */

@@ -10,6 +10,7 @@ const props = defineProps<{ session: SessionDetailResponse; selectedPhaseId: str
 const detail = ref<PhaseDetailResponse | null>(null);
 const loadingPhase = ref(false);
 const phaseError = ref<string | null>(null);
+const drawer = ref<InstanceType<typeof PhaseDetailDrawer> | null>(null);
 let requestSequence = 0;
 let lastScrolledPhaseId: string | null = null;
 
@@ -17,13 +18,15 @@ async function loadPhase(): Promise<void> {
   const phaseId = props.selectedPhaseId;
   const sequence = ++requestSequence;
   if (phaseId === null) {
-    detail.value = null;
+    loadingPhase.value = false;
     phaseError.value = null;
+    detail.value = null;
     lastScrolledPhaseId = null;
     return;
   }
   loadingPhase.value = true;
   phaseError.value = null;
+  detail.value = null;
   try {
     const response = await fetch(`/api/v1/sessions/${encodeURIComponent(props.session.sessionId)}/phases/${encodeURIComponent(phaseId)}`);
     if (!response.ok) throw new Error("Phase evidence unavailable");
@@ -32,7 +35,10 @@ async function loadPhase(): Promise<void> {
     detail.value = responseDetail;
     await nextTick();
     if (lastScrolledPhaseId !== phaseId) {
-      document.querySelector<HTMLElement>(".inline-phase-detail")?.scrollIntoView({ block: "start", behavior: "auto" });
+      // This route's own drawer. Vue clears the ref on unmount, so a response that
+      // lands after the owner has left this page finds nothing to scroll.
+      const element: unknown = drawer.value?.$el;
+      if (element instanceof HTMLElement) element.scrollIntoView({ block: "start", behavior: "auto" });
       lastScrolledPhaseId = phaseId;
     }
   } catch (reason) {
@@ -57,7 +63,7 @@ function closeDetail(): void {
     <SwimlaneChart :session="session" :selected-phase-id="selectedPhaseId" @inspect="inspect" />
     <p v-if="phaseError" class="error-bar" role="alert">{{ phaseError }}</p>
     <p v-else-if="loadingPhase && !detail" class="phase-loading" role="status">Loading phase evidence…</p>
-    <PhaseDetailDrawer v-if="selectedPhaseId && detail" :detail="detail" :session-id="session.sessionId" @close="closeDetail" />
+    <PhaseDetailDrawer ref="drawer" v-if="selectedPhaseId && detail" :detail="detail" :session-id="session.sessionId" @close="closeDetail" />
     <OwnerGateCard v-if="session.state === 'AWAITING_OWNER'" :session="session" />
   </main>
 </template>

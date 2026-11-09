@@ -38,6 +38,29 @@ export function isDeterministicSource(source: string | undefined): source is Rea
   return (DETERMINISTIC_REASON_SOURCES as readonly string[]).includes(source ?? "");
 }
 
+/** The process-fault literals used by more than one blocked edge. */
+const PROCESS_FAULT_CODE = {
+  silence: "silence",
+  quota: "quota-exhausted",
+  phaseAbort: "phase-abort",
+  permissionBreach: "permission-breach",
+  budgetExhausted: "budget-exhausted",
+} as const;
+const PREPARED_PROCESS_FAULT_CODES = [
+  PROCESS_FAULT_CODE.silence,
+  PROCESS_FAULT_CODE.quota,
+  PROCESS_FAULT_CODE.phaseAbort,
+  PROCESS_FAULT_CODE.permissionBreach,
+  PROCESS_FAULT_CODE.budgetExhausted,
+] as const;
+const REVIEW_PROCESS_FAULT_CODES = [
+  PROCESS_FAULT_CODE.quota,
+  PROCESS_FAULT_CODE.silence,
+  PROCESS_FAULT_CODE.phaseAbort,
+  PROCESS_FAULT_CODE.permissionBreach,
+  PROCESS_FAULT_CODE.budgetExhausted,
+] as const;
+
 /**
  * Every reason code a `→ BLOCKED` edge may carry, per edge, gathered from the
  * Guard column of L2, L5, L8, L13, L17, L21 and L24.
@@ -50,8 +73,8 @@ export function isDeterministicSource(source: string | undefined): source is Rea
  */
 export const EDGE_BLOCKER_CODES = {
   L2: ["preflight-failed"],
-  L5: ["crash", "silence", "quota-exhausted", "phase-abort", "permission-breach", "budget-exhausted"],
-  L8: ["crash", "silence", "quota-exhausted", "phase-abort", "permission-breach", "budget-exhausted"],
+  L5: ["crash", ...PREPARED_PROCESS_FAULT_CODES],
+  L8: ["crash", ...PREPARED_PROCESS_FAULT_CODES],
   L13: ["correction-budget-exhausted"],
   // L17 names every review failure the host can classify after the review
   // process exits. The first three are review-specific contract/evidence
@@ -63,17 +86,13 @@ export const EDGE_BLOCKER_CODES = {
     "review-malformed",
     "review-evidence-invalid",
     "review-inconsistent",
-    "quota-exhausted",
-    "silence",
-    "phase-abort",
-    "permission-breach",
-    "budget-exhausted",
+    ...REVIEW_PROCESS_FAULT_CODES,
   ],
   L21: ["record-corrupt", "unknown-state", "ambiguous-pid", "unreadable-worktree"],
   L24: ["non-fast-forward", "dirty-canonical-tree", "git-failure", "ambiguous-recovery"],
 } as const satisfies Record<string, readonly string[]>;
 
-/** The union of every per-edge set — `reason.code ∈ BLOCKER_CODES` in L2's guard. */
+/** The union of every per-edge blocker vocabulary, retained for aggregate readers. */
 export const BLOCKER_CODES: readonly string[] = [
   ...new Set(Object.values(EDGE_BLOCKER_CODES).flat()),
 ].sort();
@@ -179,7 +198,8 @@ export class HumanGateBypass extends StateError {
 /** Step 5. Only now is "unknown pair" the true, most-specific complaint. */
 export class IllegalTransition extends StateError {
   constructor(from: TaskState, to: TaskState) {
-    super("IllegalTransition", from, to, `${pair(from, to)}: not one of the twenty-five legal transitions`);
+    // No edge count in the wording: a count here drifts every time an edge is added (B3-21).
+    super("IllegalTransition", from, to, `${pair(from, to)}: not one of the legal transitions`);
   }
 }
 

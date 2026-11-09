@@ -26,7 +26,7 @@ export const planWorkflow = {
       outputSchema: PlanOutputSchema,
       maxCorrections: 1,
       gates: [],
-      prompt: loadUserPrompt("planner"),
+      get prompt() { return loadUserPrompt("planner"); },
     },
   ],
 } as const satisfies WorkflowRecipe;

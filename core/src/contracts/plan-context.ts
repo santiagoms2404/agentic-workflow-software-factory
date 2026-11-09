@@ -2,7 +2,7 @@ import { Type, type Static } from "@sinclair/typebox";
 import { ARCHITECTURE_REVIEW_FINDING_PROPERTIES } from "./architecture-review-output.ts";
 import { DesignAcceptanceCriterionSchema, DesignInvariantSchema } from "./design-output.ts";
 import { phaseEnvelope } from "./envelope-base.ts";
-import { REVIEW_SEVERITIES, REVIEW_VERDICTS } from "./review-output.ts";
+import { BLOCKING_SEVERITIES, REVIEW_SEVERITIES, REVIEW_VERDICTS } from "./review-output.ts";
 import { stringUnion } from "./typebox.ts";
 
 export const PLAN_CONTEXT_SCHEMA_ID = "awsf.plan-context/v1";
@@ -16,7 +16,10 @@ export const PLAN_CONTEXT_SCHEMA_ID = "awsf.plan-context/v1";
 // unrepresentable. The gate and schema agree by construction rather than by
 // coincidence. The finding schema reinforces that boundary by accepting only
 // the non-blocking members of the shared ordered severity vocabulary.
-const NON_BLOCKING_REVIEW_SEVERITIES = [REVIEW_SEVERITIES[0], REVIEW_SEVERITIES[1]] as const;
+// Derived by filtering, not by position, so a reordered or inserted severity cannot leak a blocking one (B3-12).
+export const NON_BLOCKING_REVIEW_SEVERITIES = REVIEW_SEVERITIES.filter(
+  (severity) => !(BLOCKING_SEVERITIES as readonly string[]).includes(severity),
+);
 
 const NonBlockingArchitectureReviewFindingSchema = Type.Object(
   {

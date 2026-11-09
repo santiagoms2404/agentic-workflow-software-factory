@@ -29,6 +29,7 @@ import {
   ProveReasonRequired,
   ProveReplayRepeated,
   ProveTaskNamesDefect,
+  assertProveReason,
   proveCommand,
   type ProveCommandOptions,
 } from "../../../src/cli/commands/prove.ts";
@@ -126,6 +127,17 @@ test("awsf prove is the owner's: a non-interactive terminal is refused before an
     assert.deepEqual(piped.prompts, []);
     assert.equal(written(w, "replay-a"), false);
   } finally { w.close(); }
+});
+
+test("prove reason bounding never leaves half of an astral code point", () => {
+  const reason = assertProveReason(`${"x".repeat(1_999)}😀tail`);
+  assert.equal(reason, "x".repeat(1_999));
+});
+
+test("credential scanning happens before the reason is bounded", () => {
+  const token = "gh" + "p_" + "a".repeat(36);
+  const reason = `${"x".repeat(1_990)}${token}`;
+  assert.throws(() => assertProveReason(reason), ProveCredentialRejected);
 });
 
 test("the reason is required and never credential-shaped, and --rep and --order are positive integers", async () => {
@@ -303,6 +315,20 @@ test("a repeated (item, arm, repetition) is refused however the arm is spelled, 
     await assert.rejects(proveCommand(options(w, { repetition: 2 })), /replay-a already has attempt 1; a replay is a new task/);
     const next = await proveCommand(options(w, { taskId: "replay-b", repetition: 2 }));
     assert.equal(next.status?.replay?.repetition, 2);
+  } finally { w.close(); }
+});
+
+test("concurrent prove commands cannot record the same item, arm and repetition twice", async () => {
+  const w = world("concurrent-repeat");
+  try {
+    const results = await Promise.allSettled([
+      proveCommand(options(w, { taskId: "replay-race-a" })),
+      proveCommand(options(w, { taskId: "replay-race-b" })),
+    ]);
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+    const refused = results.find((result) => result.status === "rejected");
+    assert.ok(refused?.status === "rejected" && refused.reason instanceof ProveReplayRepeated);
+    assert.notEqual(written(w, "replay-race-a"), written(w, "replay-race-b"));
   } finally { w.close(); }
 });
 

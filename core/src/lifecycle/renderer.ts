@@ -88,7 +88,10 @@ export function renderNextAction(model: NextSteps, context: AdviceContext = {}):
   const wait = model.waits.length === 0 ? "" : `host transitions: ${model.waits.map(wait => `${wait.edge} to ${wait.to}`).join(", ")}`;
   const sentence = actions.length === 0 ? "no state-changing CLI action is listed" : `run ${actions.join(" or ")}`;
   const held = model.steps.find(step => step.kind === "edge" && step.edge === "L1")?.requires ?? [];
-  const k1 = held.length === 0 ? "" : `start is refused until K1 clears: ${held.map(entry => `${entry.field} ${entry.status}`).join(", ")}; `;
+  const unmeasured = held.some(entry => entry.check === "K1" && entry.status === "unmeasured");
+  const k1 = held.length === 0 ? "" : unmeasured
+    ? `K1 is unmeasured; start remains refused until preflight measures its requirements: ${held.map(entry => entry.field).join(", ")}; `
+    : `start is refused until K1 clears: ${held.map(entry => `${entry.field} ${entry.status}`).join(", ")}; `;
   const owed = owedGrant(model);
   const spent = context.grantUnwidenable;
   const grant = spent != null ? `run is refused: ${spent.phase}'s protected grant misses ${spent.paths.join(", ")}, and ${unwidenableGrant(spent)}; `

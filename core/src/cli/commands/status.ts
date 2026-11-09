@@ -10,6 +10,7 @@ import { locateRunReport, runReportRevision } from "../../observability/run-repo
 import { readAttemptEvidence } from "./review-record.ts";
 import { readAttempt, type AttemptStatus } from "./attempt.ts";
 import { shiftReadout } from "./shift-readout.ts";
+import { processAlive } from "./preview.ts";
 import { declaredContinuation, type TaskRelation } from "../../persistence/task-relations.ts";
 
 function phaseLine(status: AttemptStatus): string {
@@ -183,10 +184,6 @@ export function formatStatusEvidence(evidence: readonly AttemptEvidence[]): read
   return Object.freeze(lines);
 }
 
-function pidIsLive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
-}
-
 /**
  * What the OWNER chose for this attempt, as distinct from what ran.
  *
@@ -225,13 +222,14 @@ export async function statusCommand(
   attemptDir: string,
   options: { readonly evidence?: boolean } = {},
 ): Promise<readonly string[]> {
-  const [status, records, report, relation] = await Promise.all([
+  const [status, report, relation] = await Promise.all([
     readAttempt(attemptDir),
-    readAttemptEvidence(attemptDir),
     locateRunReport(attemptDir),
     // `attemptDir` is `<task>/<attempt>`, so the task root is its parent.
     declaredContinuation(join(attemptDir, "..")),
   ]);
+  const needsRecords = options.evidence === true || status.shift != null || status.workflow === "shift";
+  const records = needsRecords ? await readAttemptEvidence(attemptDir) : [];
   const lines = [
     ...formatStatus(status), ...formatRelation(status, relation), ...formatGroup(status),
     `Closure: ${(await readClosure(attemptDir, status)).state} — closure is read from the journal, not inferred from ticket markers`,
@@ -241,7 +239,9 @@ export async function statusCommand(
     const kind = status.recovery.kind === "quota-pause" ? "quota-paused"
       : status.recovery.kind === "ceiling-pause" ? "ceiling-paused; the owner raises the ceiling, the shift never does"
       : status.recovery.kind === "ticket-block" ? "ticket-blocked; the owner fixes the cause, the shift never retries itself"
-      : status.recovery.kind === "result-ready" ? "saved reply awaiting host validation" : "saved accepted phase result";
+      // A validating checkpoint records the stage about to run, not acceptance.
+      : status.recovery.kind === "result-ready" || status.recovery.kind === "validating"
+        ? "saved reply awaiting host validation" : "saved accepted phase result";
     const ticket = status.recovery.ticket === undefined ? "" : `; next ticket ${status.recovery.ticket}`;
     lines.push(`Recovery: ${kind}; ${status.recovery.prefix.length} completed phase(s)${ticket}. Native interrupted-turn reconnect is not implied.`);
   }
@@ -257,7 +257,7 @@ export async function statusCommand(
     lines.push(`Run report: ${report.absolutePath} — human-readable projection of the retained attempt evidence${stale}`);
   }
   if (options.evidence === true) {
-    lines.push(...formatRecoveryDiagnostic(diagnoseRecovery(status, records, pidIsLive)));
+    lines.push(...formatRecoveryDiagnostic(diagnoseRecovery(status, records, processAlive)));
     lines.push(...formatStatusEvidence(records));
   }
   return Object.freeze(lines);

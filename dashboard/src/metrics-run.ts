@@ -1,8 +1,8 @@
 import type { MetricsAttribution, MetricsResponse, MetricsRoleRow, MetricsRun, MetricsRunPhase, PhaseStatus, RateCardRow } from "../shared/types.ts";
-import { TOOL_CLASSES, type RowPrice } from "../shared/route-metrics.ts";
-import { formatListEquivalent, priceRow } from "../shared/rate-card.ts";
+import { compareText, TOOL_CLASSES, type RowPrice } from "../shared/route-metrics.ts";
+import { formatListEquivalent, listEquivalentByKindUsd, priceRow } from "../shared/rate-card.ts";
 import { formatTokens, shortSessionId } from "./display.ts";
-import { ROLE_ORDER, runsInLens, type MetricsRouteState, type Provider } from "./metrics-lens.ts";
+import { rankIn, ROLE_ORDER, runsInLens, STATE_LABEL, type MetricsRouteState, type Provider } from "./metrics-lens.ts";
 import { TOOL_LETTER } from "./metrics-ledger.ts";
 import { routeProvider, routeTitle } from "./metrics-matrix.ts";
 
@@ -35,7 +35,7 @@ export function runPicker(payload: Pick<MetricsResponse, "runs" | "roleRows">, s
 }
 
 export function runOptionLabel(run: MetricsRun): string {
-  return `${run.taskId} · ${shortSessionId(run.sessionId)} · ${run.stateGroup === "OPEN" ? "in flight" : run.stateGroup.toLowerCase().replace("_", " ")}`;
+  return `${run.taskId} · ${shortSessionId(run.sessionId)} · ${STATE_LABEL[run.stateGroup]}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,24 +169,19 @@ export interface KindShare {
 }
 
 /**
- * The row's list-price equivalent split by token kind, at the card's rates.
+ * The row's list-price equivalent split by token kind. The shares come from
+ * the card's rates, and the bars are scaled to `listUsd`, the figure the List
+ * column beside them shows, so the bars always add up to that column (B13-23).
  * Reasoning joins output only when a usage event called it additive, as
- * `listEquivalentUsd` counts it. `null` when the row is unpriced.
+ * `listEquivalentUsd` counts it. `null` when the row is unpriced or has no figure.
  */
-export function listByKind(row: Pick<MetricsRoleRow, "route" | "resolvedModel" | "tokens">): KindShare[] | null {
+export function listByKind(row: Pick<MetricsRoleRow, "route" | "resolvedModel" | "tokens">, listUsd: number | null): KindShare[] | null {
   const pricing = priceRow(row);
-  if (!pricing.priced) return null;
-  const { rate } = pricing;
-  const t = row.tokens;
-  const reasoning = t.reasoningRelation === "additive" ? t.reasoningTokens ?? 0 : 0;
-  const usd: Record<TokenKind, number> = {
-    input: ((t.inputTokens ?? 0) * rate.input) / 1_000_000,
-    "cache read": ((t.cacheReadTokens ?? 0) * rate.cacheRead) / 1_000_000,
-    "cache write": ((t.cacheWriteTokens ?? 0) * rate.cacheWrite) / 1_000_000,
-    output: (((t.outputTokens ?? 0) + reasoning) * rate.output) / 1_000_000,
-  };
+  if (!pricing.priced || listUsd === null) return null;
+  const usd = listEquivalentByKindUsd(row.tokens, pricing.rate);
   const total = TOKEN_KINDS.reduce((sum, kind) => sum + usd[kind], 0);
-  return TOKEN_KINDS.map((kind) => ({ kind, usd: usd[kind], share: total === 0 ? 0 : usd[kind] / total }));
+  const share = (kind: TokenKind): number => (total === 0 ? 0 : usd[kind] / total);
+  return TOKEN_KINDS.map((kind) => ({ kind, usd: share(kind) * listUsd, share: share(kind) }));
 }
 
 export interface RoleLine {
@@ -221,14 +216,9 @@ export function firstPassMark(row: Pick<MetricsRoleRow, "settled" | "firstPass" 
   return row.blockedHere ? "blocked here" : "no";
 }
 
-function roleRank(role: string): number {
-  const index = (ROLE_ORDER as readonly string[]).indexOf(role);
-  return index < 0 ? ROLE_ORDER.length : index;
-}
-
 export function roleLines(rows: readonly MetricsRoleRow[], price: RowPrice, context: RoleContext): RoleLine[] {
   return [...rows]
-    .sort((a, b) => roleRank(a.role) - roleRank(b.role) || (a.role < b.role ? -1 : a.role > b.role ? 1 : 0))
+    .sort((a, b) => rankIn(ROLE_ORDER, a.role) - rankIn(ROLE_ORDER, b.role) || compareText(a.role, b.role))
     .map((row) => {
       const named = routeTitle(row.route, [row], context.rateCard, context.priorLabels);
       return {
@@ -245,7 +235,7 @@ export function roleLines(rows: readonly MetricsRoleRow[], price: RowPrice, cont
         firstPass: firstPassMark(row),
         tokens: `${formatTokens(row.tokens.cacheReadTokens)} · ${formatTokens(row.tokens.outputTokens)}`,
         list: formatListEquivalent(price(row)),
-        byKind: listByKind(row),
+        byKind: listByKind(row, price(row)),
       };
     });
 }
@@ -352,9 +342,9 @@ export interface AttributionPanel {
   readonly source: "owner" | "heuristic" | null;
 }
 
-/** `null` unless the run is BLOCKED: only a blocked attempt can be attributed (`AttributeAttemptNotBlocked`). */
+/** `null` unless the run is BLOCKED or CANCELLED: only a blocked or cancelled attempt can be attributed. */
 export function attributionPanel(run: LinkedMetricsRun): AttributionPanel | null {
-  if (run.stateGroup !== "BLOCKED") return null;
+  if (run.stateGroup !== "BLOCKED" && run.stateGroup !== "CANCELLED") return null;
   return {
     blocked: blockedAt(run),
     heuristic: run.heuristicAttribution,

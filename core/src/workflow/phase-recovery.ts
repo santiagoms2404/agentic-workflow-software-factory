@@ -14,11 +14,8 @@ import { writeStatus } from "../persistence/status-store.ts";
 import { assertClean, runGit, type GitRunner } from "../git/changes.ts";
 import { reconcileHostCommit, type HostCommitReconciliation } from "../git/commit-reconcile.ts";
 import { planHostValidationRecovery, type HostValidationRecovery, type VerifyCandidateLedgerVerdict } from "./host-validation.ts";
-import { runSystemCommand } from "../execution/transport-broker.ts";
-const readOnlyGit = (repository: string): GitRunner => argv => runSystemCommand("git", ["-C", repository, ...argv], {
-  env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-    GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" }, timeoutMs: 30_000,
-});
+import { protectedReadOnlyGit } from "./protected-files.ts";
+const readOnlyGit = protectedReadOnlyGit;
 import type { PhaseEvidenceRecord } from "../observability/attempt-evidence.ts";
 import { acceptedResumeInstructions } from "./resume-instruction.ts";
 
@@ -82,8 +79,9 @@ export async function inspectPhaseRecovery(attemptDir: string) {
       // A durable stage is only ever installed by the event that announces the
       // stage advance. A checkpoint that appeared in any other event is not a
       // record of what the host actually reached.
+      const checkpointDigest = recoveryDigest(checkpoint);
       const installed = scan.records.find(record => record.event.next.recovery != null &&
-        recoveryDigest(record.event.next.recovery) === recoveryDigest(checkpoint));
+        record.event.next.recovery.id === checkpoint.id && recoveryDigest(record.event.next.recovery) === checkpointDigest);
       if (installed?.event.evidence?.type !== "phase-validation-started" ||
           installed.event.evidence.phaseId !== `${status.sessionId}:${pending.phaseKey}` ||
           !scan.records.some(record => record.event.evidence?.type === "phase-validation-started" &&
@@ -175,9 +173,13 @@ export interface ValidationReconciliation {
  * retained debit exactly as the crash left them. In particular, an ambiguous
  * commit history is a refusal — never a reset, a clean, a stash, or a second
  * commit that would "make it look right".
+ *
+ * `seedPaths` is the attempt's `config.runtime.seed_paths`: the same list the
+ * producing run excluded from every tree digest it recorded (B6-01), so the
+ * digests compared here measure the same tree.
  */
 export async function reconcileHostValidation(
-  status: AttemptStatus, checkpoint: PhaseRecovery, git: GitRunner,
+  status: AttemptStatus, checkpoint: PhaseRecovery, git: GitRunner, seedPaths: readonly string[] = [],
   verifyCandidateLedger?: VerifyCandidateLedgerVerdict,
 ): Promise<ValidationReconciliation> {
   const progress = checkpoint.validation!;
@@ -191,23 +193,36 @@ export async function reconcileHostValidation(
   // A protected host effect is identified against its own durable intent and
   // binding, under the execution lease, by `git/protected-reconcile.ts`.
   // Preflight states the plan and touches nothing.
-  if (plan.action === "reconcile-protected") return Object.freeze({ plan, commit: null, candidateSha: inherited });
+  // The protected publication is identified by its own evidence, which this function never reads,
+  // so it cannot name the revision: the previous phase's candidate is not this phase's (B6-23).
+  if (plan.action === "reconcile-protected") return Object.freeze({ plan, commit: null, candidateSha: null });
   if (plan.action === "replay") {
-    if (await savedResultTreeDigest(status.worktree!, git) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
     if (runGit(git, ["rev-parse", "HEAD"]).trim() !== checkpoint.worktreeHeadSha) throw new Error("recovery refused: HEAD moved during read-only host validation");
+    if (await savedResultTreeDigest(status.worktree!, git, seedPaths) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
     return Object.freeze({ plan, commit: null, candidateSha: inherited });
   }
   // The commit is already durable at this cut; what is unresolved is which
   // configured commands ran. The ledger names those that provably did not, and
   // only those are dispatched again. Preflight states the plan and acts on
   // nothing.
-  if (plan.action === "reconcile-commands") return Object.freeze({ plan, commit: null, candidateSha: inherited });
+  if (plan.action === "reconcile-commands") {
+    const recorded = progress.commitResult;
+    if (recorded === null) {
+      throw new Error("recovery refused: verify-candidate recovery has no recorded commit result");
+    }
+    const currentHead = runGit(git, ["rev-parse", "HEAD"]).trim();
+    const expectedHead = recorded.commitSha ?? checkpoint.worktreeHeadSha;
+    if (currentHead !== expectedHead) {
+      throw new Error("recovery refused: worktree HEAD does not match the durable commit");
+    }
+    return Object.freeze({ plan, commit: null, candidateSha: recorded.commitSha ?? inherited });
+  }
   const commit = await reconcileHostCommit(plan.intent, { worktree: status.worktree!, git });
   if (commit.outcome === "refused") throw new Error(`recovery refused: ${commit.reason}`);
   if (commit.outcome === "not-committed") {
     // The transport never ran, so the exact bytes it was going to commit must
     // still be the exact bytes the saved reply left behind.
-    if (await savedResultTreeDigest(status.worktree!, git) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
+    if (await savedResultTreeDigest(status.worktree!, git, seedPaths) !== pending.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
   }
   const recorded = plan.result;
   if (recorded !== null) {
@@ -215,14 +230,15 @@ export async function reconcileHostValidation(
         (commit.outcome === "committed" && commit.commitSha !== recorded.commitSha)) {
       throw new Error("recovery refused: the durable commit result and the repository name different revisions");
     }
-    if (await savedResultTreeDigest(status.worktree!, git) !== recorded.treeDigest) throw new Error("recovery refused: worktree or index bytes changed after the recorded commit");
+    if (await savedResultTreeDigest(status.worktree!, git, seedPaths) !== recorded.treeDigest) throw new Error("recovery refused: worktree or index bytes changed after the recorded commit");
   }
   return Object.freeze({ plan, commit,
     candidateSha: commit.outcome === "committed" ? commit.commitSha : inherited });
 }
 
+/** `seedPaths` is `config.runtime.seed_paths`, the list every recorded tree digest excluded; see `reconcileHostValidation`. */
 export async function verifyRecoveryWorktree(
-  status: AttemptStatus, checkpoint: PhaseRecovery, verifyCandidateLedger?: VerifyCandidateLedgerVerdict,
+  status: AttemptStatus, checkpoint: PhaseRecovery, seedPaths: readonly string[] = [], verifyCandidateLedger?: VerifyCandidateLedgerVerdict,
 ): Promise<ValidationReconciliation | null> {
   if (status.worktree === null || status.baseSha === null) throw new Error("recovery has no worktree");
   const git = readOnlyGit(status.worktree);
@@ -230,9 +246,9 @@ export async function verifyRecoveryWorktree(
   // A `validating` checkpoint answers the tree and HEAD questions against its
   // recorded commit intent, because HEAD legitimately advances at exactly one
   // point inside the segment. Every other checkpoint keeps the original rule.
-  const reconciliation = checkpoint.validation === undefined ? null : await reconcileHostValidation(status, checkpoint, git, verifyCandidateLedger);
+  const reconciliation = checkpoint.validation === undefined ? null : await reconcileHostValidation(status, checkpoint, git, seedPaths, verifyCandidateLedger);
   if (reconciliation === null && checkpoint.pending === undefined) assertClean(status.worktree, "before", git);
-  else if (reconciliation === null && await savedResultTreeDigest(status.worktree, git) !== checkpoint.pending!.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
+  else if (reconciliation === null && await savedResultTreeDigest(status.worktree, git, seedPaths) !== checkpoint.pending!.worktreeDigest) throw new Error("saved reply worktree or index bytes changed");
   if (runGit(git, ["rev-parse", "--abbrev-ref", "HEAD"]).trim() !== "HEAD" ||
       (reconciliation === null && runGit(git, ["rev-parse", "HEAD"]).trim() !== checkpoint.worktreeHeadSha) ||
       runGit(canonical, ["rev-parse", "HEAD"]).trim() !== checkpoint.integrationBaseSha ||

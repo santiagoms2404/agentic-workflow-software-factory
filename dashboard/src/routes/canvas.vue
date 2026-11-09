@@ -14,7 +14,8 @@ import {
   type CanvasRoute,
 } from "../canvas-view.ts";
 import { browserPins, readPins, writePins } from "../canvas-pins.ts";
-import { askLine, decisionSlides, elsewhere } from "../canvas-session.ts";
+import { decisionSlides, elsewhere } from "../canvas-session.ts";
+import { askLine as formatAskLine } from "../presentation.ts";
 import { clampIndex, relationBetween, relationReason } from "../canvas-wheel.ts";
 import { stateTone } from "../display.ts";
 import CanvasMap from "../components/CanvasMap.vue";
@@ -33,6 +34,8 @@ const props = defineProps<{
 }>();
 
 const map = ref<InstanceType<typeof CanvasMap> | null>(null);
+const currentRoute = ref(props.route);
+watch(() => props.route, (route) => { currentRoute.value = route; });
 /**
  * Focus across the open and the return.
  *
@@ -56,7 +59,7 @@ function holdParked(id: string, element: unknown): void {
   else parked.set(id, element as HTMLElement);
 }
 
-watch(() => props.route.opened, async (now, before) => {
+watch(() => currentRoute.value.opened, async (now, before) => {
   // Lazily, so arriving with `opened` already in the address moves nothing:
   // the reader did not navigate, they landed.
   await nextTick();
@@ -65,7 +68,7 @@ watch(() => props.route.opened, async (now, before) => {
   if (map.value?.focusNode(before) !== true) parked.get(before)?.focus();
 });
 const graph = computed(() => buildCanvasGraph(props.sessions, props.groups, props.plans));
-const shown = computed(() => filterGraph(graph.value, props.route.kinds));
+const shown = computed(() => filterGraph(graph.value, currentRoute.value.kinds));
 const counts = computed(() => kindCounts(graph.value));
 
 /**
@@ -84,13 +87,34 @@ function keepPins(next: ReadonlyMap<string, Point>): void {
   writePins(store, next);
 }
 
+function reset(): void {
+  if (map.value !== null) {
+    map.value.reset();
+  } else {
+    pinned.value = new Map();
+    writePins(store, pinned.value);
+  }
+}
+
 function go(next: Partial<CanvasRoute>): void {
-  location.hash = canvasRouteHash({ ...props.route, ...next });
+  const updated = { ...currentRoute.value, ...next };
+  currentRoute.value = updated;
+  location.hash = canvasRouteHash(updated);
+}
+
+function updateCamera(camera: Camera): void {
+  const updated = { ...currentRoute.value, camera };
+  currentRoute.value = updated;
+  history.replaceState(history.state, "", canvasRouteHash(updated));
+}
+
+function askLine(text: string | null): string | null {
+  return formatAskLine(text, 120);
 }
 
 function toggleKind(kind: CanvasNodeKind): void {
-  const has = props.route.kinds.includes(kind);
-  const next = has ? props.route.kinds.filter((candidate) => candidate !== kind) : [...props.route.kinds, kind];
+  const has = currentRoute.value.kinds.includes(kind);
+  const next = has ? currentRoute.value.kinds.filter((candidate) => candidate !== kind) : [...currentRoute.value.kinds, kind];
   // Every kind off is every kind on: a map showing nothing reads as broken
   // rather than as filtered, and there would be no control left to undo it.
   //
@@ -109,11 +133,11 @@ function toggleKind(kind: CanvasNodeKind): void {
 /* --- The opened run: its deck, in execution order ------------------------- */
 
 const opened = computed(() => {
-  if (props.route.opened === null) return null;
+  if (currentRoute.value.opened === null) return null;
   // The parked rail opens too: a plan nothing has run against still has its
   // tickets, and a session whose runs are elsewhere still has its journal.
-  return graph.value.nodes.find((node) => node.id === props.route.opened)
-    ?? graph.value.unplaced.find((node) => node.id === props.route.opened)
+  return graph.value.nodes.find((node) => node.id === currentRoute.value.opened)
+    ?? graph.value.unplaced.find((node) => node.id === currentRoute.value.opened)
     ?? null;
 });
 
@@ -123,7 +147,12 @@ const chain = computed<readonly SessionCard[]>(() =>
   (opened.value?.sessionIds ?? []).map((id) => byId.value.get(id)).filter((run): run is SessionCard => run !== undefined));
 
 const at = ref(0);
-watch(() => props.route.opened, () => { at.value = 0; reason.value = null; });
+let reasonSeq = 0;
+watch(() => currentRoute.value.opened, () => {
+  at.value = 0;
+  reason.value = null;
+  reasonSeq++;
+});
 watch(chain, (next) => { at.value = clampIndex(at.value, next.length); });
 
 const middle = computed(() => chain.value[clampIndex(at.value, chain.value.length)]);
@@ -140,18 +169,45 @@ const relation = computed(() => relationBetween(previous.value, middle.value));
  * for the middle run only, and only when the pair is actually a continuation.
  */
 const reason = ref<string | null>(null);
-watch([middle, relation], async ([run, link]) => {
-  reason.value = null;
-  if (run === undefined || link === null || link.kind !== "continuation") return;
-  try {
-    const response = await fetch(`/api/v1/sessions/${encodeURIComponent(run.sessionId)}/events`);
-    if (!response.ok) return;
-    const payload = await response.json() as EventsResponse;
-    reason.value = relationReason(payload.events);
-  } catch {
-    // A reason that cannot be fetched is shown as unavailable, never invented.
-  }
-});
+watch(
+  [
+    () => middle.value?.sessionId,
+    () => (relation.value as { id?: string } | null)?.id ?? (relation.value?.kind === "continuation" ? relation.value.task : relation.value?.kind ?? null),
+  ],
+  async ([sessionId], [oldSessionId]) => {
+    const seq = ++reasonSeq;
+    if (sessionId !== oldSessionId) reason.value = null;
+    const run = middle.value;
+    const link = relation.value;
+    if (run === undefined || link === null || link.kind !== "continuation" || !sessionId) {
+      reason.value = null;
+      return;
+    }
+    try {
+      let after = 0;
+      let foundReason: string | null = null;
+      let hasMore = true;
+      while (hasMore && foundReason === null) {
+        const url = after > 0
+          ? `/api/v1/sessions/${encodeURIComponent(sessionId)}/events?after=${after}&limit=500`
+          : `/api/v1/sessions/${encodeURIComponent(sessionId)}/events?limit=500`;
+        const response = await fetch(url);
+        if (seq !== reasonSeq) return;
+        if (!response.ok) return;
+        const payload = await response.json() as EventsResponse;
+        if (seq !== reasonSeq) return;
+        foundReason = relationReason(payload.events);
+        hasMore = payload.hasMore;
+        after = payload.cursor;
+        if (!payload.events.length) break;
+      }
+      if (seq !== reasonSeq) return;
+      reason.value = foundReason;
+    } catch {
+      // A reason that cannot be fetched is shown as unavailable, never invented.
+    }
+  },
+);
 
 /* --- The opened driving session: its journal, three ways ------------------ */
 
@@ -166,8 +222,10 @@ const tree = ref<GroupTree | null>(null);
 const treeError = ref<string | null>(null);
 const slides = computed(() => decisionSlides(tree.value));
 const slideAt = ref(0);
+let treeSeq = 0;
 
 watch(() => opened.value?.kind === "session" ? opened.value.ref : null, async (group) => {
+  const seq = ++treeSeq;
   tree.value = null;
   treeError.value = null;
   view.value = "slides";
@@ -175,6 +233,7 @@ watch(() => opened.value?.kind === "session" ? opened.value.ref : null, async (g
   if (group === null || group === undefined) return;
   try {
     const response = await fetch(`/api/v1/groups?group=${encodeURIComponent(group)}`);
+    if (seq !== treeSeq) return;
     if (!response.ok) {
       treeError.value = response.status === 404
         ? "No planning journal exists for this driving session."
@@ -182,12 +241,14 @@ watch(() => opened.value?.kind === "session" ? opened.value.ref : null, async (g
       return;
     }
     const payload = await response.json() as GroupTree;
+    if (seq !== treeSeq) return;
     if (payload.group !== group) {
       treeError.value = "The journal returned did not match this driving session.";
       return;
     }
     tree.value = payload;
   } catch {
+    if (seq !== treeSeq) return;
     treeError.value = "The journal could not be read.";
   }
 }, { immediate: true });
@@ -203,24 +264,28 @@ const openedPlan = computed(() =>
     : null);
 const tickets = ref<readonly BacklogTicket[]>([]);
 const ticketsError = ref<string | null>(null);
+let ticketsSeq = 0;
 
-watch(openedPlan, async (plan) => {
+watch(() => openedPlan.value?.id, async (planId) => {
+  const seq = ++ticketsSeq;
   ticketsError.value = null;
-  if (plan === null) return;
+  if (planId === null || planId === undefined) return;
   // Fetched when a plan is opened rather than with the board, because the
   // ticket set is large and nothing else on this screen needs it.
   try {
     const response = await fetch("/api/v1/tickets");
+    if (seq !== ticketsSeq) return;
     if (!response.ok) { ticketsError.value = "The ticket set could not be read."; return; }
     tickets.value = (await response.json() as TicketsResponse).tickets;
   } catch {
+    if (seq !== ticketsSeq) return;
     ticketsError.value = "The ticket set could not be read.";
   }
 }, { immediate: true });
 
 const selectedNode = computed(() =>
-  shown.value.nodes.find((node) => node.id === props.route.selected)
-  ?? graph.value.unplaced.find((node) => node.id === props.route.selected)
+  shown.value.nodes.find((node) => node.id === currentRoute.value.selected)
+  ?? graph.value.unplaced.find((node) => node.id === currentRoute.value.selected)
   ?? null);
 
 /**
@@ -234,7 +299,7 @@ const selectedNode = computed(() =>
  * the selection every reader arrived with in their URL.
  */
 watch(shown, (next) => {
-  const selected = props.route.selected;
+  const selected = currentRoute.value.selected;
   if (selected === null) return;
   const recorded = (nodes: readonly { readonly id: string }[]): boolean => nodes.some((node) => node.id === selected);
   // On the map and hidden — nothing else. A node in the parked rail was never
@@ -263,7 +328,7 @@ watch(shown, (next) => {
           <!-- The only way back to how it first drew, which is what makes
                keeping an arrangement safe: drop a dot anywhere and it stays
                there until this is pressed. -->
-          <button type="button" class="session-filter-control" @click="map?.reset()">reset the map</button>
+          <button type="button" class="session-filter-control" @click="reset()">reset the map</button>
         </div>
         <!-- A filter REMOVES a kind and takes its lines with it. Selecting a dot
              does not: it dims the others and removes nothing. Two controls that
@@ -274,8 +339,8 @@ watch(shown, (next) => {
             :key="kind"
             type="button"
             class="session-filter-option canvas-kind"
-            :class="[`canvas-kind-${kind}`, { selected: route.kinds.includes(kind) }]"
-            :aria-pressed="route.kinds.includes(kind)"
+            :class="[`canvas-kind-${kind}`, { selected: currentRoute.kinds.includes(kind) }]"
+            :aria-pressed="currentRoute.kinds.includes(kind)"
             @click="toggleKind(kind)"
           >
             <span class="canvas-kind-dot" aria-hidden="true" />
@@ -296,7 +361,7 @@ watch(shown, (next) => {
              writes it; until then the place it sits says so rather than being
              filled with a sentence nothing generated. -->
         <p class="canvas-selected-summary absent">no summary written yet</p>
-        <a v-if="openHref(selectedNode, route)" class="session-filter-control canvas-open" :href="openHref(selectedNode, route) ?? '#'">
+        <a v-if="openHref(selectedNode, currentRoute)" class="session-filter-control canvas-open" :href="openHref(selectedNode, currentRoute) ?? '#'">
           open this
         </a>
       </section>
@@ -318,7 +383,7 @@ watch(shown, (next) => {
             :ref="(element) => holdParked(node.id, element)"
             class="canvas-parked-item session-filter-option"
             :class="`canvas-kind-${node.kind}`"
-            :href="openHref(node) ?? '#'"
+            :href="openHref(node, currentRoute) ?? '#'"
           >
             <span class="canvas-kind-dot" aria-hidden="true" />
             <span class="canvas-parked-label">{{ node.label }}</span>
@@ -332,7 +397,7 @@ watch(shown, (next) => {
          to it exactly as it was. -->
     <section v-if="opened && opened.kind === 'run' && chain.length" ref="panel" tabindex="-1" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
-        <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
+        <a class="session-filter-control" :href="canvasRouteHash({ ...currentRoute, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
         <p class="canvas-opened-meta">{{ chain.length }} run(s) in this chain, oldest first</p>
       </header>
@@ -367,7 +432,7 @@ watch(shown, (next) => {
          either of the two readings that already exist. -->
     <section v-else-if="opened && opened.kind === 'session'" ref="panel" tabindex="-1" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
-        <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
+        <a class="session-filter-control" :href="canvasRouteHash({ ...currentRoute, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
         <div class="canvas-view-switch" role="group" aria-label="View">
           <button
@@ -422,7 +487,7 @@ watch(shown, (next) => {
          route serving local files and a second stylesheet in the shell. -->
     <section v-else-if="opened && opened.kind === 'plan'" ref="panel" tabindex="-1" class="canvas-opened canvas-board neu-well">
       <header class="canvas-opened-head">
-        <a class="session-filter-control" :href="canvasRouteHash({ ...route, opened: null })">← the map</a>
+        <a class="session-filter-control" :href="canvasRouteHash({ ...currentRoute, opened: null })">← the map</a>
         <p class="canvas-opened-title">{{ opened.label }}</p>
         <p class="canvas-opened-meta">{{ openedPlan?.kind ?? "plan" }}<template v-if="openedPlan?.parentSpineName"> · under {{ openedPlan.parentSpineName }}</template></p>
       </header>
@@ -436,11 +501,11 @@ watch(shown, (next) => {
       ref="map"
       class="canvas-board"
       :graph="shown"
-      :camera="route.camera"
-      :selected="route.selected"
+      :camera="currentRoute.camera"
+      :selected="currentRoute.selected"
       :pinned="pinned"
-      :route="route"
-      @update:camera="go({ camera: $event })"
+      :route="currentRoute"
+      @update:camera="updateCamera($event)"
       @update:selected="go({ selected: $event })"
       @update:pinned="keepPins($event)"
     />

@@ -1,10 +1,11 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
-import { SeedOwnerAmendmentSchema, assertOwnerAmendment } from "./owner-amendment.ts";
+import { SeedOwnerAmendmentSchema, assertOwnerAmendmentBinding } from "./owner-amendment.ts";
+import { OBJECT_ID_PATTERN, SHA256_HEX_PATTERN } from "./typebox.ts";
 
 const id = Type.String({ minLength: 1 });
-const sha = Type.String({ pattern: "^[a-f0-9]{40}$" });
-const digest = Type.String({ pattern: "^[a-f0-9]{64}$" });
+const sha = Type.String({ pattern: OBJECT_ID_PATTERN });
+const digest = Type.String({ pattern: SHA256_HEX_PATTERN });
 
 export const CandidateSeedSchema = Type.Object({
   schema: Type.Literal("awsf.candidate-seed/v1"), authorizationId: id, confirmedAt: id,
@@ -27,12 +28,23 @@ export function assertCandidateSeed(value: unknown): asserts value is CandidateS
     throw new Error("seed must bind a distinct target and a nonempty candidate");
   }
   if (value.ownerAmendment !== null) {
-    assertOwnerAmendment(value.ownerAmendment);
-    const binding = value.ownerAmendment.binding;
-    if (binding.entry !== "seed" || binding.project !== value.target.project || binding.taskId !== value.target.taskId || binding.attempt !== 1 ||
-        binding.sessionId !== value.target.sessionId || binding.authorizationId !== value.authorizationId ||
-        binding.operationId !== value.authorizationId || binding.phaseKey !== value.builderPhaseKey ||
-        binding.phaseOrdinal !== value.builderPhaseOrdinal || binding.originalRequestDigest !== value.requestDigest ||
-        binding.originalPromptBundleDigest !== value.builderPromptBundleDigest) throw new Error("amendment does not bind the seeded target");
+    assertOwnerAmendmentBinding(value.ownerAmendment, {
+      entry: "seed",
+      project: value.target.project,
+      taskId: value.target.taskId,
+      attempt: 1,
+      sessionId: value.target.sessionId,
+      authorizationId: value.authorizationId,
+      operationId: value.authorizationId,
+      phaseKey: value.builderPhaseKey,
+      phaseOrdinal: value.builderPhaseOrdinal,
+      originalRequestDigest: value.requestDigest,
+      originalPromptBundleDigest: value.builderPromptBundleDigest,
+      anchorId: null,
+      logicalTurnId: null,
+      correctionRound: 0,
+      priorAmendmentDigest: null,
+      deliveryFrontier: "first-builder-input",
+    }, "amendment does not bind the seeded target");
   }
 }

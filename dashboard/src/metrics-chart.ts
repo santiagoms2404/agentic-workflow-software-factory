@@ -5,6 +5,8 @@
  * library (invariant 7).
  */
 
+import { compareText, formatPercent } from "../shared/route-metrics.ts";
+
 export interface Rect {
   readonly x: number;
   readonly y: number;
@@ -90,7 +92,7 @@ export function formatTick(value: number): string {
 }
 
 export function formatPercentTick(value: number): string {
-  return `${Math.round(value * 100)}%`;
+  return formatPercent(value);
 }
 
 /**
@@ -196,7 +198,7 @@ export function placeLabels(
   const { charWidth, lineHeight, gap } = options;
   const taken: Rect[] = [...(options.avoid ?? [])];
   const placed = new Map<string, PlacedLabel | null>();
-  const order = [...requests].sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const order = [...requests].sort((a, b) => b.priority - a.priority || compareText(a.id, b.id));
   for (const request of order) {
     const width = request.text.length * charWidth;
     const height = lineHeight * (request.lines ?? 1);

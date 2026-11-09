@@ -1,9 +1,10 @@
 import { Type, type Static } from "@sinclair/typebox";
+import { OBJECT_ID_PATTERN, SHA256_HEX_PATTERN } from "./typebox.ts";
 import { Value } from "@sinclair/typebox/value";
 import { recoveryDigest } from "./phase-recovery.ts";
 
-const digest = Type.String({ pattern: "^[a-f0-9]{64}$" });
-const oid = Type.String({ pattern: "^[a-f0-9]{40}$" });
+const digest = Type.String({ pattern: SHA256_HEX_PATTERN });
+const oid = Type.String({ pattern: OBJECT_ID_PATTERN });
 const id = Type.String({ minLength: 1, maxLength: 256 });
 const text = Type.String({ minLength: 1, maxLength: 16384 });
 const path = Type.String({ minLength: 1, maxLength: 4096 });
@@ -103,7 +104,7 @@ export function assertProtectedCandidateAuthorization(value: unknown, expected: 
 
 export function assertExactProtectedPath(value: string): void {
   if (value !== value.normalize("NFC") || value.length === 0 || value.length > 4096 ||
-      [...value].some(character => character.codePointAt(0)! <= 31 || character.codePointAt(0) === 127 || "\\:*?[]{}!".includes(character)) || value.startsWith("/") ||
+      [...value].some(character => character.codePointAt(0)! <= 31 || character.codePointAt(0) === 127 || "\\:*?[]{}!\"<>|".includes(character)) || value.startsWith("/") ||
       value.split("/").some(segment => segment === "" || segment === "." || segment === ".." || segment.toLowerCase() === ".git" ||
         /[. ]$/u.test(segment) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(segment))) {
     throw new Error("protected grant requires an exact normalized repository-relative file path");

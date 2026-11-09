@@ -113,7 +113,7 @@ export interface TransitionEvidence {
   survivorsReported?: boolean;
   // L10, L11, L12, L13, L20, L25
   gatesPass?: boolean;
-  // L25 — the rows behind that boolean
+  // L11, L20, L25 — the rows behind a green-consuming boolean
   gateEvidence?: GateEvidence;
   // L16, L19; and L25, which requires it ABSENT
   gatesInvalidated?: boolean;
@@ -508,7 +508,17 @@ const VALID_INPUTS: EdgeInputs = {
     from: "GATING", to: "REVIEWING", actor: "host", tier: 2,
     reason: { source: "gate", detail: "gates pass" },
     interactive: false, budget: budget(),
-    evidence: { gatesPass: true, candidateSha: CANDIDATE_SHA },
+    evidence: {
+      gatesPass: true,
+      candidateSha: CANDIDATE_SHA,
+      gateEvidence: {
+        configured: ["candidate_hygiene", "commands_pass"],
+        rows: [
+          { gateId: "candidate_hygiene", passed: true, candidateSha: CANDIDATE_SHA },
+          { gateId: "commands_pass", passed: true, candidateSha: CANDIDATE_SHA },
+        ],
+      },
+    },
     spawn: { cost: 1 },
   }),
   L12: () => ({
@@ -579,6 +589,13 @@ const VALID_INPUTS: EdgeInputs = {
     evidence: {
       candidateSha: CANDIDATE_SHA,
       gatesPass: true,
+      gateEvidence: {
+        configured: ["candidate_hygiene", "commands_pass"],
+        rows: [
+          { gateId: "candidate_hygiene", passed: true, candidateSha: CANDIDATE_SHA },
+          { gateId: "commands_pass", passed: true, candidateSha: CANDIDATE_SHA },
+        ],
+      },
       landing: {
         shaDisplayed: CANDIDATE_SHA,
         summaryDisplayed: "Add the --json flag to awsf status.",

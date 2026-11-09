@@ -13,9 +13,15 @@ const context = { ...validReviewContext(), diffTruncated: true, diffOmittedChars
   ] },
 };
 const output: ReviewOutput = { ...validReviewOutput(), verdict: "accept", findings: [], limitations: [] };
-function read(file: string, patch: Partial<Extract<NormalizedEvent, { kind: "tool.requested" }>> = {}): NormalizedEvent {
+type ReadRequest = Extract<NormalizedEvent, { kind: "tool.requested" }>;
+function read(file: string, patch: Partial<ReadRequest> = {}): ReadRequest {
   return { kind: "tool.requested", runId: "review-run", seq: 1, hostAt: "now", providerAt: null,
-    toolCallId: "t1", name: "Read", inputSummary: JSON.stringify({ file_path: `/private/inputs/run/${file}` }), ...patch };
+    toolCallId: `t${patch.seq ?? 1}`, name: "Read", inputSummary: JSON.stringify({ file_path: `/private/inputs/run/${file}` }), ...patch };
+}
+function completedRead(file: string, patch: Partial<ReadRequest> = {}): readonly NormalizedEvent[] {
+  const request = read(file, patch);
+  return [request, { kind: "tool.completed", runId: request.runId, seq: request.seq + 1, hostAt: "now", providerAt: null,
+    toolCallId: request.toolCallId, outcome: "ok", durationMs: 0, resultSnippet: "diff bytes" }];
 }
 function gate(events: readonly NormalizedEvent[], review = output) {
   return verdictConsistent(review, { candidateSha: output.reviewedSha, candidatePaths: context.changedFiles,
@@ -23,9 +29,9 @@ function gate(events: readonly NormalizedEvent[], review = output) {
 }
 
 test("only own-run host-observed Read requests discharge omitted and partial path limitations", () => {
-  assert.equal(gate([read("000001.diff"), read("000002.diff", { name: "read", inputSummary: JSON.stringify({ path: "/private/inputs/run/000002.diff" }) })]).passed, true);
-  assert.equal(gate([read("000001.diff")]).passed, false, "partial path still needs a limitation");
-  assert.equal(gate([read("000001.diff")], { ...output, limitations: [{ detail: "partial unread", affectedFiles: ["partial.ts"] }] }).passed, true);
+  assert.equal(gate([...completedRead("000001.diff"), ...completedRead("000002.diff", { seq: 3, name: "read", inputSummary: JSON.stringify({ path: "/private/inputs/run/000002.diff" }) })]).passed, true);
+  assert.equal(gate(completedRead("000001.diff")).passed, false, "partial path still needs a limitation");
+  assert.equal(gate(completedRead("000001.diff"), { ...output, limitations: [{ detail: "partial unread", affectedFiles: ["partial.ts"] }] }).passed, true);
 });
 
 test("unobserved delivery keeps the exact named-limitation rule", () => {
@@ -42,10 +48,10 @@ test("claimed reads without observed reads never satisfy the gate", () => {
 
 test("other runs, grep/glob, index reads, and prefix matches are not observed delivered reads", () => {
   for (const events of [
-    [read("000001.diff", { runId: "other-run" }), read("000002.diff", { runId: "other-run" })],
-    [read("000001.diff", { name: "Grep" }), read("000002.diff", { name: "Glob" })],
-    [read("index.json")],
-    [read("000001.diff.extra"), read("000002.diff.extra")],
+    [...completedRead("000001.diff", { runId: "other-run" }), ...completedRead("000002.diff", { runId: "other-run", seq: 3 })],
+    [...completedRead("000001.diff", { name: "Grep" }), ...completedRead("000002.diff", { name: "Glob", seq: 3 })],
+    [...completedRead("index.json")],
+    [...completedRead("000001.diff.extra"), ...completedRead("000002.diff.extra", { seq: 3 })],
   ]) assert.equal(gate(events).passed, false);
 });
 
@@ -58,10 +64,10 @@ test("inline markers remain independent evidence, and delivered paths preserve e
     diff: "*** awsf: 1 of 2 hunk(s) omitted from omitted.ts\n", diffDelivery: { ...context.diffDelivery,
       files: context.diffDelivery.files.map(file => ({ ...file, inlineOmitted: false, inlineTruncated: false })) } };
   assert.equal(report(inconsistent, []).passed, false);
-  assert.equal(report(inconsistent, [read("000001.diff")]).passed, true);
+  assert.equal(report(inconsistent, completedRead("000001.diff")).passed, true);
   const unusual = { ...context, diffOmittedFiles: [], limitationRequiredFiles: ["newline\nfile.ts"],
     diff: "*** awsf: 1 of 2 hunk(s) omitted from newline\nfile.ts\n", diffDelivery: { ...context.diffDelivery,
       files: [{ ...context.diffDelivery.files[0]!, path: "newline\nfile.ts", inlineOmitted: false, inlineTruncated: true }] } };
   assert.equal(report(unusual, []).passed, false);
-  assert.equal(report(unusual, [read("000001.diff")]).passed, true, "no spurious newline-prefix path needs a limitation");
+  assert.equal(report(unusual, completedRead("000001.diff")).passed, true, "no spurious newline-prefix path needs a limitation");
 });

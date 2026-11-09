@@ -1,10 +1,12 @@
 import { promises as fs } from "node:fs";
+import { Value } from "@sinclair/typebox/value";
+import type { Static, TSchema } from "@sinclair/typebox";
 import { basename, dirname, join } from "node:path";
-import type { BuildOutput } from "../contracts/build-output.ts";
-import type { DocumentOutput } from "../contracts/document-output.ts";
+import { BuildOutputSchema, BUILD_OUTPUT_SCHEMA_ID } from "../contracts/build-output.ts";
+import { DocumentOutputSchema, DOCUMENT_OUTPUT_SCHEMA_ID } from "../contracts/document-output.ts";
 import { RUN_REPORT_PATH_PATTERN } from "../contracts/document-output.ts";
-import type { PlanOutput } from "../contracts/plan-output.ts";
-import type { ReviewOutput } from "../contracts/review-output.ts";
+import { PlanOutputSchema, PLAN_OUTPUT_SCHEMA_ID } from "../contracts/plan-output.ts";
+import { ReviewOutputSchema, REVIEW_OUTPUT_SCHEMA_ID } from "../contracts/review-output.ts";
 import type { AttemptStatus } from "../cli/commands/attempt.ts";
 import type { AttemptEvidence } from "./attempt-evidence.ts";
 import { resumeInstructionLines } from "../workflow/resume-instruction.ts";
@@ -99,17 +101,19 @@ export interface RenderedRunReport {
   readonly renderedRevision: number;
 }
 
-function latestEnvelope<T>(
+function latestEnvelope<P extends TSchema>(
   evidence: readonly AttemptEvidence[],
   schemaId: string,
+  payloadSchema: P,
   phaseKey?: string,
-): T | null {
+): Static<P> | null {
   for (let index = evidence.length - 1; index >= 0; index -= 1) {
     const record = evidence[index]!;
     if (record.type !== "envelope" || record.envelope.schemaId !== schemaId) continue;
     if (phaseKey !== undefined && !record.phaseId.endsWith(`:${phaseKey}`)) continue;
     if (!record.envelope.valid || record.envelope.payload === null) continue;
-    return record.envelope.payload as T;
+    if (!Value.Check(payloadSchema, record.envelope.payload)) continue;
+    return Value.Parse(payloadSchema, record.envelope.payload);
   }
   return null;
 }
@@ -178,11 +182,11 @@ export function renderRunReport(
   status: AttemptStatus,
   evidence: readonly AttemptEvidence[],
 ): RenderedRunReport {
-  const plan = latestEnvelope<PlanOutput>(evidence, "awsf.plan-output/v1", "planner") ??
-    latestEnvelope<PlanOutput>(evidence, "awsf.plan-output/v1", "request");
-  const build = latestEnvelope<BuildOutput>(evidence, "awsf.build-output/v1", "builder");
-  const document = latestEnvelope<DocumentOutput>(evidence, "awsf.document-output/v1", "documenter");
-  const review = latestEnvelope<ReviewOutput>(evidence, "awsf.review-output/v1");
+  const plan = latestEnvelope(evidence, PLAN_OUTPUT_SCHEMA_ID, PlanOutputSchema, "planner") ??
+    latestEnvelope(evidence, PLAN_OUTPUT_SCHEMA_ID, PlanOutputSchema, "request");
+  const build = latestEnvelope(evidence, BUILD_OUTPUT_SCHEMA_ID, BuildOutputSchema, "builder");
+  const document = latestEnvelope(evidence, DOCUMENT_OUTPUT_SCHEMA_ID, DocumentOutputSchema, "documenter");
+  const review = latestEnvelope(evidence, REVIEW_OUTPUT_SCHEMA_ID, ReviewOutputSchema);
   const draft = document?.runReport;
   const path = draft?.path ?? "reports/run-report.md";
   if (!new RegExp(RUN_REPORT_PATH_PATTERN).test(path)) {
