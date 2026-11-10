@@ -24,6 +24,7 @@ import { fakeBroker } from "../fixtures/recording-broker.ts";
 import { k1Request, startUnderK1 } from "../fixtures/k1-preflight.ts";
 import { assertReviewDelivery } from "../fixtures/assert-review-delivery.ts";
 import { selectedLanding } from "../fixtures/closure-readers.ts";
+import { unconfiguredDoctorEnvironment } from "../fixtures/doctor-environment.ts";
 
 const PROJECT = "light-journey", PATH = "specs/tickets/T00.md";
 const ticket: Ticket = { id: "T00", title: "Small change", milestone: "M1", tier: 2, state: "todo", depends_on: [],
@@ -96,9 +97,9 @@ async function world(t: { after(fn: () => void): void }) {
   writeFileSync(join(root, "prompts/shared/headless-role.md"), readFileSync(resolve("prompts/shared/headless-role.md")));
   await writePlacement(stateRoot, PROJECT, { version: "awsf.placement/v1", project: PROJECT, repositories: { app: { path: repository } }, worktree_root: join(root, "worktrees") });
   const terminal = { interactive: true, write: (_line: string) => {}, confirm: async (_prompt: string) => true };
-  const invoke = async (argv: string[], outputTicket?: Ticket) => {
+  const invoke = async (argv: string[], outputTicket?: Ticket, env = process.env) => {
     const out: string[] = [], err: string[] = [];
-    const code = await main({ argv: [...argv, "--config", configPath, "--state-root", stateRoot, "--worktree-root", join(root, "worktrees")], cwd: repository, terminal,
+    const code = await main({ argv: [...argv, "--config", configPath, "--state-root", stateRoot, "--worktree-root", join(root, "worktrees")], cwd: repository, terminal, env,
       ...(outputTicket === undefined ? {} : { intakeExecution: { preflight: () => ({ adapter: true, sandbox: true, observability: true }),
         infrastructure: { adapterFor: (_entry, id) => new LightAdapter(id, "", outputTicket), createBroker: fakeBroker, sandboxProbe: () => false } } }),
       writeOut: line => out.push(line), writeError: line => err.push(line) });
@@ -152,8 +153,10 @@ for (const done of [true, false]) test(`ticket new, selected build-review, landi
   assert.equal(git(w.repository, "status", "--porcelain"), "");
   const status = JSON.parse((await w.invoke(["status", "small-build", "--json"])).out.join("\n"));
   assert.equal(status.closure.state, readout.state);
-  const doctor = await w.invoke(["doctor", "--json"]);
-  assert.equal(doctor.code, 0, doctor.err.join("\n"));
+  // The fixture config is outside the repository. Doctor's unconfigured-tool
+  // probe must not depend on provider or quota tools installed on the host.
+  const doctor = await w.invoke(["doctor", "--json"], undefined, unconfiguredDoctorEnvironment(w.root));
+  assert.equal(doctor.code, 0, [...doctor.err, ...doctor.out].join("\n"));
   assert.match(doctor.out.join("\n"), new RegExp(`light/T00=${done ? "done" : "wip"}|${readout.state}`));
 });
 

@@ -81,9 +81,10 @@ function terminal(answer: boolean, interactive = true, lines: string[] = []): Ow
   return { interactive, write: (line) => { lines.push(line); }, confirm: async () => answer };
 }
 
-function configText(): string {
+function configText(reviewExecutable: "claude" | "node" = "claude"): string {
   // Scripted replacement reviews deliberately use an ephemeral transport.
   return readFileSync(resolve("awsf.config.yaml"), "utf8")
+    .replace("kind: claude-code, executable: claude", `kind: claude-code, executable: ${reviewExecutable}`)
     .replaceAll("interrupted_turn: true", "interrupted_turn: false")
     .replace("  seed_paths: [node_modules]", "  seed_paths: []")
     .replace("test: { argv: [npm, run, test:unit], timeout_seconds: 600 }", "test: { argv: [node, -e, process.exit(0)], timeout_seconds: 10 }")
@@ -154,6 +155,7 @@ async function world(options: {
   workflow?: "build-review" | "simple-sdlc";
   callsSpent?: number;
   evidenceGate?: "absent" | "passed" | "failed";
+  reviewExecutable?: "claude" | "node";
   configure?: (config: AwsfConfig) => AwsfConfig;
   /** Drift the route the SUPERSEDED review is recorded as having run on. */
   recordedReviewRoute?: { adapterId?: string; provider?: string; requestedModel?: string };
@@ -166,7 +168,7 @@ async function world(options: {
   git(canonical, "add", "README.md");
   ownerCommit(canonical, "test: seed replacement review");
 
-  const text = configText();
+  const text = configText(options.reviewExecutable);
   const config = (options.configure ?? ((value: AwsfConfig) => value))(loadConfig(text));
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, text);
@@ -1144,7 +1146,9 @@ test("the landing screen shows the superseded verdict beside the replacement", a
 });
 
 test("the CLI routes awsf review, requires --reason, and reports the declined case", async () => {
-  const fixture = await world();
+  // Only executable availability is checked before the owner declines. Node
+  // exists on every test host, so this path needs no installed provider CLI.
+  const fixture = await world({ reviewExecutable: "node" });
   const errors: string[] = [];
   const out: string[] = [];
   try {
@@ -1162,7 +1166,10 @@ test("the CLI routes awsf review, requires --reason, and reports the declined ca
     });
     assert.equal(declined, 1);
     assert.match(out.join("\n"), /Replacement review declined; state remains AWAITING_OWNER and no call was spent/, `errors[]: ${JSON.stringify(errors)}`);
-    assert.equal((await readAttempt(fixture.attemptDir)).revision, fixture.status.revision);
+    const after = await readAttempt(fixture.attemptDir);
+    assert.equal(after.revision, fixture.status.revision);
+    assert.deepEqual(after.budget, fixture.status.budget);
+    assert.equal(after.lifecycleState, "AWAITING_OWNER");
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }

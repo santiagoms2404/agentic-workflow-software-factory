@@ -6,6 +6,11 @@ mechanical checks. Reading this file substitutes for none of them.
 
 ## 1. Write the request, then cut it
 
+The request becomes input to later phases. Ambiguity is therefore paid for again
+by the planner, builder and reviewer. Resolve the missing facts before launch,
+and keep the ask short enough that the owner can check it without reconstructing
+the conversation.
+
 **The intent is the owner's. The precision is yours.** Use these labels, in
 order, with nonempty content:
 
@@ -18,6 +23,23 @@ The parser lives in `core/src/preflight/fields.ts`. Do not prepend a narrative
 that hides or changes the ask. `how_to_prompt_for_the_owner.md` explains how to
 resolve a short owner request into these fields without substituting your own
 intent.
+
+A hypothetical request has this shape. These example paths are not claims about
+this repository and must not be submitted unchanged:
+
+```text
+Ask: Reject an empty label without changing valid labels.
+Where: core/src/labels.ts and core/test/unit/labels.test.ts.
+Done means: An empty label returns the specified validation error, valid labels
+retain their existing result, and the regression tests and required gates pass.
+Out of scope: Renaming labels, changing stored records or redesigning the UI.
+```
+
+“Improve validation” gives a worker no stopping condition. A named input, expected
+result and preserved behavior do. When acceptance is visual or interactive,
+specify the observation and who will verify it instead of pretending a unit test
+proves the whole experience. If the intended result is still unclear, ask the
+owner before creating the task.
 
 ## 2. Choose a workflow whose tier matches the risk
 
@@ -35,12 +57,40 @@ or write policy that the change needs.
 `awsf.config.yaml`, `core/src/workflow/catalog.ts`, the recipes and
 `core/src/state/tiers.ts`.
 
+Judge risk by consequences, not line count. A small process-control or persistence
+change can need stronger review than a large documentation change. Check which
+quality evidence the recipe buys, including whether it plans first, reviews the
+candidate independently or reruns checks after documentation changes.
+
+If the change needs evidence the selected recipe omits, change the proposal
+before launch. If the only reason for selecting a weaker route is insufficient
+budget, tell the owner. A cheaper route must not conceal the risk. Unfamiliar
+code may justify a separate read-only survey before proposing writing work,
+but a survey result is not authority to implement it.
+
 ## 3. Resolve the request against the repository
 
-Before `new`, open every path and symbol the request names. Verify each claimed
-behavior in the source. Distinguish a symptom from the condition that causes it,
-and include facts a prior attempt already discovered. Cite current locations,
-not line numbers copied from a stale handoff.
+Before `new`, turn the owner's outcome into a source-grounded request. This is
+investigation, not implementation. Do not edit code or a managed worktree while
+resolving the ask.
+
+| Input to resolve | Evidence to collect |
+|---|---|
+| Named paths and symbols | Open their current definitions and callers. Correct a moved or renamed reference before passing it to a worker. |
+| Claimed behavior | Read the condition that produces it and the relevant tests. Distinguish an observed failure from an explanation that has not been verified. |
+| Ambiguous terms | Identify the actual store, view, command or repository meant. Two components with similar names are not interchangeable. |
+| Prior attempts | Read the recorded cause and relevant gate or review evidence. Carry forward established facts and identify what has changed since that attempt. |
+
+For example, “the list hides these tickets” is a symptom. A source reference to
+the exact filename filter, the filenames it excludes and a reproducing test is
+a usable fact. Do not claim a filter is the cause merely because its name looks
+relevant. If the source does not establish the cause, say what remains unknown
+and choose a workflow that can investigate it.
+
+Cite current locations rather than line numbers copied from a stale handoff.
+Put resolved scope and acceptance into the request without prescribing an
+unverified implementation. This applies to direct build routes too. A recipe
+without a planner gives nobody a separate phase to repair a mistaken premise.
 
 If work belongs to a registered plan, read its ticket and the matching Section B
 prompt. Select the exact plan and ticket. A shift selects complete milestones
@@ -58,6 +108,17 @@ before creating a replacement task.
 The catalogue's `corrections fundable` is a margin, not a promise of success.
 Compare it with the recipe and the likely correction needs. The host's admission
 checks decide whether the declared route can be funded.
+
+Read minimum calls, remaining task spend and correction margin together. A
+recipe's host phases do not cost provider calls. A cold correction does, while
+an eligible same-session continuation has different accounting. The displayed
+margin does not guarantee a particular number of recoverable failures.
+
+A previously failed attempt, unfamiliar envelope shape or multi-phase change is
+a reason to examine headroom carefully. It is not a rule to raise every task.
+Explain which likely correction or required later review the additional calls
+would fund. If no bounded amount makes the proposal sensible, narrow the work
+with the owner rather than increasing the ceiling reflexively.
 
 When more budget is justified, prepare the exact owner command and its reason:
 
@@ -104,6 +165,14 @@ For this repository, `npm test` includes all five test layers, while the project
 catalog's candidate gates are a different set. Verify the plan's full list and
 report each original exit code. A green manual suite never replaces K1.
 
+Read the configured argv and timeouts, not just the gate names. A command that
+passes manually but exceeds its managed timeout will still stop the attempt.
+Separate an existing baseline failure from a failure introduced by the proposed
+change. Preserve the original output and exit status, and do not turn a failure
+into green by weakening a check or reading only the last successful command.
+If the evidence is stale, rerun the required check rather than citing an older
+result as current.
+
 Missing closure records for earlier eligible landings are owner work. Read the
 refusal, prepare `awsf close` with its supporting evidence, and stop until the
 owner resolves it. Never flip plan markers or create a different task to evade
@@ -125,10 +194,23 @@ normally automatic run, because it can request an owner correction decision.
 
 ## The green flag
 
-Say preparation is ready only when the request is resolved, its scope and route
-match, the necessary budget and permissions exist, baseline evidence is valid,
-closure obligations are satisfied, and the owner has confirmed the exact input.
-A refusal is reported with its cause and remedy. It is never worked around.
+Use this checklist to explain readiness. It is a readout of evidence, not a
+second set of switches that can override the command:
+
+| Check | What must be established |
+|---|---|
+| Intent | The owner recognizes the exact ask, exclusions and observable acceptance. |
+| Repository | The canonical repository, base revision, referenced files and selected plan or ticket are the intended ones. |
+| Scope | Actual writes fit the role's globs and any exact protected authorization. Read-only context is identified separately. |
+| Workflow and route | The recipe supplies the necessary evidence, the route is admitted and any required review remains independent unless explicitly degraded by the owner. |
+| Budget | Remaining task headroom funds the declared route and required correction reservations. A needed owner raise has been recorded. |
+| Baseline | Required checks have valid evidence for the bound revision and executable commands fit their configured timeouts. |
+| Prior work | Relevant attempt findings were read and outstanding closure obligations were resolved through the owner path. |
+| Confirmation | The owner confirmed the exact request and measured paths, and the host's freshness checks still hold. |
+
+An unknown item is not ready. Report a refusal with its cause, evidence and the
+next permitted remedy. Do not create a new identity, remove a selection or
+rewrite retained evidence to make the same blocked work appear admissible.
 
 The command owns prompt readability, repository identity, route admission,
 freshness and the measured preflight fields. The driving session still owns the

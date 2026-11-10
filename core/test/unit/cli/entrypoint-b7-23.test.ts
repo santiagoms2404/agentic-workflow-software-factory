@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -34,6 +34,15 @@ function assertUsage(result: ReturnType<typeof spawnSync>): void {
 test("B7-23: invoking the real CLI through a symlink runs main", () => {
   const { root, link } = fixture();
   assertUsage(run(process.execPath, [...nodeFlags, link, "--help"], root));
+});
+
+test("the CLI is tracked as executable even on filesystems that ignore Git modes", () => {
+  // WSL/NTFS can report executable permissions for a tracked 100644 file.
+  // Check the index too, so a Linux checkout does not lose the shebang route.
+  const tracked = execFileSync("git", ["ls-files", "--stage", "--", "core/src/cli/main.ts"], {
+    cwd: fileURLToPath(new URL("../../../../", import.meta.url)), encoding: "utf8",
+  });
+  assert.match(tracked, /^100755 /u, "the CLI must be stored with its executable bit");
 });
 
 test("B7-24: invoking the bin symlink through its shebang runs main", () => {
