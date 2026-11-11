@@ -2,9 +2,9 @@
 
 **Status:** brainstorm record. Nothing in this file is a rule. A rule changes only by an owner commit through gate GA of `specs/awsf-v3-plan.html`.
 
-**Written:** 2026-11-10, in a direct session with the owner.
+**Written:** 2026-11-10, in a direct session with the owner. Updated 2026-11-11.
 
-**Design reference:** the Marimba Harness Panel canvas, version 23, 45 frames. <https://claude.ai/artifact/KG8KPMBCPma35268R5yP6M> (private to the owner).
+**Design reference:** the Marimba Harness Panel canvas, version 27, 50 frames. <https://claude.ai/artifact/KG8KPMBCPma35268R5yP6M> (private to the owner).
 
 ## How to read this
 
@@ -49,6 +49,7 @@ The ladder below says how much each kind of change costs.
 - `specs/awsf-v3-plan.html`, `specs/awsf-v3-intent.md` and the W01 to W03 deep plans.
 - `AGENTS.md`.
 - The owner's earlier projects BrainOS/Evo and the SecondBrain vault, both outside this repository. They were read in part on 2026-11-10.
+- A critique of the panel written on 2026-11-10 by a second assistant the owner iterates with, Marimba on META Muse. It lives outside this repository. It compared 115 features of the TSF screenshots with the 45 frames then drawn: 36 carried, 48 partial, 23 missing, 8 not applicable.
 
 ## 3. Rounds
 
@@ -63,6 +64,8 @@ The ladder below says how much each kind of change costs.
 | R7 | Canvas version 21: a three-pane workspace, the dock, Stop for anyone, ten settings frames. Version 22: the rejected glass overlay removed, the routines limit added. |
 | R8 | The owner ruled on I3, I4, I6 and I7, and accepted the report, the map and the second-brain proposal. |
 | R9 | Canvas version 23: the map, a cited answer, the report as a tecla, sources and factory config. This report was written. |
+| R10 | The owner iterated the panel with Marimba on META Muse and brought back its critique with decisions D20 to D23. Canvas version 27: the rooms, the vault, the plan viewer, the journal, frame 36 redrawn with real counts, and ten additions from the critique. |
+| R11 | The owner ruled D24 to D26. A review of the plan-sota skill and its plans was written and handed to the owner. |
 
 ## 4. Decided
 
@@ -87,6 +90,13 @@ The ladder below says how much each kind of change costs.
 | D17 | Teclas and brainstorms join the Canvas tab's map as new kinds. | Every line is read from a record. See section 10. | 2026-11-10 |
 | D18 | Marimba's memory uses four zones and no new store. Lookup goes links first, words second, meaning last. | See section 10. The SecondBrain vault is not imported. The owner called it outdated and its folders an example only. | 2026-11-10 |
 | D19 | This report lives in the repository. | `specs/brainstorms/`. | 2026-11-10 |
+| D20 | The Canvas tab holds more than one map. Each map is a room. | Zoom out to see the rooms and zoom in to enter one. The current graph is Room 1 and opens first until the owner says otherwise. A new room is a layout tecla. See section 10. | 2026-11-10 |
+| D21 | The vault is tecla TC3. It holds every plan and every important document. | A plan opens in full inside the dashboard, drawn in the harness's own design, with no summary first. Its questionables are buttons that put text in Marimba's composer. The journal gets its own section beside the vault. The order of teclas is TC1, TC2, TC3, TC4. | 2026-11-10 |
+| D22 | The Routes settings frame names real models. | Naming them is its job. Grades stay the language everywhere else. | 2026-11-10 |
+| D23 | Four open questions are answered. | Adding a source from outside the project is an owner press. The node marks are accepted, to revisit with real data. The key letters are accepted, and the step shapes are fixed in W08's deep plan. "Answer in Marimba" is the only way to answer from a tecla. | 2026-11-10 |
+| D24 | Three rules are accepted. | A tecla is a tuning candidate when it was opened on 5 of the last 14 days, helped more than half the time and has not changed for 7 days, or when the owner says so. An item enters "Waiting on you" only when its next legal step is an owner act, and it leaves when the owner acts or the cause disappears. Settings are built starting with frame 27 Look and feel, then 29 and 28, because they work without Marimba. | 2026-11-11 |
+| D25 | For plans, the viewer comes first and any format change second. | The viewer draws today's plan HTML. The format changes only after the owner has read a review of the plan-sota skill and its plans. | 2026-11-11 |
+| D26 | A routine may run "when this dashboard opens". | This adds a second kind of schedule to D15. The lease rule does not change. | 2026-11-11 |
 
 ## 5. Words
 
@@ -122,8 +132,14 @@ A program tecla needs more than a recipe. The dashboard forbids frames and inlin
 | --- | --- | --- | --- | --- |
 | TC1 | Spine board | recipe | `GET /api/v1/tickets` | each workstream's progress and what it waits on |
 | TC2 | Loose ends | recipe | `GET /api/v1/groups` | proposals from driving sessions that were never taken |
+| TC3 | Vault | recipe | the plan registry and the files in `specs/` | every plan and document, each opened in full |
 | TC4 | Your time in the loop | program | run metrics and events | owner presses per landing |
 | proposed | Brainstorm report | recipe | one brainstorm record | decided, planned, gaps, waiting on you |
+| proposed | Journal | recipe | `GET /api/v1/groups` | each driving session: what was asked, applied and not taken, and the runs and plans it touched |
+
+The vault differs from the spine board. The board says where each workstream stands. The vault opens the document itself. A workstream with no deep plan opens a "Draft the request" button, never an empty page.
+
+Refreshing a tecla reads its route again and calls no model.
 
 The brainstorm report tecla needs brainstorms to be records first (G5). Frame 38 draws it with this report's own content.
 
@@ -196,6 +212,26 @@ Lines can mean: cites, decided in, led to, ran under, asked in, reads, tuned by,
 
 Routines, leases and signals can join once W05 and W14 exist.
 
+### Rooms
+
+The Canvas tab holds rooms (D20). Each room is its own layout over the same records, and none stores anything.
+
+| Room | Layout | State |
+| --- | --- | --- |
+| 1, the factory graph | the current Canvas, unchanged | opens first |
+| 2, how an idea became software | the four zones, with runs folded | not proven with real use |
+| a new room | a layout tecla Marimba makes on request | none yet |
+
+Each room keeps its own filters. Room 1 has kind switches and Room 2 has lenses. Each room lists what it left out. The factory builds only the zoomed-out view and the move between rooms.
+
+Measured on 2026-11-10 with the dashboard's own `buildCanvasGraph` over every session page:
+
+- 194 run records stack into 156 run nodes, because the attempts of one task are one node.
+- The map holds 177 nodes and 146 connections, and leaves 20 records unplaced.
+- Of the 156 run nodes, 99 sit in 10 replay pairs under one proving ground, 22 sit in 5 driving sessions, 1 names only a plan, and 34 have no recorded parent.
+
+Room 2 folds each run into what it ran under and shows the count beside the mark. Opening a mark fans its runs out. A plan node opens the plan in the vault, and an open question on the map is the same object as the questionable inside its plan.
+
 ### The four zones
 
 | Zone | Kinds |
@@ -250,7 +286,9 @@ BrainOS's stack is not carried over. Postgres, pgvector, Redis and an embedding 
 | 7, teclas | 19 Empty workspace, 20 Sketch, 21 Workspace, 22 Change, 23 Program, 24 Tune or retire, 25 Reuse |
 | 8, settings | 26 At a glance, 27 Look and feel, 28 Bars, 29 Keys, 30 Routines |
 | 9, settings | 31 Routes, 32 Prompt, 33 Steps, 34 Steps described, 35 Harness |
-| 10, map and memory | 36 Map, 37 Cited answer, 38 Brainstorm report, 39 Sources, 40 Factory config |
+| 10, memory | 38 Brainstorm report, 39 Sources, 40 Factory config |
+| 11, canvas rooms | 41 Rooms zoomed out, 42 Room 1, 36 Room 2, 37 Cited answer |
+| 12, vault and journal | 43 Vault, 44 Plan viewer, 45 Journal |
 
 Where the older screens live now:
 
@@ -262,6 +300,10 @@ Where the older screens live now:
 | 6, 7, 11 | Settings: Routes, Leases, Context |
 | 5b | Driver checks, on the Mac host |
 | 16a, 16b | other surfaces, outside the dashboard |
+
+The nav's Canvas link opens Room 1.
+
+Ten additions from the critique were drawn on 2026-11-10: context marks (26), step summaries that unfold into the raw steps (17a, 21), the call ceiling held by code (4, 6), what done means on a closure (8), an owner override of Marimba's advice (3), self-correction (26, 17a), a model chooser with what each choice costs (31), no model call on a tecla refresh (20, 21, 43), a rating on a tecla and the tuning rule (21, 24), and a routine's contract with its runs (30). Frame 18 gained the path for when a passkey cannot answer.
 
 **Design language.** Forest palette (`#051F20` ground, `#DAF1DE` text, `#8EB69B` muted). One orange accent, `#F26A1B`, for the action that spends and for what waits on the owner. Archivo and JetBrains Mono. Owner buttons carry a key glyph. Unknown values are placeholders in brackets, such as `[N]`.
 
@@ -278,6 +320,8 @@ Where the older screens live now:
 | FL5 | Away | 30, lease press, 7, then "Waiting on you" in 21 |
 | FL6 | Look something up | 36, 37, 38 |
 | FL7 | Change a rule | 40, a prepared patch, an owner commit |
+| FL8 | A plan from draft to decided questionables | 21 or 43 "Draft the request", the factory authors it, 43, 44, an owner press to apply |
+| FL9 | Move between maps | 41, then 42 or 36 |
 
 ## 13. Planned
 
@@ -288,6 +332,8 @@ Where the older screens live now:
 | A6 | The deep plan for W16, with W08's ticket frame references. | U3 |
 | A7 | The deep plan for W17. | U1 |
 | A8 | A flow-map frame, a re-freeze of the frame index, and screenshots for the workers. | U2 |
+| A9 | The plan viewer over today's plan HTML, as part of W16 (D25). | U3 |
+| A10 | Any change to the plan format. | U4 |
 
 AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/awsf-v3-plan-build-prompts.md` and the vision doc. Invariant 12 requires a plan and its tickets to change in the same commit.
 
@@ -325,8 +371,18 @@ AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/aws
 
 **G7. The frozen frame index is behind the canvas.**
 - Plain: the workers' reference still points at an old design.
-- Detail: `specs/design/awsf-v3-plan/frame-index.json` pins canvas version 14. The canvas is at version 23.
+- Detail: `specs/design/awsf-v3-plan/frame-index.json` pins canvas version 14. The canvas is at version 27.
 - Recommendation: re-freeze once, at U2.
+
+**G8. Nothing connects the dashboard to a phone or a watch.**
+- Plain: a watch cannot press a button on a dashboard it cannot reach.
+- Detail: the API answers only on localhost (`core/src/api/security.ts`). Frame 16b already assumes a phone can reach it.
+- Recommendation: design that path inside W15 before any watch or phone work.
+
+**G9. The viewer has no renderer yet.**
+- Plain: the dashboard cannot draw a plan today.
+- Detail: the Backlog board reads a plan's markers. The full plan is only readable in a browser tab.
+- Recommendation: build the renderer over today's plan HTML first (D25).
 
 ## 15. Waiting on the owner
 
@@ -345,27 +401,39 @@ AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/aws
 - Detail: D8 set this order. T15 is the open ticket.
 - Recommendation: keep the order.
 
+**U4. Rule on the plan-sota review.**
+- Plain: the review proposes a leaner plan format and asks five questions.
+- Detail: it was handed over on 2026-11-11. It estimates about 42% less written per deep plan and about 60% less loaded later.
+- Recommendation: answer its questions before any format work.
+
 ## 16. Open questions
 
-**Q29. Is adding a source from outside the project an owner press?**
-- Plain: should only the owner be able to let Marimba read a new folder?
-- Detail: frame 39 draws it as an owner press. A new source widens what is sent to a model provider.
-- Recommendation: yes.
+Q29 to Q32 were answered on 2026-11-10 and are recorded as D23.
 
-**Q30. Are the node marks right?**
-- Plain: bar, diamond, hexagon, triangle, page and ring.
-- Detail: frame 36. The five existing kinds keep their marks.
-- Recommendation: accept, and revisit with real data.
+**Q42. When does a tecla first run on AR glasses?**
+- Plain: a small web app on display glasses could show one tecla.
+- Detail: Meta opened its display glasses to outside developers in May 2026, with a native toolkit and plain web apps. There is no public store yet.
+- Recommendation: wait until TC1 exists. A tecla has no format before that, so a prototype now would be thrown away.
 
-**Q31. Are the key letters and the step shapes right?**
-- Plain: frames 29 and 34 show proposals.
-- Detail: the letters can be rebound in frame 29.
-- Recommendation: accept the letters. Fix the step shapes in W08's deep plan.
+**Q43. Which tecla goes on glasses first?**
+- Plain: the candidates are TC4, TC2, or a new "what waits on you now".
+- Detail: the strip, a watch and glasses could all read one small "waiting on you" feed.
+- Recommendation: "what waits on you now".
 
-**Q32. Is "Answer in Marimba" the only way to answer from a tecla?**
-- Plain: the report puts words in Marimba's box and presses nothing.
-- Detail: this is NR3 applied to frame 38.
-- Recommendation: yes.
+**Q44. How does a watch or a phone sign an owner press?**
+- Plain: the owner wants a double tap on the Apple Watch to count as a press.
+- Detail: see section 19 and G8.
+- Recommendation: Stop and the inbox first, because they need no proof of presence. Signing follows U1.
+
+**Q45. How do the two Marimbas talk?**
+- Plain: one Marimba runs in the cloud and one in the factory, and the owner carries messages between them.
+- Detail: see section 19.
+- Recommendation: files in git, with the owner's commit as the gate.
+
+**Q46. What is the panel not?**
+- Plain: the panel grew from 19 frames to 50.
+- Detail: the critique asked for one line that bounds it.
+- Recommendation: it replaces neither Sessions, Backlog, Metrics nor the Sessions log. It rebuilds Settings and adds rooms to Canvas.
 
 ## 17. What a builder needs to read
 
@@ -391,3 +459,41 @@ AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/aws
 - The passkey path on the owner's machine (U1).
 - BrainOS was read in part: its overview, the opening of two plans, and its graph model. No full audit was done.
 - A brainstorm ledger that the SecondBrain vault mentions was not found.
+- Versions 24 to 26 of the canvas were published outside the session that published version 27, and the index was not re-read first.
+- Whether a double tap triggers a notification's main action for an outside app, and how watchOS guards a key an app stores.
+- The market and hardware figures in the critique's AR study.
+- The token cost of authoring a plan.
+
+## 19. Other surfaces, explored on 2026-11-10
+
+Nothing in this section is decided.
+
+### AR glasses
+
+The full canvas does not fit today's display glasses. Voice and small cards do, and a tecla maps well to a single-purpose web app. See Q42 and Q43.
+
+### Apple Watch
+
+- An outside app can adopt the double tap from watchOS 11, with SwiftUI's `handGestureShortcut(.primaryAction)`. One main action per screen. The app gets no gesture event and cannot tell a double tap from a tap.
+- A double tap is not proof of who pressed. The proof is an unlocked watch on the wrist plus a key no agent can reach.
+- A double tap can fire by accident, so it should never land code alone.
+- The owner's split holds: the watch gives presence and intent, and the phone signs. The phone signs with a key its app holds and the factory registers once, checked with `node:crypto` like a laptop press. A localhost passkey cannot be used from a phone app.
+- The hard part is the path from the laptop to the phone (G8).
+- The watch work is a W15 surface that carries W17 presses. It lives in the Smart Health Platform app.
+
+Sources: Apple's "Enabling Double Tap" and `HandGestureShortcut.primaryAction` pages at developer.apple.com.
+
+### Marimba to Marimba
+
+- Channel: files in git. The cloud Marimba can never author a commit, by invariant 11, so the owner's commit is the gate.
+- Inbound: a handoff arrives as a signal when the dashboard opens (W14) and stays data until the owner confirms it.
+- Outbound: the factory writes a digest to the repository on the owner's press, because that text leaves the laptop.
+- Format: who wrote it, the commit it read, what it prepared, what needs the owner, what it could not check.
+- The cloud Marimba gets no direct read of the journal.
+
+## 20. Corrections to the critique
+
+- "194 runs and 156 runs disagree." They agree. 194 run records stack into 156 run nodes (section 10).
+- "The panel shows no budget." Frame 4 already showed calls spent against the ceiling. The host enforces the ceiling.
+- "No ticket says what done means." A ticket carries `serves` with its acceptance ids and an owner-acceptance block. Frame 8 now shows them.
+- "No frame after 40 before the re-freeze." TC3 and D20 could not be drawn without new frames. The re-freeze still happens once, at U2.
