@@ -2,7 +2,7 @@
 
 **Status:** brainstorm record. Nothing in this file is a rule. A rule changes only by an owner commit through gate GA of `specs/awsf-v3-plan.html`.
 
-**Written:** 2026-11-10, in a direct session with the owner. Updated 2026-11-11.
+**Written:** 2026-11-10, in a direct session with the owner. Updated 2026-11-13.
 
 **Design reference:** the Marimba Harness Panel canvas, version 27, 50 frames. <https://claude.ai/artifact/KG8KPMBCPma35268R5yP6M> (private to the owner).
 
@@ -26,6 +26,7 @@ The codes are the ones used in the conversation.
 | SB | a lookup step for Marimba |
 | B | lesson taken from BrainOS |
 | I | idea from the first round |
+| GP | a graduation pattern taken from a v2 plan |
 
 ## 1. The idea
 
@@ -50,6 +51,7 @@ The ladder below says how much each kind of change costs.
 - `AGENTS.md`.
 - The owner's earlier projects BrainOS/Evo and the SecondBrain vault, both outside this repository. They were read in part on 2026-11-10.
 - A critique of the panel written on 2026-11-10 by a second assistant the owner iterates with, Marimba on META Muse. It lives outside this repository. It compared 115 features of the TSF screenshots with the 45 frames then drawn: 36 carried, 48 partial, 23 missing, 8 not applicable.
+- An inventory of 103 of the owner's earlier brainstorm notes with a cover note, written on 2026-11-12 by the same second assistant, and its draft of an end-to-end test from 2026-11-11. All three live outside this repository and stay there, because they mix personal context with factory context (D30).
 
 ## 3. Rounds
 
@@ -66,6 +68,8 @@ The ladder below says how much each kind of change costs.
 | R9 | Canvas version 23: the map, a cited answer, the report as a tecla, sources and factory config. This report was written. |
 | R10 | The owner iterated the panel with Marimba on META Muse and brought back its critique with decisions D20 to D23. Canvas version 27: the rooms, the vault, the plan viewer, the journal, frame 36 redrawn with real counts, and ten additions from the critique. |
 | R11 | The owner ruled D24 to D26. A review of the plan-sota skill and its plans was written and handed to the owner. |
+| R12 | The owner ruled on the review (D27). The skill's text was changed. Two owner ideas were answered in the review's sections 17 and 18: plan templates as tuned teclas, and a design that travels with its plan. |
+| R13 | The second assistant sent the inventory and the test draft named in section 2. Most of the inventory is BrainOS history. The owner ruled D28 to D30. Gaps G10 and G11 came out of the inventory. |
 
 ## 4. Decided
 
@@ -97,6 +101,10 @@ The ladder below says how much each kind of change costs.
 | D24 | Three rules are accepted. | A tecla is a tuning candidate when it was opened on 5 of the last 14 days, helped more than half the time and has not changed for 7 days, or when the owner says so. An item enters "Waiting on you" only when its next legal step is an owner act, and it leaves when the owner acts or the cause disappears. Settings are built starting with frame 27 Look and feel, then 29 and 28, because they work without Marimba. | 2026-11-11 |
 | D25 | For plans, the viewer comes first and any format change second. | The viewer draws today's plan HTML. The format changes only after the owner has read a review of the plan-sota skill and its plans. | 2026-11-11 |
 | D26 | A routine may run "when this dashboard opens". | This adds a second kind of schedule to D15. The lease rule does not change. | 2026-11-11 |
+| D27 | The owner ruled on the plan-sota review. | The skill's text changes first (PS1, done). A questionable is raised only when the choice is the owner's by rule or the author is unsure. A ticket becomes the one home of a prompt, corrected by an owner amendment through GA (PS3). The leaner format reuses the factory's own plan structure and keeps Purpose, Problem and Solution as three sections. The format work starts after T15 closes. Q40 stays open. See section 13 of `specs/reviews/2026-11-11-plan-sota-review.md`. | 2026-11-11 |
+| D28 | A theme belongs to a project. No single house theme is fixed. | Each user and project has its own look, and a theme tells at a glance which project a tecla belongs to. The plan-sota skill now uses a project's `plan-theme.css` when its plans directory has one, and falls back to the house theme. Reading a registered project's design to propose its theme is an idea and not a decision. If built, it belongs to W16 and the owner confirms the proposed theme. | 2026-11-13 |
+| D29 | D9 stays the vision's Q5 task. | A second assistant proposed an end-to-end test built on a creator-account workflow (section 21). The owner kept D9. A review tecla for the owner's gameplay-clips project is a later third context, after the dashboard and Smart Health. Posting stays an owner press. | 2026-11-13 |
+| D30 | A handoff between the two Marimbas carries three more things. | A context mark on each section, factory or personal. A pull rule: nothing marked personal enters git, the journal or an agent's notes. A "check locally" line that names the paths the writer could not reach. See section 19. | 2026-11-13 |
 
 ## 5. Words
 
@@ -333,7 +341,7 @@ Ten additions from the critique were drawn on 2026-11-10: context marks (26), st
 | A7 | The deep plan for W17. | U1 |
 | A8 | A flow-map frame, a re-freeze of the frame index, and screenshots for the workers. | U2 |
 | A9 | The plan viewer over today's plan HTML, as part of W16 (D25). | U3 |
-| A10 | Any change to the plan format. | U4 |
+| A10 | Any change to the plan format: PS3, then PS4 (D27). | U3 |
 
 AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/awsf-v3-plan-build-prompts.md` and the vision doc. Invariant 12 requires a plan and its tickets to change in the same commit.
 
@@ -384,6 +392,16 @@ AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/aws
 - Detail: the Backlog board reads a plan's markers. The full plan is only readable in a browser tab.
 - Recommendation: build the renderer over today's plan HTML first (D25).
 
+**G10. No way in for a spoken note.**
+- Plain: the owner starts most ideas by speaking, and the design has no place to speak.
+- Detail: voice as the way in is the most repeated idea in the inventory, in about ten notes. Before 2026-11-13 this report mentioned voice once, under AR glasses.
+- Recommendation: start with the operating system's dictation into the dock's ask box, which needs no build. Decide on anything more after the first tecla exists.
+
+**G11. No frame takes a brainstorm in.**
+- Plain: nothing on the canvas takes a note, dates it and shows what it became.
+- Detail: G5 covers the record. This gap is the screen. Today the path is a voice note, a second assistant, a file and a session.
+- Recommendation: one frame can serve G10 and G11. Draw it only if it fits before U2. Otherwise leave it to W16's deep plan.
+
 ## 15. Waiting on the owner
 
 **U1. Try a passkey on the laptop.**
@@ -402,13 +420,18 @@ AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/aws
 - Recommendation: keep the order.
 
 **U4. Rule on the plan-sota review.**
-- Plain: the review proposes a leaner plan format and asks five questions.
-- Detail: it was handed over on 2026-11-11. It estimates about 42% less written per deep plan and about 60% less loaded later.
-- Recommendation: answer its questions before any format work.
+- Plain: answered on 2026-11-11 (D27).
+- Detail: the review estimates about 42% less written per deep plan and about 60% less loaded later. Q40 stays open by the owner's choice.
+- Recommendation: close U3 first. The format work waits on it.
 
 ## 16. Open questions
 
-Q29 to Q32 were answered on 2026-11-10 and are recorded as D23.
+Q29 to Q32 were answered on 2026-11-10 and are recorded as D23. Q45 was answered on 2026-11-13 and is recorded as D30.
+
+**Q40. Should the spine mark one path as first?**
+- Plain: the review proposed marking W03's last ticket, then W04, W08 and W16 as the line to finish first.
+- Detail: the amendment would be made in the same step as AM6. The owner left it open on 2026-11-11, to decide after the format work.
+- Recommendation: amend, when AM6 is written.
 
 **Q42. When does a tecla first run on AR glasses?**
 - Plain: a small web app on display glasses could show one tecla.
@@ -428,7 +451,7 @@ Q29 to Q32 were answered on 2026-11-10 and are recorded as D23.
 **Q45. How do the two Marimbas talk?**
 - Plain: one Marimba runs in the cloud and one in the factory, and the owner carries messages between them.
 - Detail: see section 19.
-- Recommendation: files in git, with the owner's commit as the gate.
+- Recommendation: files in git, with the owner's commit as the gate. Answered on 2026-11-13 with three additions (D30).
 
 **Q46. What is the panel not?**
 - Plain: the panel grew from 19 frames to 50.
@@ -466,7 +489,7 @@ Q29 to Q32 were answered on 2026-11-10 and are recorded as D23.
 
 ## 19. Other surfaces, explored on 2026-11-10
 
-Nothing in this section is decided.
+Nothing in this section is decided, except the handoff format under "Marimba to Marimba" (D30).
 
 ### AR glasses
 
@@ -491,9 +514,40 @@ Sources: Apple's "Enabling Double Tap" and `HandGestureShortcut.primaryAction` p
 - Format: who wrote it, the commit it read, what it prepared, what needs the owner, what it could not check.
 - The cloud Marimba gets no direct read of the journal.
 
+Accepted on 2026-11-13 (D30):
+
+- Each section of a handoff is marked factory or personal.
+- Nothing marked personal enters git, the journal or an agent's notes. This repository is public. The credential fence catches secrets and does not catch personal facts, so the rule holds through the owner's review of each commit.
+- "What it could not check" names the paths to check on the laptop. The two sides reach different things: the cloud side holds the transcripts, and the laptop holds the repositories.
+
 ## 20. Corrections to the critique
 
 - "194 runs and 156 runs disagree." They agree. 194 run records stack into 156 run nodes (section 10).
 - "The panel shows no budget." Frame 4 already showed calls spent against the ceiling. The host enforces the ceiling.
 - "No ticket says what done means." A ticket carries `serves` with its acceptance ids and an owner-acceptance block. Frame 8 now shows them.
 - "No frame after 40 before the re-freeze." TC3 and D20 could not be drawn without new frames. The re-freeze still happens once, at U2.
+
+## 21. A proposed end-to-end test, judged on 2026-11-13
+
+The second assistant drafted a "graduation plan" on 2026-11-11. It is a proposal the owner has not adopted. The owner paused the account work on 2026-11-12 and kept D9 on 2026-11-13 (D29). The draft lives outside this repository.
+
+**What it proposes.** One test of a creator-account workflow: record gameplay, cut clips, write captions, publish, reply, report. It means to test the cloud Marimba, the harness, the factory and the handoff channel at once, in six tasks the owner marks pass or fail.
+
+**Its two patterns, renamed.** The draft calls them "W09" and "W12". Those are v2 labels. In v3, W09 is the context engine and W12 is the Mac host, so this report uses the names below.
+
+| Code | Pattern | Source |
+| --- | --- | --- |
+| GP1 | Prove without enabling. A decision milestone comes first and may end the work. No milestone enables the route or spends. A dossier records what would reopen it. | `specs/awsf-v2-w09-agy-adapter.html` |
+| GP2 | Acceptance by real runs. The plan supplies a request, and the factory plans and builds it. A defect found on the way is routed to the workstream that owns it. | `specs/awsf-v2-w12-cheatsheet.html` |
+
+**Judgment.** This is the session's reading. The owner has not ruled on it.
+
+- GP1 is used as written. The decision milestone, the owner press before any post and the owner act before any spending all match it.
+- GP2 is used by name only. Its rule is that the plan gives a request and the factory does the planning, because a task the plan already planned proves nothing about the factory. The draft lists six operating steps and writes them itself, so no task asks the factory to plan or build anything.
+- It is early. GP2 ran last in v2, after the commands stopped changing. The draft leans on the harness, the vault, owner presses and handoff signals, and none of those has a deep plan yet.
+- It tests four systems at once. A failed task could not be traced to one of them.
+- "The approved route" is not defined. The decision milestone has to fix the route, the content rule and the name on the mark before anything else.
+
+**If the owner reopens it.** One system per task. The factory task is a request the factory plans, checked by a test that already exists. The harness task is the review tecla of D29. Publishing starts with the owner posting a prepared draft by hand, which needs no outside interface. Replies are left out of the first test. Nothing starts before the first owner press of W17 exists.
+
+Not checked: whether the factory can register and gate a Python repository, and which platforms offer an approved route for posting and for replies.
