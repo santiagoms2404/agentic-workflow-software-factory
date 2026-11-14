@@ -2,7 +2,7 @@
 
 **Status:** brainstorm record. Nothing in this file is a rule. A rule changes only by an owner commit through gate GA of `specs/awsf-v3-plan.html`.
 
-**Written:** 2026-11-10, in a direct session with the owner. Updated 2026-11-13.
+**Written:** 2026-11-10, in a direct session with the owner. Updated 2026-11-14, when the owner closed the brainstorm (D36). **To resume work, read section 13 first.**
 
 **Design reference:** the Marimba Harness Panel canvas, version 27, 50 frames. <https://claude.ai/artifact/KG8KPMBCPma35268R5yP6M> (private to the owner).
 
@@ -27,6 +27,8 @@ The codes are the ones used in the conversation.
 | B | lesson taken from BrainOS |
 | I | idea from the first round |
 | GP | a graduation pattern taken from a v2 plan |
+| AB | a line of the acceptance bar for an always-on host |
+| AU | a use for the owner's current laptop |
 
 ## 1. The idea
 
@@ -52,6 +54,7 @@ The ladder below says how much each kind of change costs.
 - The owner's earlier projects BrainOS/Evo and the SecondBrain vault, both outside this repository. They were read in part on 2026-11-10.
 - A critique of the panel written on 2026-11-10 by a second assistant the owner iterates with, Marimba on META Muse. It lives outside this repository. It compared 115 features of the TSF screenshots with the 45 frames then drawn: 36 carried, 48 partial, 23 missing, 8 not applicable.
 - An inventory of 103 of the owner's earlier brainstorm notes with a cover note, written on 2026-11-12 by the same second assistant, and its draft of an end-to-end test from 2026-11-11. All three live outside this repository and stay there, because they mix personal context with factory context (D30).
+- Three packages from the second assistant on 2026-11-14, all outside this repository: two videos by Kun Chen on one orchestrator across several machines, a video on Google's elephant-goldfish plugin, and a hardware brief. The plugin's public repository, `github.com/google/elephant-goldfish-model`, was read directly on that day.
 
 ## 3. Rounds
 
@@ -70,6 +73,7 @@ The ladder below says how much each kind of change costs.
 | R11 | The owner ruled D24 to D26. A review of the plan-sota skill and its plans was written and handed to the owner. |
 | R12 | The owner ruled on the review (D27). The skill's text was changed. Two owner ideas were answered in the review's sections 17 and 18: plan templates as tuned teclas, and a design that travels with its plan. |
 | R13 | The second assistant sent the inventory and the test draft named in section 2. Most of the inventory is BrainOS history. The owner ruled D28 to D30. Gaps G10 and G11 came out of the inventory. |
+| R14 | The owner brought the three packages of 2026-11-14 as brainstorm input, with nothing to be built or changed until the picture was agreed. The owner accepted the picture, ruled D31 to D35, and closed the brainstorm (D36). Section 22 holds the round. Section 13 holds the order of work. |
 
 ## 4. Decided
 
@@ -105,6 +109,12 @@ The ladder below says how much each kind of change costs.
 | D28 | A theme belongs to a project. No single house theme is fixed. | Each user and project has its own look, and a theme tells at a glance which project a tecla belongs to. The plan-sota skill now uses a project's `plan-theme.css` when its plans directory has one, and falls back to the house theme. Reading a registered project's design to propose its theme is an idea and not a decision. If built, it belongs to W16 and the owner confirms the proposed theme. | 2026-11-13 |
 | D29 | D9 stays the vision's Q5 task. | A second assistant proposed an end-to-end test built on a creator-account workflow (section 21). The owner kept D9. A review tecla for the owner's gameplay-clips project is a later third context, after the dashboard and Smart Health. Posting stays an owner press. | 2026-11-13 |
 | D30 | A handoff between the two Marimbas carries three more things. | A context mark on each section, factory or personal. A pull rule: nothing marked personal enters git, the journal or an agent's notes. A "check locally" line that names the paths the writer could not reach. See section 19. | 2026-11-13 |
+| D31 | The working setup is one picture. | One factory and one journal on an always-on Linux box. The MacBook is where the owner works, and it is a dashboard client. The phone reads, presses and signs. The Apple Watch stands beside the phone and carries presence and intent: Stop, status at a glance, the double tap. The cloud Marimba stays as research and iteration partner through the handoff format: it drafts and the owner commits. Nothing starts work unless the owner started it. | 2026-11-14 |
+| D32 | There is one Marimba. | No second orchestrator runs on a second machine. Two orchestrators mean two journals, and the journal is the one evidence store. The single Marimba moves to the always-on box when that box exists, and the laptop and the phone are views. | 2026-11-14 |
+| D33 | D15 holds as written. | A phone terminal session is the owner's terminal and does not count as "the dashboard is open". A phone dashboard session counts once a phone-width TC2 exists. An owner-started run may finish with the laptop closed, and that needs no rule change: decision 6 forbids a daemon that starts work, and D15 governs routines. | 2026-11-14 |
+| D34 | The hosts are chosen. | The Mac is a MacBook Pro M5 Pro with 64 GB and 2 TB, which matches v3 decision 3. The owner's current laptop stays at 8 GB and is a candidate always-on host on Ubuntu Server 24.04 LTS, minimal, with no desktop. It earns that role only by passing AB1 to AB6 (section 22), and a test booted from USB comes before anything is spent. The sandbox's user-namespace need is met with the stock bwrap AppArmor profile and never with a machine-wide switch. If the laptop fails the bar, decision 3 stands: AWSF in a Linux VM on the Mac. A further machine is considered only if the laptop proves too weak or dies. | 2026-11-14 |
+| D35 | A zero-context review of plans is backtested first, on W03. | One closed deep plan is reviewed as first committed, and the findings are scored against that plan's own Amendments list. Where the review then lives, and with which lenses, is decided after the backtest (section 22 holds the recommendation). | 2026-11-14 |
+| D36 | The brainstorm is closed. | Work resumes on the planned steps, in the order section 13 gives. | 2026-11-14 |
 
 ## 5. Words
 
@@ -342,6 +352,24 @@ Ten additions from the critique were drawn on 2026-11-10: context marks (26), st
 | A8 | A flow-map frame, a re-freeze of the frame index, and screenshots for the workers. | U2 |
 | A9 | The plan viewer over today's plan HTML, as part of W16 (D25). | U3 |
 | A10 | Any change to the plan format: PS3, then PS4 (D27). | U3 |
+| A11 | The test booted from USB on the 8 GB laptop: AB1 to AB3, with timings (section 22). | U5 |
+| A12 | The backtest of a zero-context plan review on W03 (D35). | U3, because W03's Amendments list is complete only when T15 closes |
+| A13 | The phone step: from mobile data, attach to the running session, read what waits, and perform one owner act that was owed anyway. Nothing is built. | nothing |
+| A14 | The Mac's acceptance, then the laptop's move to Ubuntu Server and AB4 to AB6 (D34). | A11, and the Mac's arrival |
+
+### Order of work
+
+The brainstorm is closed (D36). This is the order.
+
+1. **U3: close T15.** The format work and the tecla plans wait on it.
+2. **U2 and U1, both the owner's.** Say the canvas is settled, and try the passkey.
+3. **After U2:** A4 and A8. **After G1 and U1:** A5, which also carries Q40's spine amendment.
+4. **After U3:** A12, then A10 (PS3, then PS4), then the deep plans in spine order: W04, W08, then A6 (W16) with A9, and A7 (W17) after U1.
+5. **Hosts, at the owner's pace and independent of steps 1 to 4:** A11, the Mac, A14. A13 can happen any day.
+
+Parked, with no step planned: the account test (section 21), AR glasses (Q42, Q43), reading a project's design to propose its theme (D28), and voice beyond dictation (G10).
+
+Owner-side upkeep of the current machine comes before the host steps. It is tracked outside this repository (D30).
 
 AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/awsf-v3-plan-build-prompts.md` and the vision doc. Invariant 12 requires a plan and its tickets to change in the same commit.
 
@@ -386,6 +414,7 @@ AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/aws
 - Plain: a watch cannot press a button on a dashboard it cannot reach.
 - Detail: the API answers only on localhost (`core/src/api/security.ts`). Frame 16b already assumes a phone can reach it.
 - Recommendation: design that path inside W15 before any watch or phone work.
+- Update, 2026-11-14: a phone can already reach a terminal on the laptop over the owner's private network, and a terminal session there is an interactive terminal for an owner act (`core/src/cli/tty.ts`). The dashboard is still out of reach, because the API accepts a loopback host only. A phone-width TC2 needs one more accepted origin, which is a fence change and so an owner amendment. Until then the phone reads and acts through the terminal (A13).
 
 **G9. The viewer has no renderer yet.**
 - Plain: the dashboard cannot draw a plan today.
@@ -423,6 +452,11 @@ AM5 is named in `specs/awsf-v3-intent.md`, `specs/awsf-v3-plan.html`, `specs/aws
 - Plain: answered on 2026-11-11 (D27).
 - Detail: the review estimates about 42% less written per deep plan and about 60% less loaded later. Q40 stays open by the owner's choice.
 - Recommendation: close U3 first. The format work waits on it.
+
+**U5. Run the test booted from USB.**
+- Plain: it decides whether the 8 GB laptop earns the job of always-on host before anything is spent.
+- Detail: A11. The steps are in section 22. It changes nothing on the laptop's disks.
+- Recommendation: run it at the next restart of that machine.
 
 ## 16. Open questions
 
@@ -551,3 +585,84 @@ The second assistant drafted a "graduation plan" on 2026-11-11. It is a proposal
 **If the owner reopens it.** One system per task. The factory task is a request the factory plans, checked by a test that already exists. The harness task is the review tecla of D29. Publishing starts with the owner posting a prepared draft by hand, which needs no outside interface. Replies are left out of the first test. Nothing starts before the first owner press of W17 exists.
 
 Not checked: whether the factory can register and gate a Python repository, and which platforms offer an approved route for posting and for replies.
+
+## 22. The round of 2026-11-14: one picture, three inputs
+
+The owner's rule for this round was that nothing is built, installed or changed until the picture is agreed. The picture is D31. The rulings are D32 to D36. Everything below that is not one of those decisions is the session's judgment.
+
+### What was taken and what was refused
+
+**From the two videos on one orchestrator across several machines.**
+
+- Taken: a queue shown one item at a time, most important first. It belongs to TC2, in W16's deep plan.
+- Taken: writing a project's mission note (I6) by probing its boundaries with hypothetical changes. A good note lets a plan's author decide without asking, which matters because all 37 of v3's questionables were decided as recommended.
+- Taken: the phone's terminal as the bridge until owner presses exist (G8, A13).
+- Refused: agents that merge on their own. Landing is human-only (v3 decision 4).
+- Refused: an orchestrator that rewrites other agents' instructions. That is generated content changing its own controls. The legal form is a trap plus an owner commit.
+- Refused: heavy work sent to paid cloud agents. W06 routes inside the owner's subscriptions.
+- Refused: a second orchestrator on a second machine (D32), a terminal dial as the phone's main surface (D7), and voice profiles of real people.
+
+**From the headless-host recipe, changed for this factory.**
+
+- The agent's account is the unprivileged one. A separate owner account holds the push credential and performs owner acts. Otherwise the terminal check is the only barrier between an agent and an owner act.
+- The setup is a script in git. An agent's memory of what it did ends with its session.
+- A laptop used as a server keeps its battery charged for years, so a charge limit is part of the setup.
+- A server with a browser kiosk runs on the built-in graphics adapter and needs no extra graphics driver.
+
+**From the elephant-goldfish plugin.** Facts read from its public repository:
+
+- Its review has five stages: a first zoom-out, a comprehension test on the document alone, a critic review, a second zoom-out, and an implementation-readiness test. A human gate follows each stage.
+- Its resolve step sorts each finding into propose a fix, contest, escalate or decline, and edits the document only after the human answers.
+- Its drift report compares a folder of design documents with the code, on request, and changes nothing.
+
+The session's recommendation, to be settled after the backtest (D35):
+
+- The review belongs in plan authoring. The factory already has a zero-context reviewer for code and W07 is one for the product. The plan is the one artifact without one.
+- Two lenses earn their cost: grounding, which checks a plan's claims against the code, and readiness, which asks whether a builder holding only the ticket could do the work. The readiness reviewer is handed the trap list as its checklist.
+- Take the pattern and do not install the plugin. It would bring a second plan format beside the one invariant 12 checks.
+- Two of resolve's rules are worth taking: a contest must be checkable, and a finding is escalated when the answer needs the owner's knowledge.
+- The plan stays lean. Findings live in a review record, and only blockers and owner questions enter the plan.
+- Non-Goals is the one section of the plugin's template that W02's and W03's plans lack by that name. PS4 should check it.
+- For drift, commands are already fenced (`core/test/unit/meta/doc-reconciliation.test.ts`). Not covered: the vision doc against decisions, spine status, the frame index (G7) and counts in prose. Countable facts should become fences, and a model's drift read fits two moments only: when a workstream closes and before a deep plan is authored.
+
+### The acceptance bar for an always-on host
+
+| Code | Line |
+| --- | --- |
+| AB1 | `awsf doctor` is green on the box. |
+| AB2 | The full `npm test` passes twice in a row, including the journeys that need the sandbox, in no more time than the current WSL host takes. |
+| AB3 | The trap suite passes. |
+| AB4 | One real shift lands with the Mac asleep, with no disk swap in steady state and no process killed for memory. |
+| AB5 | It survives a restart, a network drop in the middle of a run, and seven days up. |
+| AB6 | From the phone on mobile data: read status and perform one owner act. |
+
+**Judged again at 8 GB.** The bar holds. The setup around it changes.
+
+- One worker at a time. No parallel shifts.
+- The kiosk browser runs only if AB4 still passes with it open.
+- Swap is compressed memory first, with a small swap file on disk as overflow. A memory watchdog ends the worker before the box freezes, so a run fails as BLOCKED and can be retried.
+- If AB2 fails for memory, the test runner's parallelism is capped before the laptop is given up. That is a change to how the gates are invoked and needs its own decision.
+- Evidence that 8 GB is not the obstacle by itself: on 2026-11-14 the factory's own programs used about 1 GB at rest inside a WSL machine capped at 5 GB. The limit that remains is the processor, four cores from 2017. Suites will pass slowly. No native-Linux timing exists yet.
+
+### The test booted from USB (A11)
+
+It covers AB1 to AB3. AB4 to AB6 need a real install and provider logins, so they come later (A14).
+
+1. Finish the owner-side upkeep of the machine first.
+2. Write Ubuntu Desktop 24.04 LTS to a USB stick with a persistence partition, so the work lives on the stick and not in memory. The Server image has no live session. A desktop running during the test makes the result pessimistic, which is the safe direction.
+3. Boot it and choose to try it. Do not open the installer. Do not mount the internal disks.
+4. Install git, bubblewrap and Node 22, clone this repository from its public address, and run `npm ci`.
+5. Enable the stock bwrap AppArmor profile (D34) and confirm that bwrap can create a user namespace.
+6. Run `npm run awsf -- doctor`, then `npm test` twice. Record the time of each layer and the peak memory.
+7. It passes when AB1 to AB3 are green on both runs. Rows of `doctor` about provider logins are out of scope here. Time on a USB stick is recorded and not judged.
+
+Not verified: the path of the stock profile on 24.04, and how `doctor` behaves in a fresh clone with no providers. The session that helps run the test confirms both on the box.
+
+### Uses for the laptop, whichever way the test goes
+
+| Code | Use | Needs the bar? |
+| --- | --- | --- |
+| AU1 | The always-on factory host of D31. | Yes |
+| AU2 | A touch kiosk that shows one tecla served by the host. | No |
+| AU3 | The clean machine. W07's user-testing validator wants a machine that has never seen the factory. | No |
+| AU4 | A place to run the sandboxed journeys that CI cannot run. On a public repository, outside pull requests must never run there. | AB1 to AB3 |
