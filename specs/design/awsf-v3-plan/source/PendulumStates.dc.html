@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The pendulum: six states, the lease and your voice</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1940px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <div class="layer" style="padding-top:36px;padding-bottom:44px;gap:20px">
+    <div>
+      <div class="h1" style="font-size:40px">The pendulum</div>
+      <div class="sub" style="margin-top:8px;max-width:820px">Marimba's mark. Its shape says what is happening. Its last circle says whether a lease is live. No word has to be read and no movement seen.</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:14px">
+      <article class="gc" style="gap:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:10px"><div class="plate" style="flex:1 1 0;min-width:0;height:150px"><dc-import name="Pendulum" state="idle" size="180" ground="light" hint-size="180px,115px"></dc-import></div><div style="flex:1 1 0;min-width:0;display:flex;justify-content:center"><dc-import name="Pendulum" state="idle" size="170" hint-size="170px,109px"></dc-import></div></div>
+        <div style="display:flex;align-items:baseline;gap:10px"><span class="h2 pn-idle">Idle</span></div>
+        <div class="sub" style="min-height:46px">Nothing is running and nothing waits on you.</div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Shape</span><span>hangs plumb with room between its circles, dimmed, still</span></div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Read from</span><span>no live process, no open question, nothing unseen</span></div>
+      </article>
+      <article class="gc" style="gap:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:10px"><div class="plate" style="flex:1 1 0;min-width:0;height:150px"><dc-import name="Pendulum" state="working" size="180" ground="light" hint-size="180px,115px"></dc-import></div><div style="flex:1 1 0;min-width:0;display:flex;justify-content:center"><dc-import name="Pendulum" state="working" size="170" hint-size="170px,109px"></dc-import></div></div>
+        <div style="display:flex;align-items:baseline;gap:10px"><span class="h2 pn-working">Working</span></div>
+        <div class="sub" style="min-height:46px">It is live, on something.</div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Shape</span><span>full length, swinging, with a short trail</span></div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Read from</span><span>a run, a phase or a turn with a live process</span></div>
+      </article>
+      <article class="gc" style="gap:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:10px"><div class="plate" style="flex:1 1 0;min-width:0;height:150px"><dc-import name="Pendulum" state="needs" size="180" ground="light" hint-size="180px,115px"></dc-import></div><div style="flex:1 1 0;min-width:0;display:flex;justify-content:center"><dc-import name="Pendulum" state="needs" size="170" hint-size="170px,109px"></dc-import></div></div>
+        <div style="display:flex;align-items:baseline;gap:10px"><span class="h2 pn-needs">Needs you</span></div>
+        <div class="sub" style="min-height:46px">The next step is yours. It stopped in the middle of its swing.</div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Shape</span><span>frozen bent, never straight · its last circle opens into a ring</span></div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Read from</span><span>an act only you may take, that you have not set aside</span></div>
+      </article>
+      <article class="gc" style="gap:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:10px"><div class="plate" style="flex:1 1 0;min-width:0;height:150px"><dc-import name="Pendulum" state="paused" size="180" ground="light" hint-size="180px,115px"></dc-import></div><div style="flex:1 1 0;min-width:0;display:flex;justify-content:center"><dc-import name="Pendulum" state="paused" size="170" hint-size="170px,109px"></dc-import></div></div>
+        <div style="display:flex;align-items:baseline;gap:10px"><span class="h2 pn-paused">Paused</span></div>
+        <div class="sub" style="min-height:46px">It waits for a clock, and you can do nothing to hurry it.</div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Shape</span><span>hangs, and a ring around the last circle fills as the window resets</span></div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Read from</span><span>a quota window, a provider limit, a wait between tries</span></div>
+      </article>
+      <article class="gc" style="gap:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:10px"><div class="plate" style="flex:1 1 0;min-width:0;height:150px"><dc-import name="Pendulum" state="done" size="180" ground="light" hint-size="180px,115px"></dc-import></div><div style="flex:1 1 0;min-width:0;display:flex;justify-content:center"><dc-import name="Pendulum" state="done" size="170" hint-size="170px,109px"></dc-import></div></div>
+        <div style="display:flex;align-items:baseline;gap:10px"><span class="h2 pn-done">Done</span></div>
+        <div class="sub" style="min-height:46px">The definition of done is met. It is ready for something new.</div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Shape</span><span>the arms are gone, three circles overlap, lit green</span></div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Read from</span><span>landed, published or answered, and you have not looked</span></div>
+      </article>
+      <article class="gc" style="gap:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:10px"><div class="plate" style="flex:1 1 0;min-width:0;height:150px"><dc-import name="Pendulum" state="off" size="180" ground="light" hint-size="180px,115px"></dc-import></div><div style="flex:1 1 0;min-width:0;display:flex;justify-content:center"><dc-import name="Pendulum" state="off" size="170" hint-size="170px,109px"></dc-import></div></div>
+        <div style="display:flex;align-items:baseline;gap:10px"><span class="h2 pn-off">No signal</span></div>
+        <div class="sub" style="min-height:46px">The dashboard cannot see the host, so it will not pretend.</div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Shape</span><span>outlines only, dotted arms, no motion</span></div>
+        <div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Read from</span><span>the server stopped, or a live record is older than 30 s</span></div>
+      </article>
+    </div>
+    <section class="sec" aria-label="The lease"><div class="sech"><span class="h3">The last circle is the lease</span><span class="meta">filled orange: a lease is live · open orange ring: it waits on you</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:20px;padding:0 18px 24px"><div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:0"><dc-import name="Pendulum" state="working" size="200" hanger="{{ true }}" hint-size="200px,128px"></dc-import><span class="h3 pn-working">Working</span><span class="meta">your press started it · it stops when it needs you</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:0"><dc-import name="Pendulum" state="working" lease="{{ true }}" size="200" hanger="{{ true }}" hint-size="200px,128px"></dc-import><span class="h3 pn-working">Working, under a lease</span><span class="meta">it may go on without you, inside the lease</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:0"><dc-import name="Pendulum" state="needs" size="200" hanger="{{ true }}" hint-size="200px,128px"></dc-import><span class="h3 pn-needs">Needs you</span><span class="meta">the ring is the open seat</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:0"><dc-import name="Pendulum" state="needs" lease="{{ true }}" size="200" hanger="{{ true }}" hint-size="200px,128px"></dc-import><span class="h3 pn-needs">Needs you, lease still live</span><span class="meta">the dot in the ring is the lease</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:0"><dc-import name="Pendulum" state="idle" lease="{{ true }}" size="200" hanger="{{ true }}" hint-size="200px,128px"></dc-import><span class="h3 pn-idle">Idle, lease live</span><span class="meta">it may act, and nothing runs</span></div></div>
+    </section>
+    <section class="sec" aria-label="See it change">
+      <div class="sech"><span class="h3">See it change</span><span class="meta">press a state · it goes there from wherever it is</span><span class="grow"></span>
+        <button class="{{lcls}}" type="button" aria-pressed="{{lon}}" onClick="{{ltog}}">Lease live</button><button class="{{vcls}}" type="button" aria-pressed="{{von}}" onClick="{{vtog}}">Listening</button>
+        <div class="seg" role="group" aria-label="State">
+          <sc-for list="{{opts}}" as="o" hint-placeholder-count="6"><button class="{{o.cls}}" type="button" aria-pressed="{{o.on}}" onClick="{{o.pick}}">{{o.name}}</button></sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px 40px;padding:0 36px 30px">
+        <span style="display:flex;width:520px;height:333px;flex:none"><dc-import name="Pendulum" state="{{sel}}" lease="{{lon}}" listening="{{von}}" size="520" hanger="{{ true }}" hint-size="520px,333px"></dc-import></span>
+        <div style="flex:1 1 440px;min-width:0;display:flex;flex-direction:column;gap:6px;padding-top:34px">
+          <span class="{{wordCls}}" style="font-size:30px">{{word}}</span>
+          <span class="sub">{{what}}</span>
+          <div style="margin-top:12px">
+            <div class="r"><span>Idle to working</span><span class="rv">the arms grow out, one push, then gravity</span></div>
+            <div class="r"><span>Working to needs you</span><span class="rv">it catches at the next bent pose, never later than 2 s</span></div>
+            <div class="r"><span>Needs you to working</span><span class="rv">your press lets it fall from where it stuck</span></div>
+            <div class="r"><span>Working to done</span><span class="rv">the nodes gather, one green pulse, 1.3 s</span></div>
+            <div class="r"><span>Done to idle</span><span class="rv">you looked · the nodes unfold and hang</span></div>
+            <div class="r"><span>Working to paused</span><span class="rv">the swing dies down, then the ring appears</span></div>
+            <div class="r"><span>Any state to no signal</span><span class="rv">it fades to outlines and stops</span></div>
+            <div class="r"><span>A lease starts or ends</span><span class="rv">the last circle fills or empties, in place</span></div>
+            <div class="r"><span>You speak</span><span class="rv">a ring of ticks goes around whatever state it is in</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1940}}'>
+class Component extends DCLogic {
+constructor(props) { super(props); this.state = {}; }
+renderVals() {
+const sel = this.state.sel || 'working', on = this.state.lease === true, vo = this.state.voice === true;
+const t = {
+idle: ['Idle', 'Nothing is running and nothing waits on you.'],
+working: ['Working', 'It is live, on something.'],
+needs: ['Needs you', 'The next step is yours. It stopped in the middle of its swing.'],
+paused: ['Paused', 'It waits for a clock, and you can do nothing to hurry it.'],
+done: ['Done', 'The definition of done is met. It is ready for something new.'],
+off: ['No signal', 'The dashboard cannot see the host, so it will not pretend.']
+};
+const opts = ['idle', 'working', 'needs', 'paused', 'done', 'off'].map((k) => ({
+name: t[k][0], on: k === sel, cls: k === sel ? 'segon' : 'segb', pick: () => this.setState({ sel: k })
+}));
+return { sel: sel, opts: opts, word: t[sel][0], what: t[sel][1], wordCls: 'pn-w pn-' + sel, lon: on, lcls: on ? 'segon' : 'segb', ltog: () => this.setState({ lease: !on }), von: vo, vcls: vo ? 'segon' : 'segb', vtog: () => this.setState({ voice: !vo }) };
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Waiting on you: one queue, durable answers</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1700px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">all projects</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" aria-current="page" href="PressQueue.dc.html">waiting on you</a>
+    <span class="grow"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Room1.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div class="layer" style="padding-top:0;gap:16px">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 26px" role="status"><dc-import name="Pendulum" state="needs" size="270" hanger="{{ true }}" hint-size="270px,173px"></dc-import><span style="min-width:0;padding-top:20px"><span class="h1" style="display:block;font-size:40px">Waiting on you</span><span class="pn-w pn-needs" style="display:block;margin:4px 0 6px">Needs you</span><span class="meta">6 items across 2 projects · an item is here only when its next step is yours</span></span><span class="grow"></span>
+      <div class="seg" role="group" aria-label="Project"><sc-for list="{{opts}}" as="o" hint-placeholder-count="3"><button class="{{o.cls}}" type="button" aria-pressed="{{o.on}}" onClick="{{o.pick}}">{{o.name}}</button></sc-for></div></div>
+    <section class="sec" aria-label="A durable yes or no"><div class="sech"><span class="h3">A durable yes or no</span><span class="meta">the run stopped here · it waits as long as you need, through restarts and nights</span></div><div style="padding:22px 10px 18px"><div class="rail2" role="list" aria-label="A run stops at your answer"><div class="rs"><span class="dot"><i class=""></i></span><b>asked</b><span class="t">you</span></div><div class="rs"><span class="dot"><i class=""></i></span><b>checked</b><span class="t">preflight</span></div><div class="rs"><span class="dot"><i class="you"></i></span><b>you: start</b><span class="t">answered</span></div><div class="rs"><span class="dot"><i class=""></i></span><b>built</b><span class="t">1 call</span></div><div class="rs"><span class="dot"><i class=""></i></span><b>proved</b><span class="t">gates 5/5</span></div><div class="rs"><span class="dot"><i class="now"></i></span><b>you: land</b><span class="t">waiting</span></div><div class="rs q"><span class="dot"><i class="no"></i></span><b>landed</b><span class="t"></span></div><div class="rs q"><span class="dot"><i class="no"></i></span><b>published</b><span class="t"></span></div></div></div></section>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(520px,100%),1fr));gap:14px"><sc-if value="{{a}}" hint-placeholder-val="{{ true }}"><article class="ocard" aria-label="Land [TASK]?"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px"><span class="sq" style="background:#1D4D3A;border:1px solid #A7BFA7;box-sizing:border-box"></span><span class="meta" style="color:#DAF1DE">agentic-workflow-software-factory</span><span class="grow"></span><span class="lblo">owner press</span></div><div class="h2" style="font-size:20px">Land [TASK]?</div><div class="sub">Gates 5 of 5, review accept, journey attested.</div><div><div class="kv"><span>Yes</span><span>main moves to [SHA] · nothing is pushed</span></div><div class="kv"><span>No</span><span>the candidate stays · nothing is lost</span></div></div><div class="btnrow"><button class="btnk" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l8-8M16 7l3 3"></path></svg>Land</button><button class="btn" type="button">Read it</button><span class="grow"></span><span class="meta">waiting [N]h · from run [ID]</span></div></article></sc-if><sc-if value="{{a}}" hint-placeholder-val="{{ true }}"><article class="ocard" aria-label="Change the mission note?"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px"><span class="sq" style="background:#1D4D3A;border:1px solid #A7BFA7;box-sizing:border-box"></span><span class="meta" style="color:#DAF1DE">agentic-workflow-software-factory</span><span class="grow"></span><span class="lblo">owner commit</span></div><div class="h2" style="font-size:20px">Change the mission note?</div><div class="sub">You approved [N] changes the note says to resist.</div><div><div class="kv"><span>Yes</span><span>a diff of 2 lines, for you to commit</span></div><div class="kv"><span>No</span><span>the note stays · this card does not come back for the same cause</span></div></div><div class="btnrow"><button class="btn" type="button">Show the diff</button><button class="btn" type="button">No</button><span class="grow"></span><span class="meta">from Marimba · HY6</span></div></article></sc-if><sc-if value="{{s}}" hint-placeholder-val="{{ true }}"><article class="ocard" aria-label="Pin the host for this project?"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px"><span class="sq" style="background:#DAF1DE;border:1px solid #A7BFA7;box-sizing:border-box"></span><span class="meta" style="color:#DAF1DE">smart-health-platform</span><span class="grow"></span><span class="lblo">owner press</span></div><div class="h2" style="font-size:20px">Pin the host for this project?</div><div class="sub">A landing here stopped a run there.</div><div><div class="kv"><span>Yes</span><span>it runs from host [SHA], published</span></div><div class="kv"><span>No</span><span>it keeps following main</span></div></div><div class="btnrow"><button class="btnk" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l8-8M16 7l3 3"></path></svg>Pin it</button><button class="btn" type="button">No</button><span class="grow"></span><span class="meta">one card per project · HY1</span></div></article></sc-if><sc-if value="{{s}}" hint-placeholder-val="{{ true }}"><article class="gc" aria-label="Use trap [TR-ID] here too?"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px"><span class="sq" style="background:#DAF1DE;border:1px solid #A7BFA7;box-sizing:border-box"></span><span class="meta" style="color:#DAF1DE">smart-health-platform</span><span class="grow"></span><span class="lbl">one card per project</span></div><div class="h2" style="font-size:20px">Use trap [TR-ID] here too?</div><div class="sub">The factory learned it at home. It is not applied anywhere else by itself.</div><div><div class="kv"><span>Yes</span><span>a prepared patch to this project’s traps</span></div><div class="kv"><span>No</span><span>nothing changes here</span></div></div><div class="btnrow"><button class="btn" type="button">Prepare it</button><button class="btn" type="button">No</button><span class="grow"></span><span class="meta">learned in run [ID] · HY2</span></div></article></sc-if><sc-if value="{{s}}" hint-placeholder-val="{{ true }}"><article class="ocard" aria-label="Take the new reviewer prompt?"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px"><span class="sq" style="background:#DAF1DE;border:1px solid #A7BFA7;box-sizing:border-box"></span><span class="meta" style="color:#DAF1DE">smart-health-platform</span><span class="grow"></span><span class="lblo">owner commit</span></div><div class="h2" style="font-size:20px">Take the new reviewer prompt?</div><div class="sub">It landed at home. 37 of 37 files still match, so this would be the first difference.</div><div><div class="kv"><span>Yes</span><span>a one-line version bump, for you to commit</span></div><div class="kv"><span>No</span><span>this project keeps the version it has</span></div></div><div class="btnrow"><button class="btn" type="button">Show the line</button><button class="btn" type="button">No</button><span class="grow"></span><span class="meta">HY5</span></div></article></sc-if><sc-if value="{{a}}" hint-placeholder-val="{{ true }}"><article class="gc" aria-label="Add this drift to the backlog?"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px"><span class="sq" style="background:#1D4D3A;border:1px solid #A7BFA7;box-sizing:border-box"></span><span class="meta" style="color:#DAF1DE">agentic-workflow-software-factory</span><span class="grow"></span><span class="lbl">a finding</span></div><div class="h2" style="font-size:20px">Add this drift to the backlog?</div><div class="sub">A check found it at [TIME], while you were away. It was recorded and nothing else happened.</div><div><div class="kv"><span>Yes</span><span>one backlog item</span></div><div class="kv"><span>No</span><span>the finding stays in the record</span></div></div><div class="btnrow"><button class="btn" type="button">Add it</button><button class="btn" type="button">Not now</button><span class="grow"></span><span class="meta">code only · no model · HY3</span></div></article></sc-if></div>
+    <section class="sec" aria-label="Answered"><div class="sech"><span class="h3">Answered</span><span class="meta">a card leaves when you act, or when its cause is gone</span></div><div class="secb">
+      <div class="r"><span class="ok">✓</span><span>Yes · start [TASK]</span><span class="rv">agentic-workflow-software-factory · [TIME]</span></div>
+      <div class="r"><span class="x">×</span><span>No · give smart-health-platform its own installation</span><span class="rv">2026-11-23 · pinned instead</span></div>
+      <div class="r"><span class="lbl">gone</span><span>Add a retry to [TASK]</span><span class="rv">its run landed first</span></div>
+    </div></section>
+  </div>
+<div class="pn-bar flat"><dc-import name="Bar" state="needs" lease="{{ false }}" line="6 across 2 projects" waiting="6" running="0" well="{{ false }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1700}}'>
+class Component extends DCLogic {
+constructor(props) { super(props); this.state = {}; }
+renderVals() {
+const sel = this.state.sel || 'all';
+const opts = [['all', 'All 6'], ['a', 'AWSF 3'], ['s', 'Smart Health 3']].map((o) => ({
+name: o[1], on: o[0] === sel, cls: o[0] === sel ? 'segon' : 'segb', pick: () => this.setState({ sel: o[0] })
+}));
+return { opts: opts, a: sel !== 's', s: sel !== 'a' };
+}
+}
+</script>
+</body>
+</html>

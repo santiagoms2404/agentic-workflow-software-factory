@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Puente: handoffs, taken in as data</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1000px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">smart-health-platform</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" aria-current="page" href="Puente.dc.html">puente</a>
+    <span class="grow"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Room1.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div class="cols">
+    <aside class="lc" aria-label="Handoffs">
+      <div class="seg" role="group" aria-label="Filter" style="margin:0 6px 8px"><button class="segon" type="button" aria-pressed="true">All 3</button><button class="segb" type="button" aria-pressed="false">To confirm 1</button></div>
+      <a class="li on" href="#h"><span class="lit2">Reviews no longer die on long runs</span><span class="lim">from agentic-workflow-software-factory</span><span class="lim" style="color:#F26A1B">to confirm</span></a>
+      <a class="li" href="#h"><span class="lit2">Meta factory package</span><span class="lim">from cloud Marimba · factory</span><span class="lim" style="color:#8EB69B">taken in</span></a>
+      <a class="li" href="#h"><span class="lit2">Teams plan, frames and notes</span><span class="lim">from cloud Marimba</span><span class="lim" style="color:#8EB69B">taken in</span></a>
+      <div class="grp">How each arrives</div>
+      <div class="lim" style="padding:0 12px;display:flex;flex-direction:column;gap:10px"><span><b style="color:#DAF1DE">Project to project</b><br>no transport · a record in the host journal</span><span><b style="color:#DAF1DE">Cloud Marimba and factory</b><br>a file in git that you commit</span><span><b style="color:#DAF1DE">Another installation</b><br>none until a second one is right</span></div>
+    </aside>
+    <main class="cc">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px"><span class="h1" style="font-size:30px">Reviews no longer die on long runs</span><span class="lblo">to confirm</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px"><span class="ref">handoff [H-ID]</span><span class="ref">thread [T-ID] · message 1</span><span class="ref">change 833f8dc</span><span class="ref">read at 3aa0a3c</span><span class="lbl">factory</span></div>
+      <section style="display:grid;grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr);align-items:center" aria-label="From and to">
+        <div class="rc"><div class="eyebrow">From</div><div class="h3" style="margin-top:8px">agentic-workflow-software-factory</div><div class="meta">the landed change is its own record</div></div>
+        <svg viewBox="0 0 64 40" width="64" height="40" aria-hidden="true"><path d="M4 30Q32 0 60 30" fill="none" stroke="#A7BFA7" stroke-width="2.4"></path><path d="M4 30h56" stroke="#2F7A5B" stroke-width="3"></path><circle cx="4" cy="30" r="3.6" fill="#1D4D3A" stroke="#A7BFA7" stroke-width="1.6"></circle><circle cx="60" cy="30" r="3.6" fill="#1D4D3A" stroke="#A7BFA7" stroke-width="1.6"></circle></svg>
+        <div class="rc"><div class="eyebrow">To</div><div class="h3" style="margin-top:8px">smart-health-platform</div><div class="meta">a row in its Signals</div></div>
+      </section>
+      <section class="sec" aria-label="The record"><div class="sech"><span class="h3">What it says</span></div><div class="secb">
+        <div class="kv"><span>Change</span><span>A status write reads only the journal’s tail, and a missing terminal event is explained.</span></div>
+        <div class="kv"><span>Prepared</span><span>nothing for you to apply</span></div>
+        <div class="kv"><span>Needs you</span><span>confirm it as true for this project</span></div>
+        <div class="kv"><span>Could not check</span><span>which host revision this project will run from</span></div>
+      </div></section>
+      <section class="sec" aria-label="Claims checked"><div class="sech"><span class="h3">Its claims, against your own records</span><span class="grow"></span><span class="lbl">2 match · 1 is out of date</span></div><div class="secb">
+        <div class="r"><span class="ok">✓</span><span style="flex:1 1 260px">833f8dc is on main</span><span class="rv">git · yes</span></div>
+        <div class="r"><span class="ok">✓</span><span style="flex:1 1 260px">Nine files changed, with tests</span><span class="rv">git · 9 files, +370 −19</span></div>
+        <div class="r"><span class="x">×</span><span style="flex:1 1 260px">“Smart Health’s first run is next”</span><span class="rv">your record · after T15</span></div>
+      </div></section>
+      <div class="btnrow"><button class="btns" type="button">Confirm it</button><button class="btn" type="button">Set it aside</button><button class="btn" type="button">Ask Marimba</button><span class="grow"></span><span class="meta">confirming records it · nothing runs and nothing is sent back</span></div>
+    </main>
+    <aside class="rc3" aria-label="The receiver's rules">
+      <div class="pn-bay" role="status" aria-label="Marimba, needs you"><dc-import name="Pendulum" state="needs" size="250" hanger="{{ true }}" hint-size="250px,160px"></dc-import><span class="pn-w pn-needs">Needs you</span><span class="pn-n">1 handoff to confirm</span></div>
+      <div><span class="h2" style="display:block">Puente</span><span class="meta">how word crosses from one side to the other</span></div>
+      <div class="eyebrow" style="margin-top:4px">Done means</div>
+      <div><div class="r" style="align-items:flex-start"><span class="num">1</span><span style="flex:1;font-size:14.5px">Take it in. Send nothing back, and tell nobody unless it changes their work.</span></div><div class="r" style="align-items:flex-start"><span class="num">2</span><span style="flex:1;font-size:14.5px">Your requests, the mission and a human gate come first.</span></div><div class="r" style="align-items:flex-start"><span class="num">3</span><span style="flex:1;font-size:14.5px">It is data until you confirm it.</span></div><div class="r" style="align-items:flex-start"><span class="num">4</span><span style="flex:1;font-size:14.5px">Every claim is checked against your own records before use.</span></div><div class="r" style="align-items:flex-start"><span class="num">5</span><span style="flex:1;font-size:14.5px">One notice for each landed change, keyed by its commit.</span></div></div>
+      <div class="rc"><div style="display:flex;align-items:center;gap:8px"><span style="color:#8EB69B;display:flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></span><span class="h3">Personal sections</span></div><div class="sub" style="margin-top:6px">They stay out of git, the journal and an agent’s notes. This handoff has none.</div></div>
+    </aside>
+  </div>
+<div class="pn-bar flat"><dc-import name="Bar" state="needs" lease="{{ false }}" line="1 handoff to confirm" waiting="1" running="0" well="{{ false }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

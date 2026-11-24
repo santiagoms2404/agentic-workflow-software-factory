@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plan-author: a run that produces documents</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+.steps{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.step{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:12px;border:1px solid rgba(218,241,222,.1);color:#DAF1DE;font:600 12.5px/1 "JetBrains Mono",monospace;text-decoration:none;white-space:nowrap}
+.step.on{border-color:#DAF1DE;background:rgba(218,241,222,.1)}
+.arrow{color:#8EB69B;font:400 12px/1 "JetBrains Mono",monospace}
+.sq{display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(218,241,222,.45)}
+.sqo{display:inline-block;width:10px;height:10px;border-radius:3px;border:1.5px solid #DAF1DE;box-sizing:border-box}
+.doc{display:flex;flex-direction:column;gap:8px;padding:14px 16px;border-radius:14px;border:1px solid rgba(218,241,222,.14);background:rgba(20,20,15,.3)}
+.outline{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;background:rgba(218,241,222,.04);font:400 13px/1.7 Archivo;color:rgba(218,241,222,.86)}
+.outline .lvl2{padding-left:16px;color:#8EB69B}
+</style>
+</helmet>
+<div class="app" style="min-height:1420px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#run" aria-current="page">[SESSION]</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="#sessions" aria-label="Back to sessions" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">W04 deep plan</span>
+      <span class="lbl">drawn before its first run</span>
+      <span class="meta">plan-author · --plan awsf-v3-plan --ticket W04</span>
+    </header>
+
+    <nav class="steps" aria-label="Phases of plan-author">
+      <a class="step" href="RequestOwner.dc.html"><span class="dmd"></span>request</a><span class="arrow">›</span>
+      <a class="step on" href="#author" aria-current="step"><span class="sq"></span>plan-author</a><span class="arrow">›</span>
+      <a class="step" href="#admit"><span class="sqo"></span>plan-admit</a><span class="arrow">›</span>
+      <a class="step" href="CodePhase.dc.html"><span class="sqo"></span>tests</a><span class="arrow">›</span>
+      <a class="step" href="ReviewPhase.dc.html"><span class="dmd"></span>review-context</a><span class="arrow">›</span>
+      <a class="step" href="ReviewPhase.dc.html"><span class="sq"></span>reviewer</a><span class="arrow">›</span>
+      <a class="step" href="RequestOwner.dc.html"><span class="dmdf"></span>owner</a>
+    </nav>
+
+    <section class="sec" aria-label="Selected phase evidence">
+      <div class="sech">
+        <span class="eyebrow">Selected phase evidence</span>
+        <span class="h2" style="font-size:20px">plan-author</span>
+        <span class="lbl">[STATE]</span>
+        <span class="grow"></span>
+        <span class="meta">agent · codex · gpt-6-sol @ high · writes no repository path</span>
+      </div>
+      <nav class="ptabs" aria-label="Evidence tabs">
+        <a class="on" href="#docs" aria-current="page">Documents<span class="n">3</span></a>
+        <a href="#open">Open items<span class="n">[N]</span></a>
+        <a href="Events.dc.html">Events</a>
+        <a href="#prompt">Prompt</a>
+        <a href="#output">Output</a>
+        <a href="#gates">Gates</a>
+      </nav>
+      <div class="secb" style="display:flex;flex-direction:column;gap:16px;padding-top:16px">
+        <div class="grid3">
+          <div class="doc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="h3">plan.html</span><span class="grow"></span><span class="meta">[N] KB of 2 MB</span></div>
+            <div class="outline" aria-label="Plan outline">
+              <span>Identifier Spine</span>
+              <span>Milestones M1 to M[N]</span>
+              <span class="lvl2">each with its tasks and markers, all [ ]</span>
+              <span>Questionables · [N]</span>
+              <span>Amendments · empty</span>
+            </div>
+            <a class="btn" href="#viewer" style="align-self:flex-start">Open in the plan viewer</a>
+          </div>
+          <div class="doc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="h3">build-prompts.md</span><span class="grow"></span><span class="meta">[N] KB of 2 MB</span></div>
+            <div class="sub">Section A, the shared conventions. Section B, one canonical prompt per task, which each ticket carries byte for byte.</div>
+            <div class="r"><span>Prompts in Section B</span><span class="rv">[N]</span></div>
+          </div>
+          <div class="doc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="h3">tickets.json</span><span class="grow"></span><span class="meta">[N] KB of 256 KB</span></div>
+            <div class="sub">The frontmatter table: id, title, milestone, state, depends_on, workflow, serves.</div>
+            <div class="r"><span>Tickets</span><span class="rv">[N] · all todo</span></div>
+          </div>
+        </div>
+        <div class="two">
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Open items in the plan</span><span class="grow"></span><span class="lblo">become cards for you</span></div>
+            <div class="mix" style="display:flex;height:10px;gap:3px" aria-hidden="true"><span style="width:58%;background:#8EB69B;border-radius:4px"></span><span style="width:25%;border:1px solid #DAF1DE;border-radius:4px;box-sizing:border-box"></span><span style="width:17%;border:1px dashed rgba(218,241,222,.5);border-radius:4px;box-sizing:border-box"></span></div>
+            <div class="r"><span>Settled</span><span class="rv">[N]</span></div>
+            <div class="r"><span>Working choice · you can overrule</span><span class="rv">[N]</span></div>
+            <div class="r"><span>Open · needs research or your policy</span><span class="rv">[N]</span></div>
+            <div class="meta">The plan marks its own open items. Each becomes a card in Waiting on you, with the author's pick and its reasons.</div>
+          </div>
+          <div class="gc">
+            <div class="eyebrow">Where the documents live</div>
+            <div class="sub">In the phase's private session output, never in Git. The envelope only names the three files and the plan's stem.</div>
+            <div class="r"><span>Stem</span><span class="rv">awsf-v3-w04-[STEM]</span></div>
+            <div class="r"><span>Envelope</span><span class="rv">awsf.plan-author-output/v1 · 64 KB cap</span></div>
+            <div class="r"><span>Corrections</span><span class="rv">up to 1</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="two">
+      <section class="sec" aria-label="plan-admit">
+        <div class="sech"><span class="sqo"></span><span class="eyebrow">plan-admit · host</span><span class="grow"></span><span class="lbl">next phase</span></div>
+        <div class="secb">
+          <div class="r"><span class="dmd"></span><span>Exactly one new plan set</span><span class="rv">[ ]</span></div>
+          <div class="r"><span class="dmd"></span><span>No existing file changed</span><span class="rv">[ ]</span></div>
+          <div class="r"><span class="dmd"></span><span>Plan and tickets agree, by the sync fence</span><span class="rv">[ ]</span></div>
+          <div class="r"><span class="dmd"></span><span>Frontmatter vocabularies</span><span class="rv">[ ]</span></div>
+          <div class="meta" style="margin-top:8px">Admission creates the files new. A failed admission rolls back only the files it created.</div>
+        </div>
+      </section>
+      
+    </div>
+
+    
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="the W04 plan has not been run" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1420}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

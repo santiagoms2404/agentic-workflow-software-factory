@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings: sources</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0;background:#051F20}
+a{color:#DAF1DE}a:hover{color:#F26A1B}
+.app{position:relative;min-height:1940px;background:#051F20;color:#DAF1DE;font:400 15px/1.55 Archivo,sans-serif;overflow:hidden;display:flex;flex-direction:column}
+.bokeh{position:absolute;inset:0;background:radial-gradient(46px 46px at 6% 8%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 19% 5%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 31% 12%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 44% 6%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 58% 10%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 72% 4%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 86% 9%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 95% 17%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 11% 24%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 25% 29%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 39% 22%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 53% 27%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 67% 21%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 81% 26%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 92% 33%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 4% 41%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 17% 46%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 33% 40%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 47% 44%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 61% 39%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 75% 45%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 89% 49%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 9% 58%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 23% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 37% 56%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 52% 61%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 66% 55%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 80% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 96% 66%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 5% 75%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 19% 79%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 34% 73%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 49% 78%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 63% 72%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 77% 79%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 91% 82%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 13% 92%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 28% 96%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 42% 89%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 57% 94%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 71% 90%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 86% 95%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 27% 34%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 58% 52%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 83% 68%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 14% 84%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%)}
+.tint{position:absolute;inset:0;background:linear-gradient(165deg,rgba(11,43,38,.36) 0%,rgba(5,31,32,.48) 60%,rgba(5,31,32,.55) 100%)}
+.sheen{position:absolute;inset:0;background:linear-gradient(118deg,rgba(218,241,222,.075) 0%,rgba(218,241,222,0) 34%,rgba(218,241,222,0) 66%,rgba(218,241,222,.045) 100%);border-top:1px solid rgba(218,241,222,.13)}
+.tabs{position:relative;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:0 24px;padding:0 32px;border-bottom:1px solid rgba(218,241,222,.08)}
+.tabs .brand{font:700 15px/1 Archivo;letter-spacing:.02em;margin-right:8px}
+.tabs a{display:inline-flex;align-items:center;min-height:52px;font:500 14px/1 Archivo;color:#8EB69B;text-decoration:none}
+.tabs a.on{color:#DAF1DE;box-shadow:inset 0 -2px 0 #F26A1B}
+.tabs .right{margin-left:auto;font:400 12px/1 "JetBrains Mono",monospace;color:#8EB69B}
+.layer{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;gap:20px;width:100%;max-width:760px;margin:0 auto;padding:0 24px;box-sizing:border-box}
+.head{height:72px;display:flex;align-items:center;gap:12px;flex:none}
+.meta{font:400 12px/1.5 "JetBrains Mono",monospace;color:#8EB69B}
+.icon{width:44px;height:44px;border:0;background:transparent;color:#8EB69B;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:12px}
+.eyebrow{font:600 11px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#8EB69B}
+.eyebrowo{font:600 11px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#F26A1B}
+.you{align-self:flex-end;max-width:520px;background:rgba(218,241,222,.1);border:1px solid rgba(218,241,222,.1);border-radius:18px;padding:12px 16px}
+.ink{font-size:17px;line-height:1.6}
+.card{border-radius:18px;background:rgba(218,241,222,.07);border:1px solid #F26A1B}
+.fact{display:flex;justify-content:space-between;gap:24px;padding:12px 20px;border-top:1px solid rgba(218,241,222,.08)}
+.factv{font:600 13.5px/1.45 "JetBrains Mono",monospace;text-align:right}
+.tiles{display:flex;flex-wrap:wrap;gap:10px}
+.tile{flex:1 1 120px;min-height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:1px solid rgba(218,241,222,.11);border-radius:16px;background:rgba(218,241,222,.05);color:#DAF1DE;font:600 13px/1 Archivo;cursor:pointer}
+.tileo{flex:1.5 1 180px;min-height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:1px solid #F26A1B;border-radius:16px;background:rgba(242,106,27,.07);color:#F26A1B;font:600 13px/1 Archivo;cursor:pointer}
+.composer{display:flex;gap:12px;align-items:center;padding:0 0 28px}
+.field{flex:1;min-height:54px;box-sizing:border-box;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);border-radius:16px;padding:0 18px;color:#DAF1DE;font:400 15px Archivo}
+.send{width:54px;height:54px;border-radius:50%;border:1.5px solid #F26A1B;background:rgba(242,106,27,.1);color:#F26A1B;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.h1{font:800 40px/1.1 Archivo;letter-spacing:-.032em}
+.h2{font:800 24px/1.15 Archivo;letter-spacing:-.025em}
+.sub{font-size:14.5px;line-height:1.6;color:rgba(218,241,222,.82)}
+.note{margin:0;font-size:14.5px;line-height:1.6;color:rgba(142,182,155,.85)}
+.gc{border-radius:18px;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);padding:18px 20px}
+.rc{border-radius:16px;background:rgba(218,241,222,.06);border:1px solid rgba(218,241,222,.1);padding:14px 16px}
+.tk{border-radius:18px;background:rgba(5,31,32,.6);border:1px dashed rgba(218,241,222,.34);padding:18px 20px}
+.lbl{display:inline-flex;align-items:center;min-height:24px;padding:0 10px;border-radius:999px;border:1px solid rgba(218,241,222,.24);font:600 10.5px/1 "JetBrains Mono",monospace;letter-spacing:.04em;color:#8EB69B;white-space:nowrap}
+.lblo{display:inline-flex;align-items:center;min-height:24px;padding:0 10px;border-radius:999px;border:1px solid #F26A1B;font:600 10.5px/1 "JetBrains Mono",monospace;letter-spacing:.04em;color:#F26A1B;white-space:nowrap}
+.r{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 0;border-top:1px solid rgba(218,241,222,.07);font-size:14.5px}
+.rv{margin-left:auto;font:400 12.5px/1.4 "JetBrains Mono",monospace;color:#8EB69B;text-align:right}
+.id{font:600 13px/1 "JetBrains Mono",monospace;min-width:38px}
+.btn{min-height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 16px;border-radius:14px;border:1px solid rgba(218,241,222,.14);background:rgba(218,241,222,.05);color:#DAF1DE;font:600 13.5px/1 Archivo;cursor:pointer;white-space:nowrap}
+.btnk{min-height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 16px;border-radius:14px;border:1px solid rgba(218,241,222,.38);background:rgba(218,241,222,.08);color:#DAF1DE;font:600 13.5px/1 Archivo;cursor:pointer;white-space:nowrap}
+.btns{min-height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 16px;border-radius:14px;border:1px solid #F26A1B;background:rgba(242,106,27,.07);color:#F26A1B;font:600 13.5px/1 Archivo;cursor:pointer;white-space:nowrap}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px}
+.term{display:flex;align-items:center;gap:12px;background:rgba(20,20,15,.42);border:1px solid rgba(218,241,222,.07);border-radius:14px;padding:12px 16px;font:400 13px/1.4 "JetBrains Mono",monospace;color:rgba(218,241,222,.72)}
+.strip3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-radius:14px;background:rgba(218,241,222,.05);border:1px solid rgba(218,241,222,.09)}
+.cell{padding:14px 16px;border-left:1px solid rgba(218,241,222,.07)}
+.cellv{font:600 20px/1.2 "JetBrains Mono",monospace}
+.celll{font:400 11.5px/1.4 Archivo;color:#8EB69B;margin-top:4px}
+.bar{position:relative;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 32px;border-top:1px solid rgba(218,241,222,.12);background:rgba(5,31,32,.86)}
+.barf{flex:1 1 320px;min-height:46px;box-sizing:border-box;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);border-radius:14px;padding:0 16px;color:#DAF1DE;font:400 14.5px Archivo}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:24px;padding:0 7px;border-radius:6px;border:1px solid rgba(218,241,222,.24);font:600 11px/1 "JetBrains Mono",monospace;color:#8EB69B}
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:999px;background:rgba(218,241,222,.1);font:400 12.5px/1 "JetBrains Mono",monospace;color:#DAF1DE}
+.pbar{flex:1 1 120px;height:4px;border-radius:2px;background:rgba(218,241,222,.12);position:relative;min-width:80px}
+.pfill{position:absolute;left:0;top:0;height:4px;border-radius:2px;background:#8EB69B}
+.phase{font:600 11px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#8EB69B;padding:14px 0 6px}
+.set{position:relative;z-index:2;flex:1;display:flex;flex-wrap:wrap;gap:0 40px;width:100%;max-width:1240px;margin:0 auto;padding:28px 24px 40px;box-sizing:border-box}
+.rail{flex:1 1 220px;max-width:264px;display:flex;flex-direction:column;gap:2px}
+.railg{font:600 11px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#DAF1DE;padding:20px 12px 4px}
+.railn{font:400 11.5px/1.4 Archivo;color:#8EB69B;padding:0 12px 6px}
+.sr{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:12px;color:#DAF1DE;font:500 14.5px/1 Archivo;text-decoration:none}
+.sr.on{background:rgba(218,241,222,.1)}
+.sr .kbd{margin-left:auto}
+.setc{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:18px}
+.who{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:0 11px;border-radius:999px;background:rgba(218,241,222,.09);font:600 10.5px/1 "JetBrains Mono",monospace;color:#8EB69B;white-space:nowrap}
+.pal{display:flex;flex-direction:column;padding:0;border-radius:16px;border:1px solid rgba(218,241,222,.12);background:rgba(218,241,222,.04);overflow:hidden;cursor:pointer;color:#DAF1DE;text-align:left}
+.pal.on{border-color:#DAF1DE;box-shadow:0 0 0 1px #DAF1DE}
+.palv{display:flex;gap:8px;padding:12px;height:96px;box-sizing:border-box}
+.palp{flex:1;display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:8px}
+.palp i{display:block;height:5px;border-radius:3px}
+.paln{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:10px 14px 12px;font:600 14px/1.2 Archivo}
+.tog{display:inline-flex;align-items:center;width:44px;height:26px;border-radius:999px;border:1px solid rgba(218,241,222,.22);background:rgba(218,241,222,.07);padding:2px;box-sizing:border-box;flex:none}
+.tog span{width:20px;height:20px;border-radius:50%;background:#8EB69B}
+.tog.on{background:rgba(218,241,222,.24);border-color:#DAF1DE;justify-content:flex-end}
+.tog.on span{background:#DAF1DE}
+.sw{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:8px 0;border:0;border-top:1px solid rgba(218,241,222,.07);background:transparent;color:#DAF1DE;font:400 14.5px/1.45 Archivo;text-align:left;cursor:pointer}
+.sw .tog{margin-left:auto}
+.piece{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:10px;border:1px solid rgba(218,241,222,.14);background:rgba(218,241,222,.05);font:500 13px/1 Archivo;color:#DAF1DE;white-space:nowrap}
+.piecef{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:10px;border:1px solid rgba(218,241,222,.4);background:rgba(218,241,222,.1);font:600 13px/1 Archivo;color:#DAF1DE;white-space:nowrap}
+.spacer{flex:1 1 60px;min-height:40px;border-radius:10px;border:1px dashed rgba(218,241,222,.18);display:flex;align-items:center;justify-content:center;font:400 11px/1 "JetBrains Mono",monospace;color:#8EB69B}
+.barrow{display:flex;flex-wrap:wrap;gap:8px;padding:8px;border-radius:14px;border:1px solid rgba(218,241,222,.1);background:rgba(5,31,32,.5)}
+.step{display:flex;align-items:center;gap:10px;min-height:46px;padding:0 10px 0 14px;border-radius:12px;border:1px solid rgba(218,241,222,.1);background:rgba(5,31,32,.5);color:#DAF1DE;font:600 13px/1 "JetBrains Mono",monospace;cursor:pointer;text-align:left}
+.step .tog{margin-left:auto}
+.stepk{display:flex;align-items:center;gap:10px;min-height:46px;padding:0 14px;border-radius:12px;border:1px solid rgba(218,241,222,.3);background:rgba(218,241,222,.06);color:#DAF1DE;font:600 13px/1 "JetBrains Mono",monospace}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:4px;border-radius:14px;background:rgba(218,241,222,.05);border:1px solid rgba(218,241,222,.09)}
+.segb{min-height:36px;padding:0 14px;border:0;border-radius:10px;background:transparent;color:#8EB69B;font:500 13px/1 Archivo;cursor:pointer}
+.segon{min-height:36px;padding:0 14px;border:0;border-radius:10px;background:rgba(218,241,222,.1);color:#DAF1DE;font:600 13px/1 Archivo;cursor:pointer}
+.fork{display:flex;flex-direction:column;gap:6px;width:100%;padding:16px 18px;border-radius:16px;border:1px solid rgba(218,241,222,.14);background:rgba(218,241,222,.05);color:#DAF1DE;text-align:left;cursor:pointer;font:600 16px/1.35 Archivo}
+.panes{position:relative;z-index:2;flex:1;display:flex;flex-wrap:wrap}
+.pane-l{flex:1 1 260px;max-width:316px;border-right:1px solid rgba(218,241,222,.1);padding:14px 12px 24px;box-sizing:border-box;display:flex;flex-direction:column;gap:2px}
+.pane-c{flex:999 1 520px;min-width:0;padding:22px 28px 28px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px}
+.pane-r{flex:1 1 360px;max-width:420px;border-left:1px solid rgba(218,241,222,.14);background:rgba(5,31,32,.74);padding:18px 20px 22px;box-sizing:border-box;display:flex;flex-direction:column;gap:14px}
+.lig{display:flex;align-items:center;gap:8px;font:600 11px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#8EB69B;padding:16px 12px 6px}
+.li{display:flex;flex-direction:column;justify-content:center;gap:4px;min-height:48px;padding:8px 12px;border-radius:12px;box-sizing:border-box;color:#DAF1DE;text-decoration:none}
+.li.on{background:rgba(218,241,222,.1)}
+.lit{display:flex;align-items:center;gap:8px;font:600 14px/1.25 Archivo}
+.lis{font:400 12px/1.4 Archivo;color:#8EB69B}
+.tc{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 12px;border-radius:10px;border:1px solid rgba(218,241,222,.08);background:rgba(20,20,15,.35);font:400 12.5px/1.3 "JetBrains Mono",monospace;color:rgba(218,241,222,.88)}
+.tc .ms{margin-left:auto;color:#8EB69B}
+.stat{flex:1 1 150px;border-radius:14px;border:1px solid rgba(218,241,222,.1);background:rgba(218,241,222,.05);padding:14px 16px}
+.statl{font:400 12.5px/1.3 Archivo;color:#8EB69B}
+.statv{font:800 34px/1.1 Archivo;letter-spacing:-.02em;margin-top:6px}
+.statn{font:400 12px/1.4 Archivo;color:#8EB69B;margin-top:4px}
+.tag{display:inline-flex;align-items:center;min-height:24px;padding:0 10px;border-radius:6px;font:600 10.5px/1 "JetBrains Mono",monospace;letter-spacing:.04em;white-space:nowrap}
+.tagy{background:rgba(242,106,27,.14);color:#F26A1B}
+.tagg{background:rgba(218,241,222,.1);color:#8EB69B}
+.sec{border-radius:16px;border:1px solid rgba(218,241,222,.1);background:rgba(5,31,32,.5)}
+.sech{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 16px;border-bottom:1px solid rgba(218,241,222,.07)}
+.secb{padding:14px 16px;font-size:14.5px;line-height:1.6;color:rgba(218,241,222,.86)}
+.code{display:block;margin:10px 0 0;padding:12px 14px;border-radius:10px;background:rgba(20,20,15,.5);border:1px solid rgba(218,241,222,.07);font:400 12.5px/1.6 "JetBrains Mono",monospace;color:rgba(218,241,222,.86);white-space:pre-wrap}
+.search{flex:1 1 280px;min-height:44px;box-sizing:border-box;background:rgba(218,241,222,.06);border:1px solid rgba(218,241,222,.11);border-radius:12px;padding:0 14px;color:#DAF1DE;font:400 14px Archivo}
+.md{font:700 16px/1.3 Archivo;margin:14px 0 4px}
+.var{font:600 12.5px/1 "JetBrains Mono",monospace;padding:3px 6px;border-radius:5px;background:rgba(218,241,222,.1)}
+.edit{min-height:44px;padding:0 10px;border:0;background:transparent;color:#8EB69B;font:500 13px/1 Archivo;cursor:pointer}
+.mapbox{border-radius:18px;border:1px solid rgba(218,241,222,.1);background:rgba(5,31,32,.55);padding:8px;overflow:hidden}
+.mapbox svg{display:block;width:100%;height:auto;max-height:700px}
+.kr{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 12px;border:0;border-radius:12px;background:transparent;color:#DAF1DE;font:500 14px/1.2 Archivo;text-align:left;cursor:pointer}
+.kr>span:first-of-type{white-space:nowrap}
+.kr .n{margin-left:auto;font:400 12px/1 "JetBrains Mono",monospace;color:#8EB69B;white-space:nowrap}
+.cite{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 4px;border-top:1px solid rgba(218,241,222,.07);color:#DAF1DE;font:500 14px/1.3 Archivo;text-decoration:none}
+.cite .ms{margin-left:auto;font:400 11.5px/1 "JetBrains Mono",monospace;color:#8EB69B;white-space:nowrap}
+.wait{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:14px 0;border-top:1px solid rgba(218,241,222,.08);margin-top:12px}
+.wait+.wait{margin-top:0}
+.wait>div{flex:1 1 320px}
+.waitt{font:700 16px/1.3 Archivo;margin-bottom:4px}
+.srcrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;width:100%;min-height:52px;padding:8px 0;border:0;border-top:1px solid rgba(218,241,222,.07);background:transparent;color:#DAF1DE;font:400 14.5px/1.4 Archivo;text-align:left;cursor:pointer}
+.srcrow .rv{margin-left:auto}
+.sum{display:flex;flex-direction:column;gap:6px}
+.sumh{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:10px;border:1px solid rgba(218,241,222,.16);background:rgba(218,241,222,.05);color:#DAF1DE;font:500 13.5px/1.3 Archivo;text-align:left;cursor:pointer}
+.sumh .ms{margin-left:auto;font:400 12px/1 "JetBrains Mono",monospace;color:#8EB69B;white-space:nowrap}
+.sum .tc{margin-left:14px}
+.vrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-height:44px;padding:6px 0;border-top:1px solid rgba(218,241,222,.07);font-size:14.5px}
+.vrow .rv{margin-left:auto}
+.qb{padding:14px 0;border-top:1px solid rgba(218,241,222,.08);margin-top:12px}
+.qb+.qb{margin-top:0}
+.thread{display:flex;flex-direction:column;margin-top:10px}
+.thr{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 0;border-top:1px solid rgba(218,241,222,.07);font-size:14.5px}
+.thr .eyebrow{min-width:72px}
+.thr .rv{margin-left:auto}
+.rate{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.tiers{display:flex;flex-direction:column;margin-top:10px}
+.tier{display:grid;grid-template-columns:1.25fr 1.9fr .6fr .6fr 1.1fr;align-items:center;gap:12px;min-height:48px;padding:6px 0;border-top:1px solid rgba(218,241,222,.07);font-size:14px}
+.tier.th{min-height:32px;border-top:0;font:600 11px/1 Archivo;letter-spacing:.14em;text-transform:uppercase;color:#8EB69B}
+.tier .lbl{justify-self:start}
+.mini{height:230px;display:flex;align-items:center;justify-content:center}
+.mapbox.mini svg{width:auto;height:222px;max-width:100%}
+</style>
+</helmet>
+<div class="app">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span aria-hidden="true" style="color:#8EB69B;margin:0 -12px">›</span>
+    <a href="#sessions">sessions</a>
+    <span aria-hidden="true" style="color:#8EB69B;margin:0 -12px">›</span>
+    <a class="on" href="SettingsGlance.dc.html" aria-current="page">settings</a>
+    <span style="flex:1"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Room1.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div class="set">
+    <aside class="rail" aria-label="Settings sections">
+      <div class="h2" style="font-size:18px;padding:0 12px 4px">Settings</div>
+      <div class="railg">Yours and Marimba's</div>
+      <div class="railn">either of you can change these</div>
+      <a class="sr" href="SettingsLook.dc.html"><span>Look and feel</span><span class="kbd" aria-hidden="true">L</span></a>
+      <a class="sr" href="SettingsBars.dc.html"><span>Bars</span><span class="kbd" aria-hidden="true">N</span></a>
+      <a class="sr" href="SettingsKeys.dc.html"><span>Keys</span><span class="kbd" aria-hidden="true">?</span></a>
+      <div class="railg">Marimba</div>
+      <div class="railn">it reads these · you approve changes</div>
+      <a class="sr" href="SettingsGlance.dc.html"><span>At a glance</span><span class="kbd" aria-hidden="true">S</span></a>
+      <a class="sr" href="Context.dc.html"><span>Context</span><span class="kbd" aria-hidden="true">C</span></a>
+      <a class="sr on" href="SettingsSources.dc.html" aria-current="page"><span>Sources</span><span class="kbd" aria-hidden="true">K</span></a>
+      <a class="sr" href="SettingsRoutes.dc.html"><span>Routes</span><span class="kbd" aria-hidden="true">M</span></a>
+      <a class="sr" href="SettingsPrompt.dc.html"><span>Prompt</span><span class="kbd" aria-hidden="true">P</span></a>
+      <a class="sr" href="SettingsSteps.dc.html"><span>Steps</span><span class="kbd" aria-hidden="true">T</span></a>
+      <a class="sr" href="SettingsSummaries.dc.html"><span>Step lines</span><span class="kbd" aria-hidden="true">D</span></a>
+      <a class="sr" href="SettingsHarness.dc.html"><span>Harness</span><span class="kbd" aria-hidden="true">E</span></a>
+      <a class="sr" href="SettingsJobs.dc.html"><span>Jobs</span><span class="kbd" aria-hidden="true">W</span></a>
+      <div class="railg">Teclas</div>
+      <div class="railn">what a tecla may be made from</div>
+      <a class="sr" href="TeclaSketch.dc.html"><span>Blocks</span><span class="kbd" aria-hidden="true">B</span></a>
+      <a class="sr" href="TeclaProgram.dc.html"><span>Locked room</span><span class="kbd" aria-hidden="true">R</span></a>
+      <div class="railg">Only you</div>
+      <div class="railn">your press or your commit</div>
+      <a class="sr" href="OwnerPress.dc.html"><span>Owner presses</span><span class="kbd" aria-hidden="true">O</span></a>
+      <a class="sr" href="SettingsRoutines.dc.html"><span>Routines</span><span class="kbd" aria-hidden="true">J</span></a>
+      <a class="sr" href="Lease.dc.html"><span>Leases</span><span class="kbd" aria-hidden="true">G</span></a>
+      <a class="sr" href="SettingsConfig.dc.html"><span>Factory config</span><span class="kbd" aria-hidden="true">F</span></a>
+    </aside>
+    <div class="setc">
+      <div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px"><span class="h1">Sources</span><span class="who">it reads these · you set the scope</span><span style="flex:1"></span><a class="btn" href="Map.dc.html" style="text-decoration:none">See them on the map</a></div>
+        <div class="sub" style="margin-top:8px;max-width:680px">What Marimba may read to answer you. Each kind is a file you commit or a record the factory already keeps. Nothing here is a second copy.</div>
+      </div>
+
+      <div class="rc" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px"><span class="lblo">leaves this laptop</span><span class="sub" style="flex:1 1 320px">Whatever Marimba reads to answer is sent to the model that answers. Today that is gpt-5.6-sol.</span><a class="btn" href="SettingsRoutes.dc.html" style="text-decoration:none">Open Routes</a></div>
+
+      <section class="gc" aria-label="What Marimba may read, by kind">
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px"><span class="eyebrow">Why</span><span class="meta">what the project is for</span></div>
+        <button class="srcrow" type="button" role="switch" aria-checked="true" style="border-top:0"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(0.5)"><circle r="18" fill="#DAF1DE" fill-opacity=".06" stroke="#DAF1DE" stroke-width="2"/><circle r="3.5" fill="#DAF1DE"/></g></svg><span>Mission</span><span class="lbl">this project</span><span class="rv">one note · your commit</span><span class="tog on"><span></span></span></button>
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;margin-top:20px"><span class="eyebrow">Thinking</span><span class="meta">how a decision was reached</span></div>
+        <button class="srcrow" type="button" role="switch" aria-checked="true" style="border-top:0"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(0.9)"><path d="M0-10L10 0 0 10-10 0Z" fill="#051F20"/><path d="M0-10L10 0 0 10-10 0Z" fill="#DAF1DE" fill-opacity=".16" stroke="#DAF1DE" stroke-width="1.5"/></g></svg><span>Brainstorms</span><span class="lbl">this project</span><span class="rv">specs/brainstorms · [N] files</span><span class="tog on"><span></span></span></button>
+        <button class="srcrow" type="button" role="switch" aria-checked="true"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(1)"><circle r="7" fill="#051F20" stroke="#F26A1B" stroke-width="2"/></g></svg><span>Questions</span><span class="lbl">this project</span><span class="rv">open and answered · [N]</span><span class="tog on"><span></span></span></button>
+        <button class="srcrow" type="button" role="switch" aria-checked="true"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(1)"><path d="M8.5 0L4.25 7.36H-4.25L-8.5 0-4.25-7.36H4.25Z" fill="#8EB69B"/></g></svg><span>Decisions</span><span class="lbl">this project</span><span class="rv">AGENTS.md · v3 intent · amendments</span><span class="tog on"><span></span></span></button>
+        <button class="srcrow" type="button" role="switch" aria-checked="false"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(0.9)"><path d="M-6-8H3L7-4V8H-6Z" fill="#051F20" stroke="#8EB69B" stroke-width="1.4" stroke-dasharray="3 2.4" stroke-linejoin="round"/></g></svg><span>Sources</span><span class="lbl">none added</span><span class="rv">videos, articles, transcripts you add</span><span class="tog"><span></span></span></button>
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;margin-top:20px"><span class="eyebrow">Doing</span><span class="meta">what was built, and how it went</span></div>
+        <button class="srcrow" type="button" role="switch" aria-checked="true" style="border-top:0"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(1)"><rect x="-8" y="-8" width="16" height="16" rx="2.2" fill="#DAF1DE" fill-opacity=".72"/></g></svg><span>Plans and tickets</span><span class="lbl">this project</span><span class="rv">specs · [N] plans</span><span class="tog on"><span></span></span></button>
+        <button class="srcrow" type="button" role="switch" aria-checked="true"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(1)"><rect x="-8" y="-8" width="16" height="16" rx="5.1" fill="#DAF1DE" fill-opacity=".86"/></g></svg><span>Driving sessions</span><span class="lbl">this project</span><span class="rv">journal · asks and decisions</span><span class="tog on"><span></span></span></button>
+        <button class="srcrow" type="button" role="switch" aria-checked="true"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(1)"><circle r="4.5" fill="#8EB69B"/></g></svg><span>Runs</span><span class="lbl">this project</span><span class="rv">journal · [N] runs</span><span class="tog on"><span></span></span></button>
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;margin-top:20px"><span class="eyebrow">Keeping</span><span class="meta">what is worth having again</span></div>
+        <button class="srcrow" type="button" role="switch" aria-checked="true" style="border-top:0"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(0.8)"><rect x="-15" y="-6" width="30" height="12" rx="6" fill="#051F20" stroke="#DAF1DE" stroke-width="1.5" stroke-dasharray="3 3"/></g></svg><span>Teclas</span><span class="lbl">all your projects</span><span class="rv">each tecla's record</span><span class="tog on"><span></span></span></button>
+        <button class="srcrow" type="button" role="switch" aria-checked="true"><svg width="30" height="22" viewBox="-15 -11 30 22" aria-hidden="true" style="flex:none"><g transform="scale(0.9)"><path d="M0-9L9 7H-9Z" fill="#051F20" stroke="#DAF1DE" stroke-width="1.5" stroke-linejoin="round"/></g></svg><span>Lessons</span><span class="lbl">all your projects</span><span class="rv">trap suite · [N] traps</span><span class="tog on"><span></span></span></button>
+      </section>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:16px;align-items:start"><section class="gc" aria-label="How Marimba looks things up">
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px"><span class="h2" style="font-size:18px">How Marimba looks things up</span><span class="meta">in this order</span></div>
+        <div class="r" style="margin-top:8px"><span class="id">1</span><span>Follow links between records</span><span class="rv">on · exact · costs nothing</span></div>
+        <div class="r"><span class="id">2</span><span>Search by word</span><span class="rv">on · runs when links find too little</span></div>
+        <div class="r"><span class="id">3</span><span style="display:inline-flex;align-items:center;gap:8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Search by meaning</span><span class="rv">locked · needs proof that 1 and 2 miss, and a rule change</span></div>
+      </section><section class="gc" aria-label="Question set">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px"><span class="h2" style="font-size:18px">Question set</span><span class="meta">[N] questions you would really ask</span><span style="flex:1"></span><button class="btn" type="button">Run the set</button></div>
+        <div class="r" style="margin-top:8px"><span>Answered from the right record</span><span class="rv">[N] of [N] · last run [DATE]</span></div>
+        <div class="r"><span>Answered from the wrong record</span><span class="rv">[N] · these decide whether step 3 is needed</span></div>
+      </section></div>
+
+      <section class="card" aria-label="Add a folder outside this project">
+        <div style="padding:18px 20px 14px">
+          <div class="eyebrowo">Owner act · prepared for your press</div>
+          <div class="h2" style="margin-top:10px">Add a folder outside this project</div>
+        </div>
+        <div class="fact"><span class="eyebrow" style="padding-top:3px">Folder</span><span class="factv">[PATH]</span></div>
+        <div class="fact"><span class="eyebrow" style="padding-top:3px">May do</span><span class="factv">read notes under it · never write</span></div>
+        <div class="fact"><span class="eyebrow" style="padding-top:3px">Sent to</span><span class="factv">the model that answers, when a note is read</span></div>
+        <div class="fact"><span class="eyebrow" style="padding-top:3px">Ends</span><span class="factv">when you remove it</span></div>
+        <div class="btnrow" style="padding:14px 20px 18px;border-top:1px solid rgba(218,241,222,.08)"><button class="btnk" type="button" aria-label="Add source, signed by your passkey"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l8-8M16 7l3 3"></path></svg>Add source</button></div>
+      </section>
+
+      <p class="note">A source is data. Marimba never follows an instruction it finds inside one.</p>
+    </div>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="needs" lease="{{ false }}" line="adding a folder waits on your press" waiting="1" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1940}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

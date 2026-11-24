@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The strip: one component, every tab</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="{{cls}}" role="group" aria-label="Marimba strip">
+<sc-if value="{{well}}" hint-placeholder-val="{{ true }}"><a class="mwell" href="Rest.dc.html" aria-label="{{label}}"><dc-import name="Pendulum" state="{{state}}" lease="{{lease}}" listening="{{listening}}" progress="{{progress}}" size="232" hanger="{{ true }}" hint-size="232px,148px"></dc-import></a></sc-if>
+<div class="mline" role="status" aria-label="What Marimba may do"><span class="mwords"><b style="color:{{color}}">{{word}}</b> <i>·</i> {{line}} <i>·</i> <span style="color:{{leaseColor}}">{{leaseLine}}</span></span><span class="mnever">never · land · publish · attest · grant</span></div>
+<a class="{{chip}}" href="PressQueue.dc.html"><b aria-hidden="true"></b>{{waiting}} waiting on you</a>
+<input class="mfield" type="text" aria-label="Message Marimba" placeholder="{{ask}}">
+<span class="mkey" aria-hidden="true">/</span>
+<span class="mmeta">{{running}} running</span>
+<button class="mstop" type="button" disabled="{{calm}}">Stop</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["idle","working","needs","paused","done","off"],"default":"needs"},"lease":{"editor":"boolean","default":false},"line":{"editor":"string","default":"3 runs wait on your review"},"until":{"editor":"string","default":""},"waiting":{"editor":"range","min":0,"max":9,"step":1,"default":3},"running":{"editor":"range","min":0,"max":9,"step":1,"default":0},"ask":{"editor":"string","default":"Message Marimba about this tab…"},"well":{"editor":"boolean","default":true},"listening":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":180}}'>
+class Component extends DCLogic {
+renderVals() {
+const p = this.props, s = ['idle', 'working', 'needs', 'done', 'paused', 'off'].indexOf(p.state) < 0 ? 'needs' : p.state;
+const word = { idle: 'Idle', working: 'Working', needs: 'Needs you', done: 'Done', paused: 'Paused', off: 'No signal' }[s];
+const color = { idle: '#A7BFA7', working: '#DAF1DE', needs: '#F26A1B', done: '#4FE3A1', paused: '#A7BFA7', off: '#8EB69B' }[s];
+const lease = p.lease === true, waiting = Number(p.waiting ?? 3), running = Number(p.running ?? 0);
+return {
+state: s, word: word, color: color, lease: lease, listening: p.listening === true, progress: Number(p.progress ?? 0.6), well: p.well !== false,
+cls: 'mbar' + (p.well !== false ? ' well' : ''), line: p.line ?? '3 runs wait on your review',
+leaseLine: s === 'off' ? 'what it may do is not known' : lease ? 'lease until ' + (p.until || '07:00') : 'no lease is live', leaseColor: lease && s !== 'off' ? '#F26A1B' : '#DAF1DE',
+waiting: waiting, running: running, chip: 'mchip' + (waiting ? '' : ' none'), calm: running === 0,
+ask: p.ask ?? 'Message Marimba about this tab…', label: 'Open Marimba'
+};
+}
+}
+</script>
+</body>
+</html>

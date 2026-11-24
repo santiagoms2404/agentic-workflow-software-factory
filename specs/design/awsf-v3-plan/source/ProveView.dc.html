@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prove: replay items by arm</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+.pm{display:grid;grid-template-columns:minmax(220px,1.6fr) repeat(6,minmax(84px,1fr));gap:6px}
+.pmh{font:600 11px/1.35 "JetBrains Mono",monospace;color:#8EB69B;padding:6px 4px;display:flex;align-items:flex-end}
+.pmi{display:flex;flex-direction:column;justify-content:center;gap:3px;padding:6px 8px;min-width:0}
+.pmi b{font:600 13px/1 "JetBrains Mono",monospace}
+.pmi span{font:400 12px/1.35 Archivo;color:#8EB69B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.cv{min-height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:600 10.5px/1 "JetBrains Mono",monospace;border:1px solid rgba(218,241,222,.12);background:rgba(218,241,222,.07);color:#DAF1DE;text-decoration:none}
+.cv.f{border:1.5px dashed #DAF1DE;background:transparent}
+.cv.m{background:transparent;color:#8EB69B;border-style:dotted}
+.cv.sel{box-shadow:0 0 0 2px #DAF1DE}
+</style>
+</helmet>
+<div class="app" style="min-height:1240px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#prove" aria-current="page">d3-r2 replays</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="#sessions" aria-label="Back to sessions" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">D3 round 2 · review replays</span>
+      <span class="lblf">measured</span>
+      <span class="meta">prove · 5 items × 6 route arms × 2 repetitions · seed › tests › review-context › reviewer</span>
+    </header>
+
+    <div class="strip">
+      <div class="cell"><div class="cellv">58</div><div class="celll">runs on this board · 2 cells empty</div></div>
+      <div class="cell"><div class="cellv">57</div><div class="celll">reviewed · verdict concern</div></div>
+      <div class="cell"><div class="cellv">1</div><div class="celll">blocked by a review gate</div></div>
+      <div class="cell"><div class="cellv">0</div><div class="celll">landed · prove never lands</div></div>
+    </div>
+
+    
+
+    <section class="sec" aria-label="Items by arm">
+      <div class="sech"><span class="eyebrow">Items by arm · two repetitions each</span><span class="grow"></span><span class="key"><i style="background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.12)"></i>concern</span><span class="key"><i style="border:1.5px dashed #DAF1DE"></i>gate failed</span><span class="key"><i style="border:1px dotted #8EB69B"></i>no run</span></div>
+      <div class="secb">
+        <div class="pm" role="table" aria-label="Verdict per item, arm and repetition">
+          <span class="pmh">item</span><span class="pmh">opus @ high</span><span class="pmh">sonnet @ high</span><span class="pmh">gpt-6-sol @ xhigh</span><span class="pmh">gpt-6-sol @ high</span><span class="pmh">gpt-6.1-sol @ high</span><span class="pmh">gpt-6.1-sol @ medium</span>
+          <div class="pmi"><b>review-01</b><span>Add a hasMore flag to GET /api/v1/sessions</span></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv f sel" href="ReviewPhase.dc.html" aria-label="repetition 2, gate failed">×</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><span class="cv m">—</span><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pmi"><b>review-02</b><span>Add isLockHeld beside readLockHolder</span></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pmi"><b>review-03</b><span>Let raiseCommand take an expectedCeiling</span></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pmi"><b>review-04</b><span>Add listEquivalentParts to the rate card</span></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pmi"><b>review-05</b><span>Add Journal.appendAll(events)</span></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><span class="cv m">—</span></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+          <div class="pc"><a class="cv" href="#r">C</a><a class="cv" href="#r">C</a></div>
+        </div>
+        <div class="meta" style="margin-top:10px">C is a concern verdict. Each cell opens that run's reviewer phase in the same panel as any run.</div>
+      </div>
+    </section>
+
+    <div class="two">
+      <section class="sec" aria-label="Arms compared">
+        <table class="pt">
+          <caption class="eyebrow" style="text-align:left;padding:14px 14px 4px">Arms compared · medians of the reviewer phase</caption>
+          <thead><tr><th scope="col">Arm</th><th scope="col">Runs</th><th scope="col">Verdicts</th><th scope="col">Time</th><th scope="col">Tokens</th></tr></thead>
+          <tbody>
+            <tr><td class="f">sonnet @ high</td><td>10</td><td>10 concern</td><td class="n">19s</td><td class="n s">1.1k</td></tr>
+            <tr class="sel"><td class="f">opus @ high</td><td>10</td><td>9 concern · 1 ×</td><td class="n">25s</td><td class="n s">2.0k</td></tr>
+            <tr><td class="f">gpt-6.1-sol @ medium</td><td>10</td><td>10 concern</td><td class="n">40s</td><td class="n s">14.6k</td></tr>
+            <tr><td class="f">gpt-6-sol @ high</td><td>8</td><td>8 concern</td><td class="n">42s</td><td class="n s">11.3k</td></tr>
+            <tr><td class="f">gpt-6.1-sol @ high</td><td>10</td><td>10 concern</td><td class="n">51s</td><td class="n s">18.4k</td></tr>
+            <tr><td class="f">gpt-6-sol @ xhigh</td><td>10</td><td>10 concern</td><td class="n">64s</td><td class="n s">14.8k</td></tr>
+          </tbody>
+        </table>
+        <div class="secb">Token counts are not comparable across providers here: the Claude arms report about a tenth of the Codex arms on the same items. Time is comparable. Every arm agreed on the verdict.</div>
+      </section>
+
+      <section class="sec" aria-label="Selected run">
+        <div class="sech"><span class="eyebrow">Selected · review-01 · opus @ high · repetition 2</span></div>
+        <div class="secb" style="display:flex;flex-direction:column;gap:10px">
+          <div class="r"><span>seed › tests › review-context</span><span class="rv">2s · 2m 01s · 2s</span></div>
+          <div class="r"><span class="x">×</span><span>reviewer</span><span class="rv">verdict_consistent failed</span></div>
+          <div class="term">outside candidate: core/test/unit/api/routes.test.ts</div>
+          <div class="r"><span>Order in the round</span><span class="rv">8 of 10 for this item</span></div>
+          <a class="btn" href="ReviewPhase.dc.html" style="align-self:flex-start">Open the reviewer phase</a>
+        </div>
+      </section>
+    </div>
+
+    
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="no replay runs" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

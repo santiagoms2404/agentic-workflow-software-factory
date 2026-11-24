@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec: which workstream builds each frame</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1480px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#spec" aria-current="page">spec · workstreams</a>
+    <span class="grow"></span>
+    <span class="right">for builders · not a screen</span>
+  </nav>
+  <div class="layer" style="padding-top:24px;padding-bottom:44px;gap:18px">
+    <div><div class="h1" style="font-size:30px">Which workstream builds each frame</div><div class="sub" style="margin-top:6px;max-width:900px">A plan author selects frames from this table. A frame may serve more than one workstream. Its deep plan may narrow it, and says so.</div></div>
+    <section class="sec tbox" aria-label="Frames by workstream"><table class="pt" style="min-width:900px"><thead><tr><th scope="col">Work</th><th scope="col">Name</th><th scope="col" style="text-align:right">Frames</th><th scope="col">Numbers</th></tr></thead><tbody><tr><td class="f mono">W01</td><td>Driver checks</td><td style="text-align:right" class="n">4</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">2</span><span class="lbl">3</span><span class="lbl">4</span><span class="lbl">5</span></span></td></tr><tr><td class="f mono">W02</td><td>Trap suite</td><td style="text-align:right" class="n">2</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">3</span><span class="lbl">5</span></span></td></tr><tr><td class="f mono">W03</td><td>Ticket closure</td><td style="text-align:right" class="n">1</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">8</span></span></td></tr><tr><td class="f mono">W04</td><td>Session record</td><td style="text-align:right" class="n">3</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">4</span><span class="lbl">9</span><span class="lbl">45</span></span></td></tr><tr><td class="f mono">W05</td><td>Authority</td><td style="text-align:right" class="n">5</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">6</span><span class="lbl">7</span><span class="lbl">30</span><span class="lbl">62</span><span class="lbl">66</span></span></td></tr><tr><td class="f mono">W06</td><td>Routing within subscriptions</td><td style="text-align:right" class="n">2</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">6</span><span class="lbl">31</span></span></td></tr><tr><td class="f mono">W07</td><td>User-testing validator</td><td style="text-align:right" class="n">1</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">10</span></span></td></tr><tr><td class="f mono">W08</td><td>Marimba harness v1</td><td style="text-align:right" class="n">47</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">0</span><span class="lbl">1</span><span class="lbl">2</span><span class="lbl">3</span><span class="lbl">4</span><span class="lbl">5</span><span class="lbl">6</span><span class="lbl">17</span><span class="lbl">17a</span><span class="lbl">17b</span><span class="lbl">26</span><span class="lbl">27</span><span class="lbl">28</span><span class="lbl">29</span><span class="lbl">31</span><span class="lbl">32</span><span class="lbl">33</span><span class="lbl">34</span><span class="lbl">35</span><span class="lbl">39</span><span class="lbl">40</span><span class="lbl">46</span><span class="lbl">46b</span><span class="lbl">47</span><span class="lbl">47b</span><span class="lbl">48</span><span class="lbl">49</span><span class="lbl">50</span><span class="lbl">50b</span><span class="lbl">51</span><span class="lbl">52</span><span class="lbl">53</span><span class="lbl">55</span><span class="lbl">56</span><span class="lbl">58</span><span class="lbl">63</span><span class="lbl">64</span><span class="lbl">65</span><span class="lbl">69</span><span class="lbl">70</span><span class="lbl">70b</span><span class="lbl">71</span><span class="lbl">73</span><span class="lbl">75</span><span class="lbl">79</span><span class="lbl">80</span><span class="lbl">81</span></span></td></tr><tr><td class="f mono">W09</td><td>Context engine</td><td style="text-align:right" class="n">2</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">11</span><span class="lbl">37</span></span></td></tr><tr><td class="f mono">W10</td><td>Data loop</td><td style="text-align:right" class="n">2</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">6</span><span class="lbl">12</span></span></td></tr><tr><td class="f mono">W11</td><td>Agent readiness</td><td style="text-align:right" class="n">1</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">13</span></span></td></tr><tr><td class="f mono">W12</td><td>Factory on the Mac</td><td style="text-align:right" class="n">1</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">5b</span></span></td></tr><tr><td class="f mono">W13</td><td>Deploy</td><td style="text-align:right" class="n">1</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">14</span></span></td></tr><tr><td class="f mono">W14</td><td>Signals and jobs</td><td style="text-align:right" class="n">5</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">15</span><span class="lbl">30</span><span class="lbl">77</span><span class="lbl">78</span><span class="lbl">86</span></span></td></tr><tr><td class="f mono">W15</td><td>Voice and phone</td><td style="text-align:right" class="n">5</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">16a</span><span class="lbl">16b</span><span class="lbl">67</span><span class="lbl">68</span><span class="lbl">84</span></span></td></tr><tr><td class="f mono">W16</td><td>Teclas</td><td style="text-align:right" class="n">20</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">19</span><span class="lbl">20</span><span class="lbl">21</span><span class="lbl">22</span><span class="lbl">23</span><span class="lbl">24</span><span class="lbl">25</span><span class="lbl">36</span><span class="lbl">37</span><span class="lbl">38</span><span class="lbl">41</span><span class="lbl">42</span><span class="lbl">43</span><span class="lbl">44</span><span class="lbl">45</span><span class="lbl">61</span><span class="lbl">74</span><span class="lbl">76</span><span class="lbl">83</span><span class="lbl">85</span></span></td></tr><tr><td class="f mono">W17</td><td>Owner presses</td><td style="text-align:right" class="n">4</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">2</span><span class="lbl">18</span><span class="lbl">67</span><span class="lbl">75</span></span></td></tr><tr><td class="f mono">P4</td><td>Orquesta, after v3</td><td style="text-align:right" class="n">2</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">57</span><span class="lbl">72</span></span></td></tr><tr><td class="f mono">Specs</td><td>Read by every builder</td><td style="text-align:right" class="n">9</td><td><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="lbl">53b</span><span class="lbl">54</span><span class="lbl">59</span><span class="lbl">59b</span><span class="lbl">60</span><span class="lbl">65b</span><span class="lbl">65c</span><span class="lbl">82</span><span class="lbl">88</span></span></td></tr></tbody></table></section>
+    <section class="rc"><span class="eyebrow">Three rules for a builder</span><div class="secb" style="padding:8px 0 0"><div class="r"><span>A screen</span><span class="rv">build what it shows · every bracketed value is a placeholder</span></div><div class="r"><span>A spec</span><span class="rv">read it · nothing on it is drawn in the product</span></div><div class="r"><span>A capture</span><span class="rv">the whole board once, then 1:1 pieces of at most 1,000 px, cut between sections</span></div><div class="r"><span>The strip and the mark</span><span class="rv">two components, frames 64 and 80 · never redrawn inside a screen</span></div></div></section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1480}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,27 +1,36 @@
 {
   "version": 1,
   "plan": "awsf-v3-plan",
-  "purpose": "Design baseline for AWSF v3: the Marimba panel and every surface the v3 spine plans, W01-W15, drawn before any of it is built so the built product can be compared against it. AWSF reads version, frames[].id, frames[].image and ticketFrames; every other field is provenance for people and is ignored by the host.",
+  "purpose": "Design baseline for AWSF v3: the Marimba panel and every surface the v3 spine plans, drawn before any of it is built so the built product can be compared against it. AWSF reads version, frames[].id, frames[].image and ticketFrames. Every other field is for people and is ignored by the host.",
   "source": {
     "artifact": "https://claude.ai/artifact/KG8KPMBCPma35268R5yP6M",
-    "artifactVersion": 33,
-    "artifactVersionId": "1795199465-18e2",
-    "canvas": "docs/design/marimba-panel/2026-11-20/source/canvas.json",
-    "pages": "docs/design/marimba-panel/2026-11-20/pages/",
-    "tracked": false,
-    "why": "Frames, pages and the canvas copy sit beside W18's in the ignored docs/design/ tree. The canvas artifact is the durable source, and these digests prove that a later capture is byte-identical to the baseline.",
+    "artifactVersion": 52,
+    "artifactVersionId": "1795551651-a7ec",
+    "files": "specs/design/awsf-v3-plan/source/",
+    "tracked": true,
+    "facts": "specs/design/awsf-v3-plan/frame-facts.json",
+    "images": "docs/design/marimba-panel/2026-11-24/frames/",
+    "imagesTracked": false,
+    "why": "The canvas source is tracked, so a worker can read exact colours, sizes, words and the code of the two shared components from its own worktree. Images stay in the ignored docs/design/ tree and reach a worker through the owner’s binding. These digests prove that a later capture is byte-identical to the baseline.",
+    "mirror": {
+      "artifact": "https://claude.ai/artifact/7oSXGYDUKq3UQiUnpbf8eA",
+      "artifactVersion": 32,
+      "why": "27 boards generated from this canvas. Edit this canvas only."
+    },
     "previous": {
-      "artifactVersion": 14,
-      "artifactVersionId": "1791072122-330b",
-      "frozen": "2026-10-03",
-      "frames": 19
+      "artifactVersion": 33,
+      "artifactVersionId": "1795199465-18e2",
+      "frozen": "2026-11-20",
+      "frames": 65
     }
   },
   "capture": {
-    "date": "2026-11-20",
-    "tool": "chrome-headless-shell 1243 (Playwright), one-shot --screenshot, --force-device-scale-factor=1, --virtual-time-budget=10000",
-    "method": "Each artboard's static markup was lifted out of the Design runtime into a plain HTML page and captured at its canvas frame size (w x h). The artboards hold no script-built content, so the conversion changes nothing visible. Artboards that link the shared stylesheet project/marimba.css load it from beside the page.",
-    "viewport": "Each frame at its canvas size: 1440 px wide for the dashboard screens and the Mac app, 430 x 884 for the phone frame."
+    "date": "2026-11-24",
+    "tool": "chrome-headless-shell 1243 (Playwright), one-shot --screenshot, --force-device-scale-factor=1, --virtual-time-budget=5000",
+    "method": "Each board runs in the Design runtime with window.__pendulumStill set, which gives every pendulum one fixed pose from a seed. Each board is captured once whole. A board taller than 1,040 px is then cut into 1:1 pieces of at most 1,000 px, between sections where the page has a gap. Two full runs gave 275 identical files.",
+    "viewport": "Each board at its canvas size: 1440 px wide for dashboard screens, 430 x 884 for the phone, 1940 x 460 for the watch.",
+    "limits": "Every image is at most 2,000 px on an edge and 4 MiB, as core/src/contracts/visual-references.ts requires.",
+    "tools": "docs/design/marimba-panel/2026-11-24/tools/ (not tracked)"
   },
   "workstreamFrames": {
     "W01": [
@@ -39,14 +48,19 @@
     ],
     "W04": [
       "mp-s4-runs",
-      "mp-s9-session"
+      "mp-s9-session",
+      "mp-s45-journal"
     ],
     "W05": [
       "mp-s6-routes",
-      "mp-s7-lease"
+      "mp-s7-lease",
+      "mp-s30-settings-routines",
+      "mp-s62-access-line",
+      "mp-s66-lease-hours"
     ],
     "W06": [
-      "mp-s6-routes"
+      "mp-s6-routes",
+      "mp-s31-settings-routes"
     ],
     "W07": [
       "mp-s10-validator"
@@ -58,10 +72,51 @@
       "mp-s3-blocked",
       "mp-s4-runs",
       "mp-s5-checks",
-      "mp-s6-routes"
+      "mp-s6-routes",
+      "mp-s17-strip",
+      "mp-s17a-summon-dock",
+      "mp-s17b-reshape",
+      "mp-s26-settings-glance",
+      "mp-s27-settings-look",
+      "mp-s28-settings-bars",
+      "mp-s29-settings-keys",
+      "mp-s31-settings-routes",
+      "mp-s32-settings-prompt",
+      "mp-s33-settings-steps",
+      "mp-s34-settings-steps-detail",
+      "mp-s35-settings-harness",
+      "mp-s39-settings-sources",
+      "mp-s40-settings-config",
+      "mp-s46-run-evidence",
+      "mp-s46b-selected-phase",
+      "mp-s47-events",
+      "mp-s47b-turns",
+      "mp-s48-event-raw",
+      "mp-s49-code-phase",
+      "mp-s50-review-phase",
+      "mp-s50b-review-fails",
+      "mp-s51-request-owner",
+      "mp-s52-shift-view",
+      "mp-s53-waterfall-live",
+      "mp-s55-prove-view",
+      "mp-s56-plan-author",
+      "mp-s58-settings-summaries",
+      "mp-s63-project-switcher",
+      "mp-s64-pendulum",
+      "mp-s65-pendulum-states",
+      "mp-s69-host-map",
+      "mp-s70-cell",
+      "mp-s70b-cell-prompts",
+      "mp-s71-cell-empty",
+      "mp-s73-where-things-stand",
+      "mp-s75-waiting-on-you",
+      "mp-s79-pendulum-homes",
+      "mp-s80-strip-component",
+      "mp-s81-pendulum-palettes"
     ],
     "W09": [
-      "mp-s11-context"
+      "mp-s11-context",
+      "mp-s37-map-cited"
     ],
     "W10": [
       "mp-s6-routes",
@@ -77,19 +132,63 @@
       "mp-s14-deploy"
     ],
     "W14": [
-      "mp-s15-signals"
+      "mp-s15-signals",
+      "mp-s30-settings-routines",
+      "mp-s77-puente",
+      "mp-s78-settings-jobs",
+      "mp-s86-bridges"
     ],
     "W15": [
       "mp-s16a-orb",
-      "mp-s16b-phone"
+      "mp-s16b-phone",
+      "mp-s67-phone-queue",
+      "mp-s68-watch",
+      "mp-s84-phone-intake"
     ],
     "W16": [
-      "mp-s20-tecla-sketch"
+      "mp-s19-workspace-empty",
+      "mp-s20-tecla-sketch",
+      "mp-s21-workspace",
+      "mp-s22-tecla-change",
+      "mp-s23-tecla-program",
+      "mp-s24-tecla-tune",
+      "mp-s25-tecla-reuse",
+      "mp-s36-map",
+      "mp-s37-map-cited",
+      "mp-s38-tecla-report",
+      "mp-s41-rooms",
+      "mp-s42-room1",
+      "mp-s43-vault",
+      "mp-s44-plan-view",
+      "mp-s45-journal",
+      "mp-s61-two-attempts",
+      "mp-s74-change-detail",
+      "mp-s76-mission-note",
+      "mp-s83-intake",
+      "mp-s85-rulings"
     ],
     "W17": [
-      "mp-s18-owner-press"
+      "mp-s2-owner-review",
+      "mp-s18-owner-press",
+      "mp-s67-phone-queue",
+      "mp-s75-waiting-on-you"
+    ],
+    "P4": [
+      "mp-s57-team-room",
+      "mp-s72-team-beam"
     ]
   },
+  "builderSpecs": [
+    "mp-s53b-waterfall-motion",
+    "mp-s54-waterfall-limit",
+    "mp-s59-evidence-map",
+    "mp-s59b-builder-notes",
+    "mp-s60-flow-map",
+    "mp-s65b-pendulum-rules",
+    "mp-s65c-pendulum-numbers",
+    "mp-s82-six-states",
+    "mp-s88-workstreams"
+  ],
   "ticketFrames": {
     "T05": [
       "mp-s3-blocked",
@@ -114,13 +213,16 @@
     ]
   },
   "comparison": [
+    "Facts: a screen is compared by the facts in frame-facts.json first. Each has an id, a kind of check and one sentence.",
     "Glass: about 42 soft dots of 46-53 px at 14% opacity and 4 brighter dots at 17%, under a 165-degree tint and a 118-degree sheen with a 1 px top highlight. No constellation lines.",
-    "Layout: the dashboard tab bar, then one centred column about 760-880 px wide for the conversation screens. Run, workflow and settings screens use the dashboard's page width, up to 1320 px, and settings keep their own rail.",
-    "Type: Archivo for prose, headings and controls; JetBrains Mono for ids, commands, numbers and status lines.",
-    "Colour: the Forest palette with one accent, #F26A1B. Orange marks only what spends and what waits on the owner. Lanes and phase kinds differ by shape and fill, never by a colour of their own (D1, 2026-11-20).",
-    "Voice: the owner's messages are bubbles; Marimba's replies are bare text on the glass.",
-    "Owner acts: a button marked with a key glyph, signed by the owner's passkey, with the terminal line kept as the fallback. The phone and the Mac app show none as runnable.",
-    "Numbers are not compared. Bracketed values are placeholders and the run data is illustrative."
+    "Layout: the dashboard tab bar, then one centred column about 760-880 px wide for the conversation screens. Run, workflow and settings screens use the dashboard's page width, up to 1320 px, and settings keep their own rail. Every tab without an open thread or dock carries the strip of frame 80.",
+    "Type: Archivo for prose, headings and controls. JetBrains Mono for ids, commands, numbers and status lines.",
+    "Colour: one colour governs lanes and access. Orange marks what spends, what waits on the owner and a live lease. Lanes and phase kinds differ by shape and fill. The pendulum takes each palette’s ink (frame 81), and green shows that it is done.",
+    "Mark: the pendulum of frame 64, with its six states and listening layer (65 to 65c). Motion is compared with the component’s numbers, never with a still image.",
+    "Voice: the owner's messages are bubbles. Marimba's replies are bare text on the glass.",
+    "Owner acts: a button marked with a key glyph, signed by the owner's passkey, with the terminal line kept as the fallback. Signing on the phone waits for the passkey test (Q44, U1).",
+    "Numbers are not compared. Bracketed values are placeholders and the run data is illustrative unless an override names its source.",
+    "Pieces: a piece shows the same pixels as its whole board at full size. Select the whole for layout and the pieces for detail."
   ],
   "overrides": [
     {
@@ -140,7 +242,7 @@
     {
       "id": "O3",
       "frames": "all",
-      "rule": "Task names, candidate SHAs other than 4de5ff0, decision ids and times are illustrative, not records."
+      "rule": "Task names, candidate SHAs, decision ids and times are illustrative, not records, except where O6 or O8 names a source."
     },
     {
       "id": "O4",
@@ -150,19 +252,23 @@
     {
       "id": "O5",
       "frames": "all",
-      "rule": "The frames show Forest dark only. The built panel supports the dashboard's palettes and modes like every other tab."
+      "rule": "Screens are drawn in Forest dark. The built panel supports the dashboard’s palettes and modes. Frame 81 gives the mark in every palette."
     },
     {
       "id": "O6",
       "frames": [
         "mp-s46-run-evidence",
+        "mp-s46b-selected-phase",
         "mp-s47-events",
+        "mp-s47b-turns",
         "mp-s48-event-raw",
         "mp-s49-code-phase",
         "mp-s50-review-phase",
+        "mp-s50b-review-fails",
         "mp-s51-request-owner",
         "mp-s52-shift-view",
         "mp-s53-waterfall-live",
+        "mp-s53b-waterfall-motion",
         "mp-s54-waterfall-limit",
         "mp-s55-prove-view",
         "mp-s56-plan-author",
@@ -177,906 +283,3761 @@
       "frames": [
         "mp-s60-flow-map"
       ],
-      "rule": "FL1 to FL9 come from section 12 of specs/brainstorms/2026-11-09-liquid-software.md. FL10 and FL11 are proposed with the run screen frames and are not in that record."
+      "rule": "FL1 to FL9 come from section 12 of specs/brainstorms/2026-11-09-liquid-software.md. FL10 and FL11 came with the run screens. FL12 to FL19 were ruled on 2026-11-24 (specs/brainstorms/2026-11-24-design-contract.md)."
+    },
+    {
+      "id": "O8",
+      "frames": [
+        "mp-s61-two-attempts",
+        "mp-s74-change-detail",
+        "mp-s63-project-switcher",
+        "mp-s69-host-map",
+        "mp-s70-cell",
+        "mp-s70b-cell-prompts",
+        "mp-s71-cell-empty",
+        "mp-s73-where-things-stand"
+      ],
+      "rule": "Counts, sessions d3caa395, 1645ba32 and 36deb464, and the three projects were read from the state root on 2026-11-23 and 2026-11-24, with times in local time (UTC-5)."
+    },
+    {
+      "id": "O9",
+      "frames": [
+        "mp-s16b-phone",
+        "mp-s67-phone-queue",
+        "mp-s68-watch"
+      ],
+      "rule": "Signing from a phone or a watch is drawn as the target. Until U1 and Q44 pass, the built screens show no runnable owner act there."
+    },
+    {
+      "id": "O10",
+      "frames": [
+        "mp-s17-strip",
+        "mp-s67-phone-queue",
+        "mp-s68-watch",
+        "mp-s80-strip-component"
+      ],
+      "rule": "Stop is drawn, and no stop command exists (G4). W17 defines it: end the running phase, keep the worktree and the record."
+    },
+    {
+      "id": "O11",
+      "frames": [
+        "mp-s83-intake",
+        "mp-s84-phone-intake",
+        "mp-s85-rulings",
+        "mp-s86-bridges"
+      ],
+      "rule": "The round, sources and agents shown are samples. Facts about outside agents were read from the web on 2026-11-24 and must be checked again before use."
+    },
+    {
+      "id": "O12",
+      "frames": [
+        "mp-s53b-waterfall-motion",
+        "mp-s54-waterfall-limit",
+        "mp-s59-evidence-map",
+        "mp-s59b-builder-notes",
+        "mp-s60-flow-map",
+        "mp-s65b-pendulum-rules",
+        "mp-s65c-pendulum-numbers",
+        "mp-s82-six-states",
+        "mp-s88-workstreams"
+      ],
+      "rule": "These boards are read by builders. Nothing on them is drawn in the product."
     }
   ],
   "frames": [
     {
       "id": "mp-s0-rest",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s0-rest.png",
-      "sha256": "9fd9579327a5645b1956b95696ed037741f67a24fe2c29d86ec6947182ce0753",
-      "bytes": 551388,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s0-rest.png",
+      "sha256": "7b24efb929877d92b1175a0c106dfa3120d96f4af086856260b0443328d81b22",
+      "bytes": 557389,
       "width": 1440,
       "height": 1060,
       "screen": "S0",
+      "kind": "screen",
       "title": "At rest: write to the factory",
       "workstreams": [
         "W08"
       ],
       "artboard": "project/Rest.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Rest.html"
+      "source": "specs/design/awsf-v3-plan/source/Rest.dc.html",
+      "pieces": [
+        "mp-s0-rest.p1",
+        "mp-s0-rest.p2"
+      ]
+    },
+    {
+      "id": "mp-s0-rest.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s0-rest.p1.png",
+      "sha256": "064929089fb19e8e0a1d16f7ec88e81b6e272d33802b11fc8f6d50e98885ae15",
+      "bytes": 482586,
+      "width": 1440,
+      "height": 889,
+      "pieceOf": "mp-s0-rest",
+      "top": 0
+    },
+    {
+      "id": "mp-s0-rest.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s0-rest.p2.png",
+      "sha256": "304d8b5c07bcd07f9de50c7173bd3d13a7f1f2b9b021a274a5bddfcfa4725b7b",
+      "bytes": 74889,
+      "width": 1440,
+      "height": 171,
+      "pieceOf": "mp-s0-rest",
+      "top": 889
     },
     {
       "id": "mp-s1-drive",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s1-drive.png",
-      "sha256": "b64a44be0c549cef1c260059f5042ac2106fb5df2790eec1d7b070de49e98c00",
-      "bytes": 599375,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s1-drive.png",
+      "sha256": "dae2b2ef5523f2150f81a798bde78185375f43bcb39030afedb5d2651af54b23",
+      "bytes": 608429,
       "width": 1440,
       "height": 1060,
       "screen": "S1",
+      "kind": "screen",
       "title": "Drive a run: one confirmation card",
       "workstreams": [
         "W08"
       ],
       "artboard": "project/Main.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Main.html"
+      "source": "specs/design/awsf-v3-plan/source/Main.dc.html",
+      "pieces": [
+        "mp-s1-drive.p1",
+        "mp-s1-drive.p2"
+      ]
+    },
+    {
+      "id": "mp-s1-drive.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s1-drive.p1.png",
+      "sha256": "3135b70ec301945bfcf76e8affb5f37e83e3f530c9ce42e8fd16a8d884b76efe",
+      "bytes": 575704,
+      "width": 1440,
+      "height": 977,
+      "pieceOf": "mp-s1-drive",
+      "top": 0
+    },
+    {
+      "id": "mp-s1-drive.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s1-drive.p2.png",
+      "sha256": "740a6af627a1e7650fdca93298e90b894f9929b83eac74e9552e9d01b3d0c632",
+      "bytes": 32695,
+      "width": 1440,
+      "height": 83,
+      "pieceOf": "mp-s1-drive",
+      "top": 977
     },
     {
       "id": "mp-s2-owner-review",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s2-owner-review.png",
-      "sha256": "5e690245de12cacf9bc36fdcb4b31d220b008f04e66cc97044eed4df24230898",
-      "bytes": 590259,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s2-owner-review.png",
+      "sha256": "c5125e599056629b1e3708f68258825a8c8c9dac192156f98f3ff097c5ceadca",
+      "bytes": 599390,
       "width": 1440,
       "height": 1060,
       "screen": "S2",
+      "kind": "screen",
       "title": "Awaiting owner: prepared by Marimba, run by your press",
       "workstreams": [
+        "W01",
         "W08",
-        "W01"
+        "W17"
       ],
       "artboard": "project/OwnerAct.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/OwnerAct.html"
+      "source": "specs/design/awsf-v3-plan/source/OwnerAct.dc.html",
+      "pieces": [
+        "mp-s2-owner-review.p1",
+        "mp-s2-owner-review.p2"
+      ]
+    },
+    {
+      "id": "mp-s2-owner-review.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s2-owner-review.p1.png",
+      "sha256": "47c8309787405b1835b1685f0f8f2117de5c3780d552bee31533d2c858319873",
+      "bytes": 566631,
+      "width": 1440,
+      "height": 977,
+      "pieceOf": "mp-s2-owner-review",
+      "top": 0
+    },
+    {
+      "id": "mp-s2-owner-review.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s2-owner-review.p2.png",
+      "sha256": "740a6af627a1e7650fdca93298e90b894f9929b83eac74e9552e9d01b3d0c632",
+      "bytes": 32695,
+      "width": 1440,
+      "height": 83,
+      "pieceOf": "mp-s2-owner-review",
+      "top": 977
     },
     {
       "id": "mp-s3-blocked",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s3-blocked.png",
-      "sha256": "20566e98f4d511b0fd03505b8ff37d1b003e653ebf2c5d010fdac9fea420a464",
-      "bytes": 646972,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s3-blocked.png",
+      "sha256": "0aed4295ff9ab9d5d4ae8cc2b83569d0b9eba26bd38b49d02c1f46fb12d8579a",
+      "bytes": 658466,
       "width": 1440,
       "height": 1140,
       "screen": "S3",
+      "kind": "screen",
       "title": "Blocked: cause, recovery, and a refused turn",
       "workstreams": [
-        "W08",
         "W01",
-        "W02"
+        "W02",
+        "W08"
       ],
       "artboard": "project/Blocked.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Blocked.html"
+      "source": "specs/design/awsf-v3-plan/source/Blocked.dc.html",
+      "pieces": [
+        "mp-s3-blocked.p1",
+        "mp-s3-blocked.p2"
+      ]
+    },
+    {
+      "id": "mp-s3-blocked.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s3-blocked.p1.png",
+      "sha256": "7cf16b26c003d01fd870b2c1bc28e58919708f847c10ac1296c4bc0b6e18b235",
+      "bytes": 599172,
+      "width": 1440,
+      "height": 988,
+      "pieceOf": "mp-s3-blocked",
+      "top": 0
+    },
+    {
+      "id": "mp-s3-blocked.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s3-blocked.p2.png",
+      "sha256": "b5df9367adebc0a7299c24f85ee94b876a2d642a3d4750548ee8709dfcc19876",
+      "bytes": 59268,
+      "width": 1440,
+      "height": 152,
+      "pieceOf": "mp-s3-blocked",
+      "top": 988
     },
     {
       "id": "mp-s4-runs",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s4-runs.png",
-      "sha256": "4cb380bb0fc9cf7216e7c2c59ad84bf0ad98f86ab0273efefc1fdd89a6e27837",
-      "bytes": 680798,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s4-runs.png",
+      "sha256": "c062817278b490edf0ba7e956249ff4089e120dc9d09184906174fe7480bd333",
+      "bytes": 655905,
       "width": 1440,
-      "height": 1300,
+      "height": 1220,
       "screen": "S4",
+      "kind": "screen",
       "title": "Runs: one promoted, the rest degrade",
       "workstreams": [
-        "W08",
         "W01",
-        "W04"
+        "W04",
+        "W08"
       ],
       "artboard": "project/Runs.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Runs.html"
+      "source": "specs/design/awsf-v3-plan/source/Runs.dc.html",
+      "pieces": [
+        "mp-s4-runs.p1",
+        "mp-s4-runs.p2"
+      ]
+    },
+    {
+      "id": "mp-s4-runs.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s4-runs.p1.png",
+      "sha256": "7ad5cd57cc66844696c80e3783950dc6945b5fad5bad32c2d70d5f2a9d13719f",
+      "bytes": 595838,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s4-runs",
+      "top": 0
+    },
+    {
+      "id": "mp-s4-runs.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s4-runs.p2.png",
+      "sha256": "88d75f70b437567c9d5084a48836969372b94eccbf249eef69a3140ca297a2e2",
+      "bytes": 60626,
+      "width": 1440,
+      "height": 220,
+      "pieceOf": "mp-s4-runs",
+      "top": 1000
     },
     {
       "id": "mp-s5-checks",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s5-checks.png",
-      "sha256": "63ad5ddce96fbe0687e9960839b1bd52a3d93e36ce2acea48b406c44fd053701",
-      "bytes": 790302,
-      "width": 1440,
-      "height": 1500,
-      "screen": "S5",
-      "title": "Driver checks: K1–K5 and doctor",
-      "workstreams": [
-        "W08",
-        "W01",
-        "W02"
-      ],
-      "artboard": "project/Checks.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Checks.html"
-    },
-    {
-      "id": "mp-s6-routes",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s6-routes.png",
-      "sha256": "18416df73c5971e6e040426a9a22587e9eb5cef000c45629eece284cb0c19c7f",
-      "bytes": 869207,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s5-checks.png",
+      "sha256": "44735dd97a3e53f86e3fdb8d77ddb6243a83d61242579953360c9f6eefe7a97b",
+      "bytes": 826356,
       "width": 1440,
       "height": 1700,
-      "screen": "S6",
-      "title": "Routes: who answers at L1–L4",
+      "screen": "S5",
+      "kind": "screen",
+      "title": "Driver checks: K1–K5 and doctor",
       "workstreams": [
-        "W08",
-        "W05",
-        "W06",
-        "W10"
+        "W01",
+        "W02",
+        "W08"
       ],
-      "artboard": "project/Routes.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Routes.html"
+      "artboard": "project/Checks.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Checks.dc.html",
+      "pieces": [
+        "mp-s5-checks.p1",
+        "mp-s5-checks.p2"
+      ]
+    },
+    {
+      "id": "mp-s5-checks.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s5-checks.p1.png",
+      "sha256": "eee27fff80372dc346ae95eefea6617674a3222c52e07b87848e8948d9985e62",
+      "bytes": 489932,
+      "width": 1440,
+      "height": 851,
+      "pieceOf": "mp-s5-checks",
+      "top": 0
+    },
+    {
+      "id": "mp-s5-checks.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s5-checks.p2.png",
+      "sha256": "c7d4078b785071dda8e4367e273ea6f27504cb8c41e7bf567e9850ab269c85ec",
+      "bytes": 336091,
+      "width": 1440,
+      "height": 849,
+      "pieceOf": "mp-s5-checks",
+      "top": 851
     },
     {
       "id": "mp-s5b-doctor-vm",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s5b-doctor-vm.png",
-      "sha256": "31656a17ea89a99fb60c716aa02cf3c901e0af948489edb7db75f9d22bdd9bfd",
-      "bytes": 574944,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s5b-doctor-vm.png",
+      "sha256": "1c0aefd4eaf847406c4bae977ae510273035687d9d151ce03337674240390453",
+      "bytes": 557066,
       "width": 1440,
       "height": 1000,
       "screen": "S5b",
+      "kind": "screen",
       "title": "Doctor inside the Mac VM (W12)",
       "workstreams": [
         "W12"
       ],
       "artboard": "project/ChecksVM.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/ChecksVM.html"
+      "source": "specs/design/awsf-v3-plan/source/ChecksVM.dc.html"
+    },
+    {
+      "id": "mp-s6-routes",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s6-routes.png",
+      "sha256": "f3efe91bd8ce21af45c546345b5f9f1a294c8d50cdf82a108aaf119d629a292e",
+      "bytes": 881764,
+      "width": 1440,
+      "height": 1760,
+      "screen": "S6",
+      "kind": "screen",
+      "title": "Routes: who answers at L1–L4",
+      "workstreams": [
+        "W05",
+        "W06",
+        "W08",
+        "W10"
+      ],
+      "artboard": "project/Routes.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Routes.dc.html",
+      "pieces": [
+        "mp-s6-routes.p1",
+        "mp-s6-routes.p2"
+      ]
+    },
+    {
+      "id": "mp-s6-routes.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s6-routes.p1.png",
+      "sha256": "e29a8054d0ac283cb920a70978cd267fddc9fd4811d24c60d56e40d68aa3119d",
+      "bytes": 521150,
+      "width": 1440,
+      "height": 882,
+      "pieceOf": "mp-s6-routes",
+      "top": 0
+    },
+    {
+      "id": "mp-s6-routes.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s6-routes.p2.png",
+      "sha256": "2ec4202b268fea22444b498a08e0d87b9d5f1d1e7eb45df9244f80a38dbb2e8c",
+      "bytes": 360675,
+      "width": 1440,
+      "height": 878,
+      "pieceOf": "mp-s6-routes",
+      "top": 882
     },
     {
       "id": "mp-s7-lease",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s7-lease.png",
-      "sha256": "86fc672e57e7d7154082a0b11238cfd92319b1a045f36a38355ece1453474958",
-      "bytes": 759949,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s7-lease.png",
+      "sha256": "3701f349d86a258ffa2deb7223a94d6eae67a25a04161800c2c9772bb5cb97bd",
+      "bytes": 727623,
       "width": 1440,
-      "height": 1500,
+      "height": 1280,
       "screen": "S7",
+      "kind": "screen",
       "title": "Lease and the Delegate (W05)",
       "workstreams": [
         "W05"
       ],
       "artboard": "project/Lease.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Lease.html"
+      "source": "specs/design/awsf-v3-plan/source/Lease.dc.html",
+      "pieces": [
+        "mp-s7-lease.p1",
+        "mp-s7-lease.p2"
+      ]
+    },
+    {
+      "id": "mp-s7-lease.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s7-lease.p1.png",
+      "sha256": "46c6ba770ed56974498b2723f2a579e5723a3bc8778411e6fd0ae326a692b4ba",
+      "bytes": 621889,
+      "width": 1440,
+      "height": 991,
+      "pieceOf": "mp-s7-lease",
+      "top": 0
+    },
+    {
+      "id": "mp-s7-lease.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s7-lease.p2.png",
+      "sha256": "514f2ae5265be7e6ca94e07e94cf4cfc809bbf215a62d444830e74899bbf034f",
+      "bytes": 105049,
+      "width": 1440,
+      "height": 289,
+      "pieceOf": "mp-s7-lease",
+      "top": 991
     },
     {
       "id": "mp-s8-closure",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s8-closure.png",
-      "sha256": "8981ae7871a307a45b6ad4497e56e0e482415c40852665f59ea21957fe0a1665",
-      "bytes": 709966,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s8-closure.png",
+      "sha256": "7a03ecec4389f446462b7c705bd7e580682d42d6e54a80b134fd35f963819116",
+      "bytes": 727622,
       "width": 1440,
-      "height": 1300,
+      "height": 1400,
       "screen": "S8",
+      "kind": "screen",
       "title": "Ticket closure (W03)",
       "workstreams": [
         "W03"
       ],
       "artboard": "project/Closure.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Closure.html"
+      "source": "specs/design/awsf-v3-plan/source/Closure.dc.html",
+      "pieces": [
+        "mp-s8-closure.p1",
+        "mp-s8-closure.p2"
+      ]
     },
     {
-      "id": "mp-s10-validator",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s10-validator.png",
-      "sha256": "ecc45ccce681a7b3f01fb9b5c2ef4765d750dec6dacb23d1f4b104adeb6a55bf",
-      "bytes": 720034,
+      "id": "mp-s8-closure.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s8-closure.p1.png",
+      "sha256": "0771aee2f0d6ad63751686c109cea78aae61c8a7016ee95a28d0d60b3db69df0",
+      "bytes": 585324,
       "width": 1440,
-      "height": 1500,
-      "screen": "S10",
-      "title": "User-testing validator (W07)",
-      "workstreams": [
-        "W07"
-      ],
-      "artboard": "project/Validator.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Validator.html"
+      "height": 1000,
+      "pieceOf": "mp-s8-closure",
+      "top": 0
+    },
+    {
+      "id": "mp-s8-closure.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s8-closure.p2.png",
+      "sha256": "118d86ea770ebe851ad0922c7b080bbda0addc9b2ba4b36eea8a90748ffa9227",
+      "bytes": 142547,
+      "width": 1440,
+      "height": 400,
+      "pieceOf": "mp-s8-closure",
+      "top": 1000
     },
     {
       "id": "mp-s9-session",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s9-session.png",
-      "sha256": "e3b4b4b251e6b1a20a5dd91ba38855c81e574c0e4fc0d6a32efeaada264f9274",
-      "bytes": 718198,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s9-session.png",
+      "sha256": "b1b784f06f786c658a5a263887a9103b8206eaa90817b521435bab99079068a2",
+      "bytes": 660644,
       "width": 1440,
-      "height": 1400,
+      "height": 1160,
       "screen": "S9",
+      "kind": "screen",
       "title": "Session record (W04)",
       "workstreams": [
         "W04"
       ],
       "artboard": "project/Session.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Session.html"
+      "source": "specs/design/awsf-v3-plan/source/Session.dc.html",
+      "pieces": [
+        "mp-s9-session.p1",
+        "mp-s9-session.p2"
+      ]
+    },
+    {
+      "id": "mp-s9-session.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s9-session.p1.png",
+      "sha256": "05559f136c361102cb42f33622c49eef96dfd6311c541f67444ebf1636af44a7",
+      "bytes": 615056,
+      "width": 1440,
+      "height": 983,
+      "pieceOf": "mp-s9-session",
+      "top": 0
+    },
+    {
+      "id": "mp-s9-session.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s9-session.p2.png",
+      "sha256": "49b6e688136f822f45f47a243ebd815b61b01ea2ae4d1683abc0850adb3cda3b",
+      "bytes": 46028,
+      "width": 1440,
+      "height": 177,
+      "pieceOf": "mp-s9-session",
+      "top": 983
+    },
+    {
+      "id": "mp-s10-validator",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s10-validator.png",
+      "sha256": "907b88040eb540ce740cf5211b16838f7780993d521cb4704057e6979c9d69c8",
+      "bytes": 669270,
+      "width": 1440,
+      "height": 1260,
+      "screen": "S10",
+      "kind": "screen",
+      "title": "User-testing validator (W07)",
+      "workstreams": [
+        "W07"
+      ],
+      "artboard": "project/Validator.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Validator.dc.html",
+      "pieces": [
+        "mp-s10-validator.p1",
+        "mp-s10-validator.p2"
+      ]
+    },
+    {
+      "id": "mp-s10-validator.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s10-validator.p1.png",
+      "sha256": "ffef2c3961a122c2932f9a05b079d4b3fdc12820b37995955298e017b017f191",
+      "bytes": 584161,
+      "width": 1440,
+      "height": 990,
+      "pieceOf": "mp-s10-validator",
+      "top": 0
+    },
+    {
+      "id": "mp-s10-validator.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s10-validator.p2.png",
+      "sha256": "d29f0d7622b5ce9898c434373d11f1aa923665f634bdb1f4708066756c422785",
+      "bytes": 85213,
+      "width": 1440,
+      "height": 270,
+      "pieceOf": "mp-s10-validator",
+      "top": 990
     },
     {
       "id": "mp-s11-context",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s11-context.png",
-      "sha256": "9c8f338736ea97182831b5c7412dc092f104767ea7c527e09c3aa6829b65c3a8",
-      "bytes": 672659,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s11-context.png",
+      "sha256": "a088c0835614395587e29b5f613385929640f315efc074f77a557325c2450f7a",
+      "bytes": 666304,
       "width": 1440,
       "height": 1300,
       "screen": "S11",
+      "kind": "screen",
       "title": "Context engine (W09)",
       "workstreams": [
         "W09"
       ],
       "artboard": "project/Context.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Context.html"
+      "source": "specs/design/awsf-v3-plan/source/Context.dc.html",
+      "pieces": [
+        "mp-s11-context.p1",
+        "mp-s11-context.p2"
+      ]
+    },
+    {
+      "id": "mp-s11-context.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s11-context.p1.png",
+      "sha256": "ab358238ea4e49c19e2a4776f018d4b128aee7ea57d2fa9dd7b849b4fcbe875c",
+      "bytes": 528849,
+      "width": 1440,
+      "height": 909,
+      "pieceOf": "mp-s11-context",
+      "top": 0
+    },
+    {
+      "id": "mp-s11-context.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s11-context.p2.png",
+      "sha256": "7d4f492eed69731b16e5719204b11c4947299a7dd156d115fbadb1edf862a791",
+      "bytes": 137403,
+      "width": 1440,
+      "height": 391,
+      "pieceOf": "mp-s11-context",
+      "top": 909
     },
     {
       "id": "mp-s12-data-loop",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s12-data-loop.png",
-      "sha256": "d61358798bdcf277227a3d02bc507e1f52dfad8bbae803efb187073238c1dbbe",
-      "bytes": 718811,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s12-data-loop.png",
+      "sha256": "15736d943adf03c0be1102a8085bb6b121adc4e7e12f120a7f6a3f08cd9970b3",
+      "bytes": 692212,
       "width": 1440,
-      "height": 1500,
+      "height": 1360,
       "screen": "S12",
+      "kind": "screen",
       "title": "Data loop and local model (W10)",
       "workstreams": [
         "W10"
       ],
       "artboard": "project/DataLoop.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/DataLoop.html"
+      "source": "specs/design/awsf-v3-plan/source/DataLoop.dc.html",
+      "pieces": [
+        "mp-s12-data-loop.p1",
+        "mp-s12-data-loop.p2"
+      ]
+    },
+    {
+      "id": "mp-s12-data-loop.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s12-data-loop.p1.png",
+      "sha256": "2cbf2d4b794be6910e8fcd259e5710024769149f1b4bc3d952a0ea62e8dabf29",
+      "bytes": 522738,
+      "width": 1440,
+      "height": 883,
+      "pieceOf": "mp-s12-data-loop",
+      "top": 0
+    },
+    {
+      "id": "mp-s12-data-loop.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s12-data-loop.p2.png",
+      "sha256": "a11158561db485cca51e6b24f297221237911a91d15959ffb18aa85cae957d7b",
+      "bytes": 169878,
+      "width": 1440,
+      "height": 477,
+      "pieceOf": "mp-s12-data-loop",
+      "top": 883
     },
     {
       "id": "mp-s13-readiness",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s13-readiness.png",
-      "sha256": "5219a3daf134230a4469f4d9d5620c3dd989f84295d52d495dc33070ba0fcc69",
-      "bytes": 707728,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s13-readiness.png",
+      "sha256": "2e37d04b409c85711d0899de2b97e0ad8b751810fd8a1cfb5ba0dbe37fbc7584",
+      "bytes": 696013,
       "width": 1440,
-      "height": 1400,
+      "height": 1360,
       "screen": "S13",
+      "kind": "screen",
       "title": "Agent readiness (W11)",
       "workstreams": [
         "W11"
       ],
       "artboard": "project/Readiness.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Readiness.html"
+      "source": "specs/design/awsf-v3-plan/source/Readiness.dc.html",
+      "pieces": [
+        "mp-s13-readiness.p1",
+        "mp-s13-readiness.p2"
+      ]
+    },
+    {
+      "id": "mp-s13-readiness.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s13-readiness.p1.png",
+      "sha256": "678a45b98ba8246c2f4bf9eb919923769820ac77426cabf62b67a6b05b61e4c6",
+      "bytes": 490698,
+      "width": 1440,
+      "height": 837,
+      "pieceOf": "mp-s13-readiness",
+      "top": 0
+    },
+    {
+      "id": "mp-s13-readiness.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s13-readiness.p2.png",
+      "sha256": "f89df80b9295a2451fb1436bd9c6eb8bd817da676797a0dfa38dab3762cb1342",
+      "bytes": 205791,
+      "width": 1440,
+      "height": 523,
+      "pieceOf": "mp-s13-readiness",
+      "top": 837
     },
     {
       "id": "mp-s14-deploy",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s14-deploy.png",
-      "sha256": "5ddfebcf8fbfdde56968a1eca5caec1e841ee39c770191d1ff232f42617e0b86",
-      "bytes": 654707,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s14-deploy.png",
+      "sha256": "dbf85b3683b477d6faf5ad47ef92ab6fc52ce1cd188ac20f2d1269012142fdd4",
+      "bytes": 585454,
       "width": 1440,
-      "height": 1300,
+      "height": 1060,
       "screen": "S14",
+      "kind": "screen",
       "title": "Deploy to staging (W13)",
       "workstreams": [
         "W13"
       ],
       "artboard": "project/Deploy.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Deploy.html"
+      "source": "specs/design/awsf-v3-plan/source/Deploy.dc.html",
+      "pieces": [
+        "mp-s14-deploy.p1",
+        "mp-s14-deploy.p2"
+      ]
+    },
+    {
+      "id": "mp-s14-deploy.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s14-deploy.p1.png",
+      "sha256": "1ce5ba91bfe8051c136f22570a3f52e999dec1b3430fd63485db4b59c705684d",
+      "bytes": 540076,
+      "width": 1440,
+      "height": 883,
+      "pieceOf": "mp-s14-deploy",
+      "top": 0
+    },
+    {
+      "id": "mp-s14-deploy.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s14-deploy.p2.png",
+      "sha256": "e9165373689af898bde197eb2947156d049069b4a43ebf5ab43d96a1f8302930",
+      "bytes": 45151,
+      "width": 1440,
+      "height": 177,
+      "pieceOf": "mp-s14-deploy",
+      "top": 883
     },
     {
       "id": "mp-s15-signals",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s15-signals.png",
-      "sha256": "6aab5786abcb8e3a2b8b8956a589280a3db2db86e064cb0c5a9a843f17c0177b",
-      "bytes": 636214,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s15-signals.png",
+      "sha256": "1681eb0644c93524a2c3b7a61e1adc26be82ccecc9baf2aa3e3dfb60725d6d3f",
+      "bytes": 579826,
       "width": 1440,
-      "height": 1200,
+      "height": 980,
       "screen": "S15",
+      "kind": "screen",
       "title": "Signals (W14)",
       "workstreams": [
         "W14"
       ],
       "artboard": "project/Signals.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Signals.html"
+      "source": "specs/design/awsf-v3-plan/source/Signals.dc.html"
     },
     {
       "id": "mp-s16a-orb",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s16a-orb.png",
-      "sha256": "1e54f7c3d8e68e77fdca7fe522be7913108325abbdfccdba7b445f4a24609193",
-      "bytes": 534088,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s16a-orb.png",
+      "sha256": "2b3e1b5263c2dd09a4f70dd4bb8fc0d5e5706f74d50df0f2e7848fe2e0d9ae61",
+      "bytes": 517829,
       "width": 1440,
       "height": 900,
       "screen": "S16a",
-      "title": "The Mac app: the orb, speaking Spanish (W15)",
+      "kind": "screen",
+      "title": "The Mac app: your voice, in Spanish (W15)",
       "workstreams": [
         "W15"
       ],
       "artboard": "project/Orb.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Orb.html"
+      "source": "specs/design/awsf-v3-plan/source/Orb.dc.html"
     },
     {
       "id": "mp-s16b-phone",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s16b-phone.png",
-      "sha256": "a00efb090a63bb4e45cd4488f100c30a9a5e00523e498259b080e77551e68694",
-      "bytes": 157673,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s16b-phone.png",
+      "sha256": "77e1f5ce401766abbd6042172e1ec21ba4b0b136c7cc895c379577981c8e6c78",
+      "bytes": 162772,
       "width": 430,
       "height": 884,
       "screen": "S16b",
+      "kind": "screen",
       "title": "A stop on the phone (W15)",
       "workstreams": [
         "W15"
       ],
       "artboard": "project/Phone.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Phone.html"
+      "source": "specs/design/awsf-v3-plan/source/Phone.dc.html"
     },
     {
       "id": "mp-s17-strip",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s17-strip.png",
-      "sha256": "14cfa2f6dfc10d531c91c812bcff16aae248d51a5eb6db480819a66044599700",
-      "bytes": 529188,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s17-strip.png",
+      "sha256": "c51f31f21f88af614d1c800887c6fd5558ab2c869f09ec5a36f36a22af9a487b",
+      "bytes": 516281,
       "width": 1440,
       "height": 900,
       "screen": "S17",
+      "kind": "screen",
       "title": "Summon: one strip on every tab",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/Strip.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Strip.html"
+      "source": "specs/design/awsf-v3-plan/source/Strip.dc.html"
     },
     {
       "id": "mp-s17a-summon-dock",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s17a-summon-dock.png",
-      "sha256": "6349dcda10b2cdc61621fc05997eb0db5047b6c3e91094bfa669048492d632d2",
-      "bytes": 572453,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s17a-summon-dock.png",
+      "sha256": "21b9b7ea871c2e7bd1553ab776d14bf52b8e79d690995cb26c8e2a13739e7995",
+      "bytes": 632005,
+      "width": 1440,
+      "height": 1180,
+      "screen": "S17a",
+      "kind": "screen",
+      "title": "Summoned: Marimba docks beside the tab",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/SummonDock.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/SummonDock.dc.html",
+      "pieces": [
+        "mp-s17a-summon-dock.p1",
+        "mp-s17a-summon-dock.p2"
+      ]
+    },
+    {
+      "id": "mp-s17a-summon-dock.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s17a-summon-dock.p1.png",
+      "sha256": "bba438d10efe91cc0ee6b5f7d551c590ec68dd3f1384ddbc908af84a0b6b2e58",
+      "bytes": 577586,
       "width": 1440,
       "height": 1000,
-      "screen": "S17a",
-      "title": "Summoned: Marimba docks beside the tab",
-      "workstreams": [],
-      "artboard": "project/SummonDock.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SummonDock.html"
+      "pieceOf": "mp-s17a-summon-dock",
+      "top": 0
+    },
+    {
+      "id": "mp-s17a-summon-dock.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s17a-summon-dock.p2.png",
+      "sha256": "5953cadcf2fb65b23cfb16da85622b47cb16ce7fac1bd974faafcc0cf73b64eb",
+      "bytes": 54198,
+      "width": 1440,
+      "height": 180,
+      "pieceOf": "mp-s17a-summon-dock",
+      "top": 1000
     },
     {
       "id": "mp-s17b-reshape",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s17b-reshape.png",
-      "sha256": "255d345707c3be65b270f089547548345c3febb819ed2e2560122e28033ee41d",
-      "bytes": 659106,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s17b-reshape.png",
+      "sha256": "942b505ebac6cb105807b8e15310edb861e04f13f982408ac0aebfaf7196fa8c",
+      "bytes": 669680,
       "width": 1440,
       "height": 1240,
       "screen": "S17b",
+      "kind": "screen",
       "title": "Marimba reshapes the dashboard on request",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/Reshape.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Reshape.html"
+      "source": "specs/design/awsf-v3-plan/source/Reshape.dc.html",
+      "pieces": [
+        "mp-s17b-reshape.p1",
+        "mp-s17b-reshape.p2"
+      ]
+    },
+    {
+      "id": "mp-s17b-reshape.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s17b-reshape.p1.png",
+      "sha256": "930ba452ae8071416f7d967f79dea16890618a3f8ed8a4bff0e809ef950974e8",
+      "bytes": 577950,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s17b-reshape",
+      "top": 0
+    },
+    {
+      "id": "mp-s17b-reshape.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s17b-reshape.p2.png",
+      "sha256": "7c6d06d78d89bd7d82934e057cfb05acf3180139979e881e4ee04806a890732b",
+      "bytes": 91800,
+      "width": 1440,
+      "height": 240,
+      "pieceOf": "mp-s17b-reshape",
+      "top": 1000
     },
     {
       "id": "mp-s18-owner-press",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s18-owner-press.png",
-      "sha256": "92c651bcb681c8c5077a0ecf87d5f2578096f1aeb6c855af99ceff644a9d9433",
-      "bytes": 840847,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s18-owner-press.png",
+      "sha256": "2450ba3ba42468232edfb40fd9849b6e4c06be51feaeb4f98809afb4e77cac00",
+      "bytes": 876173,
       "width": 1440,
-      "height": 1700,
+      "height": 1840,
       "screen": "S18",
+      "kind": "screen",
       "title": "Owner presses: buttons only you can press (W17)",
       "workstreams": [
         "W17"
       ],
       "artboard": "project/OwnerPress.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/OwnerPress.html"
+      "source": "specs/design/awsf-v3-plan/source/OwnerPress.dc.html",
+      "pieces": [
+        "mp-s18-owner-press.p1",
+        "mp-s18-owner-press.p2"
+      ]
+    },
+    {
+      "id": "mp-s18-owner-press.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s18-owner-press.p1.png",
+      "sha256": "766babc10a399d0c420c2f9c90157ce25030c50244e9e869623b1bc2bdc17623",
+      "bytes": 568030,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s18-owner-press",
+      "top": 0
+    },
+    {
+      "id": "mp-s18-owner-press.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s18-owner-press.p2.png",
+      "sha256": "35a5a2ab0ef508d49e7b865ab322cb1e0e3657eb4e745ed16b3dc840d4bdef70",
+      "bytes": 307460,
+      "width": 1440,
+      "height": 840,
+      "pieceOf": "mp-s18-owner-press",
+      "top": 1000
     },
     {
       "id": "mp-s19-workspace-empty",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s19-workspace-empty.png",
-      "sha256": "1033ba63dc2b878cb6b5513b8d77868ddc34e62db3477e8319f67c8efac0df5a",
-      "bytes": 524082,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s19-workspace-empty.png",
+      "sha256": "e442d798262fa79af1806e42fae08a6ac901a08e05d1de2a469d5eed95a914a0",
+      "bytes": 511311,
       "width": 1440,
       "height": 900,
       "screen": "S19",
+      "kind": "screen",
       "title": "Workspace, before any tecla",
-      "workstreams": [],
+      "workstreams": [
+        "W16"
+      ],
       "artboard": "project/WorkspaceEmpty.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/WorkspaceEmpty.html"
+      "source": "specs/design/awsf-v3-plan/source/WorkspaceEmpty.dc.html"
     },
     {
       "id": "mp-s20-tecla-sketch",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s20-tecla-sketch.png",
-      "sha256": "5e42b7fa700d139d293fc66a1aea639ca92a7b6acb3fb952859546cba4cd93b0",
-      "bytes": 716764,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s20-tecla-sketch.png",
+      "sha256": "f5858244d255c09351e7e9bb1a71eae4e3d5d03e022468c42fba71da7fc6fdd8",
+      "bytes": 727879,
       "width": 1440,
       "height": 1440,
       "screen": "S20",
+      "kind": "screen",
       "title": "A tecla is sketched: the spine board, a recipe (W16)",
       "workstreams": [
         "W16"
       ],
       "artboard": "project/TeclaSketch.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/TeclaSketch.html"
+      "source": "specs/design/awsf-v3-plan/source/TeclaSketch.dc.html",
+      "pieces": [
+        "mp-s20-tecla-sketch.p1",
+        "mp-s20-tecla-sketch.p2"
+      ]
+    },
+    {
+      "id": "mp-s20-tecla-sketch.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s20-tecla-sketch.p1.png",
+      "sha256": "38fbfa13632a3a567322c1df7745ba0e46e2afaee103227aedae9180bef788f2",
+      "bytes": 552069,
+      "width": 1440,
+      "height": 967,
+      "pieceOf": "mp-s20-tecla-sketch",
+      "top": 0
+    },
+    {
+      "id": "mp-s20-tecla-sketch.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s20-tecla-sketch.p2.png",
+      "sha256": "3cc849e58905b043a1c22d16ebcd1b8c6334f9e4077e916d7ef5b825cb917b05",
+      "bytes": 175976,
+      "width": 1440,
+      "height": 473,
+      "pieceOf": "mp-s20-tecla-sketch",
+      "top": 967
     },
     {
       "id": "mp-s21-workspace",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s21-workspace.png",
-      "sha256": "5442c0ea64d2eacc3ab2292818a4730f003e1cfcac26ff7e67275a2af407a414",
-      "bytes": 749742,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s21-workspace.png",
+      "sha256": "b68503e826f620a2a85116c9ce05ae72f04ca9c1530e9e75c5c9c1d67e64bd1b",
+      "bytes": 763689,
       "width": 1440,
       "height": 1320,
       "screen": "S21",
+      "kind": "screen",
       "title": "Workspace: the list, the open tecla, and Marimba",
-      "workstreams": [],
+      "workstreams": [
+        "W16"
+      ],
       "artboard": "project/Workspace.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Workspace.html"
+      "source": "specs/design/awsf-v3-plan/source/Workspace.dc.html",
+      "pieces": [
+        "mp-s21-workspace.p1",
+        "mp-s21-workspace.p2"
+      ]
+    },
+    {
+      "id": "mp-s21-workspace.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s21-workspace.p1.png",
+      "sha256": "79cc00a3e16accbcdf7c9440c317b84bb44d1d2bd73583e081e145efa49c637a",
+      "bytes": 620542,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s21-workspace",
+      "top": 0
+    },
+    {
+      "id": "mp-s21-workspace.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s21-workspace.p2.png",
+      "sha256": "8ba2f7aa3c8e4b1a262213ae2e9b87387b3fef8d1f87dbbd23798bbdcf00472e",
+      "bytes": 143440,
+      "width": 1440,
+      "height": 380,
+      "pieceOf": "mp-s21-workspace",
+      "top": 940
     },
     {
       "id": "mp-s22-tecla-change",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s22-tecla-change.png",
-      "sha256": "ae6633954ef21c0050d4452c3b5b0aa3d799e7ab502f4f8adf014ab6e68223ac",
-      "bytes": 652224,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s22-tecla-change.png",
+      "sha256": "dc5322de5324ab1a872d9dc4dde09de5ec2c684051e5364bf3fae800bf3ec78c",
+      "bytes": 661953,
       "width": 1440,
       "height": 1160,
       "screen": "S22",
+      "kind": "screen",
       "title": "Improve a tecla, with undo",
-      "workstreams": [],
+      "workstreams": [
+        "W16"
+      ],
       "artboard": "project/TeclaChange.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/TeclaChange.html"
+      "source": "specs/design/awsf-v3-plan/source/TeclaChange.dc.html",
+      "pieces": [
+        "mp-s22-tecla-change.p1",
+        "mp-s22-tecla-change.p2"
+      ]
+    },
+    {
+      "id": "mp-s22-tecla-change.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s22-tecla-change.p1.png",
+      "sha256": "58fdcc0a1e7841cf6aa8cc62fe66b014b9ba48dcfa5a2fbb1c430e9e7eef3e69",
+      "bytes": 443495,
+      "width": 1440,
+      "height": 686,
+      "pieceOf": "mp-s22-tecla-change",
+      "top": 0
+    },
+    {
+      "id": "mp-s22-tecla-change.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s22-tecla-change.p2.png",
+      "sha256": "e0122c80568f2c178f9db5ae03e40a6cefe9665141dfcfe668fa8384e36ecb6f",
+      "bytes": 218404,
+      "width": 1440,
+      "height": 474,
+      "pieceOf": "mp-s22-tecla-change",
+      "top": 686
     },
     {
       "id": "mp-s23-tecla-program",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s23-tecla-program.png",
-      "sha256": "c55ced173e7b31375052b0eb0cf042dcc8c55a1b0c8943e9cabc5e18dd51b136",
-      "bytes": 667325,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s23-tecla-program.png",
+      "sha256": "ff43eec36350d754568584f8417f299f1916ccbc102111ec0267d901dc529102",
+      "bytes": 677408,
       "width": 1440,
       "height": 1280,
       "screen": "S23",
+      "kind": "screen",
       "title": "A program tecla: your time in the loop",
-      "workstreams": [],
+      "workstreams": [
+        "W16"
+      ],
       "artboard": "project/TeclaProgram.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/TeclaProgram.html"
+      "source": "specs/design/awsf-v3-plan/source/TeclaProgram.dc.html",
+      "pieces": [
+        "mp-s23-tecla-program.p1",
+        "mp-s23-tecla-program.p2"
+      ]
+    },
+    {
+      "id": "mp-s23-tecla-program.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s23-tecla-program.p1.png",
+      "sha256": "7e5d9f4aa99a440f1144a0980816f426ee46678fee240709b14d7f0cce645ce1",
+      "bytes": 450275,
+      "width": 1440,
+      "height": 752,
+      "pieceOf": "mp-s23-tecla-program",
+      "top": 0
+    },
+    {
+      "id": "mp-s23-tecla-program.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s23-tecla-program.p2.png",
+      "sha256": "387c752648b96952f965d5adfc3669ecd14fd27f102ed8d34114635401c44acc",
+      "bytes": 226994,
+      "width": 1440,
+      "height": 528,
+      "pieceOf": "mp-s23-tecla-program",
+      "top": 752
     },
     {
       "id": "mp-s24-tecla-tune",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s24-tecla-tune.png",
-      "sha256": "93951c5a42a0a97aa7c7f3daa78dd13eb686b865c7b4c54bf5a78a5a6fd193a3",
-      "bytes": 731959,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s24-tecla-tune.png",
+      "sha256": "0d97c291861d72d806efacd9b77d2af8df9aeca361514917347b155a1580ed76",
+      "bytes": 741713,
       "width": 1440,
       "height": 1380,
       "screen": "S24",
+      "kind": "screen",
       "title": "Tune it, or retire it",
-      "workstreams": [],
+      "workstreams": [
+        "W16"
+      ],
       "artboard": "project/TeclaTune.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/TeclaTune.html"
+      "source": "specs/design/awsf-v3-plan/source/TeclaTune.dc.html",
+      "pieces": [
+        "mp-s24-tecla-tune.p1",
+        "mp-s24-tecla-tune.p2"
+      ]
+    },
+    {
+      "id": "mp-s24-tecla-tune.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s24-tecla-tune.p1.png",
+      "sha256": "fb84e12ed868762f5369924705f812aad8cb88b9a9be908d17aa06138192aef9",
+      "bytes": 562138,
+      "width": 1440,
+      "height": 925,
+      "pieceOf": "mp-s24-tecla-tune",
+      "top": 0
+    },
+    {
+      "id": "mp-s24-tecla-tune.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s24-tecla-tune.p2.png",
+      "sha256": "959894d132413a0dce35579ee7546e212f97911a9343001f37e7ecb0945170c5",
+      "bytes": 180255,
+      "width": 1440,
+      "height": 455,
+      "pieceOf": "mp-s24-tecla-tune",
+      "top": 925
     },
     {
       "id": "mp-s25-tecla-reuse",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s25-tecla-reuse.png",
-      "sha256": "facfd42b2c61a75d7eec703c09461cefb94a1d89a50eed5b496f8d5e917f9c91",
-      "bytes": 540641,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s25-tecla-reuse.png",
+      "sha256": "6ad62d30d7b58a56f21c39c0a1df88a8d3819d5186071fc448941c13c0872c7f",
+      "bytes": 560030,
       "width": 1440,
-      "height": 920,
+      "height": 1020,
       "screen": "S25",
+      "kind": "screen",
       "title": "Reuse on Smart Health",
-      "workstreams": [],
+      "workstreams": [
+        "W16"
+      ],
       "artboard": "project/TeclaReuse.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/TeclaReuse.html"
+      "source": "specs/design/awsf-v3-plan/source/TeclaReuse.dc.html"
     },
     {
       "id": "mp-s26-settings-glance",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s26-settings-glance.png",
-      "sha256": "6408e53bc391b5e0917850036ae21cdce56b59bbe5ac6d262cf99127602f05e3",
-      "bytes": 823789,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s26-settings-glance.png",
+      "sha256": "ed644bd8fd56c2aec6c45495a94fb80019e42431c094468abf6babaa38dd467d",
+      "bytes": 848939,
       "width": 1440,
-      "height": 1540,
+      "height": 1700,
       "screen": "S26",
+      "kind": "screen",
       "title": "Settings: Marimba at a glance",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/SettingsGlance.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsGlance.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsGlance.dc.html",
+      "pieces": [
+        "mp-s26-settings-glance.p1",
+        "mp-s26-settings-glance.p2"
+      ]
+    },
+    {
+      "id": "mp-s26-settings-glance.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s26-settings-glance.p1.png",
+      "sha256": "029f5dc6ff066fb91b6c012ed0d854bce0f1282011a4804dca6854fd561dd53f",
+      "bytes": 452639,
+      "width": 1440,
+      "height": 745,
+      "pieceOf": "mp-s26-settings-glance",
+      "top": 0
+    },
+    {
+      "id": "mp-s26-settings-glance.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s26-settings-glance.p2.png",
+      "sha256": "b396e8c81a77841b60f33a942818888cc4c4867c82500a06fbd619f86bac805a",
+      "bytes": 395443,
+      "width": 1440,
+      "height": 955,
+      "pieceOf": "mp-s26-settings-glance",
+      "top": 745
     },
     {
       "id": "mp-s27-settings-look",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s27-settings-look.png",
-      "sha256": "0de26d136f3157458b411c3f606ee08c706ea8ec8b1785d00085719dcbea2764",
-      "bytes": 723864,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s27-settings-look.png",
+      "sha256": "d3c4bd2c0bd29651570cd9ccaf30664f4d493662a14325bb6da6b827c26e3f9b",
+      "bytes": 773908,
       "width": 1440,
-      "height": 1260,
+      "height": 1440,
       "screen": "S27",
+      "kind": "screen",
       "title": "Settings: look and feel",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/SettingsLook.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsLook.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsLook.dc.html",
+      "pieces": [
+        "mp-s27-settings-look.p1",
+        "mp-s27-settings-look.p2"
+      ]
+    },
+    {
+      "id": "mp-s27-settings-look.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s27-settings-look.p1.png",
+      "sha256": "e41559485e17c42819006b80383a94f5fa2df56712da0606026cb9244fd3ee10",
+      "bytes": 587328,
+      "width": 1440,
+      "height": 927,
+      "pieceOf": "mp-s27-settings-look",
+      "top": 0
+    },
+    {
+      "id": "mp-s27-settings-look.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s27-settings-look.p2.png",
+      "sha256": "6f4ddabad13c1cdf6ce37761b53e41240b6d594b51aa0464baccdbaeb2866ccf",
+      "bytes": 187514,
+      "width": 1440,
+      "height": 513,
+      "pieceOf": "mp-s27-settings-look",
+      "top": 927
     },
     {
       "id": "mp-s28-settings-bars",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s28-settings-bars.png",
-      "sha256": "38ef630ae6c5b80f817736d9dcbb45c8ae5c150487069039f8b2d38725dd5c9c",
-      "bytes": 670996,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s28-settings-bars.png",
+      "sha256": "cabd73306b3fe6c55f22d4379e1027106f0ca61ecaf7c6cc7d4f52ff092129a2",
+      "bytes": 745956,
       "width": 1440,
-      "height": 1100,
+      "height": 1420,
       "screen": "S28",
+      "kind": "screen",
       "title": "Settings: bars",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/SettingsBars.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsBars.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsBars.dc.html",
+      "pieces": [
+        "mp-s28-settings-bars.p1",
+        "mp-s28-settings-bars.p2"
+      ]
+    },
+    {
+      "id": "mp-s28-settings-bars.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s28-settings-bars.p1.png",
+      "sha256": "4af5ade523dcde6fb144a9a7f3c82a7dedeef41f509178d40bb0f9a46fc5e576",
+      "bytes": 617319,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s28-settings-bars",
+      "top": 0
+    },
+    {
+      "id": "mp-s28-settings-bars.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s28-settings-bars.p2.png",
+      "sha256": "eac7b5c052f6331df8ff3ee101265e15f3d4b27b3570ca694f9ea9b35ef5fa0e",
+      "bytes": 128601,
+      "width": 1440,
+      "height": 420,
+      "pieceOf": "mp-s28-settings-bars",
+      "top": 1000
     },
     {
       "id": "mp-s29-settings-keys",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s29-settings-keys.png",
-      "sha256": "d8f121ce904da823a043743afd2580ecdf41229228a54f162f32884dc74f8afa",
-      "bytes": 692501,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s29-settings-keys.png",
+      "sha256": "46269b4b97efc7d6cc73a20c4113d186debb02e8d1a06a00cf1146d8e41d10a2",
+      "bytes": 762046,
       "width": 1440,
-      "height": 1180,
+      "height": 1500,
       "screen": "S29",
+      "kind": "screen",
       "title": "Settings: keys",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/SettingsKeys.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsKeys.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsKeys.dc.html",
+      "pieces": [
+        "mp-s29-settings-keys.p1",
+        "mp-s29-settings-keys.p2"
+      ]
+    },
+    {
+      "id": "mp-s29-settings-keys.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s29-settings-keys.p1.png",
+      "sha256": "18d6109a9399683eab303454b5dd7aaf4410ba599a1b3db5b51d0daa2ff2fe8b",
+      "bytes": 497825,
+      "width": 1440,
+      "height": 806,
+      "pieceOf": "mp-s29-settings-keys",
+      "top": 0
+    },
+    {
+      "id": "mp-s29-settings-keys.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s29-settings-keys.p2.png",
+      "sha256": "8e30d1c02a2d29b4433e751bf480398caa4511fa472c7a5dbe94247983c5db57",
+      "bytes": 264804,
+      "width": 1440,
+      "height": 694,
+      "pieceOf": "mp-s29-settings-keys",
+      "top": 806
     },
     {
       "id": "mp-s30-settings-routines",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s30-settings-routines.png",
-      "sha256": "c5ae4badb0ddec3dd40724f7ba7f0d13111725f85d44cb568cbe85992ead03c6",
-      "bytes": 867031,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s30-settings-routines.png",
+      "sha256": "0f864ec03ae692adbbed068d544be45206407e032d7d0bcdfc63a208107c0255",
+      "bytes": 928979,
       "width": 1440,
-      "height": 1600,
+      "height": 1800,
       "screen": "S30",
+      "kind": "screen",
       "title": "Settings: routines, under a lease",
-      "workstreams": [],
+      "workstreams": [
+        "W05",
+        "W14"
+      ],
       "artboard": "project/SettingsRoutines.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsRoutines.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsRoutines.dc.html",
+      "pieces": [
+        "mp-s30-settings-routines.p1",
+        "mp-s30-settings-routines.p2"
+      ]
+    },
+    {
+      "id": "mp-s30-settings-routines.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s30-settings-routines.p1.png",
+      "sha256": "ecb9ee3f276e3a19b7bbe9fa3e3ea036cbb26079725ee7d947b1e36705346910",
+      "bytes": 563166,
+      "width": 1440,
+      "height": 894,
+      "pieceOf": "mp-s30-settings-routines",
+      "top": 0
+    },
+    {
+      "id": "mp-s30-settings-routines.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s30-settings-routines.p2.png",
+      "sha256": "31147a3981a0238916bfd907313a554825aa85a2bf7b4a078993860130a5d3ac",
+      "bytes": 365732,
+      "width": 1440,
+      "height": 906,
+      "pieceOf": "mp-s30-settings-routines",
+      "top": 894
     },
     {
       "id": "mp-s31-settings-routes",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s31-settings-routes.png",
-      "sha256": "43295322d9387d1d7faab4dca79a574e63f80900947156326310f127d354d663",
-      "bytes": 837568,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s31-settings-routes.png",
+      "sha256": "5a73d206f8f77a977d27b10122c8e55894be27b3ff82b5007494d16a6197caaf",
+      "bytes": 864146,
       "width": 1440,
-      "height": 1500,
+      "height": 1660,
       "screen": "S31",
+      "kind": "screen",
       "title": "Settings: routes",
-      "workstreams": [],
+      "workstreams": [
+        "W06",
+        "W08"
+      ],
       "artboard": "project/SettingsRoutes.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsRoutes.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsRoutes.dc.html",
+      "pieces": [
+        "mp-s31-settings-routes.p1",
+        "mp-s31-settings-routes.p2"
+      ]
+    },
+    {
+      "id": "mp-s31-settings-routes.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s31-settings-routes.p1.png",
+      "sha256": "3137ea7edc69aac6c4f1cc70a3d5fc361f4fb3884118a598e5c86f739b7158d6",
+      "bytes": 583815,
+      "width": 1440,
+      "height": 945,
+      "pieceOf": "mp-s31-settings-routes",
+      "top": 0
+    },
+    {
+      "id": "mp-s31-settings-routes.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s31-settings-routes.p2.png",
+      "sha256": "e9b4a6276a4e0eecba4e8547ad35f9acb66b56ce467b2961465f636f424aaf5a",
+      "bytes": 281341,
+      "width": 1440,
+      "height": 715,
+      "pieceOf": "mp-s31-settings-routes",
+      "top": 945
     },
     {
       "id": "mp-s32-settings-prompt",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s32-settings-prompt.png",
-      "sha256": "8cbd1092bca083f2b83d2d23caceb54c84f81f326c1cfaf2020a90a0f57c32f5",
-      "bytes": 759751,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s32-settings-prompt.png",
+      "sha256": "ae4553a5480d406f5136660be9eb8774d9e806149fbe71d5f450846894bb8bca",
+      "bytes": 800424,
       "width": 1440,
-      "height": 1360,
+      "height": 1540,
       "screen": "S32",
+      "kind": "screen",
       "title": "Settings: prompt, with your mission and aliases",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/SettingsPrompt.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsPrompt.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsPrompt.dc.html",
+      "pieces": [
+        "mp-s32-settings-prompt.p1",
+        "mp-s32-settings-prompt.p2"
+      ]
+    },
+    {
+      "id": "mp-s32-settings-prompt.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s32-settings-prompt.p1.png",
+      "sha256": "cad592af8a21980297bc02715e3098cc17054253cba65879a3deb08d05d207f1",
+      "bytes": 610984,
+      "width": 1440,
+      "height": 989,
+      "pieceOf": "mp-s32-settings-prompt",
+      "top": 0
+    },
+    {
+      "id": "mp-s32-settings-prompt.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s32-settings-prompt.p2.png",
+      "sha256": "080af7a1cb319afb6f7d7ed698c05a6631523979ab1837499401d9875efd2826",
+      "bytes": 189439,
+      "width": 1440,
+      "height": 551,
+      "pieceOf": "mp-s32-settings-prompt",
+      "top": 989
     },
     {
       "id": "mp-s33-settings-steps",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s33-settings-steps.png",
-      "sha256": "8128958d756dd2c7a54a6167ed59b81360eb38f9827ad3aa303908f472bf4a56",
-      "bytes": 677122,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s33-settings-steps.png",
+      "sha256": "05e55fd4dad8cc39909308e08e556d927a0c049bfa4930bbf2fcfcc3754a8079",
+      "bytes": 747447,
       "width": 1440,
-      "height": 1100,
+      "height": 1420,
       "screen": "S33",
+      "kind": "screen",
       "title": "Settings: the steps Marimba may take",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/SettingsSteps.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsSteps.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsSteps.dc.html",
+      "pieces": [
+        "mp-s33-settings-steps.p1",
+        "mp-s33-settings-steps.p2"
+      ]
+    },
+    {
+      "id": "mp-s33-settings-steps.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s33-settings-steps.p1.png",
+      "sha256": "c9005ce79b42bf283e9f08661a2b1099f6b4501871ca90ae34a361635e7c3ff1",
+      "bytes": 619067,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s33-settings-steps",
+      "top": 0
+    },
+    {
+      "id": "mp-s33-settings-steps.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s33-settings-steps.p2.png",
+      "sha256": "eac7b5c052f6331df8ff3ee101265e15f3d4b27b3570ca694f9ea9b35ef5fa0e",
+      "bytes": 128601,
+      "width": 1440,
+      "height": 420,
+      "pieceOf": "mp-s33-settings-steps",
+      "top": 1000
     },
     {
       "id": "mp-s34-settings-steps-detail",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s34-settings-steps-detail.png",
-      "sha256": "e34d25fb30c8c5e44d6a8d750adc3ec8509771ae21e555a0ad10d498f7acd91f",
-      "bytes": 650623,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s34-settings-steps-detail.png",
+      "sha256": "6db041d6e660ed08240efcf23e35b92e88fdeeb0a3dd3cecbc979d133eb742a1",
+      "bytes": 705199,
       "width": 1440,
-      "height": 1180,
+      "height": 1420,
       "screen": "S34",
+      "kind": "screen",
       "title": "Settings: steps, described",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/SettingsStepsDetail.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsStepsDetail.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsStepsDetail.dc.html",
+      "pieces": [
+        "mp-s34-settings-steps-detail.p1",
+        "mp-s34-settings-steps-detail.p2"
+      ]
+    },
+    {
+      "id": "mp-s34-settings-steps-detail.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s34-settings-steps-detail.p1.png",
+      "sha256": "54ea21bfea9347203843db4d988669b634b3b95c5a0e3e241d8be4808560b185",
+      "bytes": 554926,
+      "width": 1440,
+      "height": 978,
+      "pieceOf": "mp-s34-settings-steps-detail",
+      "top": 0
+    },
+    {
+      "id": "mp-s34-settings-steps-detail.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s34-settings-steps-detail.p2.png",
+      "sha256": "5ded4cee89d771de2d89e633e19035b968a6a895635275e53fae2b1cf8cac3b0",
+      "bytes": 150495,
+      "width": 1440,
+      "height": 442,
+      "pieceOf": "mp-s34-settings-steps-detail",
+      "top": 978
     },
     {
       "id": "mp-s35-settings-harness",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s35-settings-harness.png",
-      "sha256": "665a1331a8b3d7f5ddfdc911fbb6dba01be1cb1c587f35b8b72397473ed47dad",
-      "bytes": 683262,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s35-settings-harness.png",
+      "sha256": "38fdde0d12ef440325a8659e2b4fe49443a95362860197d50400d9cc85d4c7e9",
+      "bytes": 726752,
       "width": 1440,
-      "height": 1240,
+      "height": 1420,
       "screen": "S35",
+      "kind": "screen",
       "title": "Settings: harness, the parts Marimba is made of",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/SettingsHarness.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsHarness.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsHarness.dc.html",
+      "pieces": [
+        "mp-s35-settings-harness.p1",
+        "mp-s35-settings-harness.p2"
+      ]
     },
     {
-      "id": "mp-s38-tecla-report",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s38-tecla-report.png",
-      "sha256": "51b805374074558a3284c8582384cf3214a942abd90dd25ff11a75190591ee02",
-      "bytes": 825640,
+      "id": "mp-s35-settings-harness.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s35-settings-harness.p1.png",
+      "sha256": "bf770dd87f3c98b3ce8e90483333ef1c32da383ae9985696e8136245e87df7c8",
+      "bytes": 565617,
       "width": 1440,
-      "height": 1440,
-      "screen": "S38",
-      "title": "A brainstorm report, as a tecla",
-      "workstreams": [],
-      "artboard": "project/TeclaReport.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/TeclaReport.html"
+      "height": 951,
+      "pieceOf": "mp-s35-settings-harness",
+      "top": 0
     },
     {
-      "id": "mp-s39-settings-sources",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s39-settings-sources.png",
-      "sha256": "e5aae5b974df75f19a3fdb6829bda383b40d2640e0e2d35d29b0077c43edc85d",
-      "bytes": 944651,
+      "id": "mp-s35-settings-harness.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s35-settings-harness.p2.png",
+      "sha256": "ea8611da51250faafeb41a9887fd0016e2d50a97a7fd1e89cbdd71e3bb1704f4",
+      "bytes": 160031,
       "width": 1440,
-      "height": 1840,
-      "screen": "S39",
-      "title": "Settings: sources, what Marimba may read",
-      "workstreams": [],
-      "artboard": "project/SettingsSources.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsSources.html"
-    },
-    {
-      "id": "mp-s40-settings-config",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s40-settings-config.png",
-      "sha256": "2a566cd369cae29af923750212f105f79bbfd6e3c891f655947290698c061d4b",
-      "bytes": 788397,
-      "width": 1440,
-      "height": 1500,
-      "screen": "S40",
-      "title": "Settings: factory config, yours alone",
-      "workstreams": [],
-      "artboard": "project/SettingsConfig.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsConfig.html"
-    },
-    {
-      "id": "mp-s41-rooms",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s41-rooms.png",
-      "sha256": "791c9e51801ec0c48f687e6fd48d1cc7459c265a4258c8ab8eca3780a6aa4e8d",
-      "bytes": 737156,
-      "width": 1440,
-      "height": 1240,
-      "screen": "S41",
-      "title": "Canvas, zoomed out: the rooms (D20)",
-      "workstreams": [],
-      "artboard": "project/Rooms.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Rooms.html"
-    },
-    {
-      "id": "mp-s42-room1",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s42-room1.png",
-      "sha256": "7e8ac5eb536f36ff49cf12832390651577b4e2840e9a178267f048e21941f97a",
-      "bytes": 639076,
-      "width": 1440,
-      "height": 1200,
-      "screen": "S42",
-      "title": "Room 1: the factory graph, as it is today",
-      "workstreams": [],
-      "artboard": "project/Room1.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Room1.html"
+      "height": 469,
+      "pieceOf": "mp-s35-settings-harness",
+      "top": 951
     },
     {
       "id": "mp-s36-map",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s36-map.png",
-      "sha256": "52453c8708961ab6f3789cb9c679fdf6137b1f6591052f5ff207f9e05ac59bc4",
-      "bytes": 745613,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s36-map.png",
+      "sha256": "f5b89b0105629517a2054582b59cfb3c9b8c12e23534f6f991a8f0c98b30705a",
+      "bytes": 779032,
       "width": 1440,
-      "height": 1340,
+      "height": 1480,
       "screen": "S36",
+      "kind": "screen",
       "title": "Room 2: the map, with your real counts",
-      "workstreams": [],
+      "workstreams": [
+        "W16"
+      ],
       "artboard": "project/Map.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Map.html"
+      "source": "specs/design/awsf-v3-plan/source/Map.dc.html",
+      "pieces": [
+        "mp-s36-map.p1",
+        "mp-s36-map.p2"
+      ]
+    },
+    {
+      "id": "mp-s36-map.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s36-map.p1.png",
+      "sha256": "73e3993d8be80638d4ecc272bea802a6fd62ee3bf45c5ec66398d879a3239169",
+      "bytes": 625183,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s36-map",
+      "top": 0
+    },
+    {
+      "id": "mp-s36-map.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s36-map.p2.png",
+      "sha256": "623fea52ccea4c5032ba1a4cda916d6ac31bfb79fa180980ab2113006c584c69",
+      "bytes": 153740,
+      "width": 1440,
+      "height": 480,
+      "pieceOf": "mp-s36-map",
+      "top": 1000
     },
     {
       "id": "mp-s37-map-cited",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s37-map-cited.png",
-      "sha256": "ea2d7c63f6ebdf63300ec9cab0ce78ab07332dea94aa2bdd7e6d83ea03a1ea2a",
-      "bytes": 632677,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s37-map-cited.png",
+      "sha256": "e9dd62d21b2947c35d2799e592d0f18258b62d1226edc4a207d29ffad96705d6",
+      "bytes": 645987,
       "width": 1440,
       "height": 1060,
       "screen": "S37",
+      "kind": "screen",
       "title": "Room 2: an answer that shows what it read",
-      "workstreams": [],
+      "workstreams": [
+        "W09",
+        "W16"
+      ],
       "artboard": "project/MapCited.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/MapCited.html"
+      "source": "specs/design/awsf-v3-plan/source/MapCited.dc.html",
+      "pieces": [
+        "mp-s37-map-cited.p1",
+        "mp-s37-map-cited.p2"
+      ]
+    },
+    {
+      "id": "mp-s37-map-cited.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s37-map-cited.p1.png",
+      "sha256": "abc24a564c82d133597a2a23b165692f825a34bbd493cf63b2779ce5dedaf648",
+      "bytes": 622776,
+      "width": 1440,
+      "height": 992,
+      "pieceOf": "mp-s37-map-cited",
+      "top": 0
+    },
+    {
+      "id": "mp-s37-map-cited.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s37-map-cited.p2.png",
+      "sha256": "493768158a4ffaae5b5667e552efdce5cfeba6c71b2cd0f3c96c66ed1d900b9e",
+      "bytes": 23367,
+      "width": 1440,
+      "height": 68,
+      "pieceOf": "mp-s37-map-cited",
+      "top": 992
+    },
+    {
+      "id": "mp-s38-tecla-report",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s38-tecla-report.png",
+      "sha256": "5482083bf315a2b8aac6c91cf266306c4d16afb3d9e1330c6c25a6d3e2e574ec",
+      "bytes": 838805,
+      "width": 1440,
+      "height": 1440,
+      "screen": "S38",
+      "kind": "screen",
+      "title": "A brainstorm report, as a tecla",
+      "workstreams": [
+        "W16"
+      ],
+      "artboard": "project/TeclaReport.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/TeclaReport.dc.html",
+      "pieces": [
+        "mp-s38-tecla-report.p1",
+        "mp-s38-tecla-report.p2"
+      ]
+    },
+    {
+      "id": "mp-s38-tecla-report.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s38-tecla-report.p1.png",
+      "sha256": "a25e8a27d543ade4f00fdeafbb2d1917ebd9bf791854044d54bba0f27c5fa493",
+      "bytes": 553498,
+      "width": 1440,
+      "height": 764,
+      "pieceOf": "mp-s38-tecla-report",
+      "top": 0
+    },
+    {
+      "id": "mp-s38-tecla-report.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s38-tecla-report.p2.png",
+      "sha256": "bd50b8a42ac26557c12fc9d68ca07c3b863d6998bf1a2d2aa716c5219186b012",
+      "bytes": 285671,
+      "width": 1440,
+      "height": 676,
+      "pieceOf": "mp-s38-tecla-report",
+      "top": 764
+    },
+    {
+      "id": "mp-s39-settings-sources",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s39-settings-sources.png",
+      "sha256": "046ab389f87ade1486a32300aded8fad471ae63915e5860207e5e333fcaef400",
+      "bytes": 959346,
+      "width": 1440,
+      "height": 1940,
+      "screen": "S39",
+      "kind": "screen",
+      "title": "Settings: sources, what Marimba may read",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/SettingsSources.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/SettingsSources.dc.html",
+      "pieces": [
+        "mp-s39-settings-sources.p1",
+        "mp-s39-settings-sources.p2"
+      ]
+    },
+    {
+      "id": "mp-s39-settings-sources.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s39-settings-sources.p1.png",
+      "sha256": "cec5b04f00cf83cb8c6152513ee8adebc1b33994b2f627962121e8a019a813b0",
+      "bytes": 607013,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s39-settings-sources",
+      "top": 0
+    },
+    {
+      "id": "mp-s39-settings-sources.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s39-settings-sources.p2.png",
+      "sha256": "8edaebbc122a849dba19ec813c061bfcdcf63ea291ccfa21d7302d1d0059949f",
+      "bytes": 352256,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s39-settings-sources",
+      "top": 1000
+    },
+    {
+      "id": "mp-s40-settings-config",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s40-settings-config.png",
+      "sha256": "2cfab5a06495993fc585a7e457dac9a3a102e3b2d90bffa311ba74ae96e3775c",
+      "bytes": 817259,
+      "width": 1440,
+      "height": 1680,
+      "screen": "S40",
+      "kind": "screen",
+      "title": "Settings: factory config, yours alone",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/SettingsConfig.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/SettingsConfig.dc.html",
+      "pieces": [
+        "mp-s40-settings-config.p1",
+        "mp-s40-settings-config.p2"
+      ]
+    },
+    {
+      "id": "mp-s40-settings-config.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s40-settings-config.p1.png",
+      "sha256": "2c38865d9541da8b3ca19e8268337be33690f84525eb72c1a49174b5590494ed",
+      "bytes": 582819,
+      "width": 1440,
+      "height": 973,
+      "pieceOf": "mp-s40-settings-config",
+      "top": 0
+    },
+    {
+      "id": "mp-s40-settings-config.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s40-settings-config.p2.png",
+      "sha256": "844d04ff44676af6c112e80c0d1bc9d7e841b9c5884f4588a78df6eebc42aff8",
+      "bytes": 235084,
+      "width": 1440,
+      "height": 707,
+      "pieceOf": "mp-s40-settings-config",
+      "top": 973
+    },
+    {
+      "id": "mp-s41-rooms",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s41-rooms.png",
+      "sha256": "208833453864dc7e0f6549f7ed7c9e3601b446b3ca26b351e0faecdd55fe9b7e",
+      "bytes": 817820,
+      "width": 1440,
+      "height": 1720,
+      "screen": "S41",
+      "kind": "screen",
+      "title": "Canvas, zoomed out: three rooms (D20)",
+      "workstreams": [
+        "W16"
+      ],
+      "artboard": "project/Rooms.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Rooms.dc.html",
+      "pieces": [
+        "mp-s41-rooms.p1",
+        "mp-s41-rooms.p2",
+        "mp-s41-rooms.p3"
+      ]
+    },
+    {
+      "id": "mp-s41-rooms.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s41-rooms.p1.png",
+      "sha256": "8faaa13f0eea742d322604b33c05c973785f811c9224b35ac2c3757e834feb0d",
+      "bytes": 386921,
+      "width": 1440,
+      "height": 639,
+      "pieceOf": "mp-s41-rooms",
+      "top": 0
+    },
+    {
+      "id": "mp-s41-rooms.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s41-rooms.p2.png",
+      "sha256": "ffa31d746ac366d2a97ad16ec8c9d34dfa6d152e346eaded867cc6a7cacb5064",
+      "bytes": 385185,
+      "width": 1440,
+      "height": 904,
+      "pieceOf": "mp-s41-rooms",
+      "top": 639
+    },
+    {
+      "id": "mp-s41-rooms.p3",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s41-rooms.p3.png",
+      "sha256": "4f6f48b6a654d15f48f76e85b747268fad4f362e0d50a88a5cf18ed26847a555",
+      "bytes": 46563,
+      "width": 1440,
+      "height": 177,
+      "pieceOf": "mp-s41-rooms",
+      "top": 1543
+    },
+    {
+      "id": "mp-s42-room1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s42-room1.png",
+      "sha256": "f43f943088ed495604978801785e32bd5bfdb69a285d227cc917402de441d5bf",
+      "bytes": 625210,
+      "width": 1440,
+      "height": 1240,
+      "screen": "S42",
+      "kind": "screen",
+      "title": "Room 1: the factory graph, as it is today",
+      "workstreams": [
+        "W16"
+      ],
+      "artboard": "project/Room1.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Room1.dc.html",
+      "pieces": [
+        "mp-s42-room1.p1",
+        "mp-s42-room1.p2"
+      ]
+    },
+    {
+      "id": "mp-s42-room1.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s42-room1.p1.png",
+      "sha256": "890fd00439b1e0bc134e8108ab9d2e95256852736b65823e0849427b4fdc36c2",
+      "bytes": 556750,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s42-room1",
+      "top": 0
+    },
+    {
+      "id": "mp-s42-room1.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s42-room1.p2.png",
+      "sha256": "be735791392127274c4050c7db7ef852dd734da5c757cb6935ec84b41ec7556b",
+      "bytes": 67590,
+      "width": 1440,
+      "height": 240,
+      "pieceOf": "mp-s42-room1",
+      "top": 1000
     },
     {
       "id": "mp-s43-vault",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s43-vault.png",
-      "sha256": "8580b8a70de0d6d8e3cc993eb90eb5485595767549c43a63dc7386f925ec2be5",
-      "bytes": 883310,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s43-vault.png",
+      "sha256": "09a8c300517a9a97e2e8caafab5e0a312b464e9e36c66addcba3562c2cb393ce",
+      "bytes": 876052,
       "width": 1440,
-      "height": 1540,
+      "height": 1580,
       "screen": "S43",
+      "kind": "screen",
       "title": "Vault: every plan and document (TC3)",
-      "workstreams": [],
+      "workstreams": [
+        "W16"
+      ],
       "artboard": "project/Vault.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Vault.html"
+      "source": "specs/design/awsf-v3-plan/source/Vault.dc.html",
+      "pieces": [
+        "mp-s43-vault.p1",
+        "mp-s43-vault.p2"
+      ]
+    },
+    {
+      "id": "mp-s43-vault.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s43-vault.p1.png",
+      "sha256": "91b9aaed1aa23a72b99a25e455d9d2ddf1063f3b1cb04f32546998996732665c",
+      "bytes": 617329,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s43-vault",
+      "top": 0
+    },
+    {
+      "id": "mp-s43-vault.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s43-vault.p2.png",
+      "sha256": "bc7e5a93cec13d1a80a9941f2dee214c377c506f854d637cbba6538f8b9d5cdd",
+      "bytes": 258931,
+      "width": 1440,
+      "height": 640,
+      "pieceOf": "mp-s43-vault",
+      "top": 940
     },
     {
       "id": "mp-s44-plan-view",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s44-plan-view.png",
-      "sha256": "15e261a9ab5ab035b924a206b5c79d507e578416f6612ac85832293c7554b1ff",
-      "bytes": 783766,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s44-plan-view.png",
+      "sha256": "12ee0d268896d409dedf9dc6d785017fcfb508b33653f6054d7dba12b998cbac",
+      "bytes": 797383,
       "width": 1440,
       "height": 1360,
       "screen": "S44",
+      "kind": "screen",
       "title": "A plan read in the harness, questionables as buttons",
-      "workstreams": [],
+      "workstreams": [
+        "W16"
+      ],
       "artboard": "project/PlanView.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/PlanView.html"
+      "source": "specs/design/awsf-v3-plan/source/PlanView.dc.html",
+      "pieces": [
+        "mp-s44-plan-view.p1",
+        "mp-s44-plan-view.p2"
+      ]
+    },
+    {
+      "id": "mp-s44-plan-view.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s44-plan-view.p1.png",
+      "sha256": "64c2fabc9d1eb0c32a85ce33cb2c6f2a375919d398480f9c10123a98dab989a3",
+      "bytes": 650314,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s44-plan-view",
+      "top": 0
+    },
+    {
+      "id": "mp-s44-plan-view.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s44-plan-view.p2.png",
+      "sha256": "f4247cef153df8be3b4b19b4ee41107b54fd8e65fa547fd3d29c3e6a1493ad5b",
+      "bytes": 146888,
+      "width": 1440,
+      "height": 420,
+      "pieceOf": "mp-s44-plan-view",
+      "top": 940
     },
     {
       "id": "mp-s45-journal",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s45-journal.png",
-      "sha256": "1b4629674da38ab47e34aa5cc56bc0b358b993531667364ac8609b5c0d0f92f1",
-      "bytes": 825169,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s45-journal.png",
+      "sha256": "ccdaf0903f96371e954d9a01f3e862cc11a3e41287cda8c76229e103ade67746",
+      "bytes": 851745,
       "width": 1440,
-      "height": 1380,
+      "height": 1540,
       "screen": "S45",
+      "kind": "screen",
       "title": "Journal: how each thing was decided",
-      "workstreams": [],
+      "workstreams": [
+        "W04",
+        "W16"
+      ],
       "artboard": "project/Journal.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Journal.html"
+      "source": "specs/design/awsf-v3-plan/source/Journal.dc.html",
+      "pieces": [
+        "mp-s45-journal.p1",
+        "mp-s45-journal.p2"
+      ]
+    },
+    {
+      "id": "mp-s45-journal.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s45-journal.p1.png",
+      "sha256": "fe19d86d1f789ed470612186c2efc38e333a1f5a2e565834e09481fd54ab5f92",
+      "bytes": 608886,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s45-journal",
+      "top": 0
+    },
+    {
+      "id": "mp-s45-journal.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s45-journal.p2.png",
+      "sha256": "d7fbc9bbf5d8a7eec40942a18050177bad2e4b144ac9b2ab69ad5e1d7ec8d5f1",
+      "bytes": 242956,
+      "width": 1440,
+      "height": 600,
+      "pieceOf": "mp-s45-journal",
+      "top": 940
     },
     {
       "id": "mp-s46-run-evidence",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s46-run-evidence.png",
-      "sha256": "dc0dc6135392d38ea0ed65b0415521f376eb900592f0f7e3d07dedf55e134d7f",
-      "bytes": 849568,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s46-run-evidence.png",
+      "sha256": "63ed8a1fba41015aa824424f19eed4a09cc3e36349dde12067cbce2829c1376f",
+      "bytes": 681733,
       "width": 1440,
-      "height": 2100,
+      "height": 1580,
       "screen": "S46",
-      "title": "R1 · Run · build-review, builder selected: lane icons, to scale (L1), the Overview tab",
-      "workstreams": [],
+      "kind": "screen",
+      "title": "R1 · Run · build-review, builder selected: the waterfall and its phase",
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/RunEvidence.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/RunEvidence.html"
+      "source": "specs/design/awsf-v3-plan/source/RunEvidence.dc.html",
+      "pieces": [
+        "mp-s46-run-evidence.p1",
+        "mp-s46-run-evidence.p2"
+      ]
+    },
+    {
+      "id": "mp-s46-run-evidence.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s46-run-evidence.p1.png",
+      "sha256": "d3a9393a6a2184d39970056cd44b542a0c6880c86d9fb7bf58bec6e15952dbc3",
+      "bytes": 465116,
+      "width": 1440,
+      "height": 889,
+      "pieceOf": "mp-s46-run-evidence",
+      "top": 0
+    },
+    {
+      "id": "mp-s46-run-evidence.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s46-run-evidence.p2.png",
+      "sha256": "40444c0fdbd554bc4b4ccb3d1cb2639bf70be4ce828d9fd6dcde52eea2351f0b",
+      "bytes": 216111,
+      "width": 1440,
+      "height": 691,
+      "pieceOf": "mp-s46-run-evidence",
+      "top": 889
+    },
+    {
+      "id": "mp-s46b-selected-phase",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s46b-selected-phase.png",
+      "sha256": "50d79470cc00cc82bc836e51fd66fa655572a65b54d1af039d66b406958f9a19",
+      "bytes": 596867,
+      "width": 1440,
+      "height": 1460,
+      "screen": "S46b",
+      "kind": "screen",
+      "title": "R1 · Run · the selected phase in full: account, gates, route",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/RunEvidenceB.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/RunEvidenceB.dc.html",
+      "pieces": [
+        "mp-s46b-selected-phase.p1",
+        "mp-s46b-selected-phase.p2"
+      ]
+    },
+    {
+      "id": "mp-s46b-selected-phase.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s46b-selected-phase.p1.png",
+      "sha256": "03fd62cf94c4a0deda7174bf0739c6bad4b3d24bcbdcfb12aa63ba65dd08276c",
+      "bytes": 480787,
+      "width": 1440,
+      "height": 966,
+      "pieceOf": "mp-s46b-selected-phase",
+      "top": 0
+    },
+    {
+      "id": "mp-s46b-selected-phase.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s46b-selected-phase.p2.png",
+      "sha256": "ce9fbbd6a28c350919e1cdbfe9c02f5fb5a424959cc2e21178490c5f2e0e70e6",
+      "bytes": 116727,
+      "width": 1440,
+      "height": 494,
+      "pieceOf": "mp-s46b-selected-phase",
+      "top": 966
     },
     {
       "id": "mp-s47-events",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s47-events.png",
-      "sha256": "565ec5174c5d2a78e817aac81f78a808da47fec0447307a5c38a90572042caa7",
-      "bytes": 886691,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s47-events.png",
+      "sha256": "7776af567afdfd848efdc710d3fcbc989d47ecad91a9770be5e6a1f8f6cbcea1",
+      "bytes": 642436,
       "width": 1440,
-      "height": 2100,
+      "height": 1540,
       "screen": "S47",
-      "title": "R2 · Agent phase · Events: turns, where the time went, recorded points",
-      "workstreams": [],
+      "kind": "screen",
+      "title": "R2 · Agent phase · Events: where the time went, recorded points",
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/Events.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/Events.html"
+      "source": "specs/design/awsf-v3-plan/source/Events.dc.html",
+      "pieces": [
+        "mp-s47-events.p1",
+        "mp-s47-events.p2"
+      ]
+    },
+    {
+      "id": "mp-s47-events.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s47-events.p1.png",
+      "sha256": "2aba6ac9827da11e5fa953314331cf6a6e1f026e893302c1406d77c659b2aabf",
+      "bytes": 446935,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s47-events",
+      "top": 0
+    },
+    {
+      "id": "mp-s47-events.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s47-events.p2.png",
+      "sha256": "bfc5e0d512af9d7bda262ef5c0afd1ff56c9149a83bce104580d653dead58e81",
+      "bytes": 196506,
+      "width": 1440,
+      "height": 600,
+      "pieceOf": "mp-s47-events",
+      "top": 940
+    },
+    {
+      "id": "mp-s47b-turns",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s47b-turns.png",
+      "sha256": "1ae02d45a591c45e5d29f5cd7df464744fc951179f012f9fc55ddd7803eb8aa5",
+      "bytes": 858528,
+      "width": 1440,
+      "height": 1960,
+      "screen": "S47b",
+      "kind": "screen",
+      "title": "R2 · Agent phase · Events: the turns, one line each",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/EventsB.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/EventsB.dc.html",
+      "pieces": [
+        "mp-s47b-turns.p1",
+        "mp-s47b-turns.p2",
+        "mp-s47b-turns.p3"
+      ]
+    },
+    {
+      "id": "mp-s47b-turns.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s47b-turns.p1.png",
+      "sha256": "357a424b1acdaeb29e347405ba75f929b023a0c5f56d9f8fea5f18391aeed403",
+      "bytes": 409889,
+      "width": 1440,
+      "height": 786,
+      "pieceOf": "mp-s47b-turns",
+      "top": 0
+    },
+    {
+      "id": "mp-s47b-turns.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s47b-turns.p2.png",
+      "sha256": "8ce95dfbcce180e6844fd91c60b01593f74b9ab91e3f4a3779c5c1b32ef60995",
+      "bytes": 408241,
+      "width": 1440,
+      "height": 997,
+      "pieceOf": "mp-s47b-turns",
+      "top": 786
+    },
+    {
+      "id": "mp-s47b-turns.p3",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s47b-turns.p3.png",
+      "sha256": "7c9046422a620ebaa7448e12e5220b9943e1a4dfb5f7941e93a289ec1a434723",
+      "bytes": 40509,
+      "width": 1440,
+      "height": 177,
+      "pieceOf": "mp-s47b-turns",
+      "top": 1783
     },
     {
       "id": "mp-s48-event-raw",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s48-event-raw.png",
-      "sha256": "e846db5f10e5d260fac796072c5d5899687b727ed50c312f91c659f0f87fce22",
-      "bytes": 835213,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s48-event-raw.png",
+      "sha256": "45b616b9633aa61d9dd26de06e18c0a8d2c024b1c16715d9b4f629a9f7ec2e66",
+      "bytes": 642382,
       "width": 1440,
-      "height": 2100,
+      "height": 1440,
       "screen": "S48",
+      "kind": "screen",
       "title": "R3 · Agent phase · Raw journal: filters, input first, one call opened",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/EventRaw.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/EventRaw.html"
+      "source": "specs/design/awsf-v3-plan/source/EventRaw.dc.html",
+      "pieces": [
+        "mp-s48-event-raw.p1",
+        "mp-s48-event-raw.p2"
+      ]
+    },
+    {
+      "id": "mp-s48-event-raw.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s48-event-raw.p1.png",
+      "sha256": "5802d83962bab1bd2a3cb224787407e377435ea7bbb6855e10494d6b662861e0",
+      "bytes": 486014,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s48-event-raw",
+      "top": 0
+    },
+    {
+      "id": "mp-s48-event-raw.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s48-event-raw.p2.png",
+      "sha256": "6020d5d1676145533bd48b40ff323352cc6ec9b7df487084eeaa4467fcfdcad7",
+      "bytes": 156908,
+      "width": 1440,
+      "height": 500,
+      "pieceOf": "mp-s48-event-raw",
+      "top": 940
     },
     {
       "id": "mp-s49-code-phase",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s49-code-phase.png",
-      "sha256": "73d44fb605b37574de68a3270053fad2e2f2481538f871a0c7d9c173dbfdd180",
-      "bytes": 716605,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s49-code-phase.png",
+      "sha256": "0dba8c04248c1de95164b1b77cf1a120fba3fcd09c07927c660ae71c816d9d31",
+      "bytes": 604641,
       "width": 1440,
-      "height": 2100,
+      "height": 1660,
       "screen": "S49",
+      "kind": "screen",
       "title": "R4 · Code phase · tests: commands, checks, raw output",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/CodePhase.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/CodePhase.html"
+      "source": "specs/design/awsf-v3-plan/source/CodePhase.dc.html",
+      "pieces": [
+        "mp-s49-code-phase.p1",
+        "mp-s49-code-phase.p2"
+      ]
+    },
+    {
+      "id": "mp-s49-code-phase.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s49-code-phase.p1.png",
+      "sha256": "32fe156e9d75fefb375797ab511dc496fc8489732218f094b4795ce5bc347fef",
+      "bytes": 319147,
+      "width": 1440,
+      "height": 703,
+      "pieceOf": "mp-s49-code-phase",
+      "top": 0
+    },
+    {
+      "id": "mp-s49-code-phase.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s49-code-phase.p2.png",
+      "sha256": "d1ef840850d3a7bfb8f90aedb3ed4f566375bfdd6f40af74e1c3ebc1d1cddce2",
+      "bytes": 285404,
+      "width": 1440,
+      "height": 957,
+      "pieceOf": "mp-s49-code-phase",
+      "top": 703
     },
     {
       "id": "mp-s50-review-phase",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s50-review-phase.png",
-      "sha256": "c64f2b5170189d89e906e27bc33f0325dfccbd2afab954a4a1c9ec3a2c46f494",
-      "bytes": 738992,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s50-review-phase.png",
+      "sha256": "cedd71e078c71525757502e53b9a718b380418b0fff710facca25ffb39f7d025",
+      "bytes": 597711,
       "width": 1440,
-      "height": 2100,
+      "height": 1480,
       "screen": "S50",
+      "kind": "screen",
       "title": "R5 · Agent phase · reviewer: verdict, limits, the other provider",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/ReviewPhase.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/ReviewPhase.html"
+      "source": "specs/design/awsf-v3-plan/source/ReviewPhase.dc.html",
+      "pieces": [
+        "mp-s50-review-phase.p1",
+        "mp-s50-review-phase.p2"
+      ]
+    },
+    {
+      "id": "mp-s50-review-phase.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s50-review-phase.p1.png",
+      "sha256": "f67ae37e898cbd6fa45a260ea799b3c1b67a669b7e5a32fb952d8ef1183b2926",
+      "bytes": 463489,
+      "width": 1440,
+      "height": 950,
+      "pieceOf": "mp-s50-review-phase",
+      "top": 0
+    },
+    {
+      "id": "mp-s50-review-phase.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s50-review-phase.p2.png",
+      "sha256": "ac46cc400fd6f23e149144d2c900a66d76d1fbe8358826f5ef89abf64f1cb9eb",
+      "bytes": 135456,
+      "width": 1440,
+      "height": 530,
+      "pieceOf": "mp-s50-review-phase",
+      "top": 950
+    },
+    {
+      "id": "mp-s50b-review-fails",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s50b-review-fails.png",
+      "sha256": "7a798aaf124b9a37b020608e016abc6a5e2067fe1719dcb61998e1834339227e",
+      "bytes": 404461,
+      "width": 1440,
+      "height": 900,
+      "screen": "S50b",
+      "kind": "screen",
+      "title": "R5 · Agent phase · reviewer, when the review fails",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/ReviewFail.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/ReviewFail.dc.html"
     },
     {
       "id": "mp-s51-request-owner",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s51-request-owner.png",
-      "sha256": "6af7b9df5ab993097c0c9cca0858b38334d713e4aeae4539e01d30d42e0d94f3",
-      "bytes": 826311,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s51-request-owner.png",
+      "sha256": "6237d97b6ad05e01f0487ebec2125f397767b2d7c7a0f3a42fca41086289f9ed",
+      "bytes": 725692,
       "width": 1440,
-      "height": 2100,
+      "height": 1680,
       "screen": "S51",
+      "kind": "screen",
       "title": "R6 · Engineer and owner phases: the request in, the journey out",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/RequestOwner.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/RequestOwner.html"
+      "source": "specs/design/awsf-v3-plan/source/RequestOwner.dc.html",
+      "pieces": [
+        "mp-s51-request-owner.p1",
+        "mp-s51-request-owner.p2"
+      ]
+    },
+    {
+      "id": "mp-s51-request-owner.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s51-request-owner.p1.png",
+      "sha256": "9f51fcd0e5fabfc869999bf192940148d12d28559c63f9285fa3e606e73283c9",
+      "bytes": 487671,
+      "width": 1440,
+      "height": 912,
+      "pieceOf": "mp-s51-request-owner",
+      "top": 0
+    },
+    {
+      "id": "mp-s51-request-owner.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s51-request-owner.p2.png",
+      "sha256": "0e7aedca9d1723cc8edf09069fb2955a49d8ec02bba76dde96a2c256217e52dd",
+      "bytes": 237723,
+      "width": 1440,
+      "height": 768,
+      "pieceOf": "mp-s51-request-owner",
+      "top": 912
     },
     {
       "id": "mp-s52-shift-view",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s52-shift-view.png",
-      "sha256": "86328cd8606625790efb1899e8b2674d7b782c3701dd3d3b2feb25a6d98659de",
-      "bytes": 789803,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s52-shift-view.png",
+      "sha256": "c4bedfe68894d1027979d757e054290dc8d963e34b029b00f8a0f53b13ceb737",
+      "bytes": 703975,
       "width": 1440,
-      "height": 2000,
+      "height": 1720,
       "screen": "S52",
+      "kind": "screen",
       "title": "W1 · Shift, landed: six tickets fit with no scroll, T11 in focus",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/ShiftView.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/ShiftView.html"
+      "source": "specs/design/awsf-v3-plan/source/ShiftView.dc.html",
+      "pieces": [
+        "mp-s52-shift-view.p1",
+        "mp-s52-shift-view.p2"
+      ]
+    },
+    {
+      "id": "mp-s52-shift-view.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s52-shift-view.p1.png",
+      "sha256": "259a9759dc4f97599e46f0214464f76d581f5c052b13262f94b637f9194677ed",
+      "bytes": 420565,
+      "width": 1440,
+      "height": 787,
+      "pieceOf": "mp-s52-shift-view",
+      "top": 0
+    },
+    {
+      "id": "mp-s52-shift-view.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s52-shift-view.p2.png",
+      "sha256": "15e5fbd8b389644d9569256b702868fcb20f04bad690c53148490fddf49673c4",
+      "bytes": 283935,
+      "width": 1440,
+      "height": 933,
+      "pieceOf": "mp-s52-shift-view",
+      "top": 787
     },
     {
       "id": "mp-s53-waterfall-live",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s53-waterfall-live.png",
-      "sha256": "563b26174448afa258218c23d9ae1323965517a4516ae2127d218ef4075eef20",
-      "bytes": 753803,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s53-waterfall-live.png",
+      "sha256": "12e0cc959d70683fd7eea93bae35de394b3482c8cceb798cb22c01b4f7af5184",
+      "bytes": 499997,
       "width": 1440,
-      "height": 2000,
+      "height": 1060,
       "screen": "S53",
+      "kind": "screen",
       "title": "W5 · Shift, live: the running ticket keeps the room, finished tickets compact",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/WaterfallLive.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/WaterfallLive.html"
+      "source": "specs/design/awsf-v3-plan/source/WaterfallLive.dc.html",
+      "pieces": [
+        "mp-s53-waterfall-live.p1",
+        "mp-s53-waterfall-live.p2"
+      ]
+    },
+    {
+      "id": "mp-s53-waterfall-live.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s53-waterfall-live.p1.png",
+      "sha256": "cca6c811b93f49cb07fac373a8ba852a4c162890104014a89e70e3c0a913d947",
+      "bytes": 476785,
+      "width": 1440,
+      "height": 942,
+      "pieceOf": "mp-s53-waterfall-live",
+      "top": 0
+    },
+    {
+      "id": "mp-s53-waterfall-live.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s53-waterfall-live.p2.png",
+      "sha256": "c57ad95caa81bd3819f745cf81a1c401ba1ad23fe7fc4866f5adc1457a3fb743",
+      "bytes": 23104,
+      "width": 1440,
+      "height": 118,
+      "pieceOf": "mp-s53-waterfall-live",
+      "top": 942
+    },
+    {
+      "id": "mp-s53b-waterfall-motion",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s53b-waterfall-motion.png",
+      "sha256": "00bcc51e8d7c97fd343d4f0fcd3c3b4094d34af6b6cb725cb1372d1324c50ab9",
+      "bytes": 468330,
+      "width": 1440,
+      "height": 1000,
+      "screen": "S53b",
+      "kind": "spec",
+      "title": "Spec · how the live waterfall moves",
+      "workstreams": [],
+      "artboard": "project/WaterfallMotion.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/WaterfallMotion.dc.html"
     },
     {
       "id": "mp-s54-waterfall-limit",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s54-waterfall-limit.png",
-      "sha256": "ff196cf8e078cf87efc97a02adfcc1b353348b8e0651d98f64f534246519f1b2",
-      "bytes": 902986,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s54-waterfall-limit.png",
+      "sha256": "4f52a2fc438598d4fdc6ce671b3434bfc032e832a1f11e8432e49f2a23e64486",
+      "bytes": 773670,
       "width": 1440,
-      "height": 2200,
+      "height": 1540,
       "screen": "S54",
+      "kind": "spec",
       "title": "W6 · Spec · the waterfall fits before it scrolls: four levels, the scroller, lane icons",
       "workstreams": [],
       "artboard": "project/WaterfallLimit.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/WaterfallLimit.html"
+      "source": "specs/design/awsf-v3-plan/source/WaterfallLimit.dc.html",
+      "pieces": [
+        "mp-s54-waterfall-limit.p1",
+        "mp-s54-waterfall-limit.p2"
+      ]
+    },
+    {
+      "id": "mp-s54-waterfall-limit.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s54-waterfall-limit.p1.png",
+      "sha256": "3fa7ca063bddc339caca39ac9785644429fe02870bb4066eb90bce700bc68377",
+      "bytes": 554367,
+      "width": 1440,
+      "height": 910,
+      "pieceOf": "mp-s54-waterfall-limit",
+      "top": 0
+    },
+    {
+      "id": "mp-s54-waterfall-limit.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s54-waterfall-limit.p2.png",
+      "sha256": "230a6d3d29da13d9dfd8be78ecc4060736dafb92b251cf982a62d9423fb8763e",
+      "bytes": 218869,
+      "width": 1440,
+      "height": 630,
+      "pieceOf": "mp-s54-waterfall-limit",
+      "top": 910
     },
     {
       "id": "mp-s55-prove-view",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s55-prove-view.png",
-      "sha256": "0a98085a50f0c95c21b005a65e7b42e5116fbfde1f24a678a534ddd55517e43e",
-      "bytes": 772427,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s55-prove-view.png",
+      "sha256": "a934dcd3d98f70bfd65eb2e36b87a7a1498ca59392fd18692755656a86ebe962",
+      "bytes": 558320,
       "width": 1440,
-      "height": 2000,
+      "height": 1240,
       "screen": "S55",
+      "kind": "screen",
       "title": "W2 · Prove: replay items by route arm",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/ProveView.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/ProveView.html"
+      "source": "specs/design/awsf-v3-plan/source/ProveView.dc.html",
+      "pieces": [
+        "mp-s55-prove-view.p1",
+        "mp-s55-prove-view.p2"
+      ]
+    },
+    {
+      "id": "mp-s55-prove-view.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s55-prove-view.p1.png",
+      "sha256": "3c034d35d0e1b00988db782ef1ce0a0baccd7b82841bb6ccc8cbb9f66fd7f73f",
+      "bytes": 497600,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s55-prove-view",
+      "top": 0
+    },
+    {
+      "id": "mp-s55-prove-view.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s55-prove-view.p2.png",
+      "sha256": "894b3ef292fbd72eaac72f9f313a730ef83c3107eb62e6ff6d6b346a33259770",
+      "bytes": 60317,
+      "width": 1440,
+      "height": 240,
+      "pieceOf": "mp-s55-prove-view",
+      "top": 1000
     },
     {
       "id": "mp-s56-plan-author",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s56-plan-author.png",
-      "sha256": "f026e6e8224b40887937e0e97996d720104d9130081f37a33cbe00a38660e638",
-      "bytes": 736030,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s56-plan-author.png",
+      "sha256": "6a3bcfcd9b0dcc0038040db16a44b599d3164305203754e1783023fd1571ddc2",
+      "bytes": 575368,
       "width": 1440,
-      "height": 2000,
+      "height": 1420,
       "screen": "S56",
+      "kind": "screen",
       "title": "W3 · Plan-author: a run that produces documents",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/PlanAuthor.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/PlanAuthor.html"
+      "source": "specs/design/awsf-v3-plan/source/PlanAuthor.dc.html",
+      "pieces": [
+        "mp-s56-plan-author.p1",
+        "mp-s56-plan-author.p2"
+      ]
+    },
+    {
+      "id": "mp-s56-plan-author.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s56-plan-author.p1.png",
+      "sha256": "465d0835d13589cbe41b8f362688614cacf65d5ae8e357379d12b2052a34f1ca",
+      "bytes": 432386,
+      "width": 1440,
+      "height": 888,
+      "pieceOf": "mp-s56-plan-author",
+      "top": 0
+    },
+    {
+      "id": "mp-s56-plan-author.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s56-plan-author.p2.png",
+      "sha256": "5d9bccffb8477b67006f77a8de46f3b622994bf0f8262148df1074d41f625513",
+      "bytes": 143116,
+      "width": 1440,
+      "height": 532,
+      "pieceOf": "mp-s56-plan-author",
+      "top": 888
     },
     {
       "id": "mp-s57-team-room",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s57-team-room.png",
-      "sha256": "0d54a540313fb34d7d8da2ecd712dc266bc1da479738ffa2330284c75eaca60a",
-      "bytes": 887978,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s57-team-room.png",
+      "sha256": "e99292c18f2c949c47e4ffe954707e58b4613fa8e32a8b4a6db0bf1a36468489",
+      "bytes": 853064,
       "width": 1440,
-      "height": 2000,
+      "height": 1580,
       "screen": "S57",
+      "kind": "screen",
       "title": "W4 · Orquesta: a planning team in its room",
-      "workstreams": [],
+      "workstreams": [
+        "P4"
+      ],
       "artboard": "project/TeamRoom.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/TeamRoom.html"
+      "source": "specs/design/awsf-v3-plan/source/TeamRoom.dc.html",
+      "pieces": [
+        "mp-s57-team-room.p1",
+        "mp-s57-team-room.p2"
+      ]
+    },
+    {
+      "id": "mp-s57-team-room.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s57-team-room.p1.png",
+      "sha256": "f01a37d49296620ef2da7803fdcbb385c8340db45e299dc13fdd3c85930f28f0",
+      "bytes": 595108,
+      "width": 1440,
+      "height": 906,
+      "pieceOf": "mp-s57-team-room",
+      "top": 0
+    },
+    {
+      "id": "mp-s57-team-room.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s57-team-room.p2.png",
+      "sha256": "e4b2889d507bb277d2e1495b06946816d74dd2814a36afe4948723dd5a389e95",
+      "bytes": 257490,
+      "width": 1440,
+      "height": 674,
+      "pieceOf": "mp-s57-team-room",
+      "top": 906
     },
     {
       "id": "mp-s58-settings-summaries",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s58-settings-summaries.png",
-      "sha256": "1a30591ce20ce03944946a5c9cbe10deb3dd7a435d71c33bc2ee25dfc0c463fe",
-      "bytes": 735669,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s58-settings-summaries.png",
+      "sha256": "65858f00cf457a337523e5bc6217248c9a62a8c011d1ffd769972d0ae7886f5b",
+      "bytes": 718857,
       "width": 1440,
-      "height": 1700,
+      "height": 1560,
       "screen": "S58",
+      "kind": "screen",
       "title": "S1 · Settings · Step lines: how calls become one line each, templates, no model",
-      "workstreams": [],
+      "workstreams": [
+        "W08"
+      ],
       "artboard": "project/SettingsSummaries.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/SettingsSummaries.html"
+      "source": "specs/design/awsf-v3-plan/source/SettingsSummaries.dc.html",
+      "pieces": [
+        "mp-s58-settings-summaries.p1",
+        "mp-s58-settings-summaries.p2",
+        "mp-s58-settings-summaries.p3"
+      ]
+    },
+    {
+      "id": "mp-s58-settings-summaries.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s58-settings-summaries.p1.png",
+      "sha256": "a59b55fcc466528ddf1f1005ae4a69022522ac846462bb1a52a669d10264729e",
+      "bytes": 311719,
+      "width": 1440,
+      "height": 558,
+      "pieceOf": "mp-s58-settings-summaries",
+      "top": 0
+    },
+    {
+      "id": "mp-s58-settings-summaries.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s58-settings-summaries.p2.png",
+      "sha256": "f5e7b0295a9bc2d38678da384a222197b491171d69017765b630f4ea12a20e51",
+      "bytes": 367067,
+      "width": 1440,
+      "height": 825,
+      "pieceOf": "mp-s58-settings-summaries",
+      "top": 558
+    },
+    {
+      "id": "mp-s58-settings-summaries.p3",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s58-settings-summaries.p3.png",
+      "sha256": "ac79a31d32c1baaa0176a2d14c6b06d69e1381d31032a914964e7feee3b209a1",
+      "bytes": 39254,
+      "width": 1440,
+      "height": 177,
+      "pieceOf": "mp-s58-settings-summaries",
+      "top": 1383
     },
     {
       "id": "mp-s59-evidence-map",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s59-evidence-map.png",
-      "sha256": "99c19e8b8bc6b270ae218ce142b737de218f4f4a42abc7d7baa6654255589cb3",
-      "bytes": 680713,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s59-evidence-map.png",
+      "sha256": "986c79e26386f2d8a8023bbf5f7c8834e41cd25a05d67eda1074f9bf43979ea5",
+      "bytes": 746162,
       "width": 1440,
-      "height": 1700,
+      "height": 1960,
       "screen": "S59",
+      "kind": "spec",
       "title": "S2 · Spec: which evidence each phase kind shows, per workflow",
       "workstreams": [],
       "artboard": "project/EvidenceMap.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/EvidenceMap.html"
+      "source": "specs/design/awsf-v3-plan/source/EvidenceMap.dc.html",
+      "pieces": [
+        "mp-s59-evidence-map.p1",
+        "mp-s59-evidence-map.p2",
+        "mp-s59-evidence-map.p3"
+      ]
+    },
+    {
+      "id": "mp-s59-evidence-map.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s59-evidence-map.p1.png",
+      "sha256": "0a0e4f224a7a8f4cdf8a72ecf19162823f14b1290567779ddeef05b0b4f4abcc",
+      "bytes": 313875,
+      "width": 1440,
+      "height": 604,
+      "pieceOf": "mp-s59-evidence-map",
+      "top": 0
+    },
+    {
+      "id": "mp-s59-evidence-map.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s59-evidence-map.p2.png",
+      "sha256": "4ffe6db0743ec3dbe3f11d02551690f690e9b72a7a3476efc779391369c25e83",
+      "bytes": 336387,
+      "width": 1440,
+      "height": 984,
+      "pieceOf": "mp-s59-evidence-map",
+      "top": 604
+    },
+    {
+      "id": "mp-s59-evidence-map.p3",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s59-evidence-map.p3.png",
+      "sha256": "8c36374a3ad2d70d5315da6e940d66ac2f62375c606764b0be35eaebd0ff488f",
+      "bytes": 95975,
+      "width": 1440,
+      "height": 372,
+      "pieceOf": "mp-s59-evidence-map",
+      "top": 1588
+    },
+    {
+      "id": "mp-s59b-builder-notes",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s59b-builder-notes.png",
+      "sha256": "c588b5967f53daff501c05e13dbc84a026df05fee49fc0959e3f7bc0da3176cf",
+      "bytes": 986741,
+      "width": 1440,
+      "height": 1840,
+      "screen": "S59b",
+      "kind": "spec",
+      "title": "Spec · builder notes",
+      "workstreams": [],
+      "artboard": "project/RunNotes.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/RunNotes.dc.html",
+      "pieces": [
+        "mp-s59b-builder-notes.p1",
+        "mp-s59b-builder-notes.p2"
+      ]
+    },
+    {
+      "id": "mp-s59b-builder-notes.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s59b-builder-notes.p1.png",
+      "sha256": "1cb03b88d7497019ea6a29f47453875ff0329cad71cc73f7ca091303ce9644c2",
+      "bytes": 631948,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s59b-builder-notes",
+      "top": 0
+    },
+    {
+      "id": "mp-s59b-builder-notes.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s59b-builder-notes.p2.png",
+      "sha256": "5c62bbeac3e43dbf0bece35062b29ec33aaed487b8bd84035365116d67b2dcb8",
+      "bytes": 354560,
+      "width": 1440,
+      "height": 900,
+      "pieceOf": "mp-s59b-builder-notes",
+      "top": 940
     },
     {
       "id": "mp-s60-flow-map",
-      "image": "docs/design/marimba-panel/2026-11-20/frames/mp-s60-flow-map.png",
-      "sha256": "1f9355f67e9f8e2a23e25f0be05058b51281d81890b6532fee654ad856ee9f4e",
-      "bytes": 637812,
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s60-flow-map.png",
+      "sha256": "212a110f7b632ae0263460f99a94ff295936bb6f4552309685fa421af31c0018",
+      "bytes": 802202,
       "width": 1440,
-      "height": 1500,
+      "height": 1960,
       "screen": "S60",
+      "kind": "spec",
       "title": "Flows: the frames each path crosses (A8)",
       "workstreams": [],
       "artboard": "project/FlowMap.dc.html",
-      "page": "docs/design/marimba-panel/2026-11-20/pages/FlowMap.html"
+      "source": "specs/design/awsf-v3-plan/source/FlowMap.dc.html",
+      "pieces": [
+        "mp-s60-flow-map.p1",
+        "mp-s60-flow-map.p2",
+        "mp-s60-flow-map.p3"
+      ]
+    },
+    {
+      "id": "mp-s60-flow-map.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s60-flow-map.p1.png",
+      "sha256": "72dd12cc026d4068895eeb731899d2ed2acf8453581745c0bb5ece1a47cf90c4",
+      "bytes": 461081,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s60-flow-map",
+      "top": 0
+    },
+    {
+      "id": "mp-s60-flow-map.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s60-flow-map.p2.png",
+      "sha256": "1401ab52d9b0627cc670199371c842026a4fa8508e83dfd2f25cae624d33f43c",
+      "bytes": 336690,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s60-flow-map",
+      "top": 940
+    },
+    {
+      "id": "mp-s60-flow-map.p3",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s60-flow-map.p3.png",
+      "sha256": "526e819440fda0671799198298d6030b6bedeaf76ac178a0f24c4c9424747fc3",
+      "bytes": 4163,
+      "width": 1440,
+      "height": 20,
+      "pieceOf": "mp-s60-flow-map",
+      "top": 1940
+    },
+    {
+      "id": "mp-s61-two-attempts",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s61-two-attempts.png",
+      "sha256": "d034065f1bc3bc8499539eb9c06a624c4920ebbecd4e11b4ad58d632ec836abf",
+      "bytes": 709985,
+      "width": 1440,
+      "height": 1260,
+      "screen": "S61",
+      "kind": "screen",
+      "title": "Changelog: one change, two attempts (TC5)",
+      "workstreams": [
+        "W16"
+      ],
+      "artboard": "project/Changelog.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Changelog.dc.html",
+      "pieces": [
+        "mp-s61-two-attempts.p1",
+        "mp-s61-two-attempts.p2"
+      ]
+    },
+    {
+      "id": "mp-s61-two-attempts.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s61-two-attempts.p1.png",
+      "sha256": "dbcf3147fe62ba4169a42b54f5d69992a1861652afcf9987ee11f36b51772b6a",
+      "bytes": 566681,
+      "width": 1440,
+      "height": 808,
+      "pieceOf": "mp-s61-two-attempts",
+      "top": 0
+    },
+    {
+      "id": "mp-s61-two-attempts.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s61-two-attempts.p2.png",
+      "sha256": "7545f7c124649f9a439bfc2328d432b8cd1cedc78d2248d9d958fbdfad4a9c70",
+      "bytes": 143075,
+      "width": 1440,
+      "height": 452,
+      "pieceOf": "mp-s61-two-attempts",
+      "top": 808
+    },
+    {
+      "id": "mp-s62-access-line",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s62-access-line.png",
+      "sha256": "b7d4908a3cc0508d80f13b26122eaee230ea92ecf7a568373e4b7e2e3652517c",
+      "bytes": 572203,
+      "width": 1440,
+      "height": 1680,
+      "screen": "S62",
+      "kind": "spec",
+      "title": "Access line: every state, with and without a lease",
+      "workstreams": [
+        "W05"
+      ],
+      "artboard": "project/AccessLine.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/AccessLine.dc.html",
+      "pieces": [
+        "mp-s62-access-line.p1",
+        "mp-s62-access-line.p2"
+      ]
+    },
+    {
+      "id": "mp-s62-access-line.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s62-access-line.p1.png",
+      "sha256": "64da164c7e92bf0cf0fb77e4e92fa48476c419176eb21f63db32eafa91153b26",
+      "bytes": 367597,
+      "width": 1440,
+      "height": 937,
+      "pieceOf": "mp-s62-access-line",
+      "top": 0
+    },
+    {
+      "id": "mp-s62-access-line.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s62-access-line.p2.png",
+      "sha256": "f17bbe62a8b990404a402c8b3d1adb639146257531acdae819597b76c24ce39a",
+      "bytes": 204618,
+      "width": 1440,
+      "height": 743,
+      "pieceOf": "mp-s62-access-line",
+      "top": 937
+    },
+    {
+      "id": "mp-s63-project-switcher",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s63-project-switcher.png",
+      "sha256": "0c7506282164fd85e56a7a1eb769911af8bba6cb29133668da1dd02c5306dd20",
+      "bytes": 564213,
+      "width": 1440,
+      "height": 1200,
+      "screen": "S63",
+      "kind": "screen",
+      "title": "Project switcher: one queue, one ledger",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/ProjectSwitcher.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/ProjectSwitcher.dc.html",
+      "pieces": [
+        "mp-s63-project-switcher.p1",
+        "mp-s63-project-switcher.p2"
+      ]
+    },
+    {
+      "id": "mp-s63-project-switcher.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s63-project-switcher.p1.png",
+      "sha256": "5dcab616037c8a1baa0d9b0a8c8f33852d1c00cfa4083e1ddcc287923c8c88d9",
+      "bytes": 514610,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s63-project-switcher",
+      "top": 0
+    },
+    {
+      "id": "mp-s63-project-switcher.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s63-project-switcher.p2.png",
+      "sha256": "e97185d6e97f7e5554951357d00ce929202c50a05b3a56eccbe6c320cb1280ba",
+      "bytes": 50169,
+      "width": 1440,
+      "height": 200,
+      "pieceOf": "mp-s63-project-switcher",
+      "top": 1000
+    },
+    {
+      "id": "mp-s64-pendulum",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s64-pendulum.png",
+      "sha256": "325106840f2faba592f9436d57c4a2c8a679b5e023baf1f00a8d42435dcfa39d",
+      "bytes": 9827,
+      "width": 480,
+      "height": 308,
+      "screen": "S64",
+      "kind": "component",
+      "title": "The pendulum: the mark, one component",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/Pendulum.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Pendulum.dc.html"
+    },
+    {
+      "id": "mp-s65-pendulum-states",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s65-pendulum-states.png",
+      "sha256": "5d47d63877b0975879fa1409e3ed255e9071f39c4970c17b37b5933b2f8aa61f",
+      "bytes": 819148,
+      "width": 1440,
+      "height": 1940,
+      "screen": "S65",
+      "kind": "spec",
+      "title": "The pendulum: six states, the lease, and your voice",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/PendulumStates.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/PendulumStates.dc.html",
+      "pieces": [
+        "mp-s65-pendulum-states.p1",
+        "mp-s65-pendulum-states.p2"
+      ]
+    },
+    {
+      "id": "mp-s65-pendulum-states.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s65-pendulum-states.p1.png",
+      "sha256": "9233f8cd59950a714a7a84c2e892d622d1ef9ff81ce49216012961a1fc71c8e4",
+      "bytes": 545385,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s65-pendulum-states",
+      "top": 0
+    },
+    {
+      "id": "mp-s65-pendulum-states.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s65-pendulum-states.p2.png",
+      "sha256": "0e66961d8be1d57c83a932cbb44cece236257d5e1a4af127e5f6665752e2cf2f",
+      "bytes": 273929,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s65-pendulum-states",
+      "top": 1000
+    },
+    {
+      "id": "mp-s65b-pendulum-rules",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s65b-pendulum-rules.png",
+      "sha256": "1949999d3f0a6ebea5ae6125069f4c389ea46c6a2b2bbee04c5977aa69f70d29",
+      "bytes": 577522,
+      "width": 1440,
+      "height": 1280,
+      "screen": "S65b",
+      "kind": "spec",
+      "title": "Spec · what the pendulum shows, for every run state",
+      "workstreams": [],
+      "artboard": "project/PendulumRules.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/PendulumRules.dc.html",
+      "pieces": [
+        "mp-s65b-pendulum-rules.p1",
+        "mp-s65b-pendulum-rules.p2"
+      ]
+    },
+    {
+      "id": "mp-s65b-pendulum-rules.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s65b-pendulum-rules.p1.png",
+      "sha256": "d72ad9753d5c91dc5840fcdce35169da2af5b2e3a19911c742427f7b9ba4eb47",
+      "bytes": 436072,
+      "width": 1440,
+      "height": 825,
+      "pieceOf": "mp-s65b-pendulum-rules",
+      "top": 0
+    },
+    {
+      "id": "mp-s65b-pendulum-rules.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s65b-pendulum-rules.p2.png",
+      "sha256": "2e64f89a79d4ba725e908886cf3e765a846bea803a0f3797e151438b1c12ccbe",
+      "bytes": 141302,
+      "width": 1440,
+      "height": 455,
+      "pieceOf": "mp-s65b-pendulum-rules",
+      "top": 825
+    },
+    {
+      "id": "mp-s65c-pendulum-numbers",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s65c-pendulum-numbers.png",
+      "sha256": "fa49d6e130641d9ca0ddb5a07498b219ba7d1de213f913e9c86fefac40720a83",
+      "bytes": 610449,
+      "width": 1440,
+      "height": 1440,
+      "screen": "S65c",
+      "kind": "spec",
+      "title": "Spec · the pendulum: sizes, motion, drawing",
+      "workstreams": [],
+      "artboard": "project/PendulumNumbers.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/PendulumNumbers.dc.html",
+      "pieces": [
+        "mp-s65c-pendulum-numbers.p1",
+        "mp-s65c-pendulum-numbers.p2"
+      ]
+    },
+    {
+      "id": "mp-s65c-pendulum-numbers.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s65c-pendulum-numbers.p1.png",
+      "sha256": "4fe9fcc2abd0cd971065c5cd228f8b79ee99c8f9d35d9135a38eafa97a7b29c0",
+      "bytes": 458745,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s65c-pendulum-numbers",
+      "top": 0
+    },
+    {
+      "id": "mp-s65c-pendulum-numbers.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s65c-pendulum-numbers.p2.png",
+      "sha256": "bfcdac85746a3209204396a84c02299a92e0e7e43f357c4a0d6d740ec4b1599e",
+      "bytes": 151259,
+      "width": 1440,
+      "height": 500,
+      "pieceOf": "mp-s65c-pendulum-numbers",
+      "top": 940
+    },
+    {
+      "id": "mp-s66-lease-hours",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s66-lease-hours.png",
+      "sha256": "a6ccb19c1be362e757821fe3173bbabfe6275dd844587641a301c260e862d1ba",
+      "bytes": 649254,
+      "width": 1440,
+      "height": 1360,
+      "screen": "S66",
+      "kind": "screen",
+      "title": "A lease, hour by hour",
+      "workstreams": [
+        "W05"
+      ],
+      "artboard": "project/LeaseHours.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/LeaseHours.dc.html",
+      "pieces": [
+        "mp-s66-lease-hours.p1",
+        "mp-s66-lease-hours.p2"
+      ]
+    },
+    {
+      "id": "mp-s66-lease-hours.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s66-lease-hours.p1.png",
+      "sha256": "59244fe9f8ff0c6a448c9ee3649b642596be5dc3b6e053351219886ec8cf394e",
+      "bytes": 462118,
+      "width": 1440,
+      "height": 899,
+      "pieceOf": "mp-s66-lease-hours",
+      "top": 0
+    },
+    {
+      "id": "mp-s66-lease-hours.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s66-lease-hours.p2.png",
+      "sha256": "b48b943e6210ddf09963dfec8b114ff53426ea70ffdf0eafe5b874d4e02f11a3",
+      "bytes": 187066,
+      "width": 1440,
+      "height": 461,
+      "pieceOf": "mp-s66-lease-hours",
+      "top": 899
+    },
+    {
+      "id": "mp-s67-phone-queue",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s67-phone-queue.png",
+      "sha256": "7c4b042fe5b82ae6782fff7799b865a43f31a0aaf27afd378f72d50e2c08fdef",
+      "bytes": 169087,
+      "width": 430,
+      "height": 884,
+      "screen": "S67",
+      "kind": "screen",
+      "title": "Phone: access and the queue",
+      "workstreams": [
+        "W15",
+        "W17"
+      ],
+      "artboard": "project/PhoneQueue.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/PhoneQueue.dc.html"
+    },
+    {
+      "id": "mp-s68-watch",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s68-watch.png",
+      "sha256": "93cbf80fe9f2788c4f2ad477417dc2f2c9f658eea5ba551c456792815b22c569",
+      "bytes": 74294,
+      "width": 1940,
+      "height": 460,
+      "screen": "S68",
+      "kind": "screen",
+      "title": "Watch: six states, one button",
+      "workstreams": [
+        "W15"
+      ],
+      "artboard": "project/Watch.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Watch.dc.html"
+    },
+    {
+      "id": "mp-s69-host-map",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s69-host-map.png",
+      "sha256": "fe6917a0bc8cbccc28fe44480f842951c86d62fd776725e361f387bbfa5a12dc",
+      "bytes": 675827,
+      "width": 1440,
+      "height": 1660,
+      "screen": "S69",
+      "kind": "screen",
+      "title": "Room 3: one host, its project cells",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/HostMap.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/HostMap.dc.html",
+      "pieces": [
+        "mp-s69-host-map.p1",
+        "mp-s69-host-map.p2"
+      ]
+    },
+    {
+      "id": "mp-s69-host-map.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s69-host-map.p1.png",
+      "sha256": "40f0f9ad767138a811fde983cd860179aba62968be18cf47100f5371a5695a31",
+      "bytes": 427882,
+      "width": 1440,
+      "height": 847,
+      "pieceOf": "mp-s69-host-map",
+      "top": 0
+    },
+    {
+      "id": "mp-s69-host-map.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s69-host-map.p2.png",
+      "sha256": "df483c2add7f6a3e95a678723bd0cbd338eb0fa7619eed28870134312bd0c51c",
+      "bytes": 249403,
+      "width": 1440,
+      "height": 813,
+      "pieceOf": "mp-s69-host-map",
+      "top": 847
+    },
+    {
+      "id": "mp-s70-cell",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s70-cell.png",
+      "sha256": "a0b161f7533ce681742c38e7861fa42e17279cb9f6d03a868ea464bcd63f2069",
+      "bytes": 816263,
+      "width": 1440,
+      "height": 1700,
+      "screen": "S70",
+      "kind": "screen",
+      "title": "Project cell: what it is made of",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/Cell.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Cell.dc.html",
+      "pieces": [
+        "mp-s70-cell.p1",
+        "mp-s70-cell.p2"
+      ]
+    },
+    {
+      "id": "mp-s70-cell.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s70-cell.p1.png",
+      "sha256": "07129105a8d26be569c27d72f88fa660557d59c2797fd24ec688ee220a7c9ebc",
+      "bytes": 581287,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s70-cell",
+      "top": 0
+    },
+    {
+      "id": "mp-s70-cell.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s70-cell.p2.png",
+      "sha256": "835559364a0399b8596b8fea669cc39c948807f4c293f3540c343a0fa11791df",
+      "bytes": 234527,
+      "width": 1440,
+      "height": 760,
+      "pieceOf": "mp-s70-cell",
+      "top": 940
+    },
+    {
+      "id": "mp-s70b-cell-prompts",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s70b-cell-prompts.png",
+      "sha256": "7e5054d750ae7a4a08b07d424a39cce77ba58df6f24c9167e862d06eb152a247",
+      "bytes": 633234,
+      "width": 1440,
+      "height": 1300,
+      "screen": "S70b",
+      "kind": "screen",
+      "title": "Project cell: its prompts",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/CellPrompts.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/CellPrompts.dc.html",
+      "pieces": [
+        "mp-s70b-cell-prompts.p1",
+        "mp-s70b-cell-prompts.p2"
+      ]
+    },
+    {
+      "id": "mp-s70b-cell-prompts.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s70b-cell-prompts.p1.png",
+      "sha256": "87c12602705717e09ef753b5692dc115e667e53172a0cd7ea83097e545ab4a01",
+      "bytes": 511645,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s70b-cell-prompts",
+      "top": 0
+    },
+    {
+      "id": "mp-s70b-cell-prompts.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s70b-cell-prompts.p2.png",
+      "sha256": "cccc681a165b7f19c4702c120295de5dff75e746e264bd7b630e2e558d1e0801",
+      "bytes": 121462,
+      "width": 1440,
+      "height": 360,
+      "pieceOf": "mp-s70b-cell-prompts",
+      "top": 940
+    },
+    {
+      "id": "mp-s71-cell-empty",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s71-cell-empty.png",
+      "sha256": "9bf120d35d80531f1d60559c3a927fd46267eaa50cea79eaacaa4b14101ae73e",
+      "bytes": 618064,
+      "width": 1440,
+      "height": 1420,
+      "screen": "S71",
+      "kind": "screen",
+      "title": "Smart Health: a cell before its first attempt",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/CellEmpty.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/CellEmpty.dc.html",
+      "pieces": [
+        "mp-s71-cell-empty.p1",
+        "mp-s71-cell-empty.p2"
+      ]
+    },
+    {
+      "id": "mp-s71-cell-empty.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s71-cell-empty.p1.png",
+      "sha256": "f3849e639eaab00f05ff7e0d2d1512191066b566bfb6d37ed90a8f583aeb8947",
+      "bytes": 457023,
+      "width": 1440,
+      "height": 854,
+      "pieceOf": "mp-s71-cell-empty",
+      "top": 0
+    },
+    {
+      "id": "mp-s71-cell-empty.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s71-cell-empty.p2.png",
+      "sha256": "72c26efb4c4db2f6d6e7e50afd1ff24fdab9b261314ed5015ade57a97531daa1",
+      "bytes": 160514,
+      "width": 1440,
+      "height": 566,
+      "pieceOf": "mp-s71-cell-empty",
+      "top": 854
+    },
+    {
+      "id": "mp-s72-team-beam",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s72-team-beam.png",
+      "sha256": "a19f70ef2bc86d7d8345e15d61b37ab59dc1cae25a8a0b057fe81ca18f3ca7cb",
+      "bytes": 609798,
+      "width": 1440,
+      "height": 1440,
+      "screen": "S72",
+      "kind": "screen",
+      "title": "Marimba and the team, on one beam",
+      "workstreams": [
+        "P4"
+      ],
+      "artboard": "project/TeamBeam.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/TeamBeam.dc.html",
+      "pieces": [
+        "mp-s72-team-beam.p1",
+        "mp-s72-team-beam.p2"
+      ]
+    },
+    {
+      "id": "mp-s72-team-beam.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s72-team-beam.p1.png",
+      "sha256": "dd3bf82f6017733d72c2306abc7a898746fa44dd2d891173b9aeee07b916f4a6",
+      "bytes": 305505,
+      "width": 1440,
+      "height": 528,
+      "pieceOf": "mp-s72-team-beam",
+      "top": 0
+    },
+    {
+      "id": "mp-s72-team-beam.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s72-team-beam.p2.png",
+      "sha256": "6bb5f51ccf9fbc653be04a19fce5f2c056df87ea890fa638d26c739b2783e087",
+      "bytes": 304329,
+      "width": 1440,
+      "height": 912,
+      "pieceOf": "mp-s72-team-beam",
+      "top": 528
+    },
+    {
+      "id": "mp-s73-where-things-stand",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s73-where-things-stand.png",
+      "sha256": "9c9dc253133105794eaf4ebb73f1adf6706e0613b21c58e04f3a9997cbfd489b",
+      "bytes": 686012,
+      "width": 1440,
+      "height": 1300,
+      "screen": "S73",
+      "kind": "screen",
+      "title": "Where things stand, across projects",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/Stand.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Stand.dc.html",
+      "pieces": [
+        "mp-s73-where-things-stand.p1",
+        "mp-s73-where-things-stand.p2"
+      ]
+    },
+    {
+      "id": "mp-s73-where-things-stand.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s73-where-things-stand.p1.png",
+      "sha256": "face0d50ec3cc9a69456de0d795f10929997dbdfb7b95af181f9be3fcb370cd4",
+      "bytes": 570147,
+      "width": 1440,
+      "height": 894,
+      "pieceOf": "mp-s73-where-things-stand",
+      "top": 0
+    },
+    {
+      "id": "mp-s73-where-things-stand.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s73-where-things-stand.p2.png",
+      "sha256": "56d848cb3b5c9bf38069165358de5ed27502ff2e98d857dcd58506532885164a",
+      "bytes": 116181,
+      "width": 1440,
+      "height": 406,
+      "pieceOf": "mp-s73-where-things-stand",
+      "top": 894
+    },
+    {
+      "id": "mp-s74-change-detail",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s74-change-detail.png",
+      "sha256": "956f5b0f1580e2396d54544a73c84b835605ddba916c4ce852536188b388895b",
+      "bytes": 774416,
+      "width": 1440,
+      "height": 1560,
+      "screen": "S74",
+      "kind": "screen",
+      "title": "Changelog: one change, its two approvals and its diff (TC5)",
+      "workstreams": [
+        "W16"
+      ],
+      "artboard": "project/ChangeDetail.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/ChangeDetail.dc.html",
+      "pieces": [
+        "mp-s74-change-detail.p1",
+        "mp-s74-change-detail.p2"
+      ]
+    },
+    {
+      "id": "mp-s74-change-detail.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s74-change-detail.p1.png",
+      "sha256": "4ad71fa7845276e553a8d0a442ccb8e922bf5958ec7323c5af33fd48dc26978c",
+      "bytes": 591498,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s74-change-detail",
+      "top": 0
+    },
+    {
+      "id": "mp-s74-change-detail.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s74-change-detail.p2.png",
+      "sha256": "9a48a05ddb37b8fdb7e05557470edab0fde4bbeecbe9531a3b1f8b93b63f8428",
+      "bytes": 182452,
+      "width": 1440,
+      "height": 620,
+      "pieceOf": "mp-s74-change-detail",
+      "top": 940
+    },
+    {
+      "id": "mp-s75-waiting-on-you",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s75-waiting-on-you.png",
+      "sha256": "8b8b7f5b44ee2b599180e2e75694cd1502dc5af29b27a242469e14024f708d72",
+      "bytes": 809325,
+      "width": 1440,
+      "height": 1700,
+      "screen": "S75",
+      "kind": "screen",
+      "title": "Waiting on you: one queue, a durable yes or no",
+      "workstreams": [
+        "W08",
+        "W17"
+      ],
+      "artboard": "project/PressQueue.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/PressQueue.dc.html",
+      "pieces": [
+        "mp-s75-waiting-on-you.p1",
+        "mp-s75-waiting-on-you.p2"
+      ]
+    },
+    {
+      "id": "mp-s75-waiting-on-you.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s75-waiting-on-you.p1.png",
+      "sha256": "0e9683818a00bf91b6875780dd7f3c661437dc1709f88bee7af4c5e03be10f2a",
+      "bytes": 407475,
+      "width": 1440,
+      "height": 733,
+      "pieceOf": "mp-s75-waiting-on-you",
+      "top": 0
+    },
+    {
+      "id": "mp-s75-waiting-on-you.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s75-waiting-on-you.p2.png",
+      "sha256": "6029d400e4fc8d6be6a94afdec87316b79b3ce46aa6626ac9b290931891dd639",
+      "bytes": 401756,
+      "width": 1440,
+      "height": 967,
+      "pieceOf": "mp-s75-waiting-on-you",
+      "top": 733
+    },
+    {
+      "id": "mp-s76-mission-note",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s76-mission-note.png",
+      "sha256": "c457fd480b98359aed3b7cf39358b59f88a63835d52003d1fa5fd19e45b42575",
+      "bytes": 764076,
+      "width": 1440,
+      "height": 1320,
+      "screen": "S76",
+      "kind": "screen",
+      "title": "Mission note: cases in, a diff out, your commit",
+      "workstreams": [
+        "W16"
+      ],
+      "artboard": "project/Mission.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Mission.dc.html",
+      "pieces": [
+        "mp-s76-mission-note.p1",
+        "mp-s76-mission-note.p2"
+      ]
+    },
+    {
+      "id": "mp-s76-mission-note.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s76-mission-note.p1.png",
+      "sha256": "d2d2b4b48114ebe073997e3562f70acda540a7a53bce290a1c53638cbda3a584",
+      "bytes": 550423,
+      "width": 1440,
+      "height": 772,
+      "pieceOf": "mp-s76-mission-note",
+      "top": 0
+    },
+    {
+      "id": "mp-s76-mission-note.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s76-mission-note.p2.png",
+      "sha256": "485bf59a30d5de67298f26493dc6ecffeb885afdd1564d2d6cb86e1fb14d9398",
+      "bytes": 213178,
+      "width": 1440,
+      "height": 548,
+      "pieceOf": "mp-s76-mission-note",
+      "top": 772
+    },
+    {
+      "id": "mp-s77-puente",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s77-puente.png",
+      "sha256": "1f091272a4f6a5110493dbde9be109a671b9f43725032d99bef3ffe2fa11058c",
+      "bytes": 561265,
+      "width": 1440,
+      "height": 1000,
+      "screen": "S77",
+      "kind": "screen",
+      "title": "Puente: handoffs, taken in as data",
+      "workstreams": [
+        "W14"
+      ],
+      "artboard": "project/Puente.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Puente.dc.html"
+    },
+    {
+      "id": "mp-s78-settings-jobs",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s78-settings-jobs.png",
+      "sha256": "5c7a394ebe3adb7b1ae147d09e492bb2fea9a42308c62219ea97749075c0dc38",
+      "bytes": 855445,
+      "width": 1440,
+      "height": 1760,
+      "screen": "S78",
+      "kind": "screen",
+      "title": "Settings: jobs, and which ones need a lease",
+      "workstreams": [
+        "W14"
+      ],
+      "artboard": "project/SettingsJobs.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/SettingsJobs.dc.html",
+      "pieces": [
+        "mp-s78-settings-jobs.p1",
+        "mp-s78-settings-jobs.p2"
+      ]
+    },
+    {
+      "id": "mp-s78-settings-jobs.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s78-settings-jobs.p1.png",
+      "sha256": "65e1b8b89f51f38aaca999c039a2eea07f8a835ba0d44a4127aebe258ba2cd20",
+      "bytes": 557624,
+      "width": 1440,
+      "height": 927,
+      "pieceOf": "mp-s78-settings-jobs",
+      "top": 0
+    },
+    {
+      "id": "mp-s78-settings-jobs.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s78-settings-jobs.p2.png",
+      "sha256": "b9cc9b9bbedd113f8c47ca6cafd82202b790049059bcc25d2e9f62cb4ddbf5df",
+      "bytes": 297760,
+      "width": 1440,
+      "height": 833,
+      "pieceOf": "mp-s78-settings-jobs",
+      "top": 927
+    },
+    {
+      "id": "mp-s79-pendulum-homes",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s79-pendulum-homes.png",
+      "sha256": "122727c094315cc0491206b1787abada687946d93cf3d3fff5378fcab2c7ac78",
+      "bytes": 574407,
+      "width": 1440,
+      "height": 1320,
+      "screen": "S79",
+      "kind": "spec",
+      "title": "The pendulum: where it hangs",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/PendulumHomes.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/PendulumHomes.dc.html",
+      "pieces": [
+        "mp-s79-pendulum-homes.p1",
+        "mp-s79-pendulum-homes.p2"
+      ]
+    },
+    {
+      "id": "mp-s79-pendulum-homes.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s79-pendulum-homes.p1.png",
+      "sha256": "0577db65dd287eaee305e4a87d706803cee79a0497437ce20ba03c9e65483459",
+      "bytes": 401322,
+      "width": 1440,
+      "height": 903,
+      "pieceOf": "mp-s79-pendulum-homes",
+      "top": 0
+    },
+    {
+      "id": "mp-s79-pendulum-homes.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s79-pendulum-homes.p2.png",
+      "sha256": "3e47b23f3c1a59a97e6d15893a1d4672b147cbfc0cfcb39cbb3677ac23ae4461",
+      "bytes": 172862,
+      "width": 1440,
+      "height": 417,
+      "pieceOf": "mp-s79-pendulum-homes",
+      "top": 903
+    },
+    {
+      "id": "mp-s80-strip-component",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s80-strip-component.png",
+      "sha256": "ea715736f16de89f440c0da0db5abe8aede6ecfcaac7327254f7df906ff1d75a",
+      "bytes": 18262,
+      "width": 1440,
+      "height": 180,
+      "screen": "S80",
+      "kind": "component",
+      "title": "The strip: one component, every tab",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/Bar.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Bar.dc.html"
+    },
+    {
+      "id": "mp-s81-pendulum-palettes",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s81-pendulum-palettes.png",
+      "sha256": "f5686c5f19d8de906e79908066475832655fd33e7a72d521e421d11b2f9d9c2b",
+      "bytes": 614292,
+      "width": 1440,
+      "height": 1740,
+      "screen": "S81",
+      "kind": "spec",
+      "title": "Spec · the pendulum in every palette",
+      "workstreams": [
+        "W08"
+      ],
+      "artboard": "project/PendulumPalettes.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/PendulumPalettes.dc.html",
+      "pieces": [
+        "mp-s81-pendulum-palettes.p1",
+        "mp-s81-pendulum-palettes.p2"
+      ]
+    },
+    {
+      "id": "mp-s81-pendulum-palettes.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s81-pendulum-palettes.p1.png",
+      "sha256": "9124e098e311c3a74610a8bc6484977cb6b7f303736e91f70ab4c9baa2a1b234",
+      "bytes": 389995,
+      "width": 1440,
+      "height": 1000,
+      "pieceOf": "mp-s81-pendulum-palettes",
+      "top": 0
+    },
+    {
+      "id": "mp-s81-pendulum-palettes.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s81-pendulum-palettes.p2.png",
+      "sha256": "50c03a68d35622803fc3d2cef45f8a83bcf74364a609700a4541b441578c3fce",
+      "bytes": 224351,
+      "width": 1440,
+      "height": 740,
+      "pieceOf": "mp-s81-pendulum-palettes",
+      "top": 1000
+    },
+    {
+      "id": "mp-s82-six-states",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s82-six-states.png",
+      "sha256": "46c7b4698871202802779b7707adc8a2cc48546df285d09c5ea0f7c351596629",
+      "bytes": 611206,
+      "width": 1440,
+      "height": 1140,
+      "screen": "S82",
+      "kind": "spec",
+      "title": "Spec · why six states",
+      "workstreams": [],
+      "artboard": "project/PendulumMore.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/PendulumMore.dc.html",
+      "pieces": [
+        "mp-s82-six-states.p1",
+        "mp-s82-six-states.p2"
+      ]
+    },
+    {
+      "id": "mp-s82-six-states.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s82-six-states.p1.png",
+      "sha256": "6d9bb48cef9acd1bd88e5c884197fe49cf902eeba18149f4b74e56d6f8343060",
+      "bytes": 484180,
+      "width": 1440,
+      "height": 755,
+      "pieceOf": "mp-s82-six-states",
+      "top": 0
+    },
+    {
+      "id": "mp-s82-six-states.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s82-six-states.p2.png",
+      "sha256": "9e9edccfdf39d45e8d2d166f508bcd5d2446e4072590cbbd68c79d15c5ab55a8",
+      "bytes": 127553,
+      "width": 1440,
+      "height": 385,
+      "pieceOf": "mp-s82-six-states",
+      "top": 755
+    },
+    {
+      "id": "mp-s83-intake",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s83-intake.png",
+      "sha256": "a9c89fd7336e7498b71f95724d6f71425dd94477c8c41b8d3edbac7c74d07851",
+      "bytes": 641437,
+      "width": 1440,
+      "height": 1260,
+      "screen": "S83",
+      "kind": "screen",
+      "title": "Intake: an idea, from the first note to the plan",
+      "workstreams": [
+        "W16"
+      ],
+      "artboard": "project/Intake.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Intake.dc.html",
+      "pieces": [
+        "mp-s83-intake.p1",
+        "mp-s83-intake.p2"
+      ]
+    },
+    {
+      "id": "mp-s83-intake.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s83-intake.p1.png",
+      "sha256": "9a2a828ba11f6c911bb760d48ac199602250da2f65052e96c35c874de132005a",
+      "bytes": 473853,
+      "width": 1440,
+      "height": 799,
+      "pieceOf": "mp-s83-intake",
+      "top": 0
+    },
+    {
+      "id": "mp-s83-intake.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s83-intake.p2.png",
+      "sha256": "63daf44de1a78e920bb5d4767e0694c21de715de6f7d1fb367ca66c235113dba",
+      "bytes": 167814,
+      "width": 1440,
+      "height": 461,
+      "pieceOf": "mp-s83-intake",
+      "top": 799
+    },
+    {
+      "id": "mp-s84-phone-intake",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s84-phone-intake.png",
+      "sha256": "7a9543a1106728d17c3d76c4fb1d1d960c4223b4872566aeb590483ef6e9a45e",
+      "bytes": 166321,
+      "width": 430,
+      "height": 884,
+      "screen": "S84",
+      "kind": "screen",
+      "title": "Phone: an idea, spoken",
+      "workstreams": [
+        "W15"
+      ],
+      "artboard": "project/PhoneIntake.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/PhoneIntake.dc.html"
+    },
+    {
+      "id": "mp-s85-rulings",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s85-rulings.png",
+      "sha256": "38b6bb9e67b8f12e63f58a6d07f1262d56c30280725f168aa1edaf6f04f85516",
+      "bytes": 768866,
+      "width": 1440,
+      "height": 1660,
+      "screen": "S85",
+      "kind": "screen",
+      "title": "Rulings: a round of decisions, answered in place",
+      "workstreams": [
+        "W16"
+      ],
+      "artboard": "project/Rulings.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Rulings.dc.html",
+      "pieces": [
+        "mp-s85-rulings.p1",
+        "mp-s85-rulings.p2"
+      ]
+    },
+    {
+      "id": "mp-s85-rulings.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s85-rulings.p1.png",
+      "sha256": "fc25273c59f36419f4d918e4ad98a81b45ca391a5046b0f832c36c630d8f6342",
+      "bytes": 505744,
+      "width": 1440,
+      "height": 872,
+      "pieceOf": "mp-s85-rulings",
+      "top": 0
+    },
+    {
+      "id": "mp-s85-rulings.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s85-rulings.p2.png",
+      "sha256": "2b8261c1855ff8f8001df31de0ba34da2982e9fde8f4a74e0f49af64af566d65",
+      "bytes": 263114,
+      "width": 1440,
+      "height": 788,
+      "pieceOf": "mp-s85-rulings",
+      "top": 872
+    },
+    {
+      "id": "mp-s86-bridges",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s86-bridges.png",
+      "sha256": "e72e1fc5fe2a46b79a53a93792ad042f9f493376b66c91dacf28b186f48b64fd",
+      "bytes": 733966,
+      "width": 1440,
+      "height": 1700,
+      "screen": "S86",
+      "kind": "screen",
+      "title": "Bridges: agents that may send you ideas",
+      "workstreams": [
+        "W14"
+      ],
+      "artboard": "project/Bridges.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Bridges.dc.html",
+      "pieces": [
+        "mp-s86-bridges.p1",
+        "mp-s86-bridges.p2"
+      ]
+    },
+    {
+      "id": "mp-s86-bridges.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s86-bridges.p1.png",
+      "sha256": "0d66eac5710c9f15c1dd87645557390b71d4164f752108e370d483e73f90a011",
+      "bytes": 463834,
+      "width": 1440,
+      "height": 891,
+      "pieceOf": "mp-s86-bridges",
+      "top": 0
+    },
+    {
+      "id": "mp-s86-bridges.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s86-bridges.p2.png",
+      "sha256": "842683070263477dcc8953f52f76b6fe4181715fafa7ab152772fefbb4028e98",
+      "bytes": 269777,
+      "width": 1440,
+      "height": 809,
+      "pieceOf": "mp-s86-bridges",
+      "top": 891
+    },
+    {
+      "id": "mp-s88-workstreams",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s88-workstreams.png",
+      "sha256": "efcd645d4a6780f38e43d0d14b6bbbca4496484a02f43fa90cef150f3c5ea72e",
+      "bytes": 577467,
+      "width": 1440,
+      "height": 1480,
+      "screen": "S88",
+      "kind": "spec",
+      "title": "Spec · which workstream builds each frame",
+      "workstreams": [],
+      "artboard": "project/Workstreams.dc.html",
+      "source": "specs/design/awsf-v3-plan/source/Workstreams.dc.html",
+      "pieces": [
+        "mp-s88-workstreams.p1",
+        "mp-s88-workstreams.p2"
+      ]
+    },
+    {
+      "id": "mp-s88-workstreams.p1",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s88-workstreams.p1.png",
+      "sha256": "43e5324c261e3b9a9407f21618002472c435c78176b1a2bbcf02b1ee95e937fe",
+      "bytes": 403980,
+      "width": 1440,
+      "height": 940,
+      "pieceOf": "mp-s88-workstreams",
+      "top": 0
+    },
+    {
+      "id": "mp-s88-workstreams.p2",
+      "image": "docs/design/marimba-panel/2026-11-24/frames/mp-s88-workstreams.p2.png",
+      "sha256": "d317e84339591128133bb185f88fea992a1940f69b8bff92b61ecf3787eb36ed",
+      "bytes": 174097,
+      "width": 1440,
+      "height": 540,
+      "pieceOf": "mp-s88-workstreams",
+      "top": 940
     }
   ]
 }

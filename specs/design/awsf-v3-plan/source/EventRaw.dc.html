@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent phase: raw journal</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1440px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="ShiftView.dc.html">f59bab60</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#phase" aria-current="page">t11-build</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="Events.dc.html" aria-label="Back to events" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">t11-build</span>
+      <span class="lblf">✓ succeeded</span>
+      <span class="meta">raw journal · every record, in source order · canonical timestamps</span>
+    </header>
+
+    <section class="sec" aria-label="Selected phase evidence">
+      <nav class="ptabs" aria-label="Evidence tabs">
+        <a href="RunEvidence.dc.html">Overview</a>
+        <a href="Events.dc.html">Events<span class="n">3,684 records</span></a>
+        <a href="#prompt">Prompt<span class="n">2</span></a>
+        <a href="#output">Output<span class="n">2</span></a>
+        <a href="#gates">Gates<span class="n">9</span></a>
+        <a class="on" href="#raw" aria-current="page">Raw journal</a>
+      </nav>
+      <div class="secb" style="display:flex;flex-direction:column;gap:12px;padding-top:14px">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <button class="segon" type="button" aria-pressed="true">tool_call 148</button>
+          <button class="segon" type="button" aria-pressed="true">route_resolution 2</button>
+          <button class="segon" type="button" aria-pressed="true">model.resolved 2</button>
+          <button class="segon" type="button" aria-pressed="true">run.started 2</button>
+          <button class="segon" type="button" aria-pressed="true">run.completed 2</button>
+          <button class="segon" type="button" aria-pressed="true">compiled_prompt 2</button>
+          <button class="segon" type="button" aria-pressed="true">notice 2</button>
+          <button class="segb" type="button" aria-pressed="false">usage 97 · in the context line</button>
+          <button class="segb" type="button" aria-pressed="false">text 3,427 chunks · folded</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+          <label class="meta" for="raw-search">Search</label>
+          <input class="field" id="raw-search" type="search" placeholder="a path, a command, or text in a result" style="flex:1 1 320px">
+          <div class="seg" role="group" aria-label="Run"><button class="segon" type="button" aria-pressed="true">round 0 run</button><button class="segb" type="button" aria-pressed="false">c1 correction</button></div>
+          <div class="seg" role="group" aria-label="Only"><button class="segb" type="button" aria-pressed="false">failed only</button><button class="segb" type="button" aria-pressed="false">1 min or longer</button></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="side">
+      <div class="main">
+        <section class="sec tbox" aria-label="Records">
+          <table class="pt" style="min-width:820px">
+            <thead><tr><th scope="col">Time</th><th scope="col">Kind</th><th scope="col">What was asked or recorded</th><th scope="col">Outcome</th><th scope="col">Took</th></tr></thead>
+            <tbody>
+              <tr><td class="s">15:03:22</td><td><span class="dmd"></span> compiled_prompt</td><td>system · 9 lines · 317 characters</td><td class="s">recorded</td><td class="n s">point</td></tr>
+              <tr><td class="s">15:03:22</td><td><span class="dmd"></span> compiled_prompt</td><td>user · 191 lines · 12,119 characters</td><td class="s">recorded</td><td class="n s">point</td></tr>
+              <tr><td class="s">15:03:22</td><td><span class="dmd"></span> notice</td><td>turn persistence · ephemeral · continuity not enabled</td><td class="s">recorded</td><td class="n s">point</td></tr>
+              <tr><td class="s">15:03:22</td><td>route_resolution</td><td>codex / openai-codex / gpt-6.1-sol @ high · 4 of 4 fields from the attempt override · observed gpt-6.1-sol</td><td class="s">held</td><td class="n">1h 08m</td></tr>
+              <tr><td class="s">15:03:24</td><td><span class="dmd"></span> run.started</td><td>pi-codex → gpt-6.1-sol</td><td class="s">recorded</td><td class="n s">point</td></tr>
+              <tr><td class="s">15:03:25</td><td><span class="dmd"></span> model.resolved</td><td>gpt-6.1-sol · route-attributed</td><td class="s">recorded</td><td class="n s">point</td></tr>
+              <tr><td class="s">15:03:27</td><td>tool_call · bash</td><td>pwd; git status --short; git log -3 --oneline; printenv | grep '^PI_'</td><td><span class="ok">✓</span></td><td class="n">160ms</td></tr>
+              <tr><td class="s">15:03:27</td><td class="s">text</td><td class="s">streamed response · folded · open to read it whole</td><td class="s">—</td><td class="n s">[N]s</td></tr>
+              <tr><td class="s">15:03:32</td><td>tool_call · read</td><td>AGENTS.md</td><td><span class="ok">✓</span></td><td class="n">452ms</td></tr>
+              <tr><td class="s">15:03:32</td><td>tool_call · read</td><td>specs/awsf-v3-w03-ticket-closure-build-prompts.md</td><td><span class="ok">✓</span></td><td class="n">462ms</td></tr>
+              <tr><td class="s">15:03:32</td><td>tool_call · grep</td><td>Amendment|Handoff|task-11|T11 · in specs/awsf-v3-w03-ticket-closure.html</td><td><span class="ok">✓</span></td><td class="n">[N]ms</td></tr>
+              <tr><td class="s">15:03:32</td><td>tool_call · read</td><td>package.json</td><td><span class="ok">✓</span></td><td class="n">[N]ms</td></tr>
+              <tr><td class="s">15:03:35</td><td>tool_call · bash</td><td>npm run test:unit &gt; /tmp/awsf-t11-baseline.log 2&gt;&amp;1 …<div class="meta">/bin/bash: line 1: /tmp/awsf-t11-baseline.log: Read-only file system</div></td><td><span class="x">×</span></td><td class="n">182ms</td></tr>
+              <tr class="sel"><td class="s">15:03:37</td><td>tool_call · bash</td><td>npm run test:unit</td><td><span class="ok">✓</span></td><td class="n"><span class="tchip long">6m 43s</span></td></tr>
+              <tr><td class="s">15:10:28</td><td>tool_call · read</td><td>specs/awsf-v3-w03-ticket-closure.html · lines [N]–[N]</td><td><span class="ok">✓</span></td><td class="n">[N]ms</td></tr>
+              <tr><td class="s">15:10:28</td><td>tool_call · read</td><td>specs/tickets/awsf-v3-w03-ticket-closure/T11.md</td><td><span class="ok">✓</span></td><td class="n">[N]ms</td></tr>
+            </tbody>
+          </table>
+          <div class="r" style="padding:12px 16px"><span class="meta">16 of 3,684 records · usage and text chunks are folded</span><a class="btn rv" href="#more" style="margin-left:auto">Load the next 200</a></div>
+        </section>
+
+        
+      </div>
+
+      <aside class="aside" aria-label="Opened record">
+        <section class="sec">
+          <div class="sech"><span class="eyebrow">Opened record</span><span class="grow"></span><div class="seg" role="group" aria-label="View"><button class="segon" type="button" aria-pressed="true">Readable</button><button class="segb" type="button" aria-pressed="false">Raw</button></div></div>
+          <div class="secb">
+            <div class="r"><span>Kind</span><span class="rv">tool_call · bash</span></div>
+            <div class="r"><span>Run</span><span class="rv">…:t11-build:run · round 0</span></div>
+            <div class="r"><span>Started</span><span class="rv">15:03:37</span></div>
+            <div class="r"><span>Ended</span><span class="rv">15:10:20</span></div>
+            <div class="r"><span>Took</span><span class="rv">402,866 ms</span></div>
+            <div class="r"><span>Outcome</span><span class="rv">ok</span></div>
+            <div class="eyebrow" style="margin:12px 0 8px">Input</div>
+            <div class="code">{ "command": "npm run test:unit", "timeout": null }</div>
+            <div class="eyebrow" style="margin:12px 0 8px">Result snippet</div>
+            <div class="code">… # Subtest: the preview line reads what the pre…</div>
+            <div class="meta" style="margin-top:8px">The snippet is a bounded head, not the full output. The full output stays in the phase's raw files.</div>
+            <div class="btnrow" style="margin-top:12px"><button class="btn" type="button">Copy the record id</button><a class="btn" href="Events.dc.html">Show its turn</a></div>
+          </div>
+        </section>
+        
+      </aside>
+    </div>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="f59bab60 landed and you have seen it" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1440}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

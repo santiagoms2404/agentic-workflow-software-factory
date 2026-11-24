@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec: builder notes</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+.steps{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.step{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:12px;border:1px solid rgba(218,241,222,.1);color:#DAF1DE;font:600 12.5px/1 "JetBrains Mono",monospace;text-decoration:none;white-space:nowrap}
+.step.on{border-color:#DAF1DE;background:rgba(218,241,222,.1)}
+.arrow{color:#8EB69B;font:400 12px/1 "JetBrains Mono",monospace}
+.sq{display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(218,241,222,.45)}
+.sqo{display:inline-block;width:10px;height:10px;border-radius:3px;border:1.5px solid #DAF1DE;box-sizing:border-box}
+.doc{display:flex;flex-direction:column;gap:8px;padding:14px 16px;border-radius:14px;border:1px solid rgba(218,241,222,.14);background:rgba(20,20,15,.3)}
+.outline{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;background:rgba(218,241,222,.04);font:400 13px/1.7 Archivo;color:rgba(218,241,222,.86)}
+.outline .lvl2{padding-left:16px;color:#8EB69B}
+.seq{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font:500 12px/1.4 "JetBrains Mono",monospace;color:#DAF1DE}
+.seq .a{color:#8EB69B}
+.sq{display:inline-block;width:9px;height:9px;border-radius:2px;background:rgba(218,241,222,.5);margin-right:4px}
+.sqo{display:inline-block;width:9px;height:9px;border-radius:2px;border:1.5px solid #DAF1DE;box-sizing:border-box;margin-right:4px}
+.dm{display:inline-block;width:8px;height:8px;transform:rotate(45deg);border:1.5px solid #DAF1DE;margin-right:5px}
+.dmf{display:inline-block;width:8px;height:8px;transform:rotate(45deg);background:#DAF1DE;margin-right:5px}
+</style>
+</helmet>
+<div class="app" style="min-height:1840px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#spec" aria-current="page">spec · builder notes</a>
+    <span class="grow"></span>
+    <span class="right">for builders · not a screen</span>
+  </nav>
+
+  <div class="layer" style="padding-top:24px">
+    <div><div class="h1" style="font-size:30px">Builder notes</div><div class="sub" style="margin-top:6px">Why these frames look as they do, and what they change from today. These notes were on the screens themselves. Nothing here is drawn in the product.</div></div>
+    <div style="columns:2 480px;column-gap:20px">
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="R1 · the run screen"><div class="eyebrow">R1 · the run screen</div><div class="rc">
+      <span class="eyebrow">What changes from today's run screen</span>
+      <div class="sub" style="margin-top:8px">Phases are drawn to scale by kind: a filled bar spends calls, an outlined bar is the host, a diamond is a point. The panel opens on an Overview with the four things that decide an agent's output, its own account of the work, and the gates that checked it. Route provenance shows a source for every field. Today that event renders as a dash. Events, Prompt, Output, Gates and the raw journal each have a tab of their own.</div>
+    </div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="R3 · point or span"><div class="eyebrow">R3 · point or span</div><div class="rc">
+          <span class="eyebrow">Point or span</span>
+          <div class="sub" style="margin-top:8px">A record with no end is a point and gets a diamond. A record with an end is a span and gets its duration. The words "recorded point event" no longer repeat on every row.</div>
+        </div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="R4 · code phase"><div class="eyebrow">R4 · code phase</div><div class="rc">
+        <span class="eyebrow">One template for every host phase</span>
+        <div class="sub" style="margin-top:8px">Commands, then checks, then output. The same panel serves tests in build and build-review, final-tests in simple-sdlc, every tNN-tests in a shift, plan-admit in plan-author, seed in prove, and the context and render phases of design-to-plan. A host phase records commands, not tool calls, so it has no Events tab.</div>
+      </div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="R5 · a review that fails"><div class="eyebrow">R5 · a review that fails</div><div class="rc">
+              <span class="eyebrow">What the panel adds</span>
+              <div class="sub" style="margin-top:8px">The failed check, the path that tripped it, and why no correction ran, in one place. Today these sit in a phase error string.</div>
+            </div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="R6 · engineer and owner"><div class="eyebrow">R6 · engineer and owner</div><div class="rc">
+      <span class="eyebrow">Why these two panels look different</span>
+      <div class="sub" style="margin-top:8px">An engineer phase holds what came in: the words, the sealed selection, and your acts before the first call, each with the reason you gave. An owner phase holds what goes out: the journey's checks, the closure record, and the next act, which waits on you and so carries the orange line and the key.</div>
+    </div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="W1 · shift"><div class="eyebrow">W1 · shift</div><section class="sec" aria-label="What changed">
+        <div class="sech"><span class="eyebrow">Same run, today and here</span></div>
+        <div class="secb">
+          <div class="r"><span>Track width today</span><span class="rv">3,978 px · 20 phases × 190 px + 178</span></div>
+          <div class="r"><span>Track width here</span><span class="rv">1,058 px · fits the window</span></div>
+          <div class="r"><span>Lane height today</span><span class="rv">792 px · 132, 178, 220, 220 + axis</span></div>
+          <div class="r"><span>Lane height here</span><span class="rv">318 px · 56, 66, 82, 66 + axis</span></div>
+          <div class="r"><span>Request zone today</span><span class="rv">holds t09-brief · this shift has no request phase</span></div>
+          <div class="meta" style="margin-top:8px">Today's widths come from SwimlaneChart.vue: PHASE_PX 190, REQUEST_PX 170, lanes 132 px, agent lanes 220 px.</div>
+        </div>
+      </section></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="W2 · prove, today"><div class="eyebrow">W2 · prove, today</div><div class="rc" style="display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center">
+      <span class="lblf">today</span>
+      <span class="sub" style="flex:1 1 520px">The sessions list shows 57 of these runs as CANCELLED. Each one finished its review and recorded a verdict before the attempt was closed. Here a run is shown by its verdict, and the lifecycle state moves to the detail.</span>
+    </div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="W2 · prove, what it adds"><div class="eyebrow">W2 · prove, what it adds</div><div class="rc">
+      <span class="eyebrow">What the prove view adds to the shell</span>
+      <div class="sub" style="margin-top:8px">Runs of one replay set sit in one grid: items down, route arms across, repetitions side by side. The grid answers the question prove exists for, which arm to trust for which work. Its medians feed the tier list's ranking, measured rather than guessed.</div>
+    </div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="W3 · plan-author"><div class="eyebrow">W3 · plan-author</div><div class="rc">
+      <span class="eyebrow">Where Orquesta fits</span>
+      <div class="sub" style="margin-top:8px">Orquesta v0 runs beside this workflow. The single author becomes a team, an author with a grounding and a readiness reviewer, and the room's cards replace the open-items list. Its acceptance is a real deep plan, compared with this one.</div>
+      <a class="btn" href="TeamRoom.dc.html" style="margin-top:10px">Open the team room</a>
+    </div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="W3 · the same tab elsewhere"><div class="eyebrow">W3 · the same tab elsewhere</div><section class="sec" aria-label="Other document workflows">
+        <div class="sech"><span class="eyebrow">The same Documents tab in design-to-plan</span></div>
+        <div class="secb" style="display:flex;flex-direction:column;gap:10px">
+          <nav class="steps" aria-label="Phases of design-to-plan">
+            <span class="step"><span class="dmd"></span>request</span><span class="arrow">›</span>
+            <span class="step"><span class="sqo"></span>design-context</span><span class="arrow">›</span>
+            <span class="step"><span class="sq"></span>design</span><span class="arrow">›</span>
+            <span class="step"><span class="sq"></span>architecture-review</span><span class="arrow">›</span>
+            <span class="step"><span class="sqo"></span>plan-context</span><span class="arrow">›</span>
+            <span class="step"><span class="sq"></span>plan</span><span class="arrow">›</span>
+            <span class="step"><span class="sqo"></span>plan-render</span>
+          </nav>
+          <div class="sub">design, plan and plan-render each produce a document, so each opens on Documents. architecture-review opens on Verdict, like a reviewer.</div>
+        </div>
+      </section></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="W4 · the team room"><div class="eyebrow">W4 · the team room</div><div class="rc">
+        <span class="eyebrow">What this frame adds</span>
+        <div class="sub" style="margin-top:6px">Lanes are told apart by name, list label and shape. No member gets an accent colour of its own, and orange stays for what waits on you. That is the proposal for C16, for you to decide on this frame. The team, its brief, the cards and the room itself are the shapes the video showed, redrawn in the factory's own language.</div>
+      </div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="Room 1"><div class="eyebrow">Room 1</div><div class="rc"><span class="eyebrow">What changes in this room</span><div class="sub" style="margin-top:6px">Two things. It gains a way out, to the rooms. A plan node gains “Open the plan”, which opens the vault. The layout, the colours and the switches stay as they are.</div></div></section>
+      <section style="display:flex;flex-direction:column;gap:8px;min-width:0;break-inside:avoid;margin-bottom:20px" aria-label="Vault"><div class="eyebrow">Vault</div><div class="rc"><span class="eyebrow">How it differs from the spine board</span><div class="sub" style="margin-top:6px">The spine board says where each workstream stands. The vault opens the document itself, in full, inside the dashboard.</div></div></section>
+    </div>
+    <section style="display:flex;flex-direction:column;gap:8px" aria-label="R3 · raw journal"><div class="eyebrow">R3 · raw journal</div><section class="sec tbox" aria-label="What changes per column">
+          <table class="pt" style="min-width:720px">
+            <caption class="eyebrow" style="text-align:left;padding:14px 14px 4px">What each column shows today, and here</caption>
+            <thead><tr><th scope="col">Column</th><th scope="col">Today</th><th scope="col">Here</th></tr></thead>
+            <tbody>
+              <tr><td class="f">What</td><td class="s">the result snippet, so a command shows its output path</td><td>the input first: the command, the path, the pattern · the result opens below</td></tr>
+              <tr><td class="f">route_resolution, notice</td><td class="s">a dash</td><td>the route with its source per field · the notice's mode</td></tr>
+              <tr><td class="f">Took</td><td class="s">"0s" for anything under a second</td><td>milliseconds under a second · a long call carries a chip</td></tr>
+              <tr><td class="f">Kind</td><td class="s">the type name, which overlaps the text</td><td>a fixed column · a diamond marks a point record</td></tr>
+              <tr><td class="f">usage</td><td class="s">97 rows mixed into the list</td><td>folded into the context line on the Events tab</td></tr>
+            </tbody>
+          </table>
+        </section></section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1840}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent phase: events</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1540px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="ShiftView.dc.html">f59bab60</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#phase" aria-current="page">t11-build</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="ShiftView.dc.html" aria-label="Back to the shift" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">t11-build</span>
+      <span class="lblf">✓ succeeded</span>
+      <span class="meta">agent · builder · T11 of the M4–M6 shift · 15:03:22 → 16:12:53 · corrections 1 of 1</span>
+    </header>
+
+    <section class="sec" aria-label="Selected phase evidence">
+      <nav class="ptabs" aria-label="Evidence tabs">
+        <a href="RunEvidence.dc.html">Overview</a>
+        <a class="on" href="#events" aria-current="page">Events<span class="n">3,684 records</span></a>
+        <a href="#prompt">Prompt<span class="n">2</span></a>
+        <a href="#output">Output<span class="n">2</span></a>
+        <a href="#gates">Gates<span class="n">9</span></a>
+        <a href="EventRaw.dc.html">Raw journal</a>
+      </nav>
+      <div class="secb" style="padding-top:16px">
+        <div class="strip">
+          <div class="cell"><div class="cellv">69m 31s</div><div class="celll">phase</div></div>
+          <div class="cell"><div class="cellv">97</div><div class="celll">model turns · 96 + 1 correction</div></div>
+          <div class="cell"><div class="cellv">148</div><div class="celll">tool calls · 8 failed</div></div>
+          <div class="cell"><div class="cellv">220k</div><div class="celll">peak context of 500k</div></div>
+          <div class="cell"><div class="cellv">245k / 33k</div><div class="celll">tokens in / out · 13.9M cached</div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="side">
+      <div class="main">
+        <section class="sec" aria-label="Where the time went">
+          <div class="sech"><span class="eyebrow">Where the time went</span><span class="grow"></span><span class="meta">from call durations in the journal</span></div>
+          <div class="secb" style="display:flex;flex-direction:column;gap:12px">
+            <div class="rib" role="img" aria-label="Commands 77 percent, everything else 23 percent"><span class="iV" style="width:77.2%"></span><span class="iM" style="width:22.8%"></span></div>
+            <div class="keyrow"><span class="key"><i class="iV"></i>commands · 53m 42s · 77%</span><span class="key"><i class="iM"></i>everything else · 15m 49s · model turns and 122 short calls</span></div>
+            <div class="rib" role="img" aria-label="Calls by intent: explore 86, change 36, commands 26" style="height:10px;margin-top:6px"><span class="iE" style="width:58.1%;height:10px"></span><span class="iC" style="width:24.3%;height:10px"></span><span class="iV" style="width:17.6%;height:10px"></span></div>
+            <div class="keyrow"><span class="key"><i class="iE"></i>explore · 86 calls · read, grep, find</span><span class="key"><i class="iC"></i>change · 36 calls · edit, write</span><span class="key"><i class="iV"></i>commands · 26 calls · bash</span></div>
+            <div class="rc" style="display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center">
+              <span class="lblf">repeated</span>
+              <span style="flex:1 1 420px" class="sub">test:unit ran 3 times (6m 43s, 6m 24s, 6m 56s) and test:journeys twice (13m 01s, 12m 50s), 45m 54s in all. The host's t11-tests then ran the full set again, in 25m 27s.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="sec" aria-label="Timeline">
+          <div class="sech"><span class="eyebrow">Timeline · recorded points and long calls</span><span class="grow"></span><span class="meta">15:03 → 16:13</span></div>
+          <div class="secb" style="display:flex;flex-direction:column;gap:14px">
+            <div class="rail" aria-label="Timeline of commands and point events">
+              <div class="mk" style="left:2%"><span class="dmd"></span><span>15:03 prompts · route · model</span></div>
+              <div class="mk" style="left:52%"><span class="dmd"></span><span>no compaction</span></div>
+              <div class="mk" style="left:94%"><span class="dmdf"></span><span>16:12 done · envelope ✕ · c1 · gates ✓</span></div>
+              <span class="seg-v" style="left:0.4%;width:9.7%"></span>
+              <span class="seg-v" style="left:15.2%;width:0.9%"></span>
+              <span class="seg-v" style="left:16.2%;width:0.6%"></span>
+              <span class="seg-v" style="left:24.3%;width:0.8%"></span>
+              <span class="seg-v" style="left:26.3%;width:0.8%"></span>
+              <span class="seg-v" style="left:28.7%;width:1.6%"></span>
+              <span class="seg-v" style="left:30.5%;width:9.2%"></span>
+              <span class="seg-v" style="left:39.8%;width:18.7%"></span>
+              <span class="seg-v" style="left:58.7%;width:2%"></span>
+              <span class="seg-v" style="left:60.7%;width:1%"></span>
+              <span class="seg-v" style="left:64.8%;width:10%"></span>
+              <span class="seg-v" style="left:74.9%;width:18.5%"></span>
+              <span class="seg-v" style="left:93.5%;width:2.1%"></span>
+              <span class="seg-v" style="left:95.7%;width:1%"></span>
+              <span class="tk" style="left:3%">15:03</span>
+              <span class="tk" style="left:26%">15:20</span>
+              <span class="tk" style="left:50%">15:38</span>
+              <span class="tk" style="left:74%">15:55</span>
+              <span class="tk" style="left:96%">16:12</span>
+            </div>
+            <div class="keyrow"><span class="key"><i class="iV"></i>a command running</span><span class="key"><span class="dmd"></span>recorded point</span><span class="key"><span class="dmdf"></span>a gate or run end</span></div>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="eyebrow">Context per turn</span><span class="grow"></span><span class="meta">window 500k · input + cached</span></div>
+              <svg class="chart" viewBox="0 0 1000 150" role="img" aria-label="Context grows from 4.6k to a 220k peak, then the correction starts at 11.3k">
+                <line x1="0" y1="10" x2="1000" y2="10" stroke="rgba(218,241,222,.25)" stroke-dasharray="4 6"></line>
+                <line x1="0" y1="140" x2="1000" y2="140" stroke="rgba(218,241,222,.12)"></line>
+                <polyline fill="none" stroke="#DAF1DE" stroke-width="2" points="0,138.8 4,130.9 100,128 200,119.2 300,110 400,102.6 500,96 600,92 700,88 800,85 900,83 980,82.8"></polyline>
+                <polyline fill="none" stroke="#8EB69B" stroke-width="2" stroke-dasharray="3 4" points="980,82.8 992,137.1 1000,137.1"></polyline>
+                <circle cx="0" cy="138.8" r="4" fill="#DAF1DE"></circle>
+                <circle cx="400" cy="102.6" r="4" fill="#DAF1DE"></circle>
+                <circle cx="980" cy="82.8" r="4" fill="#DAF1DE"></circle>
+                <text x="8" y="128" fill="#8EB69B" font-family="JetBrains Mono" font-size="12">4.6k</text>
+                <text x="408" y="96" fill="#8EB69B" font-family="JetBrains Mono" font-size="12">144k at the midpoint</text>
+                <text x="842" y="74" fill="#8EB69B" font-family="JetBrains Mono" font-size="12">220k peak</text>
+                <text x="8" y="24" fill="#8EB69B" font-family="JetBrains Mono" font-size="12">500k window</text>
+              </svg>
+              <div class="meta">Four points are measured. The line between them is drawn from the usage records, one per turn.</div>
+            </div>
+          </div>
+        </section>
+
+        
+      </div>
+
+      <aside class="aside" aria-label="Selected turn">
+        <section class="sec">
+          <div class="sech"><span class="eyebrow">Turn #4</span><span class="grow"></span><span class="lblf">long</span></div>
+          <div class="secb">
+            <div class="term">$ npm run test:unit</div>
+            <div class="r" style="margin-top:8px"><span>Started</span><span class="rv">15:03:37</span></div>
+            <div class="r"><span>Took</span><span class="rv">6m 43s · 402,866 ms</span></div>
+            <div class="r"><span>Outcome</span><span class="rv">ok</span></div>
+            <div class="r"><span>Same command in this phase</span><span class="rv">3 times · 20m 03s</span></div>
+            <div class="eyebrow" style="margin:12px 0 8px">Result, first line</div>
+            <div class="code"># Subtest: the preview line reads what the pre…</div>
+            <div class="btnrow" style="margin-top:12px"><a class="btn" href="#raw-output">Open the raw output</a><a class="btn" href="EventRaw.dc.html">In the raw journal</a></div>
+          </div>
+        </section>
+        <section class="sec">
+          <div class="sech"><span class="eyebrow">Failed calls · 8</span></div>
+          <div class="secb">
+            <div class="r"><span class="x">×</span><span>3 reads of files that do not exist</span><span class="rv">tickets, intake, tr21 tests</span></div>
+            <div class="r"><span class="x">×</span><span>4 commands</span><span class="rv">/tmp read-only · 3 test runs</span></div>
+            <div class="r"><span class="x">×</span><span>1 search with a literal \n</span><span class="rv">rg refused it</span></div>
+          </div>
+        </section>
+        <div class="rc">
+          <span class="eyebrow">How each line is written</span>
+          <div class="sub" style="margin-top:8px">A template turns each call's tool and input into words: a read names its files, a command names what it ran and whether it passed. No model writes them, so a line never claims more than the record shows. Calls in one turn share a line, and runs of the same kind fold together.</div>
+          <a class="btn" href="SettingsSummaries.dc.html" style="margin-top:10px">Step line settings</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="f59bab60 landed and you have seen it" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1540}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

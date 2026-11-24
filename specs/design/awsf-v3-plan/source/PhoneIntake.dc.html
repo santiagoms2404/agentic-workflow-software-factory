@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone: an idea, spoken</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0;background:#14140F}
+.root{width:430px;height:884px;box-sizing:border-box;padding:20px;background:#14140F}
+.phone{position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:#051F20;color:#DAF1DE;font:400 15px/1.5 Archivo,sans-serif;box-shadow:0 0 0 10px #101110,0 22px 50px rgba(0,0,0,.26)}
+.bokeh{position:absolute;inset:0;background:radial-gradient(46px 46px at 330px 186px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 168px 266px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 130px 372px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 292px 392px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 126px 566px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 100px 668px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 300px 620px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 60px 120px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 196px 168px,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 176px 470px,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%)}
+.tint{position:absolute;inset:0;background:linear-gradient(165deg,rgba(11,43,38,.36) 0%,rgba(5,31,32,.48) 60%,rgba(5,31,32,.55) 100%)}
+.sheen{position:absolute;inset:0;background:linear-gradient(118deg,rgba(218,241,222,.075) 0%,rgba(218,241,222,0) 34%,rgba(218,241,222,0) 66%,rgba(218,241,222,.045) 100%);border-top:1px solid rgba(218,241,222,.13)}
+.ui{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;gap:14px;padding:56px 20px 30px;box-sizing:border-box}
+.toast{display:flex;gap:12px;align-items:center;border-radius:18px;padding:12px 14px;background:rgba(242,106,27,.1);border:1px solid #F26A1B}
+.ticon{width:36px;height:36px;border-radius:10px;background:#F26A1B;color:#14140F;display:flex;align-items:center;justify-content:center;flex:none}
+.meta{font:400 11px/1.45 "JetBrains Mono",monospace;color:#8EB69B}
+.card{border-radius:16px;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);padding:14px 16px}
+.reason{display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(20,20,15,.45);border:1px solid #8A4A18;font:600 11.5px/1.4 "JetBrains Mono",monospace}
+.fork{display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;border-radius:16px;padding:14px 16px;background:rgba(242,106,27,.05);border:1px solid #F26A1B;color:#DAF1DE;font:inherit;cursor:pointer}
+.eyebrow{font:600 10px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#8EB69B}
+.line{font:400 12px/1.4 "JetBrains Mono",monospace;color:rgba(218,241,222,.6);padding:10px 12px;border-radius:12px;background:rgba(20,20,15,.42);border:1px solid rgba(218,241,222,.07)}
+.composer{display:flex;gap:10px;align-items:center;margin-top:auto}
+.field{flex:1;min-height:48px;box-sizing:border-box;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);border-radius:16px;padding:0 16px;color:#DAF1DE;font:400 14px Archivo}
+.send{width:48px;height:48px;border-radius:50%;border:1.5px solid #F26A1B;background:rgba(242,106,27,.1);color:#F26A1B;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.q{display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;text-align:left;border-radius:16px;padding:12px 14px;background:rgba(218,241,222,.06);border:1px solid rgba(218,241,222,.12);color:#DAF1DE;font:inherit}
+.q.o{border-color:#F26A1B;background:rgba(242,106,27,.05)}
+.sgn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;border-radius:14px;border:1px solid #F26A1B;background:rgba(242,106,27,.1);color:#F26A1B;font:600 14px/1 Archivo;cursor:pointer}
+.bt{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 14px;border-radius:14px;border:1px solid rgba(218,241,222,.16);background:rgba(218,241,222,.05);color:#DAF1DE;font:600 14px/1 Archivo;cursor:pointer}
+</style>
+</helmet>
+<div class="root">
+  <div class="phone">
+    <div class="bokeh"></div>
+    <div class="tint"></div>
+    <div class="sheen"></div>
+    <span style="position:absolute;z-index:3;left:95px;top:70px;display:flex"><dc-import name="Pendulum" state="idle" listening="{{ true }}" size="200" hint-size="200px,128px"></dc-import></span>
+    <div class="ui" style="padding-top:236px;gap:12px">
+      <div role="status" aria-label="Marimba is listening" style="text-align:center"><div style="font:800 24px/1.15 Archivo;letter-spacing:-.025em">Listening</div><div class="meta" style="margin-top:6px">2:14 · speak in English or Spanish</div></div>
+      <div class="line" style="color:rgba(218,241,222,.9);font:400 14.5px/1.5 Archivo">“What if each project had its own cell, and I could see from my phone which one is waiting for me…”</div>
+      <div style="display:flex;gap:8px"><button class="bt" type="button" style="flex:1">Link</button><button class="bt" type="button" style="flex:1">Photo</button><button class="bt" type="button" style="flex:1">File</button></div>
+      <section class="q" aria-label="Goes to">
+        <div class="meta">goes to</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px"><button class="bt" type="button" aria-pressed="true" style="border-color:#DAF1DE;background:rgba(218,241,222,.12)">Meta factory</button><button class="bt" type="button" aria-pressed="false">New idea</button></div>
+      </section>
+      <section class="q" aria-label="Context">
+        <div class="meta">is it about the factory, or about you?</div>
+        <div style="display:flex;gap:8px"><button class="bt" type="button" aria-pressed="true" style="border-color:#DAF1DE;background:rgba(218,241,222,.12)">Factory</button><button class="bt" type="button" aria-pressed="false">Personal</button></div>
+      </section>
+      <div class="meta">kept on this phone until the laptop opens · it starts nothing · a personal note never leaves your phone or Drive</div>
+      <div class="composer" style="justify-content:center">
+        <button class="bt" type="button" style="min-height:52px;flex:1">Discard</button>
+        <button class="bt" type="button" style="min-height:52px;flex:2;border-color:#DAF1DE;background:rgba(218,241,222,.14)">Save the note</button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":430,"height":884}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

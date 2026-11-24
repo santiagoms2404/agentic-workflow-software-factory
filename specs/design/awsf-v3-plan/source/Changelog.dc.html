@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Changelog: one change, two attempts</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1260px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" aria-current="page" href="#c">changelog</a>
+    <span class="grow"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Rooms.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div class="cols">
+    <aside class="lc" aria-label="Changes"><div class="pn-bay" role="status" aria-label="Marimba, done"><dc-import name="Pendulum" state="done" size="236" hanger="{{ true }}" hint-size="236px,151px"></dc-import><span class="pn-w pn-done">Done</span><span class="pn-n">both attempts are one change</span></div><div class="grp" style="padding-top:4px">Changes · newest landed first</div><a class="li on" href="#this" aria-current="page"><span class="lit2">W03 M2 and M3</span><span class="lim">landed · 2 attempts</span></a><a class="li " href="ChangeDetail.dc.html"><span class="lit2">G03-W test readiness</span><span class="lim">landed · attempt 1</span></a><a class="li " href="ChangeDetail.dc.html"><span class="lit2">W03 M4 to M6</span><span class="lim">landed · [N] attempts</span></a><a class="li " href="ChangeDetail.dc.html"><span class="lit2">W03 M1</span><span class="lim">landed · [N] attempts</span></a><a class="li " href="ChangeDetail.dc.html"><span class="lit2">Preflight duplicate field</span><span class="lim">stopped at its review</span></a><div class="lim" style="padding:10px 12px">An attempt stays in the list after it stops. Nothing here is written by hand.</div></aside>
+    <main class="cc">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px"><div class="h1">W03 M2 and M3</div><span class="lblf">✓ landed</span><span class="lbl">2 attempts</span><span class="grow"></span><a class="btn" href="ChangeDetail.dc.html">One change in full</a></div>
+      <div class="sub">The same commit, judged twice. The first attempt built six tickets and stopped before its review. The second spent one call to review that commit, and it landed.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(440px,100%),1fr));gap:16px;align-items:stretch">
+      <section class="gc" style="padding:20px;gap:12px;border-color:#F26A1B" aria-label="Attempt 1"><div style="display:flex;align-items:center;gap:12px"><span style="flex:1"><span class="h2" style="font-size:20px;display:block">Attempt 1</span><span class="meta">d3caa395 · shift · T2 · gpt-6.1-sol</span></span><dc-import name="Pendulum" state="needs" size="96" hint-size="96px,61px"></dc-import><span class="lblo">× blocked</span></div><div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">03:57</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">Asked</span><span class="rv">M2 and M3 of W03 · six tickets</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">07:19</span><span class="dmdf" aria-hidden="true"></span><span style="flex:1 1 200px">Started</span><span class="rv">you confirmed · ceiling 15</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">07:20</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">T03 built and tested</span><span class="rv">45 min</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">08:05</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">T04 built and tested</span><span class="rv">67 min</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">09:11</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">T05 built and tested</span><span class="rv">52 min</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">10:04</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">T06 built and tested</span><span class="rv">57 min · 1 correction</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">11:00</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">T07 built and tested</span><span class="rv">62 min</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">12:02</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">T08 built and tested</span><span class="rv">78 min</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">13:20</span><span class="x" aria-hidden="true">×</span><span style="flex:1 1 200px">Review never ran</span><span class="rv">the Claude login had expired</span></div></div><div class="strip" style="margin-top:auto"><div class="cell"><div class="cellv">8 of 15</div><div class="celll">calls</div></div><div class="cell"><div class="cellv">1.10M</div><div class="celll">tokens</div></div><div class="cell"><div class="cellv">6 h</div><div class="celll">in phases</div></div></div></section>
+      <section class="gc" style="padding:20px;gap:12px;" aria-label="Attempt 2"><div style="display:flex;align-items:center;gap:12px"><span style="flex:1"><span class="h2" style="font-size:20px;display:block">Attempt 2</span><span class="meta">1645ba32 · build-review · continues attempt 1</span></span><dc-import name="Pendulum" state="done" size="96" hint-size="96px,61px"></dc-import><span class="lblf">✓ landed</span></div><div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">14:34</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">Asked</span><span class="rv">review the same commit</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">14:52</span><span class="dmdf" aria-hidden="true"></span><span style="flex:1 1 200px">Adopted 5fc9e39</span><span class="rv">you adopted the candidate</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">14:52</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">Gates again, on the exact commit</span><span class="rv">23 min</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">15:15</span><span class="ok" aria-hidden="true">✓</span><span style="flex:1 1 200px">Reviewed by the other provider</span><span class="rv">accept · 3 min</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">15:27</span><span class="dmdf" aria-hidden="true"></span><span style="flex:1 1 200px">Journey</span><span class="rv">you attested it</span></div><div class="r"><span class="mono" style="min-width:52px;color:#8EB69B;font-size:12.5px">15:28</span><span class="dmdf" aria-hidden="true"></span><span style="flex:1 1 200px">Landed</span><span class="rv">you landed it · 5fc9e39</span></div></div><div class="strip" style="margin-top:auto"><div class="cell"><div class="cellv">1 of 5</div><div class="celll">calls</div></div><div class="cell"><div class="cellv">14.2k</div><div class="celll">tokens</div></div><div class="cell"><div class="cellv">26 min</div><div class="celll">in phases</div></div></div></section>
+      </div>
+      <section class="sec" aria-label="What differs"><div class="sech"><span class="h3">What differs</span><span class="meta">2026-10-09 · local time</span></div><div class="secb">
+        <div class="r"><span>Candidate</span><span class="rv">the same · 5fc9e39 on base 0b33c6e · 35 files, +3,285 −225</span></div>
+        <div class="r"><span>Cause of the stop</span><span class="rv">phase-abort · E_MODEL_UNRESOLVED · named by the host</span></div>
+        <div class="r"><span>What you did between</span><span class="rv">logged in again, then adopted the candidate</span></div>
+        <div class="r"><span>Built by, reviewed by</span><span class="rv">gpt-6.1-sol · claude-opus-5-5 · the opposite provider</span></div>
+        <div class="r"><span>Cost of the second</span><span class="rv">1 call · 1.3% of the first attempt’s tokens</span></div>
+      </div></section>
+    </main>
+  </div>
+<div class="pn-bar flat"><dc-import name="Bar" state="done" lease="{{ false }}" line="this change landed" waiting="0" running="0" well="{{ false }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1260}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

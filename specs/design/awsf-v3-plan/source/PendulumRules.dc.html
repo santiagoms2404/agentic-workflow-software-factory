@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec: what the pendulum shows, and its numbers</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1280px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#spec" aria-current="page">spec · the pendulum</a>
+    <span class="grow"></span>
+    <span class="right">for builders · not a screen</span>
+  </nav>
+  <div class="layer" style="padding-top:24px;padding-bottom:44px;gap:20px">
+    <div><div class="h1" style="font-size:30px">The pendulum: what it shows, and its numbers</div><div class="sub" style="margin-top:6px">A run has eleven states and the mark has six. This table is the whole mapping. Passing every gate is not done, because the run still waits for you.</div></div>
+    <div class="two"><section class="sec tbox"><table class="pt"><thead><tr><th scope="col">State</th><th scope="col">When</th><th scope="col">Shows</th><th scope="col">Words beside it</th></tr></thead><tbody><tr><td class="f mono" style="font-size:12.5px">DRAFT</td><td class="s">no preflight yet</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="idle" size="52" hint-size="52px,33px"></dc-import><b class="pn-idle">Idle</b></span></td><td class="s">Draft, not checked</td></tr><tr><td class="f mono" style="font-size:12.5px">DRAFT</td><td class="s">preflight passed, not confirmed</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="needs" size="52" hint-size="52px,33px"></dc-import><b class="pn-needs">Needs you</b></span></td><td class="s">Your confirmation</td></tr><tr><td class="f mono" style="font-size:12.5px">PREPARED</td><td class="s"></td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="idle" size="52" hint-size="52px,33px"></dc-import><b class="pn-idle">Idle</b></span></td><td class="s">Ready to start</td></tr><tr><td class="f mono" style="font-size:12.5px">RUNNING</td><td class="s">a live process</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="working" size="52" hint-size="52px,33px"></dc-import><b class="pn-working">Working</b></span></td><td class="s">[phase]</td></tr><tr><td class="f mono" style="font-size:12.5px">RUNNING</td><td class="s">paused on a quota window</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="paused" size="52" hint-size="52px,33px"></dc-import><b class="pn-paused">Paused</b></span></td><td class="s">Paused · resets [TIME]</td></tr><tr><td class="f mono" style="font-size:12.5px">RUNNING</td><td class="s">no live process</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="off" size="52" hint-size="52px,33px"></dc-import><b class="pn-off">No signal</b></span></td><td class="s">No signal since [TIME]</td></tr><tr><td class="f mono" style="font-size:12.5px">GATING</td><td class="s"></td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="working" size="52" hint-size="52px,33px"></dc-import><b class="pn-working">Working</b></span></td><td class="s">Gates [n] of [n]</td></tr><tr><td class="f mono" style="font-size:12.5px">REVIEWING</td><td class="s"></td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="working" size="52" hint-size="52px,33px"></dc-import><b class="pn-working">Working</b></span></td><td class="s">In review</td></tr><tr><td class="f mono" style="font-size:12.5px">AWAITING_OWNER</td><td class="s"></td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="needs" size="52" hint-size="52px,33px"></dc-import><b class="pn-needs">Needs you</b></span></td><td class="s">Your review</td></tr><tr><td class="f mono" style="font-size:12.5px">LANDING</td><td class="s"></td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="working" size="52" hint-size="52px,33px"></dc-import><b class="pn-working">Working</b></span></td><td class="s">Landing</td></tr></tbody></table></section><section class="sec tbox"><table class="pt"><thead><tr><th scope="col">State</th><th scope="col">When</th><th scope="col">Shows</th><th scope="col">Words beside it</th></tr></thead><tbody><tr><td class="f mono" style="font-size:12.5px">LANDED</td><td class="s">until you open it</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="done" size="52" hint-size="52px,33px"></dc-import><b class="pn-done">Done</b></span></td><td class="s">Landed</td></tr><tr><td class="f mono" style="font-size:12.5px">PUBLISHED</td><td class="s">until you open it</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="done" size="52" hint-size="52px,33px"></dc-import><b class="pn-done">Done</b></span></td><td class="s">Published</td></tr><tr><td class="f mono" style="font-size:12.5px">BLOCKED</td><td class="s">not attributed, not set aside</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="needs" size="52" hint-size="52px,33px"></dc-import><b class="pn-needs">Needs you</b></span></td><td class="s">Stopped · [cause]</td></tr><tr><td class="f mono" style="font-size:12.5px">BLOCKED</td><td class="s">attributed or set aside</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="idle" size="52" hint-size="52px,33px"></dc-import><b class="pn-idle">Idle</b></span></td><td class="s">Stopped</td></tr><tr><td class="f mono" style="font-size:12.5px">CANCELLED</td><td class="s"></td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="idle" size="52" hint-size="52px,33px"></dc-import><b class="pn-idle">Idle</b></span></td><td class="s">Cancelled</td></tr><tr><td class="f mono" style="font-size:12.5px">a thread</td><td class="s">a turn in progress</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="working" size="52" hint-size="52px,33px"></dc-import><b class="pn-working">Working</b></span></td><td class="s">Answering</td></tr><tr><td class="f mono" style="font-size:12.5px">a thread</td><td class="s">a card or a question is open</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="needs" size="52" hint-size="52px,33px"></dc-import><b class="pn-needs">Needs you</b></span></td><td class="s">Your answer</td></tr><tr><td class="f mono" style="font-size:12.5px">a thread</td><td class="s">answered, not seen</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="done" size="52" hint-size="52px,33px"></dc-import><b class="pn-done">Done</b></span></td><td class="s">Answered</td></tr><tr><td class="f mono" style="font-size:12.5px">a handoff</td><td class="s">not confirmed</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="needs" size="52" hint-size="52px,33px"></dc-import><b class="pn-needs">Needs you</b></span></td><td class="s">To confirm</td></tr><tr><td class="f mono" style="font-size:12.5px">any</td><td class="s">the server does not answer</td><td><span style="display:inline-flex;align-items:center;gap:8px"><dc-import name="Pendulum" state="off" size="52" hint-size="52px,33px"></dc-import><b class="pn-off">No signal</b></span></td><td class="s">No signal since [TIME]</td></tr></tbody></table></section></div>
+    <section class="sec" aria-label="Which state shows away from a thread"><div class="sech"><span class="h3">Away from a thread</span><span class="meta">the first that is true</span></div><div class="secb">
+      <div class="r"><span>1 · no signal</span><span class="rv">the host does not answer · nothing below it can be trusted</span></div>
+      <div class="r"><span>2 · needs you</span><span class="rv">any item above that is yours, and that you have not set aside</span></div>
+      <div class="r"><span>3 · working</span><span class="rv">any live process or turn</span></div>
+      <div class="r"><span>4 · paused</span><span class="rv">something waits for a clock</span></div>
+      <div class="r"><span>5 · done</span><span class="rv">anything finished that you have not opened</span></div>
+      <div class="r"><span>6 · idle</span><span class="rv">nothing else</span></div>
+      <div class="r"><span>Raise, grant and attribute</span><span class="rv">always offered by the host, so they never count as waiting on you</span></div>
+      <div class="r"><span>Set aside</span><span class="rv">an item stays in its list, keeps its place, and no longer turns the mark</span></div>
+    </div></section>
+    
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1280}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

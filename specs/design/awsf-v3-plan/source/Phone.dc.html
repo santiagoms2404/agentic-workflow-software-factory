@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marimba on the phone: a stop</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0;background:#14140F}
+.root{width:430px;height:884px;box-sizing:border-box;padding:20px;background:#14140F}
+.phone{position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:#051F20;color:#DAF1DE;font:400 15px/1.5 Archivo,sans-serif;box-shadow:0 0 0 10px #101110,0 22px 50px rgba(0,0,0,.26)}
+.bokeh{position:absolute;inset:0;background:radial-gradient(46px 46px at 330px 186px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 168px 266px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 130px 372px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 292px 392px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 126px 566px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 100px 668px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 300px 620px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 60px 120px,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 196px 168px,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 176px 470px,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%)}
+.tint{position:absolute;inset:0;background:linear-gradient(165deg,rgba(11,43,38,.36) 0%,rgba(5,31,32,.48) 60%,rgba(5,31,32,.55) 100%)}
+.sheen{position:absolute;inset:0;background:linear-gradient(118deg,rgba(218,241,222,.075) 0%,rgba(218,241,222,0) 34%,rgba(218,241,222,0) 66%,rgba(218,241,222,.045) 100%);border-top:1px solid rgba(218,241,222,.13)}
+.ui{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;gap:14px;padding:56px 20px 30px;box-sizing:border-box}
+.toast{display:flex;gap:12px;align-items:center;border-radius:18px;padding:12px 14px;background:rgba(242,106,27,.1);border:1px solid #F26A1B}
+.ticon{width:36px;height:36px;border-radius:10px;background:#F26A1B;color:#14140F;display:flex;align-items:center;justify-content:center;flex:none}
+.meta{font:400 11px/1.45 "JetBrains Mono",monospace;color:#8EB69B}
+.card{border-radius:16px;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);padding:14px 16px}
+.reason{display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(20,20,15,.45);border:1px solid #8A4A18;font:600 11.5px/1.4 "JetBrains Mono",monospace}
+.fork{display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;border-radius:16px;padding:14px 16px;background:rgba(242,106,27,.05);border:1px solid #F26A1B;color:#DAF1DE;font:inherit;cursor:pointer}
+.eyebrow{font:600 10px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#8EB69B}
+.line{font:400 12px/1.4 "JetBrains Mono",monospace;color:rgba(218,241,222,.6);padding:10px 12px;border-radius:12px;background:rgba(20,20,15,.42);border:1px solid rgba(218,241,222,.07)}
+.composer{display:flex;gap:10px;align-items:center;margin-top:auto}
+.field{flex:1;min-height:48px;box-sizing:border-box;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);border-radius:16px;padding:0 16px;color:#DAF1DE;font:400 14px Archivo}
+.send{width:48px;height:48px;border-radius:50%;border:1.5px solid #F26A1B;background:rgba(242,106,27,.1);color:#F26A1B;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+</style>
+</helmet>
+<div class="root">
+  <div class="phone">
+    <div class="bokeh"></div>
+    <div class="tint"></div>
+    <div class="sheen"></div>
+    <span style="position:absolute;z-index:3;left:80px;top:44px;display:flex"><dc-import name="Pendulum" state="needs" size="230" hanger="{{ true }}" hint-size="230px,147px"></dc-import></span>
+    <div class="ui" style="padding-top:190px">
+      <div role="status" aria-label="Marimba needs you" style="text-align:center"><div class="pn-w pn-needs" style="font-size:24px">Needs you</div><div class="meta" style="margin-top:4px">Marimba, from your phone</div></div>
+      <div class="toast" role="status">
+        <span class="ticon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></span>
+        <div style="flex:1;min-width:0"><div style="font:600 14px/1.25 Archivo">A run stopped</div><div class="meta">a28c21d5 · typecheck · 2/3 calls</div></div>
+      </div>
+
+
+      <section class="card" aria-label="Blocked run">
+        <div style="font:800 20px/1.2 Archivo;letter-spacing:-.02em">Typecheck stayed red</div>
+        <div class="reason"><span style="width:7px;height:7px;border-radius:50%;background:#F26A1B;flex:none"></span><span>correction 1/1 spent — named by the host</span></div>
+      </section>
+
+      <div class="eyebrow">Where does this go?</div>
+      <button class="fork" type="button">
+        <span style="font:700 15px/1.25 Archivo">Continue in a new run</span>
+        <span style="font-size:13px;color:rgba(218,241,222,.82)">One card to confirm, then it spends calls.</span>
+        <span style="font:400 11px/1.4 'JetBrains Mono',monospace;color:#F26A1B">new --continues · ~2 calls</span>
+      </button>
+      <div class="line">rework · cancel · signing from the phone waits for the passkey test</div>
+      <div class="meta">The phone tells you and lets you answer. Signing from here comes next. Until the passkey test passes, an owner act is signed on the laptop.</div>
+
+      <div class="composer">
+        <label for="mp" style="position:absolute;left:-9999px">Message Marimba</label>
+        <input id="mp" class="field" type="text" placeholder="Reply to Marimba…">
+        <button class="send" type="button" aria-label="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":430,"height":884}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

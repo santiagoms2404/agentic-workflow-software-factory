@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings: step lines</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1560px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#settings" aria-current="page">settings</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a class="on" href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer" style="padding-top:20px">
+    <div class="set">
+      <nav class="srail" aria-label="Settings sections">
+        <div class="srailg">Yours and Marimba's</div>
+        <div class="meta" style="padding:0 12px 4px">either of you can change these</div>
+        <a class="sr" href="SettingsLook.dc.html">Look and feel<span class="kbd" aria-hidden="true">L</span></a>
+        <a class="sr" href="SettingsBars.dc.html">Bars<span class="kbd" aria-hidden="true">N</span></a>
+        <a class="sr" href="SettingsKeys.dc.html">Keys<span class="kbd" aria-hidden="true">?</span></a>
+        <div class="srailg">Marimba</div>
+        <div class="meta" style="padding:0 12px 4px">it reads these · you approve changes</div>
+        <a class="sr" href="SettingsGlance.dc.html">At a glance<span class="kbd" aria-hidden="true">S</span></a>
+        <a class="sr" href="Context.dc.html">Context<span class="kbd" aria-hidden="true">C</span></a>
+        <a class="sr" href="SettingsSources.dc.html">Sources<span class="kbd" aria-hidden="true">K</span></a>
+        <a class="sr" href="SettingsRoutes.dc.html">Routes<span class="kbd" aria-hidden="true">M</span></a>
+        <a class="sr" href="SettingsPrompt.dc.html">Prompt<span class="kbd" aria-hidden="true">P</span></a>
+        <a class="sr" href="SettingsSteps.dc.html">Steps<span class="kbd" aria-hidden="true">T</span></a>
+        <a class="sr on" aria-current="page" href="#steplines">Step lines<span class="kbd" aria-hidden="true">D</span></a>
+        <a class="sr" href="SettingsHarness.dc.html">Harness<span class="kbd" aria-hidden="true">E</span></a>
+        <a class="sr" href="SettingsJobs.dc.html">Jobs<span class="kbd" aria-hidden="true">W</span></a>
+        <div class="srailg">Teclas</div>
+        <div class="meta" style="padding:0 12px 4px">what a tecla may be made from</div>
+        <a class="sr" href="TeclaSketch.dc.html">Blocks<span class="kbd" aria-hidden="true">B</span></a>
+        <a class="sr" href="TeclaProgram.dc.html">Locked room<span class="kbd" aria-hidden="true">R</span></a>
+        <div class="srailg">Only you</div>
+        <div class="meta" style="padding:0 12px 4px">your press or your commit</div>
+        <a class="sr" href="OwnerPress.dc.html">Owner presses<span class="kbd" aria-hidden="true">O</span></a>
+        <a class="sr" href="SettingsRoutines.dc.html">Routines<span class="kbd" aria-hidden="true">J</span></a>
+        <a class="sr" href="Lease.dc.html">Leases<span class="kbd" aria-hidden="true">G</span></a>
+        <a class="sr" href="SettingsConfig.dc.html">Factory config<span class="kbd" aria-hidden="true">F</span></a>
+      </nav>
+
+      <div class="setc">
+        <div>
+          <div class="h1" style="font-size:30px">Step lines</div>
+          <div class="sub" style="margin-top:6px">How a phase's tool calls and records become one line each, on the Events tab, in Marimba's panel and in a team room. A template writes every line. No model is called, so a line costs nothing and never claims more than the record holds.</div>
+        </div>
+
+        <section class="sec">
+          <div class="sech"><span class="eyebrow">Grouping</span></div>
+          <div class="secb">
+            <button class="sw" type="button" aria-pressed="true" style="border-top:0">One line per model turn, for the calls made in it<span class="tog on"><span></span></span></button>
+            <button class="sw" type="button" aria-pressed="true">Fold a run of turns of one kind into one line, such as 15 edits in a row<span class="tog on"><span></span></span></button>
+            <button class="sw" type="button" aria-pressed="true">Mark a command that repeats in the phase: "1 of 3"<span class="tog on"><span></span></span></button>
+            <div class="r" style="padding:14px 0"><span>A call is long from</span><div class="seg" role="group" aria-label="Long call threshold" style="margin-left:auto"><button class="segb" type="button" aria-pressed="false">30 s</button><button class="segon" type="button" aria-pressed="true">1 min</button><button class="segb" type="button" aria-pressed="false">5 min</button></div></div>
+            <div class="r" style="padding:14px 0"><span>Lines per step</span><div class="seg" role="group" aria-label="Lines per step" style="margin-left:auto"><button class="segon" type="button" aria-pressed="true">1</button><button class="segb" type="button" aria-pressed="false">2</button></div></div>
+          </div>
+        </section>
+
+        <section class="sec tbox">
+          <table class="pt" style="min-width:760px">
+            <caption class="eyebrow" style="text-align:left;padding:14px 14px 4px">Templates · each with a line from the M4–M6 shift</caption>
+            <thead><tr><th scope="col">Calls</th><th scope="col">Template</th><th scope="col">Written as</th></tr></thead>
+            <tbody>
+              <tr><td class="f">read</td><td>Read {n} files: {names}</td><td>Read 3 files and searched 1: AGENTS.md, the W03 build prompts, package.json</td></tr>
+              <tr><td class="f">grep, find</td><td>Searched {path} for {pattern}</td><td>Searched specs/awsf-v3-w03-ticket-closure.html for Amendment|Handoff|task-11|T11</td></tr>
+              <tr><td class="f">bash</td><td>Ran {command} · {passed | failed}</td><td>Ran npm run test:unit · passed</td></tr>
+              <tr><td class="f">edit, write</td><td>Edited {n} files: {names}</td><td>Edited 15 times: new.ts, status.ts, model.ts, intake-state.ts, production-run.ts and 10 edits with no path in the record</td></tr>
+              <tr><td class="f">a failed call</td><td>Tried to {verb}: {first line of the error}</td><td>Tried to write a baseline log to /tmp: read-only file system</td></tr>
+              <tr><td class="f">route_resolution</td><td>Resolved the route: {model} @ {effort}, {source}</td><td>Resolved the route: gpt-6.1-sol @ high, every field from the attempt override</td></tr>
+              <tr><td class="f">a gate record</td><td>{gate} {passed | failed} in round {n}</td><td>envelope_valid failed in round 0, so the host offered the one correction</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <div class="two">
+          <section class="sec">
+            <div class="sech"><span class="eyebrow">Rules every template keeps</span></div>
+            <div class="secb">
+              <div class="r"><span>Name files, commands and counts when they matter</span></div>
+              <div class="r"><span>A number in a line appears in the record exactly as written</span></div>
+              <div class="r"><span>Say only what the calls show. Never guess a cause</span></div>
+              <div class="r"><span>Input first. The result opens below the line</span></div>
+              <div class="r"><span>A credential-shaped value is scrubbed before any line is written</span></div>
+            </div>
+          </section>
+          <section class="sec">
+            <div class="sech"><span class="eyebrow">Preview · turn #2 of t11-build</span></div>
+            <div class="secb">
+              <div class="tc"><span class="ok">✓</span><span>Read 3 files and searched 1: AGENTS.md, the W03 build prompts, package.json</span><span class="ms">1.9s</span></div>
+              <div class="meta" style="margin-top:10px">Press a line to fold or unfold its calls. The template changes how lines read, never what the journal holds.</div>
+              <div class="eyebrow" style="margin:14px 0 6px">A model writing the lines</div>
+              <div class="sub">Parked. A model could write freer lines, at a cost per line and with a chance of claiming more than happened. It stays off unless you turn it on later.</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="nothing runs" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

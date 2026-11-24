@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Where things stand, across projects</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1300px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">all projects</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" aria-current="page" href="Rest.dc.html">marimba</a>
+    <span class="grow"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Room1.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div class="cols">
+    <aside class="lc" aria-label="Conversations">
+      <div class="pn-bay" role="status" aria-label="Marimba, needs you"><dc-import name="Pendulum" state="needs" size="236" hanger="{{ true }}" hint-size="236px,151px"></dc-import><span class="pn-w pn-needs">Needs you</span><span class="pn-n">3 runs wait on your review</span></div>
+      <div class="seg" role="group" aria-label="Filter" style="margin:0 6px 8px"><button class="segon" type="button" aria-pressed="true">All 5</button><button class="segb" type="button" aria-pressed="false">Open 2</button><button class="segb" type="button" aria-pressed="false">Waiting 2</button></div>
+      <a class="li on" href="#c"><span class="lit2">Where things stand<span class="grow"></span></span><span class="lim">all projects · now</span><span class="lim" style="color:#8EB69B">open</span></a>
+      <a class="li" href="#c"><span class="lit2">T15, closing record<span class="grow"></span></span><span class="lim">agentic-workflow-software-factory</span><span class="lim" style="color:#F26A1B">waits on you</span></a>
+      <a class="li" href="#c"><span class="lit2">Preflight duplicate field<span class="grow"></span></span><span class="lim">agentic-workflow-software-factory · e738cfb2</span><span class="lim" style="color:#F26A1B">waits on you</span></a>
+      <a class="li" href="#c"><span class="lit2">First attempt, checked offline<span class="grow"></span></span><span class="lim">smart-health-platform</span><span class="lim" style="color:#8EB69B">open</span></a>
+      <a class="li" href="#c"><span class="lit2">G03-W readiness<span class="grow"></span></span><span class="lim">agentic-workflow-software-factory · 36deb464</span><span class="lim" style="color:#8EB69B">done</span></a>
+      <div class="lim" style="padding:14px 12px">One conversation per thread of work, whichever project it belongs to.</div>
+    </aside>
+    <main class="cc">
+      <div style="display:flex;align-items:center;gap:4px"><span class="h2">Marimba</span><span class="meta" style="margin-left:8px">all projects · last looked [DATE]</span></div>
+      <div class="bub">Where do things stand?</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="step"><span class="ok">✓</span>Read 3 project cells and 195 attempt journals<span class="ms">status · [N]ms</span></div>
+        <div class="step"><span class="ok">✓</span>Read what waits on you, across projects<span class="ms">queue · [N]ms</span></div>
+        <div class="step"><span class="ok">✓</span>Read what changed since you last looked<span class="ms">changelog · [N]ms</span></div>
+        <div class="meta">each line is written by a template from the step names · no model</div>
+      </div>
+      <div class="say">Nothing is running. Three runs wait on your review, and one candidate stopped at its review.</div>
+      <div class="gc">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><span class="sq" style="background:#1D4D3A;border:1px solid #A7BFA7;box-sizing:border-box"></span><span class="h3">agentic-workflow-software-factory</span><span class="grow"></span><span style="display:inline-flex;flex:none;width:64px;height:41px;"><dc-import name="Pendulum" state="needs" size="64" hint-size="64px,41px"></dc-import></span><a class="meta" href="Cell.dc.html">open the cell</a></div>
+        <div class="r"><span>Awaiting your review</span><span class="rv">3</span></div>
+        <div class="r"><span>Stopped, with a candidate</span><span class="rv">8d5d840 · e738cfb2</span></div>
+        <div class="r"><span>Last landed</span><span class="rv">486d190 · 2026-10-12</span></div>
+        <div class="r"><span>Next in the order of work</span><span class="rv">T15</span></div>
+      </div>
+      <div class="gc">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><span class="sq" style="background:#DAF1DE"></span><span class="h3">smart-health-platform</span><span class="grow"></span><span style="display:inline-flex;flex:none;width:64px;height:41px;"><dc-import name="Pendulum" state="idle" size="64" hint-size="64px,41px"></dc-import></span><a class="meta" href="CellEmpty.dc.html">open the cell</a></div>
+        <div class="r"><span>Attempts</span><span class="rv">0 · waits on T15</span></div>
+        <div class="r"><span>Offline check of one ticket</span><span class="rv">not run</span></div>
+      </div>
+      <div class="gc">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><span class="sq" style="background:#8EB69B"></span><span class="h3">fusion-harness</span><span class="grow"></span><span style="display:inline-flex;flex:none;width:64px;height:41px;"><dc-import name="Pendulum" state="idle" size="64" hint-size="64px,41px"></dc-import></span></div>
+        <div class="r"><span>Idle</span><span class="rv">4 attempts · 1 landed</span></div>
+      </div>
+      <div class="say">I did not check whether the three waiting reviews still apply to today's main.</div>
+      <div class="btnrow"><a class="btn" href="PressQueue.dc.html">Open what waits on me</a><button class="btn" type="button">Check them against main</button><button class="btn" type="button">What changed?</button></div>
+    </main>
+    <aside class="rc3" aria-label="Since you last looked">
+      <div class="eyebrow">Since you last looked</div>
+      <div class="sub">Read when you open this. Nothing wakes Marimba on a clock.</div>
+      <div>
+        <div class="r" style="align-items:flex-start;gap:4px 10px"><span class="mono" style="font-size:12px;min-width:74px;color:#8EB69B;padding-top:3px">[DATE]</span><span style="flex:1 1 180px"><span style="display:block">You pushed the meta factory record.</span><span class="lim">host · main 3aa0a3c</span></span></div>
+        <div class="r" style="align-items:flex-start;gap:4px 10px"><span class="mono" style="font-size:12px;min-width:74px;color:#8EB69B;padding-top:3px">[DATE]</span><span style="flex:1 1 180px"><span style="display:block">A check found its prompts still in step: 37 of 37.</span><span class="lim">smart-health-platform</span></span></div>
+        <div class="r" style="align-items:flex-start;gap:4px 10px"><span class="mono" style="font-size:12px;min-width:74px;color:#8EB69B;padding-top:3px">[DATE]</span><span style="flex:1 1 180px"><span style="display:block">You re-froze the design frames at version 33.</span><span class="lim">agentic-workflow-software-factory</span></span></div>
+        <div class="r" style="align-items:flex-start;gap:4px 10px"><span class="mono" style="font-size:12px;min-width:74px;color:#8EB69B;padding-top:3px">[DATE]</span><span style="flex:1 1 180px"><span style="display:block">Cloud Marimba sent the combined package.</span><span class="lim">handoff taken in</span></span></div>
+      </div>
+      <div class="rc"><div class="eyebrow">Quota, shared</div>
+        <div class="r"><span>sol · 5 h</span><span class="rv">[USED %]</span></div><div class="pbar"><span class="pfill" style="width:38%"></span></div>
+        <div class="r" style="margin-top:8px"><span>opus · week</span><span class="rv">[USED %]</span></div><div class="pbar"><span class="pfill" style="width:22%"></span></div>
+        <div class="meta" style="margin-top:8px">bars are samples until the ledger reports</div>
+      </div>
+    </aside>
+  </div>
+<div class="pn-bar flat"><dc-import name="Bar" state="needs" lease="{{ false }}" line="3 runs wait on your review" waiting="3" running="0" well="{{ false }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

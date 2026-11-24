@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smart Health: a cell before its first attempt</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1420px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">smart-health-platform</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" aria-current="page" href="CellEmpty.dc.html">cell</a>
+    <span class="grow"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Room1.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div class="cols">
+    <aside class="lc" aria-label="Project cells"><div class="grp" style="padding-top:4px">Project cells · 3</div><a class="li" href="Cell.dc.html"><span class="lit2"><span class="sq" style="background:#1D4D3A;border:1px solid rgba(218,241,222,.5);box-sizing:border-box"></span>agentic-workflow-software-factory</span><span class="lim">191 attempts · 34 landed</span></a><a class="li on" href="CellEmpty.dc.html" aria-current="page"><span class="lit2"><span class="sq" style="background:#DAF1DE;border:1px solid rgba(218,241,222,.5);box-sizing:border-box"></span>smart-health-platform</span><span class="lim">0 attempts</span></a><a class="li" href="#"><span class="lit2"><span class="sq" style="background:#8EB69B;border:1px solid rgba(218,241,222,.5);box-sizing:border-box"></span>fusion-harness</span><span class="lim">4 attempts · 1 landed</span></a><div class="grp">Prompts in step</div><div class="lim" style="padding:0 12px">37 files in three Smart Health repositories, 37 identical to this cell's. Checked 2026-11-23.</div><div style="padding:12px"><a class="btn" href="SettingsJobs.dc.html">Check again</a></div></aside>
+    <main class="cc" style="gap:18px">
+      <nav class="ptabs" aria-label="Cell views" style="padding:0"><a href="#cell" class="on" aria-current="page">Cell</a><a href="Runs.dc.html">Runs<span class="n">0</span></a><a href="ChangeDetail.dc.html">Changelog<span class="n">0</span></a><a href="Mission.dc.html">Mission<span class="n">none</span></a></nav>
+      <section style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 0 20px;margin-top:-16px;text-align:center">
+        <dc-import name="Pendulum" state="idle" size="380" hanger="{{ true }}" hint-size="380px,243px"></dc-import>
+        <div style="font:800 44px/1.1 Archivo;letter-spacing:-.03em;color:rgba(218,241,222,.5)">No attempt yet</div>
+        <div class="sub" style="max-width:560px;font-size:16px">This cell was configured on 2026-09-23. It has three repositories and no run. Its first attempt comes right after T15.</div>
+        <div class="btnrow" style="justify-content:center;margin-top:12px"><button class="btn" type="button">Can one ticket run on its own?</button><button class="btn" type="button">Show the first milestone</button><button class="btn" type="button">Draft the mission note</button></div>
+      </section>
+      <section class="sec" aria-label="Before the first attempt">
+        <div class="sech"><span class="h3">Before the first attempt</span><span class="meta">checked before any call is spent</span><span class="grow"></span><span class="lbl">0 of 4</span></div>
+        <div class="secb">
+          <div class="r"><span class="x" aria-hidden="true">–</span><span>T15 is closed</span><span class="rv">open · agentic-workflow-software-factory</span></div>
+          <div class="r"><span class="x" aria-hidden="true">–</span><span>One ticket can run outside a shift, from its own repository</span><span class="rv">not checked · offline</span></div>
+          <div class="r"><span class="x" aria-hidden="true">–</span><span>The mission note is committed</span><span class="rv">not written</span></div>
+          <div class="r"><span class="x" aria-hidden="true">–</span><span>The host revision is named</span><span class="rv">[SHA] or pinned</span></div>
+        </div>
+      </section>
+      <section class="sec tbox" aria-label="Repositories">
+        <table class="pt" style="min-width:640px"><caption class="eyebrow" style="text-align:left;padding:14px 14px 4px">Repositories · each attempt binds to exactly one</caption>
+        <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Delivery</th><th scope="col">Gates</th></tr></thead>
+        <tbody><tr><td class="f">shp</td><td>plan</td><td>docs</td><td class="s">none</td></tr><tr><td class="f">api</td><td>service</td><td>service</td><td class="s">test 900 s · lint · typecheck</td></tr><tr><td class="f">app</td><td>application</td><td>mobile</td><td class="s">test 900 s · typecheck</td></tr></tbody></table>
+        <div class="secb" style="border-top:1px solid rgba(218,241,222,.07)">Contract <span class="mono" style="font-size:13px">openapi</span>: api produces it, app consumes it.</div>
+      </section>
+      <section class="sec" aria-label="First landing"><div class="sech"><span class="h3">From registering to the first landing</span><span class="meta">the number this cell is judged by</span></div>
+        <div class="strip" style="margin:14px 16px 16px"><div class="cell"><div class="cellv">61</div><div class="celll">days so far</div></div><div class="cell"><div class="cellv">[N]</div><div class="celll">owner minutes</div></div><div class="cell"><div class="cellv">0</div><div class="celll">attempts</div></div><div class="cell"><div class="cellv">none</div><div class="celll">landed</div></div></div>
+      </section>
+    </main>
+  </div>
+<div class="pn-bar flat"><dc-import name="Bar" state="idle" lease="{{ false }}" line="nothing runs here" waiting="0" running="0" well="{{ false }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1420}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

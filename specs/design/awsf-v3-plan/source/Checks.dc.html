@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marimba: driver checks</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0;background:#051F20}
+a{color:#DAF1DE}a:hover{color:#F26A1B}
+.app{position:relative;min-height:1700px;background:#051F20;color:#DAF1DE;font:400 15px/1.55 Archivo,sans-serif;overflow:hidden;display:flex;flex-direction:column}
+.bokeh{position:absolute;inset:0;background:radial-gradient(46px 46px at 6% 8%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 19% 5%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 31% 12%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 44% 6%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 58% 10%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 72% 4%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 86% 9%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 95% 17%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 11% 24%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 25% 29%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 39% 22%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 53% 27%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 67% 21%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 81% 26%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 92% 33%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 4% 41%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 17% 46%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 33% 40%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 47% 44%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 61% 39%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 75% 45%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 89% 49%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 9% 58%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 23% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 37% 56%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 52% 61%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 66% 55%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 80% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 96% 66%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 5% 75%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 19% 79%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 34% 73%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 49% 78%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 63% 72%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 77% 79%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 91% 82%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 13% 92%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 28% 96%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 42% 89%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 57% 94%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 71% 90%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 86% 95%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 27% 34%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 58% 52%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 83% 68%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 14% 84%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%)}
+.tint{position:absolute;inset:0;background:linear-gradient(165deg,rgba(11,43,38,.36) 0%,rgba(5,31,32,.48) 60%,rgba(5,31,32,.55) 100%)}
+.sheen{position:absolute;inset:0;background:linear-gradient(118deg,rgba(218,241,222,.075) 0%,rgba(218,241,222,0) 34%,rgba(218,241,222,0) 66%,rgba(218,241,222,.045) 100%);border-top:1px solid rgba(218,241,222,.13)}
+.tabs{position:relative;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:0 24px;padding:0 32px;border-bottom:1px solid rgba(218,241,222,.08)}
+.tabs .brand{font:700 15px/1 Archivo;letter-spacing:.02em;margin-right:8px}
+.tabs a{display:inline-flex;align-items:center;min-height:52px;font:500 14px/1 Archivo;color:#8EB69B;text-decoration:none}
+.tabs a.on{color:#DAF1DE;box-shadow:inset 0 -2px 0 #F26A1B}
+.tabs .right{margin-left:auto;font:400 12px/1 "JetBrains Mono",monospace;color:#8EB69B}
+.layer{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;gap:16px;width:100%;max-width:880px;margin:0 auto;padding:0 24px 40px;box-sizing:border-box}
+.head{height:72px;display:flex;align-items:center;gap:12px;flex:none}
+.meta{font:400 12px/1.5 "JetBrains Mono",monospace;color:#8EB69B}
+.mono{font-family:"JetBrains Mono",monospace}
+.icon{width:44px;height:44px;color:#8EB69B;display:flex;align-items:center;justify-content:center;border-radius:12px;text-decoration:none}
+.eyebrow{font:600 11px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#8EB69B}
+.card{border-radius:18px;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);padding:18px 20px}
+.ch{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px}
+.kid{font:600 13px/1 "JetBrains Mono",monospace;color:#8EB69B;width:28px}
+.kt{font:700 17px/1.2 Archivo}
+.ks{margin-left:auto;font:400 12px/1.4 "JetBrains Mono",monospace;color:#8EB69B}
+.r{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid rgba(218,241,222,.07);font-size:14.5px}
+.d{width:8px;height:8px;border-radius:50%;background:#DAF1DE;flex:none}
+.dd{width:8px;height:8px;border-radius:50%;background:rgba(218,241,222,.22);flex:none}
+.dor{width:8px;height:8px;border-radius:50%;background:#F26A1B;flex:none}
+.rv{margin-left:auto;font:400 12.5px/1.4 "JetBrains Mono",monospace;color:#8EB69B;text-align:right}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+</style>
+</helmet>
+<div class="app">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span aria-hidden="true" style="color:#8EB69B;margin:0 -12px">›</span>
+    <a href="#sessions">sessions</a>
+    <span aria-hidden="true" style="color:#8EB69B;margin:0 -12px">›</span>
+    <a class="on" href="Rest.dc.html" aria-current="page">marimba</a>
+    <span style="flex:1"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Room1.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="Main.dc.html" aria-label="Back to the conversation" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">Driver checks</span>
+      <span class="meta">backlog-empty-state · turn 11</span>
+    </header>
+
+    <div>
+      <div style="font:800 40px/1.1 Archivo;letter-spacing:-.032em">Five checks, all holding</div>
+      <div class="meta" style="margin-top:6px">K1–K5 bound what Marimba may do · none of them can be switched off from here</div>
+    </div>
+
+    <section class="card" aria-label="K1 preflight record">
+      <div class="ch"><span class="kid">K1</span><span class="kt">Preflight record</span><span class="ks">recorded at 4de5ff0 · fresh</span></div>
+      <div class="meta" style="margin:6px 0 8px 40px">DRAFT → PREPARED refuses without it</div>
+      <div class="r"><span class="d"></span><span>Suite green at HEAD</span><span class="rv">4de5ff0 · 2645 / 2645</span></div>
+      <div class="r"><span class="d"></span><span>Write boundary covers the named paths</span><span class="rv">dashboard/src/components/**</span></div>
+      <div class="r"><span class="dd"></span><span>Grant for protected paths</span><span class="rv">none needed</span></div>
+      <div class="r"><span class="d"></span><span>Git storage on a native filesystem</span><span class="rv">native</span></div>
+      <div class="r"><span class="d"></span><span>No duplicate task</span><span class="rv">0 open matches</span></div>
+      <div class="r"><span class="d"></span><span>Four-line request confirmed</span><span class="rv">turn 8</span></div>
+      <div class="r"><span class="d"></span><span>Prior attempts consulted</span><span class="rv">1 · a28c21d5</span></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card" aria-label="K2 legal next steps">
+        <div class="ch"><span class="kid">K2</span><span class="kt">Legal next steps</span></div>
+        <div class="meta" style="margin:6px 0 8px 40px">awsf next --json · AWAITING_OWNER</div>
+        <div class="r"><span class="mono" style="font-size:13.5px">status · explain · diff</span><span class="rv">driver</span></div>
+        <div class="r"><span class="mono" style="font-size:13.5px">land · journey</span><span class="rv" style="color:#F26A1B">owner</span></div>
+        <div class="r"><span class="mono" style="font-size:13.5px">rework · cancel</span><span class="rv" style="color:#F26A1B">owner</span></div>
+      </section>
+
+      <section class="card" aria-label="K3 schema">
+        <div class="ch"><span class="kid">K3</span><span class="kt">Schema</span></div>
+        <div class="meta" style="margin:6px 0 8px 40px">every turn must be a legal driver step</div>
+        <div class="r"><span class="d"></span><span>Turns valid this session</span><span class="rv">11 / 11</span></div>
+        <div class="r"><span class="dd"></span><span>Turns refused</span><span class="rv">0</span></div>
+        <div class="r"><span class="d"></span><span>Owner acts in the schema</span><span class="rv">none, in any spelling</span></div>
+      </section>
+
+      <section class="card" aria-label="K4 confirmation">
+        <div class="ch"><span class="kid">K4</span><span class="kt">Confirmation</span></div>
+        <div class="meta" style="margin:6px 0 8px 40px">one card per run · owner acts run only on your signed press</div>
+        <div class="r"><span class="d"></span><span>Card confirmed</span><span class="rv">turn 8</span></div>
+        <div class="r"><span class="d"></span><span>Covered</span><span class="rv">new · start · run</span></div>
+        <div class="r"><span class="d"></span><span>Owner acts run by Marimba</span><span class="rv">0</span></div>
+        <div class="r"><span class="d"></span><span>Owner presses signed by your passkey</span><span class="rv">[N] / [N]</span></div>
+      </section>
+
+      <section class="card" aria-label="K5 trap suite">
+        <div class="ch"><span class="kid">K5</span><span class="kt">Trap suite</span></div>
+        <div class="meta" style="margin:6px 0 8px 40px">refused before any provider call</div>
+        <div class="r"><span class="d"></span><span>Traps refused</span><span class="rv">[N] / [N]</span></div>
+        <div class="r"><span class="d"></span><span>Seeded up to</span><span class="rv">[CUT DATE]</span></div>
+        <div class="r"><span class="d"></span><span>Stops since the cut with a trap</span><span class="rv">[N] / [N]</span></div>
+      </section>
+    </div>
+
+    <section class="card" aria-label="Doctor">
+      <div class="ch"><span class="kt">Doctor</span><span class="ks">read-only · no repair path</span></div>
+      <div class="r" style="margin-top:10px"><span class="d"></span><span>Git storage on a native filesystem</span><span class="rv">yes</span></div>
+      <div class="r"><span class="d"></span><span>Provider CLIs present and logged in</span><span class="rv">claude · codex · pi</span></div>
+      <div class="r"><span class="d"></span><span>Quota windows</span><span class="rv">claude [USED %] · codex [USED %]</span></div>
+      <div class="r"><span class="dor"></span><span>Stale branches</span><span class="rv" style="color:#F26A1B">22</span></div>
+      <div class="r"><span class="dor"></span><span>Linked worktrees</span><span class="rv" style="color:#F26A1B">226 · 153 under the factory root</span></div>
+      <div class="r"><span class="d"></span><span>Open markers on landed work</span><span class="rv">0</span></div>
+    </section>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="needs" lease="{{ false }}" line="backlog-empty-state waits on your review" waiting="1" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1700}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

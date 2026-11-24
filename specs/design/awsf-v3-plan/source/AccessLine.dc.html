@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marimba: the access line in four states</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1680px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <div class="layer" style="padding-top:36px;gap:18px">
+    <div>
+      <div class="h1">Access line</div>
+      <div class="sub" style="margin-top:6px">The pendulum says what is happening, and its last circle is orange while a lease is live. The words say what Marimba may do, and always the acts it never takes.</div>
+      <div class="meta" style="margin-top:6px">times and counts are placeholders</div>
+    </div>
+    <section style="display:flex;flex-direction:column;gap:10px" aria-label="A · idle"><div class="eyebrow">A · idle</div><div class="alw" role="status" aria-label="What Marimba may do"><span class="alp"><dc-import name="Pendulum" state="idle" size="180" hanger="{{ true }}" hint-size="180px,115px"></dc-import></span><span class="alb"><span class="pn-w pn-idle">Idle</span><span class="alt" style="flex:none">reads freely <i>·</i> prepares <i>·</i> your press to act</span><span class="aln">never · land · publish · attest · grant</span></span></div></section>
+    <section style="display:flex;flex-direction:column;gap:10px" aria-label="B · working under a lease"><div class="eyebrow">B · working under a lease</div><div class="alw" role="status" aria-label="What Marimba may do"><span class="alp"><dc-import name="Pendulum" state="working" lease="{{ true }}" size="180" hanger="{{ true }}" hint-size="180px,115px"></dc-import></span><span class="alb"><span class="pn-w pn-working">Working</span><span class="alt" style="flex:none">[TASK], gates 3 of 5 <i>·</i> <span style="color:#F26A1B">lease until 07:00</span> <i>·</i> raise ≤ 2</span><span class="aln">never · land · publish · attest · grant</span></span></div></section>
+    <section style="display:flex;flex-direction:column;gap:10px" aria-label="B2 · working, no lease"><div class="eyebrow">B2 · working, no lease</div><div class="alw" role="status" aria-label="What Marimba may do"><span class="alp"><dc-import name="Pendulum" state="working" size="180" hanger="{{ true }}" hint-size="180px,115px"></dc-import></span><span class="alb"><span class="pn-w pn-working">Working</span><span class="alt" style="flex:none">[TASK], gates 3 of 5 <i>·</i> no lease is live</span><span class="aln">never · land · publish · attest · grant</span></span></div></section>
+    <section style="display:flex;flex-direction:column;gap:10px" aria-label="C · needs you"><div class="eyebrow">C · needs you</div><div class="alw o" role="status" aria-label="What Marimba may do"><span class="alp"><dc-import name="Pendulum" state="needs" size="180" hanger="{{ true }}" hint-size="180px,115px"></dc-import></span><span class="alb"><span class="pn-w pn-needs">Needs you</span><span class="alt" style="flex:none">journey and land, [TASK] <i>·</i> no lease is live</span><span class="aln">never · land · publish · attest · grant</span></span></div></section>
+    <section style="display:flex;flex-direction:column;gap:10px" aria-label="D · done"><div class="eyebrow">D · done</div><div class="alw d" role="status" aria-label="What Marimba may do"><span class="alp"><dc-import name="Pendulum" state="done" size="180" hanger="{{ true }}" hint-size="180px,115px"></dc-import></span><span class="alb"><span class="pn-w pn-done">Done</span><span class="alt" style="flex:none">[TASK] landed at 17:35 <i>·</i> ready for something new</span><span class="aln">never · land · publish · attest · grant</span></span></div></section>
+    <section style="display:flex;flex-direction:column;gap:10px" aria-label="E · paused"><div class="eyebrow">E · paused</div><div class="alw" role="status" aria-label="What Marimba may do"><span class="alp"><dc-import name="Pendulum" state="paused" size="180" hanger="{{ true }}" hint-size="180px,115px"></dc-import></span><span class="alb"><span class="pn-w pn-paused">Paused</span><span class="alt" style="flex:none">the sol window resets at 14:20 <i>·</i> nothing for you to do <i>·</i> no lease is live</span><span class="aln">never · land · publish · attest · grant</span></span></div></section>
+    <section style="display:flex;flex-direction:column;gap:10px" aria-label="F · no signal"><div class="eyebrow">F · no signal</div><div class="alw" role="status" aria-label="What Marimba may do"><span class="alp"><dc-import name="Pendulum" state="off" size="180" hanger="{{ true }}" hint-size="180px,115px"></dc-import></span><span class="alb"><span class="pn-w pn-off">No signal</span><span class="alt" style="flex:none">the host last answered at 17:02 <i>·</i> what it may do is not known</span><span class="aln">never · land · publish · attest · grant</span></span></div></section>
+    <section style="display:flex;flex-direction:column;gap:10px" aria-label="Opened, in any state"><div class="eyebrow">Opened, in any state</div><div class="alw" role="status" aria-label="What Marimba may do"><span class="alp"><dc-import name="Pendulum" state="working" lease="{{ true }}" size="180" hanger="{{ true }}" hint-size="180px,115px"></dc-import></span><span class="alb"><span class="pn-w pn-working">Working</span><span class="alt" style="flex:none">[TASK], gates 3 of 5 <i>·</i> <span style="color:#F26A1B">lease until 07:00</span> <i>·</i> raise ≤ 2</span><span class="aln">never · land · publish · attest · grant</span></span></div><div class="sec" style="padding:2px 18px 8px"><div class="kv"><span>May do</span><span>raise ≤ +2 · continue after a pause · route fallback within policy</span></div><div class="kv"><span>Never</span><span>land · publish · attest · grant · attribute</span></div><div class="kv"><span>Ends</span><span>07:00, or at the first BLOCKED · revocable any time</span></div><div class="kv"><span>Held by</span><span>the Delegate · lease [LEASE-ID] · Marimba only shows it</span></div></div></section>
+
+    <p class="sub" style="margin:0">A lease empowers the Delegate, and the words name it. While one is live the last circle is orange. The shape grants nothing.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1680}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

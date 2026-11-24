@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec: evidence per phase kind</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+.seq{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font:500 12px/1.4 "JetBrains Mono",monospace;color:#DAF1DE}
+.seq .a{color:#8EB69B}
+.sq{display:inline-block;width:9px;height:9px;border-radius:2px;background:rgba(218,241,222,.5);margin-right:4px}
+.sqo{display:inline-block;width:9px;height:9px;border-radius:2px;border:1.5px solid #DAF1DE;box-sizing:border-box;margin-right:4px}
+.dm{display:inline-block;width:8px;height:8px;transform:rotate(45deg);border:1.5px solid #DAF1DE;margin-right:5px}
+.dmf{display:inline-block;width:8px;height:8px;transform:rotate(45deg);background:#DAF1DE;margin-right:5px}
+</style>
+</helmet>
+<div class="app" style="min-height:1960px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#spec" aria-current="page">spec · phase evidence</a>
+    <span class="grow"></span>
+    <span class="right">for builders · not a screen</span>
+  </nav>
+
+  <div class="layer" style="padding-top:20px">
+    <div>
+      <div class="h1" style="font-size:30px">Which evidence each phase shows</div>
+      <div class="sub" style="margin-top:6px">The run screen has one shell. The selected-phase panel picks its tabs from the phase's kind, then adds what its workflow needs. Ten workflows use four kinds.</div>
+    </div>
+
+    <section class="sec tbox" aria-label="Kinds to tabs">
+      <table class="pt" style="min-width:900px">
+        <caption class="eyebrow" style="text-align:left;padding:14px 14px 4px">Phase kind → tabs, first tab opens</caption>
+        <thead><tr><th scope="col">Kind</th><th scope="col">Drawn as</th><th scope="col">Tabs</th><th scope="col">Phases of this kind</th></tr></thead>
+        <tbody>
+          <tr><td class="f">agent</td><td><span class="sq"></span>filled bar · spends calls</td><td>Overview · Events · Prompt · Output · Gates · Raw journal</td><td class="s">builder, planner, documenter, scout, intake, design, plan, tNN-build</td></tr>
+          <tr><td class="f">agent that reviews</td><td><span class="sq"></span>filled bar</td><td>Verdict · Findings · Limits · What it saw · Prompt · Gates · Events · Raw journal</td><td class="s">reviewer, shift-review, architecture-review</td></tr>
+          <tr><td class="f">agent that writes documents</td><td><span class="sq"></span>filled bar</td><td>Documents · Open items · Events · Prompt · Output · Gates</td><td class="s">plan-author, design, plan</td></tr>
+          <tr><td class="f">code</td><td><span class="sqo"></span>outlined bar · host</td><td>Commands · Checks · Output · Raw journal</td><td class="s">tests, final-tests, tNN-tests, plan-admit, seed, plan-render, the context phases</td></tr>
+          <tr><td class="f">engineer</td><td><span class="dm"></span>point</td><td>Request · Selection · Your acts · Briefs</td><td class="s">request, tNN-brief</td></tr>
+          <tr><td class="f">owner</td><td><span class="dmf"></span>filled point · your act</td><td>Journey · Acts · Closure · Lifecycle</td><td class="s">owner-journey</td></tr>
+        </tbody>
+      </table>
+      <div class="secb">A phase shorter than 1% of the run draws as a point on the waterfall, whatever its kind. Its kind still decides its tabs.</div>
+    </section>
+
+    <section class="sec" aria-label="Workflows">
+      <div class="sech"><span class="eyebrow">The ten workflows, as their recipes define them</span><span class="grow"></span><span class="meta">core/src/workflow/recipes · shift and prove compile their own</span></div>
+      <div class="secb">
+        <div class="r"><span class="mono" style="min-width:140px">scout</span><span class="seq"><span><span class="dm"></span>request</span><span class="a">›</span><span><span class="sq"></span>scout</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">plan</span><span class="seq"><span><span class="dm"></span>request</span><span class="a">›</span><span><span class="sq"></span>planner</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">intake</span><span class="seq"><span><span class="dm"></span>request</span><span class="a">›</span><span><span class="sq"></span>intake</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">build</span><span class="seq"><span><span class="dm"></span>request</span><span class="a">›</span><span><span class="sq"></span>builder</span><span class="a">›</span><span><span class="sqo"></span>tests</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">plan-build-test</span><span class="seq"><span><span class="dm"></span>request</span><span class="a">›</span><span><span class="sq"></span>planner</span><span class="a">›</span><span><span class="sq"></span>builder</span><span class="a">›</span><span><span class="sqo"></span>tests</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">build-review</span><span class="seq"><span><span class="dm"></span>request</span><span class="a">›</span><span><span class="sq"></span>builder</span><span class="a">›</span><span><span class="sqo"></span>tests</span><span class="a">›</span><span><span class="sqo"></span>review-context</span><span class="a">›</span><span><span class="sq"></span>reviewer</span><span class="a">›</span><span><span class="dmf"></span>owner-journey</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">simple-sdlc</span><span class="seq"><span><span class="dm"></span>request</span><span class="a">›</span><span><span class="sq"></span>planner</span><span class="a">›</span><span><span class="sq"></span>builder</span><span class="a">›</span><span><span class="sqo"></span>tests</span><span class="a">›</span><span><span class="sq"></span>documenter</span><span class="a">›</span><span><span class="sqo"></span>final-tests</span><span class="a">›</span><span><span class="sqo"></span>review-context</span><span class="a">›</span><span><span class="sq"></span>reviewer</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">design-to-plan</span><span class="seq"><span><span class="dm"></span>request</span><span class="a">›</span><span><span class="sqo"></span>design-context</span><span class="a">›</span><span><span class="sq"></span>design</span><span class="a">›</span><span><span class="sq"></span>architecture-review</span><span class="a">›</span><span><span class="sqo"></span>plan-context</span><span class="a">›</span><span><span class="sq"></span>plan</span><span class="a">›</span><span><span class="sqo"></span>plan-render</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">plan-author</span><span class="seq"><span><span class="dm"></span>request</span><span class="a">›</span><span><span class="sq"></span>plan-author</span><span class="a">›</span><span><span class="sqo"></span>plan-admit</span><span class="a">›</span><span><span class="sqo"></span>tests</span><span class="a">›</span><span><span class="sqo"></span>review-context</span><span class="a">›</span><span><span class="sq"></span>reviewer</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">shift</span><span class="seq"><span>for each ticket (</span><span><span class="dm"></span>tNN-brief</span><span class="a">›</span><span><span class="sq"></span>tNN-build</span><span class="a">›</span><span><span class="sqo"></span>tNN-tests</span><span>)</span><span class="a">›</span><span><span class="sqo"></span>shift-review-context</span><span class="a">›</span><span><span class="sq"></span>shift-review</span><span class="a">›</span><span><span class="dmf"></span>owner-journey</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">prove</span><span class="seq"><span><span class="sqo"></span>seed</span><span class="a">›</span><span><span class="sqo"></span>tests</span><span class="a">›</span><span><span class="sqo"></span>review-context</span><span class="a">›</span><span><span class="sq"></span>reviewer</span><span class="a">·</span><span>per item, arm and repetition</span></span></div>
+        <div class="r"><span class="mono" style="min-width:140px">orquesta · planned</span><span class="seq"><span><span class="dm"></span>brief</span><span class="a">›</span><span><span class="sq"></span>team rounds</span><span class="a">›</span><span><span class="dmf"></span>your cards</span><span class="a">›</span><span><span class="dmf"></span>your commit</span></span></div>
+      </div>
+    </section>
+
+    <div class="two">
+      <section class="sec tbox" aria-label="Event kinds">
+        <table class="pt" style="min-width:560px">
+          <caption class="eyebrow" style="text-align:left;padding:14px 14px 4px">Event kinds → where they show</caption>
+          <thead><tr><th scope="col">Record</th><th scope="col">Shown as</th></tr></thead>
+          <tbody>
+            <tr><td class="f">tool_call</td><td>a turn line, unfolding to its calls · input first</td></tr>
+            <tr><td class="f">usage</td><td>the context line and the token totals</td></tr>
+            <tr><td class="f">text.delta</td><td>one folded streamed response per turn</td></tr>
+            <tr><td class="f">route_resolution</td><td>the provenance table and a point</td></tr>
+            <tr><td class="f">run, model, prompt, notice</td><td>points on the timeline and in the turn list</td></tr>
+            <tr><td class="f">ceiling_grant</td><td>your act, with its reason</td></tr>
+            <tr><td class="f">gate result</td><td>a tick on the waterfall and a row in Gates</td></tr>
+            <tr><td class="f">transition</td><td>a row in Lifecycle, with its edge id</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="sec" aria-label="What workflows add">
+        <div class="sech"><span class="eyebrow">What each workflow adds to the shell</span></div>
+        <div class="secb">
+          <div class="r"><span class="f" style="min-width:110px;font-weight:600">shift</span><span>one row per ticket, build and tests on one clock</span></div>
+          <div class="r"><span style="min-width:110px;font-weight:600">prove</span><span>items by arms, repetitions side by side, verdict over state</span></div>
+          <div class="r"><span style="min-width:110px;font-weight:600">plan-author</span><span>Documents and Open items, open items to cards</span></div>
+          <div class="r"><span style="min-width:110px;font-weight:600">design-to-plan</span><span>Documents for design, plan and plan-render</span></div>
+          <div class="r"><span style="min-width:110px;font-weight:600">orquesta</span><span>the team room: lanes, rounds, cards</span></div>
+          <div class="r"><span style="min-width:110px;font-weight:600">any T2 run</span><span>the owner journey before land</span></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="sec" aria-label="Rules">
+      <div class="sech"><span class="eyebrow">Rules for builders</span></div>
+      <div class="secb">
+        <div class="r"><span>Kinds and lanes differ by shape and fill. No role gets a colour of its own. Today builder, reviewer and plan-author each carry one in the config.</span></div>
+        <div class="r"><span>Orange marks three things: what spends, what waits on you, and a live lease.</span></div>
+        <div class="r"><span>Every number is read from a record. A missing value shows as a placeholder, never a guess.</span></div>
+        <div class="r"><span>A run that recorded a verdict shows its verdict first. Its lifecycle state sits in the detail.</span></div>
+        <div class="r"><span>Step lines come from templates. A model writing them stays parked.</span></div>
+        <div class="r"><span>The waterfall tries four levels before it scrolls: to scale, finished tickets compact, finished milestones fold, then the overview becomes the scroller. Lanes keep today's icons. See W6.</span></div>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1960}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

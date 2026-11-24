@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marimba: runs</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0;background:#051F20}
+a{color:#DAF1DE}a:hover{color:#F26A1B}
+.app{position:relative;min-height:1220px;background:#051F20;color:#DAF1DE;font:400 15px/1.55 Archivo,sans-serif;overflow:hidden;display:flex;flex-direction:column}
+.bokeh{position:absolute;inset:0;background:radial-gradient(46px 46px at 6% 8%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 19% 5%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 31% 12%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 44% 6%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 58% 10%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 72% 4%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 86% 9%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 95% 17%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 11% 24%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 25% 29%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 39% 22%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 53% 27%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 67% 21%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 81% 26%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 92% 33%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 4% 41%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 17% 46%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 33% 40%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 47% 44%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 61% 39%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 75% 45%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 89% 49%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 9% 58%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 23% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 37% 56%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 52% 61%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 66% 55%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 80% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 96% 66%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 5% 75%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 19% 79%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 34% 73%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 49% 78%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 63% 72%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 77% 79%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 91% 82%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 13% 92%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 28% 96%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 42% 89%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 57% 94%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 71% 90%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 86% 95%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 27% 34%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 58% 52%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 83% 68%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 14% 84%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%)}
+.tint{position:absolute;inset:0;background:linear-gradient(165deg,rgba(11,43,38,.36) 0%,rgba(5,31,32,.48) 60%,rgba(5,31,32,.55) 100%)}
+.sheen{position:absolute;inset:0;background:linear-gradient(118deg,rgba(218,241,222,.075) 0%,rgba(218,241,222,0) 34%,rgba(218,241,222,0) 66%,rgba(218,241,222,.045) 100%);border-top:1px solid rgba(218,241,222,.13)}
+.tabs{position:relative;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:0 24px;padding:0 32px;border-bottom:1px solid rgba(218,241,222,.08)}
+.tabs .brand{font:700 15px/1 Archivo;letter-spacing:.02em;margin-right:8px}
+.tabs a{display:inline-flex;align-items:center;min-height:52px;font:500 14px/1 Archivo;color:#8EB69B;text-decoration:none}
+.tabs a.on{color:#DAF1DE;box-shadow:inset 0 -2px 0 #F26A1B}
+.tabs .right{margin-left:auto;font:400 12px/1 "JetBrains Mono",monospace;color:#8EB69B}
+.layer{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;gap:16px;width:100%;max-width:880px;margin:0 auto;padding:0 24px 40px;box-sizing:border-box}
+.head{height:72px;display:flex;align-items:center;gap:12px;flex:none}
+.meta{font:400 12px/1.5 "JetBrains Mono",monospace;color:#8EB69B}
+.mono{font-family:"JetBrains Mono",monospace}
+.icon{width:44px;height:44px;color:#8EB69B;display:flex;align-items:center;justify-content:center;border-radius:12px;text-decoration:none}
+.seg{display:flex;gap:4px;padding:4px;border-radius:14px;background:rgba(218,241,222,.05);border:1px solid rgba(218,241,222,.09)}
+.segb{min-height:36px;padding:0 14px;border:0;border-radius:10px;background:transparent;color:#8EB69B;font:500 13px/1 Archivo;cursor:pointer}
+.segon{min-height:36px;padding:0 14px;border:0;border-radius:10px;background:rgba(218,241,222,.1);color:#DAF1DE;font:600 13px/1 Archivo;cursor:pointer}
+.run{border-radius:18px;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);padding:18px 20px}
+.runo{border-radius:18px;background:rgba(218,241,222,.07);border:1px solid rgba(242,106,27,.55);padding:18px 20px}
+.rh{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.sha{font:600 16px/1 "JetBrains Mono",monospace}
+.chipt{font:600 11px/1 "JetBrains Mono",monospace;padding:5px 8px;border-radius:6px;border:1px solid rgba(218,241,222,.14);color:#8EB69B}
+.pill{font:600 10.5px/1 Archivo;letter-spacing:.12em;text-transform:uppercase;padding:8px 12px;border-radius:999px;background:rgba(218,241,222,.1);color:#DAF1DE}
+.pillo{font:600 10.5px/1 Archivo;letter-spacing:.12em;text-transform:uppercase;padding:8px 12px;border-radius:999px;border:1px solid #F26A1B;color:#F26A1B}
+.pills{font:700 10.5px/1 Archivo;letter-spacing:.12em;text-transform:uppercase;padding:8px 12px;border-radius:999px;background:#F26A1B;color:#14140F}
+.req{margin-top:10px;font-size:14.5px;color:rgba(218,241,222,.86)}
+.lane{display:flex;align-items:center;gap:12px;height:22px}
+.lanel{width:70px;font:400 11px/1 "JetBrains Mono",monospace;color:#8EB69B}
+.track{flex:1;height:1px;background:rgba(218,241,222,.12);position:relative}
+.strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:rgba(5,31,32,.55);border-radius:12px;margin-top:14px}
+.cell{padding:12px;border-left:1px solid rgba(218,241,222,.07)}
+.cellv{font:600 15px/1.2 "JetBrains Mono",monospace}
+.celll{font:400 10.5px/1.4 Archivo;color:#8EB69B;margin-top:4px}
+.reason{display:flex;align-items:center;gap:10px;margin-top:12px;padding:11px 14px;border-radius:12px;background:rgba(20,20,15,.45);border:1px solid #8A4A18;font:600 13px/1.4 "JetBrains Mono",monospace}
+</style>
+</helmet>
+<div class="app">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span aria-hidden="true" style="color:#8EB69B;margin:0 -12px">›</span>
+    <a href="#sessions">sessions</a>
+    <span aria-hidden="true" style="color:#8EB69B;margin:0 -12px">›</span>
+    <a class="on" href="Rest.dc.html" aria-current="page">marimba</a>
+    <span style="flex:1"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Room1.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="Main.dc.html" aria-label="Back to the conversation" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">Runs</span>
+      <span class="meta">agentic-workflow-software-factory</span>
+      <span style="flex:1"></span>
+      <div class="seg" role="group" aria-label="Filter runs">
+        <button class="segon" type="button" aria-pressed="true">Open</button>
+        <button class="segb" type="button" aria-pressed="false">Landed</button>
+        <button class="segb" type="button" aria-pressed="false">All</button>
+      </div>
+    </header>
+
+    <div>
+      <div style="font:800 40px/1.1 Archivo;letter-spacing:-.032em">4 runs</div>
+      <div class="meta" style="margin-top:6px">1 waiting on you · 1 blocked · 3 driven by Marimba · 1 direct session</div>
+    </div>
+
+    <section class="runo" aria-label="Run 99974f3">
+      <div class="rh">
+        <span class="sha">99974f3</span><span class="meta">build-review</span><span class="chipt">T1</span>
+        <span style="flex:1"></span><span class="pillo">! Owner review</span>
+      </div>
+      <div class="req">backlog-empty-state — an empty state on the backlog board that links to awsf intake</div>
+      <div style="margin-top:14px">
+        <div class="lane"><span class="lanel">builder</span><span class="track"><span style="position:absolute;left:3%;width:40%;top:-1px;height:3px;background:#8EB69B;border-radius:2px"></span></span></div>
+        <div class="lane"><span class="lanel">gates</span><span class="track"><span style="position:absolute;left:43%;width:36%;top:-1px;height:3px;background:#8EB69B;border-radius:2px"></span></span></div>
+        <div class="lane"><span class="lanel">reviewer</span><span class="track"><span style="position:absolute;left:79%;width:16%;top:-1px;height:3px;background:#DAF1DE;border-radius:2px"></span></span></div>
+      </div>
+      <div class="strip">
+        <div class="cell" style="border-left:0"><div class="cellv">38m 12s</div><div class="celll">runtime</div></div>
+        <div class="cell"><div class="cellv">22.0k</div><div class="celll">provider tokens</div></div>
+        <div class="cell"><div class="cellv">2/3</div><div class="celll">calls · ceiling held by code</div></div>
+        <div class="cell"><div class="cellv">— sub</div><div class="celll">cost</div></div>
+      </div>
+      <div class="meta" style="margin-top:12px">driven by Marimba · route policy v3 · [DATE TIME]</div>
+      <div class="meta" style="margin-top:4px">budget · 3 calls for T1 · the host stops a phase at its ceiling · no model can raise it · a raise is your press</div>
+    </section>
+
+    <section class="run" aria-label="Run a28c21d5">
+      <div class="rh">
+        <span class="sha">a28c21d5</span><span class="meta">build</span><span class="chipt">T1</span>
+        <span style="flex:1"></span><span class="pills">× Blocked</span>
+      </div>
+      <div class="req">[REQUEST TITLE] — the strict typecheck follow-up</div>
+      <div class="reason"><span style="width:8px;height:8px;border-radius:50%;background:#F26A1B;flex:none"></span><span>gate typecheck · correction 1/1 spent — named by the host</span></div>
+      <div class="meta" style="margin-top:12px">16m 20s · 41.0k · calls 2/3 · trap [TRAP-ID] · driven by Marimba</div>
+    </section>
+
+    <section class="run" aria-label="Run 21c850f8" style="opacity:.82">
+      <div class="rh">
+        <span class="sha">21c850f8</span><span class="meta">build</span><span class="chipt">T1</span>
+        <span style="flex:1"></span><span class="pill">● Landed</span>
+      </div>
+      <div class="req" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">[REQUEST TITLE] — landed by fast-forward, journey attested</div>
+      <div class="meta" style="margin-top:10px">direct session · logged as an exception · [DATE]</div>
+    </section>
+
+    <section class="run" aria-label="Run 465ab0bd" style="opacity:.62">
+      <div class="rh">
+        <span class="sha">465ab0bd</span><span class="meta">build</span><span class="chipt">T1</span>
+        <span style="flex:1"></span><span class="pillo" style="border-color:rgba(242,106,27,.6);color:rgba(242,106,27,.8)">× Cancelled</span>
+      </div>
+      <div class="meta" style="margin-top:10px">cause: superseded by backlog-empty-state · calls 0/3 · driven by Marimba</div>
+    </section>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="needs" lease="{{ false }}" line="99974f3 waits on your review" waiting="1" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1220}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

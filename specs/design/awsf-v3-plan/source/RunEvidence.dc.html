@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Run: build-review, builder selected</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1580px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#run" aria-current="page">36deb464</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="#sessions" aria-label="Back to sessions" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">v3-w03-g03w-readiness</span>
+      <span class="lblf">✓ landed</span>
+      <span class="meta">build-review · T2 · attempt 1 · driven by Marimba</span>
+      <span class="grow"></span>
+      <a class="btn" href="#metrics">Metrics</a>
+      <a class="btn" href="#report">Run report</a>
+    </header>
+
+    <div class="rc">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><span class="eyebrow">Request · verbatim</span><span class="grow"></span><a class="meta" href="RequestOwner.dc.html">open the request phase</a></div>
+      <div class="quote" style="margin-top:10px">Make the unit tests ready for gate G03-W of specs/awsf-v3-w03-ticket-closure.html, so the owner's G03-W commit can enable the plan-author role without turning tests red.</div>
+    </div>
+
+    <div class="strip">
+      <div class="cell"><div class="cellv">landed</div><div class="celll">after the journey · accept</div></div>
+      <div class="cell"><div class="cellv">2 / 5</div><div class="celll">calls · ceiling held by code</div></div>
+      <div class="cell"><div class="cellv">1h 19m</div><div class="celll">phase time, request to review</div></div>
+      <div class="cell"><div class="cellv">95.5k</div><div class="celll">tokens · provider counted</div></div>
+      <div class="cell"><div class="cellv">≈ [N]%</div><div class="celll">of the sol 5 h window · estimate</div></div>
+      <div class="cell"><div class="cellv">486d190</div><div class="celll">candidate on base 4c75b5c</div></div>
+    </div>
+
+    <section class="wv" aria-label="Waterfall"><div class="wvh"><span class="eyebrow">Waterfall</span><span class="lblf">to scale</span><span class="meta">6 phases · 15:10 → 17:34</span><span class="grow"></span><span class="meta">level 1 · every phase fits at 40 px or more</span><div class="seg" role="group" aria-label="Waterfall scale"><button class="segon" type="button" aria-pressed="true">Fit</button><button class="segb" type="button" aria-pressed="false">To scale</button></div></div><div class="wvb" style="--cols:212px 68px 870px 56px minmax(64px,1fr)"><div class="wvr ax"><div class="lnl" style="justify-content:flex-end;padding-bottom:8px"><span class="eyebrow">Lanes</span></div><div class="gp cmp"><span class="gh">request</span><span class="ghs">15:10:36</span></div><div class="gp foc"><span class="gh">to scale</span><span class="gtk " style="left:calc(4px + (100% - 8px) * 0.1191)">15:20</span><span class="gtk " style="left:calc(4px + (100% - 8px) * 0.3726)">15:40</span><span class="gtk " style="left:calc(4px + (100% - 8px) * 0.6261)">16:00</span><span class="gtk " style="left:calc(4px + (100% - 8px) * 0.8796)">16:20</span></div><div class="gp wait"><span class="gh o">1h 05m</span><span class="ghs" style="color:#F26A1B">on you</span></div><div class="gp cmp"><span class="gh">journey</span><span class="ghs">17:34</span></div></div><div class="wvr" style="height:56px"><div class="lnl"><span class="lnn"><svg class="lic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="5.6" r="2.8"/><path d="M12 8.4v7.1"/><path d="m8.8 12.4 3.2 3.2 3.2-3.2"/><path d="M4.5 19.6h15"/></svg>engineer</span><span class="lnm">request · journey</span></div><div class="gp cmp"><span class="dp" title="request · 15:10:36" style="left:50%"></span></div><div class="gp foc"><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.1191)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.3726)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.6261)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.8796)"></span></div><div class="gp wait"><span class="waitl"></span></div><div class="gp cmp"><span class="dp f" title="journey · 17:34:24" style="left:50%"></span></div></div><div class="wvr" style="height:66px"><div class="lnl"><span class="lnn"><svg class="lic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10M8 7.5c1 2.8 3.2 4.5 8 4.5"/></svg>code / git</span><span class="lnm">host · candidate 486d190</span></div><div class="gp cmp"></div><div class="gp foc"><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.1191)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.3726)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.6261)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.8796)"></span><a class="fb c" href="CodePhase.dc.html" style="left:calc(4px + (100% - 8px) * 0.6521);width:calc((100% - 8px) * 0.3310)"><span class="fbt"><span class="ok">✓</span>tests<span class="ms">26m 06s</span></span><span class="fbd">5 commands · 2 of 2 gates</span></a><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.9831) - 11px)"></span><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.9831) - 6px)"></span><span class="dp" title="review-context · 1s" style="left:calc(4px + (100% - 8px) * 0.9833);width:9px;height:9px"></span></div><div class="gp wait"></div><div class="gp cmp"></div></div><div class="wvr" style="height:82px"><div class="lnl"><span class="lnn"><svg class="lic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="5.4" cy="6.2" r="2.2"/><circle cx="5.4" cy="17.8" r="2.2"/><circle cx="17.6" cy="12" r="3"/><path d="m7.5 7.4 7.1 3.4M7.5 16.6l7.1-3.4"/></svg>builder<span class="pmk">O</span></span><span class="lnm"><b>gpt-6.1-sol</b> @ high · openai-codex</span><span class="lnm">sandbox os-enforced · linux-bwrap</span><span class="lnk">context 90.3k · window unknown</span></div><div class="gp cmp"></div><div class="gp foc"><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.1191)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.3726)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.6261)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.8796)"></span><a class="fb a sel" href="#overview" style="left:calc(4px + (100% - 8px) * 0.0006);width:calc((100% - 8px) * 0.6508)"><span class="fbt"><span class="ok">✓</span>builder<span class="ms">51m 21s</span></span><span class="fbd">Built the request on base 4c75b5c · 49 calls, 5 failed · 8 of 8 gates</span></a><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.6515) - 41px)"></span><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.6515) - 36px)"></span><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.6515) - 31px)"></span><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.6515) - 26px)"></span><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.6515) - 21px)"></span><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.6515) - 16px)"></span><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.6515) - 11px)"></span><span class="gt" style="left:calc(calc(4px + (100% - 8px) * 0.6515) - 6px)"></span></div><div class="gp wait"></div><div class="gp cmp"></div></div><div class="wvr" style="height:66px"><div class="lnl"><span class="lnn"><svg class="lic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="6.8" r="2.8"/><path d="M3.8 6.8h5.4M14.8 6.8h5.4"/><path d="m7.4 15.4 3 3.2 6.2-7"/></svg>reviewer<span class="pmk">A</span></span><span class="lnm"><b>claude-opus-5-5</b> · anthropic</span><span class="lnm">os-enforced · 5.2k context</span></div><div class="gp cmp"></div><div class="gp foc"><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.1191)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.3726)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.6261)"></span><span class="ggl" style="left:calc(4px + (100% - 8px) * 0.8796)"></span><a class="cb a" href="ReviewPhase.dc.html" title="reviewer · 1m 18s · accept" style="left:calc(100% - 50px);width:46px">1m 18s</a><span class="dpl" style="right:58px;left:auto">accept · drawn at 40 px, 1% of the run</span></div><div class="gp wait"></div><div class="gp cmp"></div></div></div>
+      <div class="ov" role="img" aria-label="The whole run at one scale"><span class="om e" title="request" style="left:0.00%"></span><span class="om a" title="builder" style="left:0.03%;width:35.71%"></span><span class="om c" title="tests" style="left:35.78%;width:18.16%"></span><span class="om r" title="reviewer" style="left:53.96%;width:0.90%"></span><span class="om w" title="waited on you 1h 05m" style="left:54.87%;width:45.13%"></span><span class="om e f" title="owner-journey" style="left:100.00%"></span><span class="otk" style="left:0.50%">15:10</span><span class="otk" style="left:34.35%">16:00</span><span class="otk" style="left:54.87%">review</span><span class="otk" style="left:96.40%">17:34</span></div>
+      <div class="ovc"><button class="rb" type="button" aria-label="Earlier" disabled>←</button><button class="rb" type="button" aria-label="Later" disabled>→</button><span class="meta">fits at one scale · level 1</span><span class="grow"></span><span class="kbd">[</span><span class="kbd">]</span><span class="meta">one ticket</span></div>
+      <div class="keyrow" style="padding:2px 16px 14px">
+  <span class="key"><i style="background:rgba(218,241,222,.2);border:1px solid rgba(218,241,222,.42)"></i>agent phase · spends calls</span>
+  <span class="key"><i style="background:#0a2a29;border:1px solid rgba(218,241,222,.38)"></i>code phase · host</span>
+  <span class="key"><span class="dmd"></span>point</span>
+  <span class="key"><span class="dmdf"></span>your act</span>
+  <span class="key"><i style="width:2px;background:#8EB69B"></i>gate</span>
+  <span class="key"><i style="width:8px;height:8px;border:1.5px dashed #DAF1DE;box-sizing:border-box"></i>failed round, then corrected</span>
+  <span class="key"><i style="height:4px;background:#DAF1DE"></i>a command running</span>
+  <span class="key"><i style="width:3px;background:#F26A1B"></i>running now</span>
+  <span class="key"><i style="background:repeating-linear-gradient(135deg,rgba(242,106,27,.55) 0 2px,rgba(0,0,0,0) 2px 6px)"></i>waited on you</span>
+</div>
+    </section>
+
+    <section class="sec" aria-label="Selected phase evidence">
+      <div class="sech">
+        <span class="eyebrow">Selected phase evidence</span>
+        <span class="h2" style="font-size:20px">builder</span>
+        <span class="lblf">✓ succeeded</span>
+        <span class="grow"></span>
+        <span class="meta">agent · 15:10:39 → 16:02:00 · corrections 0 of 1</span>
+        <button class="icon" type="button" aria-label="Close the panel" style="border:0;background:transparent;color:#8EB69B;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+      </div>
+      <nav class="ptabs" aria-label="Evidence tabs">
+        <a class="on" href="#overview" aria-current="page">Overview</a>
+        <a href="Events.dc.html">Events<span class="n">49 calls</span></a>
+        <a href="#prompt">Prompt<span class="n">2</span></a>
+        <a href="#output">Output<span class="n">1</span></a>
+        <a href="#gates">Gates<span class="n">8</span></a>
+        <a href="EventRaw.dc.html">Raw journal</a>
+      </nav>
+      <div class="secb" style="display:flex;flex-direction:column;gap:16px;padding-top:16px">
+        <div class="grid">
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Model</span><span class="grow"></span><span class="lbl">attempt override</span></div>
+            <div class="big mono">gpt-6.1-sol</div>
+            <div class="meta">effort high · openai-codex · pi-codex adapter · identity route-attributed</div>
+            <div class="r"><span>Configured default</span><span class="rv">gpt-6-sol @ xhigh</span></div>
+          </div>
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Prompt</span><span class="grow"></span><a class="meta" href="#prompt">read it</a></div>
+            <div class="tc"><span>system</span><span class="ms">9 lines</span></div>
+            <div class="tc"><span>user · request, scope, read-first</span><span class="ms">199 lines</span></div>
+            <div class="meta">turn persistence: ephemeral · continuity off</div>
+          </div>
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Context and tokens</span><span class="grow"></span><span class="lbl">provider</span></div>
+            <div class="r"><span>Input</span><span class="rv">78.3k</span></div>
+            <div class="r"><span>Read from cache</span><span class="rv">1.78M</span></div>
+            <div class="r"><span>Output · reasoning inside</span><span class="rv">11.9k · 3.3k</span></div>
+          </div>
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Tools</span><span class="grow"></span><span class="lbl">os-enforced · bwrap</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><span class="tchip">bash 19</span><span class="tchip">read 17</span><span class="tchip">edit 9</span><span class="tchip">grep 3</span><span class="tchip">write 1</span></div>
+            <div class="r"><span>Calls that failed</span><span class="rv">5 of 49</span></div>
+            <div class="meta">Tools belong to the role. A route changes model, effort and adapter only.</div>
+          </div>
+        </div>
+        <a class="btn" href="RunEvidenceB.dc.html" style="align-self:flex-start">What it did, its gates and its route</a>
+      </div>
+    </section>
+
+    
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="36deb464 landed and you have seen it" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1580}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

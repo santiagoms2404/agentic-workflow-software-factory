@@ -1,0 +1,3092 @@
+{
+  "version": 1,
+  "plan": "awsf-v3-plan",
+  "index": "specs/design/awsf-v3-plan/frame-index.json",
+  "canvasVersion": 52,
+  "use": "A UI ticket names its frames and cites these ids. The reviewer answers pass or fail for each cited fact. A group applies to every frame that lists it.",
+  "checks": {
+    "drawn": "the page holds it: words, order, parts",
+    "style": "computed style: font, colour, size, shape",
+    "rule": "behaviour or data, held by a test",
+    "eye": "judged by a person"
+  },
+  "groups": {
+    "LOOK": {
+      "applies": "Every screen, in every palette",
+      "facts": [
+        {
+          "id": "LOOK.1",
+          "check": "style",
+          "text": "Archivo for prose, headings and controls. JetBrains Mono for ids, commands, numbers and status lines."
+        },
+        {
+          "id": "LOOK.2",
+          "check": "style",
+          "text": "The background is soft dots under a tint and a sheen. There are no constellation lines."
+        },
+        {
+          "id": "LOOK.3",
+          "check": "style",
+          "text": "Orange marks three things only: what spends, what waits on the owner, and a live lease."
+        },
+        {
+          "id": "LOOK.4",
+          "check": "style",
+          "text": "Lanes, roles and phase kinds differ by shape and fill, never by a colour of their own."
+        },
+        {
+          "id": "LOOK.5",
+          "check": "rule",
+          "text": "Every number and name is read from a record. A missing value shows as a placeholder, never a guess."
+        },
+        {
+          "id": "LOOK.6",
+          "check": "rule",
+          "text": "At phone width menus stack, toolbars wrap, wide tables scroll in their own box, and the page never scrolls sideways."
+        },
+        {
+          "id": "LOOK.7",
+          "check": "style",
+          "text": "Every control has a visible name or an accessible one, and a target of at least 44 px."
+        }
+      ]
+    },
+    "MARK": {
+      "applies": "The pendulum, wherever it appears",
+      "facts": [
+        {
+          "id": "MARK.1",
+          "check": "drawn",
+          "text": "It is one component, with states idle, working, needs, paused, done and off, plus a listening layer."
+        },
+        {
+          "id": "MARK.2",
+          "check": "style",
+          "text": "Idle hangs plumb, dimmed and still, with room between its circles."
+        },
+        {
+          "id": "MARK.3",
+          "check": "style",
+          "text": "Working swings at full length with a short trail, and large marks never swing in step."
+        },
+        {
+          "id": "MARK.4",
+          "check": "style",
+          "text": "Needs you is frozen bent, never straight, and its last circle is an open orange ring."
+        },
+        {
+          "id": "MARK.5",
+          "check": "rule",
+          "text": "From working to needs you it freezes within 2 seconds."
+        },
+        {
+          "id": "MARK.6",
+          "check": "style",
+          "text": "Paused hangs while a ring around the last circle fills as the window resets."
+        },
+        {
+          "id": "MARK.7",
+          "check": "style",
+          "text": "Done is three overlapping circles in the palette green, with no arms."
+        },
+        {
+          "id": "MARK.8",
+          "check": "style",
+          "text": "No signal is outlines and dotted arms with no motion."
+        },
+        {
+          "id": "MARK.9",
+          "check": "style",
+          "text": "The last circle is filled orange only while a lease is live. With needs you, a live lease is a dot inside the ring."
+        },
+        {
+          "id": "MARK.10",
+          "check": "style",
+          "text": "All circles are one size and both arms are one thickness."
+        },
+        {
+          "id": "MARK.11",
+          "check": "style",
+          "text": "Arms, circles and the done green come from the palette. The orange never changes."
+        },
+        {
+          "id": "MARK.12",
+          "check": "rule",
+          "text": "With reduced motion each state shows one still pose."
+        },
+        {
+          "id": "MARK.13",
+          "check": "rule",
+          "text": "Its state follows the table in frame 65b."
+        }
+      ]
+    },
+    "STRIP": {
+      "applies": "The strip, on every tab without an open thread or dock",
+      "facts": [
+        {
+          "id": "STRIP.1",
+          "check": "drawn",
+          "text": "It is one component at the bottom of the tab: the mark in its well, the access line, the waiting chip, a message field, the running count and Stop."
+        },
+        {
+          "id": "STRIP.2",
+          "check": "drawn",
+          "text": "The access line reads the state word, what it is about, and whether a lease is live, then the acts Marimba never takes: land, publish, attest, grant."
+        },
+        {
+          "id": "STRIP.3",
+          "check": "rule",
+          "text": "The waiting chip counts only items the owner has not set aside, and opens the queue."
+        },
+        {
+          "id": "STRIP.4",
+          "check": "rule",
+          "text": "Stop is enabled only while something runs, and it needs no signature."
+        },
+        {
+          "id": "STRIP.5",
+          "check": "rule",
+          "text": "The slash key moves to the message field, and Esc leaves it."
+        },
+        {
+          "id": "STRIP.6",
+          "check": "drawn",
+          "text": "A screen whose column already holds a large mark shows the strip without the well."
+        }
+      ]
+    },
+    "THREAD": {
+      "applies": "A conversation with Marimba",
+      "facts": [
+        {
+          "id": "THREAD.1",
+          "check": "drawn",
+          "text": "The mark hangs from the top bar in the empty margin, with its state word and one line. Below 1,260 px it becomes a small mark in the header."
+        },
+        {
+          "id": "THREAD.2",
+          "check": "drawn",
+          "text": "The owner’s messages are bubbles. Marimba’s replies are plain text with no bubble."
+        },
+        {
+          "id": "THREAD.3",
+          "check": "drawn",
+          "text": "The header has the name, one status line and three icons: runs, driver checks, routes."
+        },
+        {
+          "id": "THREAD.4",
+          "check": "drawn",
+          "text": "A composer sits at the bottom, and the strip is not drawn."
+        }
+      ]
+    },
+    "DOCK": {
+      "applies": "Marimba docked beside a tab",
+      "facts": [
+        {
+          "id": "DOCK.1",
+          "check": "drawn",
+          "text": "The mark hangs at the head of the dock beside the name, where it was summoned, and the state word."
+        },
+        {
+          "id": "DOCK.2",
+          "check": "drawn",
+          "text": "The access line follows: what it did, what it may do, what it never does."
+        },
+        {
+          "id": "DOCK.3",
+          "check": "drawn",
+          "text": "An about chip names the context and can be removed."
+        },
+        {
+          "id": "DOCK.4",
+          "check": "drawn",
+          "text": "The dock ends with a message field, Queue or Steer, the running count and Stop."
+        },
+        {
+          "id": "DOCK.5",
+          "check": "rule",
+          "text": "The dock changes what the owner sees, never what the factory did. A change of view has Undo."
+        }
+      ]
+    },
+    "RAIL": {
+      "applies": "Settings",
+      "facts": [
+        {
+          "id": "RAIL.1",
+          "check": "drawn",
+          "text": "The rail lists, in order: Look and feel, Bars, Keys. At a glance, Context, Sources, Routes, Prompt, Steps, Step lines, Harness, Jobs. Blocks, Locked room. Owner presses, Routines, Leases, Factory config."
+        },
+        {
+          "id": "RAIL.2",
+          "check": "drawn",
+          "text": "The rail has four groups, and each says who may change it."
+        },
+        {
+          "id": "RAIL.3",
+          "check": "drawn",
+          "text": "The current page is marked, and each row shows its key."
+        }
+      ]
+    },
+    "RUN": {
+      "applies": "A run, its phases and its evidence",
+      "facts": [
+        {
+          "id": "RUN.1",
+          "check": "drawn",
+          "text": "The header names the run, its state, its workflow, its tier and who drove it."
+        },
+        {
+          "id": "RUN.2",
+          "check": "rule",
+          "text": "The first tab is the one its phase kind opens on, as frame 59 says."
+        },
+        {
+          "id": "RUN.3",
+          "check": "rule",
+          "text": "Times, counts and identities come from the journal, and an estimate is marked as one."
+        },
+        {
+          "id": "RUN.4",
+          "check": "drawn",
+          "text": "Lanes keep the dashboard’s own icons."
+        }
+      ]
+    },
+    "PRESS": {
+      "applies": "An act only the owner takes",
+      "facts": [
+        {
+          "id": "PRESS.1",
+          "check": "drawn",
+          "text": "The button carries a key glyph, and the exact command it signs is on the card."
+        },
+        {
+          "id": "PRESS.2",
+          "check": "rule",
+          "text": "Marimba prepares it and never runs it. No agent schema holds the act."
+        },
+        {
+          "id": "PRESS.3",
+          "check": "rule",
+          "text": "If anything moved while the prompt was open, the press is refused."
+        },
+        {
+          "id": "PRESS.4",
+          "check": "drawn",
+          "text": "Until the passkey path is proven, the same act is a line to copy."
+        }
+      ]
+    }
+  },
+  "frames": {
+    "mp-s0-rest": {
+      "screen": "S0",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "THREAD"
+      ],
+      "facts": [
+        {
+          "id": "S0.1",
+          "check": "drawn",
+          "text": "The title invites: tell the factory."
+        },
+        {
+          "id": "S0.2",
+          "check": "drawn",
+          "text": "Two cards at most offer where the owner left, each with its state and its spend."
+        },
+        {
+          "id": "S0.3",
+          "check": "rule",
+          "text": "Nothing is sent or started until the owner writes."
+        },
+        {
+          "id": "S0.4",
+          "check": "drawn",
+          "text": "The mark is idle and says nothing runs on this thread."
+        }
+      ]
+    },
+    "mp-s1-drive": {
+      "screen": "S1",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "THREAD",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S1.1",
+          "check": "drawn",
+          "text": "One card holds the whole run: request, route, gates and spend."
+        },
+        {
+          "id": "S1.2",
+          "check": "drawn",
+          "text": "The line above the answer says what Marimba read, as step names."
+        },
+        {
+          "id": "S1.3",
+          "check": "drawn",
+          "text": "Edit request and Change route are free. Confirm and run is the only orange button."
+        },
+        {
+          "id": "S1.4",
+          "check": "rule",
+          "text": "Nothing starts before the press, and the card covers new, start and run."
+        },
+        {
+          "id": "S1.5",
+          "check": "rule",
+          "text": "The spend line shows calls against the ceiling and the time the gates take."
+        }
+      ]
+    },
+    "mp-s2-owner-review": {
+      "screen": "S2",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "THREAD",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S2.1",
+          "check": "drawn",
+          "text": "The card shows diff stat, verdict, journey and candidate."
+        },
+        {
+          "id": "S2.2",
+          "check": "drawn",
+          "text": "The legal next acts are listed as command lines with a press: land, journey, rework."
+        },
+        {
+          "id": "S2.3",
+          "check": "rule",
+          "text": "Only steps the host allows appear, read from awsf next."
+        },
+        {
+          "id": "S2.4",
+          "check": "drawn",
+          "text": "Open the preview is offered before any press."
+        },
+        {
+          "id": "S2.5",
+          "check": "rule",
+          "text": "Land is refused until the journey is attested on the exact candidate."
+        }
+      ]
+    },
+    "mp-s3-blocked": {
+      "screen": "S3",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "THREAD",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S3.1",
+          "check": "drawn",
+          "text": "The refused turn is shown as one line that names the rule, and says nothing ran."
+        },
+        {
+          "id": "S3.2",
+          "check": "drawn",
+          "text": "The blocked card names the gate, the exit code and who named it."
+        },
+        {
+          "id": "S3.3",
+          "check": "drawn",
+          "text": "Marimba advises against a plain retry, with a cheaper and a surer way."
+        },
+        {
+          "id": "S3.4",
+          "check": "rule",
+          "text": "The owner may override the advice on the terms shown, and the journal records it."
+        },
+        {
+          "id": "S3.5",
+          "check": "drawn",
+          "text": "Continue in a new run is the orange fork. Rework and Cancel are lines below it."
+        }
+      ]
+    },
+    "mp-s4-runs": {
+      "screen": "S4",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S4.1",
+          "check": "drawn",
+          "text": "Filters are Open, Landed, All."
+        },
+        {
+          "id": "S4.2",
+          "check": "drawn",
+          "text": "One run is promoted with its waterfall and figures. The rest degrade in size and contrast by age."
+        },
+        {
+          "id": "S4.3",
+          "check": "drawn",
+          "text": "A blocked run shows the gate and the host’s cause."
+        },
+        {
+          "id": "S4.4",
+          "check": "rule",
+          "text": "A run driven in a direct session is listed and marked as an exception."
+        }
+      ]
+    },
+    "mp-s5-checks": {
+      "screen": "S5",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S5.1",
+          "check": "drawn",
+          "text": "Five checks, K1 to K5, each with its own card and its evidence."
+        },
+        {
+          "id": "S5.2",
+          "check": "drawn",
+          "text": "K2 lists who may take each legal step."
+        },
+        {
+          "id": "S5.3",
+          "check": "drawn",
+          "text": "K4 shows that Marimba ran no owner act."
+        },
+        {
+          "id": "S5.4",
+          "check": "drawn",
+          "text": "Doctor sits below and is read only."
+        },
+        {
+          "id": "S5.5",
+          "check": "rule",
+          "text": "None of the checks can be switched off from here."
+        }
+      ]
+    },
+    "mp-s5b-doctor-vm": {
+      "screen": "S5b",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S5b.1",
+          "check": "drawn",
+          "text": "It says which machine answers, and that the report comes from inside the VM."
+        },
+        {
+          "id": "S5b.2",
+          "check": "drawn",
+          "text": "Proof on this host lists the full suite, the trap suite and a real run landed from here."
+        },
+        {
+          "id": "S5b.3",
+          "check": "rule",
+          "text": "A row that was not measured says so."
+        }
+      ]
+    },
+    "mp-s6-routes": {
+      "screen": "S6",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S6.1",
+          "check": "drawn",
+          "text": "Four layers in order, L1 to L4, each with what it does and what it costs."
+        },
+        {
+          "id": "S6.2",
+          "check": "drawn",
+          "text": "L2 shows the live service and the shadow one, and whether a lease is granted."
+        },
+        {
+          "id": "S6.3",
+          "check": "drawn",
+          "text": "L3 shows the model and the local one under A/B, as two bars told apart without colour."
+        },
+        {
+          "id": "S6.4",
+          "check": "drawn",
+          "text": "The policy table gives builder, reviewer and reason for each task class."
+        },
+        {
+          "id": "S6.5",
+          "check": "rule",
+          "text": "A change is a diff the owner commits."
+        }
+      ]
+    },
+    "mp-s7-lease": {
+      "screen": "S7",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S7.1",
+          "check": "drawn",
+          "text": "Last night is a list of acts with time, decision id and whether the shadow agreed."
+        },
+        {
+          "id": "S7.2",
+          "check": "drawn",
+          "text": "Each act has Confirm and Flag."
+        },
+        {
+          "id": "S7.3",
+          "check": "drawn",
+          "text": "The next lease states scope, may do, never, and when it ends."
+        },
+        {
+          "id": "S7.4",
+          "check": "rule",
+          "text": "No lease is granted for a live night until the trap suite refuses every known trap."
+        },
+        {
+          "id": "S7.5",
+          "check": "rule",
+          "text": "A lease never grants itself, lands, publishes or attests."
+        }
+      ]
+    },
+    "mp-s8-closure": {
+      "screen": "S8",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S8.1",
+          "check": "drawn",
+          "text": "What done means is read from the ticket, not retyped."
+        },
+        {
+          "id": "S8.2",
+          "check": "drawn",
+          "text": "What closes lists each marker before and after."
+        },
+        {
+          "id": "S8.3",
+          "check": "drawn",
+          "text": "What cannot change lists the rows checked as unchanged."
+        },
+        {
+          "id": "S8.4",
+          "check": "rule",
+          "text": "Plan and ticket change in one commit."
+        },
+        {
+          "id": "S8.5",
+          "check": "drawn",
+          "text": "A refused closure is shown with its reason."
+        }
+      ]
+    },
+    "mp-s9-session": {
+      "screen": "S9",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S9.1",
+          "check": "drawn",
+          "text": "The session is read cycle by cycle, with compactions between."
+        },
+        {
+          "id": "S9.2",
+          "check": "drawn",
+          "text": "Each cycle shows asks captured, runs, tokens and refused turns."
+        },
+        {
+          "id": "S9.3",
+          "check": "drawn",
+          "text": "A missed ask is named."
+        },
+        {
+          "id": "S9.4",
+          "check": "rule",
+          "text": "Direct sessions are listed, never hidden."
+        },
+        {
+          "id": "S9.5",
+          "check": "rule",
+          "text": "Credential strings are scrubbed and counted."
+        }
+      ]
+    },
+    "mp-s10-validator": {
+      "screen": "S10",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S10.1",
+          "check": "drawn",
+          "text": "One row for each acceptance id, with pass or fail."
+        },
+        {
+          "id": "S10.2",
+          "check": "drawn",
+          "text": "A failed check shows its screenshot."
+        },
+        {
+          "id": "S10.3",
+          "check": "drawn",
+          "text": "Exploration by an agent that never saw the code is listed apart, and stops nothing."
+        },
+        {
+          "id": "S10.4",
+          "check": "rule",
+          "text": "A failing check stops the run with its id as the cause."
+        }
+      ]
+    },
+    "mp-s11-context": {
+      "screen": "S11",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S11.1",
+          "check": "drawn",
+          "text": "The chart shows median prompt tokens by week against the target."
+        },
+        {
+          "id": "S11.2",
+          "check": "drawn",
+          "text": "This turn read lists each source, and what was not loaded."
+        },
+        {
+          "id": "S11.3",
+          "check": "rule",
+          "text": "Compaction is decided by judgment and the last one is named."
+        }
+      ]
+    },
+    "mp-s12-data-loop": {
+      "screen": "S12",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S12.1",
+          "check": "drawn",
+          "text": "Training records are counted by provenance, with zero holding frontier output."
+        },
+        {
+          "id": "S12.2",
+          "check": "drawn",
+          "text": "The A/B table shows both models and the change, with no winner coloured."
+        },
+        {
+          "id": "S12.3",
+          "check": "drawn",
+          "text": "Promotion is a diff to commit."
+        },
+        {
+          "id": "S12.4",
+          "check": "rule",
+          "text": "The A/B continues after promotion."
+        }
+      ]
+    },
+    "mp-s13-readiness": {
+      "screen": "S13",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S13.1",
+          "check": "drawn",
+          "text": "Eight categories with a score and its evidence."
+        },
+        {
+          "id": "S13.2",
+          "check": "drawn",
+          "text": "Each recommendation becomes a backlog item only on accept."
+        },
+        {
+          "id": "S13.3",
+          "check": "rule",
+          "text": "It reads a project and never writes it."
+        }
+      ]
+    },
+    "mp-s14-deploy": {
+      "screen": "S14",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S14.1",
+          "check": "drawn",
+          "text": "A four step line: landed, built twice, published to staging, production."
+        },
+        {
+          "id": "S14.2",
+          "check": "drawn",
+          "text": "Production waits for the owner and is the only orange step."
+        },
+        {
+          "id": "S14.3",
+          "check": "rule",
+          "text": "Both builds must match before staging."
+        },
+        {
+          "id": "S14.4",
+          "check": "rule",
+          "text": "The factory has no path to production."
+        }
+      ]
+    },
+    "mp-s15-signals": {
+      "screen": "S15",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S15.1",
+          "check": "drawn",
+          "text": "Each signal shows its source, its text and the item it became."
+        },
+        {
+          "id": "S15.2",
+          "check": "drawn",
+          "text": "A handoff from another project is one row, marked to confirm."
+        },
+        {
+          "id": "S15.3",
+          "check": "rule",
+          "text": "Signals are pulled when the owner opens the panel or when outside CI pushes them."
+        },
+        {
+          "id": "S15.4",
+          "check": "rule",
+          "text": "Nothing watches while the owner is away."
+        }
+      ]
+    },
+    "mp-s16a-orb": {
+      "screen": "S16a",
+      "groups": [
+        "LOOK",
+        "MARK"
+      ],
+      "facts": [
+        {
+          "id": "S16a.1",
+          "check": "drawn",
+          "text": "The mark listens: a ring of ticks follows the voice. There is no orb."
+        },
+        {
+          "id": "S16a.2",
+          "check": "drawn",
+          "text": "The words appear as they are recognised, in the language spoken."
+        },
+        {
+          "id": "S16a.3",
+          "check": "drawn",
+          "text": "What was heard becomes the same card as the panel."
+        },
+        {
+          "id": "S16a.4",
+          "check": "rule",
+          "text": "Speech stays on the Mac."
+        },
+        {
+          "id": "S16a.5",
+          "check": "rule",
+          "text": "Nothing runs until the card is confirmed."
+        }
+      ]
+    },
+    "mp-s16b-phone": {
+      "screen": "S16b",
+      "groups": [
+        "LOOK",
+        "MARK"
+      ],
+      "facts": [
+        {
+          "id": "S16b.1",
+          "check": "drawn",
+          "text": "The mark hangs from the top of the phone."
+        },
+        {
+          "id": "S16b.2",
+          "check": "drawn",
+          "text": "The stop, its cause and one way forward are on one screen."
+        },
+        {
+          "id": "S16b.3",
+          "check": "rule",
+          "text": "Until the passkey test passes, an owner act is signed on the laptop, and the screen says so."
+        }
+      ]
+    },
+    "mp-s17-strip": {
+      "screen": "S17",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S17.1",
+          "check": "drawn",
+          "text": "The strip sits under an unchanged Sessions tab."
+        },
+        {
+          "id": "S17.2",
+          "check": "drawn",
+          "text": "The mark rises above the strip in its well."
+        },
+        {
+          "id": "S17.3",
+          "check": "rule",
+          "text": "The same strip is on every tab while Marimba is closed."
+        }
+      ]
+    },
+    "mp-s17a-summon-dock": {
+      "screen": "S17a",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "DOCK"
+      ],
+      "facts": [
+        {
+          "id": "S17a.1",
+          "check": "drawn",
+          "text": "The tab stays beside the dock, filtered by the answer, with a chip that shows the filter."
+        },
+        {
+          "id": "S17a.2",
+          "check": "drawn",
+          "text": "The steps Marimba took fold into one line written by a template."
+        },
+        {
+          "id": "S17a.3",
+          "check": "drawn",
+          "text": "A correction is shown as a correction, not edited away."
+        },
+        {
+          "id": "S17a.4",
+          "check": "rule",
+          "text": "Undo restores the tab’s own view."
+        }
+      ]
+    },
+    "mp-s17b-reshape": {
+      "screen": "S17b",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "THREAD"
+      ],
+      "facts": [
+        {
+          "id": "S17b.1",
+          "check": "drawn",
+          "text": "The answer lists what changed and what was not touched."
+        },
+        {
+          "id": "S17b.2",
+          "check": "drawn",
+          "text": "Undo all and Open Bars are offered."
+        },
+        {
+          "id": "S17b.3",
+          "check": "rule",
+          "text": "Marimba may change what is under Yours and Marimba’s, and nothing under Only you."
+        },
+        {
+          "id": "S17b.4",
+          "check": "rule",
+          "text": "Each change is checked after it is made."
+        }
+      ]
+    },
+    "mp-s18-owner-press": {
+      "screen": "S18",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S18.1",
+          "check": "drawn",
+          "text": "Three kinds of button: view, driver, owner. The kind comes from who may take the step."
+        },
+        {
+          "id": "S18.2",
+          "check": "drawn",
+          "text": "The waiting card shows what it signs, the candidate and what it is bound to."
+        },
+        {
+          "id": "S18.3",
+          "check": "drawn",
+          "text": "The fallback line is on the same page."
+        },
+        {
+          "id": "S18.4",
+          "check": "rule",
+          "text": "An owner route without a valid signature is refused."
+        },
+        {
+          "id": "S18.5",
+          "check": "rule",
+          "text": "Presses arrive in the order the page states."
+        }
+      ]
+    },
+    "mp-s19-workspace-empty": {
+      "screen": "S19",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S19.1",
+          "check": "drawn",
+          "text": "The empty workspace offers three sentences, each a message to Marimba."
+        },
+        {
+          "id": "S19.2",
+          "check": "rule",
+          "text": "Nothing is made until one is sent."
+        }
+      ]
+    },
+    "mp-s20-tecla-sketch": {
+      "screen": "S20",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "THREAD"
+      ],
+      "facts": [
+        {
+          "id": "S20.1",
+          "check": "drawn",
+          "text": "A recipe is sketched inside the conversation as it will look."
+        },
+        {
+          "id": "S20.2",
+          "check": "drawn",
+          "text": "What it asks for is shown before pinning: reads, writes, network, made by."
+        },
+        {
+          "id": "S20.3",
+          "check": "drawn",
+          "text": "Pin, Change and Discard follow."
+        },
+        {
+          "id": "S20.4",
+          "check": "rule",
+          "text": "A recipe uses only blocks that exist and reads only what it names."
+        }
+      ]
+    },
+    "mp-s21-workspace": {
+      "screen": "S21",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "DOCK"
+      ],
+      "facts": [
+        {
+          "id": "S21.1",
+          "check": "drawn",
+          "text": "The list holds what waits on the owner, the owner’s teclas, then the built in views, with one label each."
+        },
+        {
+          "id": "S21.2",
+          "check": "drawn",
+          "text": "The open tecla shows its kind, its state and who made it."
+        },
+        {
+          "id": "S21.3",
+          "check": "drawn",
+          "text": "Did this help is asked in one line."
+        },
+        {
+          "id": "S21.4",
+          "check": "drawn",
+          "text": "The based-on strip says what the view does not check."
+        }
+      ]
+    },
+    "mp-s22-tecla-change": {
+      "screen": "S22",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "THREAD",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S22.1",
+          "check": "drawn",
+          "text": "A change lists what was added and removed, and both versions are kept."
+        },
+        {
+          "id": "S22.2",
+          "check": "drawn",
+          "text": "Undo returns to the version before."
+        },
+        {
+          "id": "S22.3",
+          "check": "rule",
+          "text": "A change that reads more asks again. A change that reads the same does not."
+        }
+      ]
+    },
+    "mp-s23-tecla-program": {
+      "screen": "S23",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "THREAD",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S23.1",
+          "check": "drawn",
+          "text": "A program tecla says it is a program and that nothing has tested it."
+        },
+        {
+          "id": "S23.2",
+          "check": "drawn",
+          "text": "The locked room lists reads, network, reach and what it can send."
+        },
+        {
+          "id": "S23.3",
+          "check": "rule",
+          "text": "Activating a program is an owner press. Pinning a recipe is not."
+        }
+      ]
+    },
+    "mp-s24-tecla-tune": {
+      "screen": "S24",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "THREAD",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S24.1",
+          "check": "drawn",
+          "text": "Why now shows the four measures and their bars."
+        },
+        {
+          "id": "S24.2",
+          "check": "drawn",
+          "text": "The tuning card is an ordinary run card."
+        },
+        {
+          "id": "S24.3",
+          "check": "drawn",
+          "text": "Retire says what goes, what stays and what is kept, and that nothing is deleted."
+        }
+      ]
+    },
+    "mp-s25-tecla-reuse": {
+      "screen": "S25",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S25.1",
+          "check": "drawn",
+          "text": "Carries over, stays behind, asks again and fits are stated."
+        },
+        {
+          "id": "S25.2",
+          "check": "rule",
+          "text": "Data, pins and permissions do not travel. The recipe does."
+        }
+      ]
+    },
+    "mp-s26-settings-glance": {
+      "screen": "S26",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S26.1",
+          "check": "drawn",
+          "text": "Context, Routes, Prompt and Steps each have one card with a way to open it."
+        },
+        {
+          "id": "S26.2",
+          "check": "drawn",
+          "text": "The context bar shows held now, when Marimba offers to compact and when a turn waits."
+        },
+        {
+          "id": "S26.3",
+          "check": "rule",
+          "text": "Values are the live ones."
+        }
+      ]
+    },
+    "mp-s27-settings-look": {
+      "screen": "S27",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S27.1",
+          "check": "drawn",
+          "text": "Seven palettes, each drawn with its own colours and its own mark."
+        },
+        {
+          "id": "S27.2",
+          "check": "drawn",
+          "text": "Mode is Dark, Light or System."
+        },
+        {
+          "id": "S27.3",
+          "check": "drawn",
+          "text": "The pendulum can be stilled."
+        },
+        {
+          "id": "S27.4",
+          "check": "drawn",
+          "text": "The last change is named with Undo."
+        },
+        {
+          "id": "S27.5",
+          "check": "rule",
+          "text": "A palette change crosses the mark to the new ink and keeps its swing."
+        }
+      ]
+    },
+    "mp-s28-settings-bars": {
+      "screen": "S28",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S28.1",
+          "check": "drawn",
+          "text": "Five bars with their pieces: top, list, center, Marimba, strip."
+        },
+        {
+          "id": "S28.2",
+          "check": "drawn",
+          "text": "Four strip pieces are fixed and show a lock: the mark, what it may do, waiting, Stop."
+        },
+        {
+          "id": "S28.3",
+          "check": "rule",
+          "text": "A fixed piece can move along its bar and cannot be hidden."
+        }
+      ]
+    },
+    "mp-s29-settings-keys": {
+      "screen": "S29",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S29.1",
+          "check": "drawn",
+          "text": "Keys are grouped: panels, Marimba, places, settings."
+        },
+        {
+          "id": "S29.2",
+          "check": "drawn",
+          "text": "Each key has Edit."
+        },
+        {
+          "id": "S29.3",
+          "check": "rule",
+          "text": "Single keys work only when the message box is not focused."
+        },
+        {
+          "id": "S29.4",
+          "check": "rule",
+          "text": "No key runs an owner act."
+        }
+      ]
+    },
+    "mp-s30-settings-routines": {
+      "screen": "S30",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S30.1",
+          "check": "drawn",
+          "text": "A routine is a prompt with purpose, variables, instructions and workflow."
+        },
+        {
+          "id": "S30.2",
+          "check": "drawn",
+          "text": "The schedule is At a time or When this dashboard opens."
+        },
+        {
+          "id": "S30.3",
+          "check": "rule",
+          "text": "A clock time fires only while a dashboard page is open and the last press is under 12 hours old."
+        },
+        {
+          "id": "S30.4",
+          "check": "rule",
+          "text": "Each firing is one task, and its lease covers that task."
+        },
+        {
+          "id": "S30.5",
+          "check": "rule",
+          "text": "A missed time is offered once when the dashboard opens, and never made up by itself."
+        },
+        {
+          "id": "S30.6",
+          "check": "rule",
+          "text": "A routine never starts a run."
+        }
+      ]
+    },
+    "mp-s31-settings-routes": {
+      "screen": "S31",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S31.1",
+          "check": "drawn",
+          "text": "The stack is listed by layer, with effort and what runs now."
+        },
+        {
+          "id": "S31.2",
+          "check": "drawn",
+          "text": "A change is prepared as a diff."
+        },
+        {
+          "id": "S31.3",
+          "check": "rule",
+          "text": "Reasoning text is streamed and never saved."
+        }
+      ]
+    },
+    "mp-s32-settings-prompt": {
+      "screen": "S32",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S32.1",
+          "check": "drawn",
+          "text": "Sections are marked fixed, yours, generated or part."
+        },
+        {
+          "id": "S32.2",
+          "check": "drawn",
+          "text": "The mission is the project’s MISSION.md, and it is protected."
+        },
+        {
+          "id": "S32.3",
+          "check": "drawn",
+          "text": "Aliases show the word and its expansion."
+        },
+        {
+          "id": "S32.4",
+          "check": "rule",
+          "text": "Generated sections cannot drift from code."
+        }
+      ]
+    },
+    "mp-s33-settings-steps": {
+      "screen": "S33",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S33.1",
+          "check": "drawn",
+          "text": "Steps are grouped as read, driver and owner."
+        },
+        {
+          "id": "S33.2",
+          "check": "drawn",
+          "text": "Owner steps have no switch."
+        },
+        {
+          "id": "S33.3",
+          "check": "rule",
+          "text": "Turning a step on never exceeds what the host allows."
+        }
+      ]
+    },
+    "mp-s34-settings-steps-detail": {
+      "screen": "S34",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S34.1",
+          "check": "drawn",
+          "text": "The same steps with a description and the shape Marimba fills."
+        },
+        {
+          "id": "S34.2",
+          "check": "drawn",
+          "text": "Names, Descriptions and Shape are three views of one list."
+        }
+      ]
+    },
+    "mp-s35-settings-harness": {
+      "screen": "S35",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S35.1",
+          "check": "drawn",
+          "text": "Each part says what it gives Marimba and which steps it brings."
+        },
+        {
+          "id": "S35.2",
+          "check": "drawn",
+          "text": "Two parts have no switch."
+        },
+        {
+          "id": "S35.3",
+          "check": "rule",
+          "text": "A part turned off leaves the next turn."
+        }
+      ]
+    },
+    "mp-s36-map": {
+      "screen": "S36",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S36.1",
+          "check": "drawn",
+          "text": "Four zones: why, thinking, doing, keeping."
+        },
+        {
+          "id": "S36.2",
+          "check": "drawn",
+          "text": "Runs fold into what they ran under, with a count on the mark."
+        },
+        {
+          "id": "S36.3",
+          "check": "drawn",
+          "text": "What is not placed is listed."
+        },
+        {
+          "id": "S36.4",
+          "check": "rule",
+          "text": "A line exists only when a record names both ends."
+        }
+      ]
+    },
+    "mp-s37-map-cited": {
+      "screen": "S37",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "DOCK"
+      ],
+      "facts": [
+        {
+          "id": "S37.1",
+          "check": "drawn",
+          "text": "The records behind the answer are lit and the rest are dimmed, not hidden."
+        },
+        {
+          "id": "S37.2",
+          "check": "drawn",
+          "text": "The dock lists what was read."
+        },
+        {
+          "id": "S37.3",
+          "check": "rule",
+          "text": "An answer with nothing lit read nothing."
+        }
+      ]
+    },
+    "mp-s38-tecla-report": {
+      "screen": "S38",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "DOCK",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S38.1",
+          "check": "drawn",
+          "text": "Counts first: decided, planned, gaps, waiting on you."
+        },
+        {
+          "id": "S38.2",
+          "check": "drawn",
+          "text": "Each waiting item has its recommendation and Answer in Marimba."
+        },
+        {
+          "id": "S38.3",
+          "check": "rule",
+          "text": "The report puts words in the message box and presses nothing."
+        }
+      ]
+    },
+    "mp-s39-settings-sources": {
+      "screen": "S39",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S39.1",
+          "check": "drawn",
+          "text": "Sources are grouped by why, thinking, doing, keeping."
+        },
+        {
+          "id": "S39.2",
+          "check": "drawn",
+          "text": "It says what leaves the laptop and to which model."
+        },
+        {
+          "id": "S39.3",
+          "check": "drawn",
+          "text": "Adding a folder outside the project is an owner press."
+        },
+        {
+          "id": "S39.4",
+          "check": "rule",
+          "text": "A source is data. No instruction inside one is followed."
+        }
+      ]
+    },
+    "mp-s40-settings-config": {
+      "screen": "S40",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S40.1",
+          "check": "drawn",
+          "text": "Rules, fences and limits are listed with their home file."
+        },
+        {
+          "id": "S40.2",
+          "check": "drawn",
+          "text": "Nothing on the page has a switch."
+        },
+        {
+          "id": "S40.3",
+          "check": "rule",
+          "text": "Marimba may prepare a patch. Only the owner’s commit changes it."
+        }
+      ]
+    },
+    "mp-s41-rooms": {
+      "screen": "S41",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S41.1",
+          "check": "drawn",
+          "text": "Three rooms and a place for a new one, each with a small drawing, its counts and Enter."
+        },
+        {
+          "id": "S41.2",
+          "check": "drawn",
+          "text": "Each room says what it left out."
+        },
+        {
+          "id": "S41.3",
+          "check": "rule",
+          "text": "Rooms share one set of records and store nothing."
+        }
+      ]
+    },
+    "mp-s42-room1": {
+      "screen": "S42",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S42.1",
+          "check": "drawn",
+          "text": "Room 1 is the factory graph as the Canvas tab draws it today."
+        },
+        {
+          "id": "S42.2",
+          "check": "drawn",
+          "text": "What is not on the map is listed."
+        },
+        {
+          "id": "S42.3",
+          "check": "drawn",
+          "text": "Zoom out leads to the rooms."
+        }
+      ]
+    },
+    "mp-s43-vault": {
+      "screen": "S43",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S43.1",
+          "check": "drawn",
+          "text": "Every plan and document, with its kind, state and what waits."
+        },
+        {
+          "id": "S43.2",
+          "check": "drawn",
+          "text": "Filters by kind and by status."
+        },
+        {
+          "id": "S43.3",
+          "check": "rule",
+          "text": "The list is read from the plan registry, never kept by hand."
+        }
+      ]
+    },
+    "mp-s44-plan-view": {
+      "screen": "S44",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "DOCK",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S44.1",
+          "check": "drawn",
+          "text": "The whole plan opens inside the dashboard with its outline."
+        },
+        {
+          "id": "S44.2",
+          "check": "drawn",
+          "text": "Each open questionable shows its options as buttons that put words in the message box."
+        },
+        {
+          "id": "S44.3",
+          "check": "drawn",
+          "text": "The card shows how many answers would be applied and what would change."
+        },
+        {
+          "id": "S44.4",
+          "check": "rule",
+          "text": "Nothing is applied before the press."
+        }
+      ]
+    },
+    "mp-s45-journal": {
+      "screen": "S45",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S45.1",
+          "check": "drawn",
+          "text": "Counts of sessions, asks, applied and not taken."
+        },
+        {
+          "id": "S45.2",
+          "check": "drawn",
+          "text": "Each session opens to what was asked, decided, ran and touched."
+        },
+        {
+          "id": "S45.3",
+          "check": "rule",
+          "text": "It reads the sessions log and nothing else."
+        }
+      ]
+    },
+    "mp-s46-run-evidence": {
+      "screen": "S46",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S46.1",
+          "check": "drawn",
+          "text": "The request is quoted word for word with a link to its phase."
+        },
+        {
+          "id": "S46.2",
+          "check": "drawn",
+          "text": "Six figures: outcome, calls, phase time, tokens, window share, candidate."
+        },
+        {
+          "id": "S46.3",
+          "check": "style",
+          "text": "Every phase longer than one percent of the run draws to scale, and a shorter one draws as a point."
+        },
+        {
+          "id": "S46.4",
+          "check": "drawn",
+          "text": "The overview bar shows the whole run at one scale."
+        },
+        {
+          "id": "S46.5",
+          "check": "drawn",
+          "text": "The selected phase opens below with its tabs."
+        }
+      ]
+    },
+    "mp-s46b-selected-phase": {
+      "screen": "S46b",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S46b.1",
+          "check": "drawn",
+          "text": "Four cards: model, prompt, context and tokens, tools."
+        },
+        {
+          "id": "S46b.2",
+          "check": "drawn",
+          "text": "What it says it did is the envelope, with its changed files."
+        },
+        {
+          "id": "S46b.3",
+          "check": "drawn",
+          "text": "Gates on its output list each check and its kind."
+        },
+        {
+          "id": "S46b.4",
+          "check": "drawn",
+          "text": "Route provenance shows requested, effective, observed and source for each field."
+        }
+      ]
+    },
+    "mp-s47-events": {
+      "screen": "S47",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S47.1",
+          "check": "drawn",
+          "text": "Where the time went is one bar split between commands and everything else."
+        },
+        {
+          "id": "S47.2",
+          "check": "drawn",
+          "text": "A repeated command is named with its times."
+        },
+        {
+          "id": "S47.3",
+          "check": "drawn",
+          "text": "The timeline shows recorded points and long calls on one clock."
+        },
+        {
+          "id": "S47.4",
+          "check": "drawn",
+          "text": "The context line shows measured points and says it is drawn between them."
+        }
+      ]
+    },
+    "mp-s47b-turns": {
+      "screen": "S47b",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S47b.1",
+          "check": "drawn",
+          "text": "One line for each model turn, with its calls folded inside."
+        },
+        {
+          "id": "S47b.2",
+          "check": "drawn",
+          "text": "Filters: all, commands, changes, failed, long."
+        },
+        {
+          "id": "S47b.3",
+          "check": "drawn",
+          "text": "A failed call is marked and stays in place."
+        },
+        {
+          "id": "S47b.4",
+          "check": "rule",
+          "text": "A template writes each line. No model is called."
+        }
+      ]
+    },
+    "mp-s48-event-raw": {
+      "screen": "S48",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S48.1",
+          "check": "drawn",
+          "text": "Every record in source order with canonical times."
+        },
+        {
+          "id": "S48.2",
+          "check": "drawn",
+          "text": "Filters by kind, a search, and the round."
+        },
+        {
+          "id": "S48.3",
+          "check": "drawn",
+          "text": "Input comes first, and the result opens beside it."
+        },
+        {
+          "id": "S48.4",
+          "check": "drawn",
+          "text": "A point has a diamond. A span has a duration."
+        }
+      ]
+    },
+    "mp-s49-code-phase": {
+      "screen": "S49",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S49.1",
+          "check": "drawn",
+          "text": "Commands, checks, output, raw journal. No events tab."
+        },
+        {
+          "id": "S49.2",
+          "check": "drawn",
+          "text": "The command table shows exit, time and the output file."
+        },
+        {
+          "id": "S49.3",
+          "check": "drawn",
+          "text": "The check grid is commands by seven checks."
+        },
+        {
+          "id": "S49.4",
+          "check": "rule",
+          "text": "A host phase spends no calls, and the page says so."
+        }
+      ]
+    },
+    "mp-s50-review-phase": {
+      "screen": "S50",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S50.1",
+          "check": "drawn",
+          "text": "The verdict is the largest word on the page."
+        },
+        {
+          "id": "S50.2",
+          "check": "drawn",
+          "text": "Limits the reviewer named are listed beside the verdict."
+        },
+        {
+          "id": "S50.3",
+          "check": "drawn",
+          "text": "The other provider is shown: built by, reviewed by."
+        },
+        {
+          "id": "S50.4",
+          "check": "drawn",
+          "text": "What it saw lists request, files, results and the diff size against its cap."
+        }
+      ]
+    },
+    "mp-s50b-review-fails": {
+      "screen": "S50b",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S50b.1",
+          "check": "drawn",
+          "text": "The failed check, the path that tripped it and why no correction ran are in one place."
+        },
+        {
+          "id": "S50b.2",
+          "check": "drawn",
+          "text": "The phase strip is the prove workflow’s."
+        }
+      ]
+    },
+    "mp-s51-request-owner": {
+      "screen": "S51",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S51.1",
+          "check": "drawn",
+          "text": "The engineer side holds what came in, and the owner side what goes out."
+        },
+        {
+          "id": "S51.2",
+          "check": "drawn",
+          "text": "Each act before the first call shows its time and the reason given."
+        },
+        {
+          "id": "S51.3",
+          "check": "drawn",
+          "text": "The journey’s checks, the closure record and the lifecycle are on the owner side."
+        },
+        {
+          "id": "S51.4",
+          "check": "drawn",
+          "text": "The one act that remains carries the orange line."
+        }
+      ]
+    },
+    "mp-s52-shift-view": {
+      "screen": "S52",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S52.1",
+          "check": "style",
+          "text": "Six tickets fit without a scroll: finished ones compact, the selected one keeps at least 40 percent."
+        },
+        {
+          "id": "S52.2",
+          "check": "drawn",
+          "text": "A wait on the owner longer than a tenth of the run folds into one gap with its length."
+        },
+        {
+          "id": "S52.3",
+          "check": "drawn",
+          "text": "Routes for each ticket show the tier list and what this run used."
+        }
+      ]
+    },
+    "mp-s53-waterfall-live": {
+      "screen": "S53",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S53.1",
+          "check": "drawn",
+          "text": "The running ticket keeps the room, and queued work waits at the right."
+        },
+        {
+          "id": "S53.2",
+          "check": "drawn",
+          "text": "The mark hangs from the line that says now, in Marimba’s own lane."
+        },
+        {
+          "id": "S53.3",
+          "check": "drawn",
+          "text": "The live bar shows turn, calls, failures and the command running."
+        },
+        {
+          "id": "S53.4",
+          "check": "rule",
+          "text": "The bar always reaches now."
+        }
+      ]
+    },
+    "mp-s53b-waterfall-motion": {
+      "screen": "S53b",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S53b.1",
+          "check": "drawn",
+          "text": "Four moments show compaction and focus."
+        },
+        {
+          "id": "S53b.2",
+          "check": "rule",
+          "text": "Nothing reorders and nothing is hidden while the run moves."
+        },
+        {
+          "id": "S53b.3",
+          "check": "rule",
+          "text": "A finished ticket compacts to 1 px a minute, at least 48 px, in 400 ms."
+        },
+        {
+          "id": "S53b.4",
+          "check": "rule",
+          "text": "The running ticket keeps at least 40 percent of the track."
+        }
+      ]
+    },
+    "mp-s54-waterfall-limit": {
+      "screen": "S54",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S54.1",
+          "check": "rule",
+          "text": "Four levels are tried in order: to scale, finished tickets compact, finished milestones fold, scroll."
+        },
+        {
+          "id": "S54.2",
+          "check": "rule",
+          "text": "The level that ends at each window width is in the table."
+        },
+        {
+          "id": "S54.3",
+          "check": "rule",
+          "text": "The milestone in progress never folds."
+        },
+        {
+          "id": "S54.4",
+          "check": "drawn",
+          "text": "Lanes keep the icons of today."
+        }
+      ]
+    },
+    "mp-s55-prove-view": {
+      "screen": "S55",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S55.1",
+          "check": "drawn",
+          "text": "A grid of items by route arm, with repetitions side by side."
+        },
+        {
+          "id": "S55.2",
+          "check": "drawn",
+          "text": "Arms are compared by median time and verdicts, and tokens are marked as not comparable across providers."
+        },
+        {
+          "id": "S55.3",
+          "check": "drawn",
+          "text": "A run that recorded a verdict shows its verdict first."
+        },
+        {
+          "id": "S55.4",
+          "check": "rule",
+          "text": "Prove never lands."
+        }
+      ]
+    },
+    "mp-s56-plan-author": {
+      "screen": "S56",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S56.1",
+          "check": "drawn",
+          "text": "Documents is the first tab, with the three files and their sizes against their caps."
+        },
+        {
+          "id": "S56.2",
+          "check": "drawn",
+          "text": "Open items are counted as settled, working choice and open, and become cards."
+        },
+        {
+          "id": "S56.3",
+          "check": "rule",
+          "text": "The documents live in session output and never in git until admitted."
+        },
+        {
+          "id": "S56.4",
+          "check": "drawn",
+          "text": "Plan-admit lists its checks."
+        }
+      ]
+    },
+    "mp-s57-team-room": {
+      "screen": "S57",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S57.1",
+          "check": "drawn",
+          "text": "Three columns: team and rooms, the open room, cards."
+        },
+        {
+          "id": "S57.2",
+          "check": "drawn",
+          "text": "The team shows members of the limit, each with name, list, grade, state and mark."
+        },
+        {
+          "id": "S57.3",
+          "check": "drawn",
+          "text": "A card gives what it blocks, the pick and why, options and Dismiss."
+        },
+        {
+          "id": "S57.4",
+          "check": "drawn",
+          "text": "The owner’s grant for the task is shown with Revoke."
+        },
+        {
+          "id": "S57.5",
+          "check": "rule",
+          "text": "Every line is a journal record. The team writes documents and the owner commits."
+        },
+        {
+          "id": "S57.6",
+          "check": "rule",
+          "text": "Budget and rule text are never cards."
+        }
+      ]
+    },
+    "mp-s58-settings-summaries": {
+      "screen": "S58",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S58.1",
+          "check": "drawn",
+          "text": "Grouping switches, then templates with a real line for each."
+        },
+        {
+          "id": "S58.2",
+          "check": "rule",
+          "text": "A number appears exactly as recorded, and a credential value is scrubbed before any line is written."
+        },
+        {
+          "id": "S58.3",
+          "check": "rule",
+          "text": "A model writing these lines stays off."
+        }
+      ]
+    },
+    "mp-s59-evidence-map": {
+      "screen": "S59",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S59.1",
+          "check": "rule",
+          "text": "A phase kind decides its tabs, and the first tab opens."
+        },
+        {
+          "id": "S59.2",
+          "check": "rule",
+          "text": "The ten workflows and their phases are as listed."
+        },
+        {
+          "id": "S59.3",
+          "check": "rule",
+          "text": "Each record kind shows where the table says."
+        }
+      ]
+    },
+    "mp-s59b-builder-notes": {
+      "screen": "S59b",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S59b.1",
+          "check": "rule",
+          "text": "These notes explain the run screens, and nothing on this board is drawn in the product."
+        }
+      ]
+    },
+    "mp-s60-flow-map": {
+      "screen": "S60",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S60.1",
+          "check": "rule",
+          "text": "Each path visits its frames in this order."
+        },
+        {
+          "id": "S60.2",
+          "check": "rule",
+          "text": "An orange step is an owner press, and a dashed step happens outside any frame."
+        }
+      ]
+    },
+    "mp-s61-two-attempts": {
+      "screen": "S61",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S61.1",
+          "check": "drawn",
+          "text": "Two attempts of one change stand side by side, each with its own steps, state and mark."
+        },
+        {
+          "id": "S61.2",
+          "check": "drawn",
+          "text": "A stop names its cause beside the step it hit."
+        },
+        {
+          "id": "S61.3",
+          "check": "drawn",
+          "text": "What differs lists candidate, cause, what the owner did between, who built and reviewed, and cost."
+        },
+        {
+          "id": "S61.4",
+          "check": "rule",
+          "text": "An attempt stays in the list after it stops. Nothing is written by hand."
+        }
+      ]
+    },
+    "mp-s62-access-line": {
+      "screen": "S62",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S62.1",
+          "check": "drawn",
+          "text": "The same line in every state: idle, working with and without a lease, needs you, done, paused, no signal."
+        },
+        {
+          "id": "S62.2",
+          "check": "drawn",
+          "text": "Opened, it shows may do, never, ends and held by."
+        },
+        {
+          "id": "S62.3",
+          "check": "rule",
+          "text": "A lease is held by the Delegate. Marimba only shows it."
+        },
+        {
+          "id": "S62.4",
+          "check": "rule",
+          "text": "With no signal it says what it may do is not known."
+        }
+      ]
+    },
+    "mp-s63-project-switcher": {
+      "screen": "S63",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S63.1",
+          "check": "drawn",
+          "text": "It opens from the project name in the bar."
+        },
+        {
+          "id": "S63.2",
+          "check": "drawn",
+          "text": "Each project shows its swatch, counts, mark, state and key."
+        },
+        {
+          "id": "S63.3",
+          "check": "drawn",
+          "text": "One queue and one ledger are shown under the list."
+        },
+        {
+          "id": "S63.4",
+          "check": "rule",
+          "text": "Switching changes the tab and the theme, moves no run, and Marimba stays one."
+        }
+      ]
+    },
+    "mp-s64-pendulum": {
+      "screen": "S64",
+      "groups": [
+        "MARK"
+      ],
+      "facts": [
+        {
+          "id": "S64.1",
+          "check": "rule",
+          "text": "The component’s props are state, lease, listening, palette, ground, size, hanger, progress, still and seed."
+        },
+        {
+          "id": "S64.2",
+          "check": "style",
+          "text": "The box is 25 by 16."
+        }
+      ]
+    },
+    "mp-s65-pendulum-states": {
+      "screen": "S65",
+      "groups": [
+        "MARK"
+      ],
+      "facts": [
+        {
+          "id": "S65.1",
+          "check": "drawn",
+          "text": "All six states are told apart when still."
+        },
+        {
+          "id": "S65.2",
+          "check": "drawn",
+          "text": "Five lease cases are shown."
+        },
+        {
+          "id": "S65.3",
+          "check": "rule",
+          "text": "Any state goes to any other from where it is."
+        }
+      ]
+    },
+    "mp-s65b-pendulum-rules": {
+      "screen": "S65b",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S65b.1",
+          "check": "rule",
+          "text": "Every run state maps to one mark state, as the table says."
+        },
+        {
+          "id": "S65b.2",
+          "check": "rule",
+          "text": "Passing every gate is not done. Landed, published or answered is done, until seen."
+        },
+        {
+          "id": "S65b.3",
+          "check": "rule",
+          "text": "Away from a thread the first that is true shows: no signal, needs you, working, paused, done, idle."
+        },
+        {
+          "id": "S65b.4",
+          "check": "rule",
+          "text": "Raise, grant and attribute never count as waiting on the owner."
+        },
+        {
+          "id": "S65b.5",
+          "check": "rule",
+          "text": "An item set aside keeps its place and no longer turns the mark."
+        }
+      ]
+    },
+    "mp-s65c-pendulum-numbers": {
+      "screen": "S65c",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S65c.1",
+          "check": "style",
+          "text": "Circles are 21 on an arm of 100, both arms are 16 wide, and the second arm is 0.82 of the first."
+        },
+        {
+          "id": "S65c.2",
+          "check": "rule",
+          "text": "The motion is a double pendulum solved at 240 steps a second with its energy held in a band."
+        },
+        {
+          "id": "S65c.3",
+          "check": "style",
+          "text": "Strokes thicken below 80 px, and 44 px is the smallest."
+        },
+        {
+          "id": "S65c.4",
+          "check": "rule",
+          "text": "A capture uses one fixed pose from a seed, so it is the same every time."
+        }
+      ]
+    },
+    "mp-s66-lease-hours": {
+      "screen": "S66",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S66.1",
+          "check": "drawn",
+          "text": "The night is a row of marks above one time bar."
+        },
+        {
+          "id": "S66.2",
+          "check": "drawn",
+          "text": "The bar shows working with and without a lease, the pause, waiting, done, the owner’s presses and the Delegate’s acts."
+        },
+        {
+          "id": "S66.3",
+          "check": "drawn",
+          "text": "What ends a lease lists five causes and marks the one that did."
+        },
+        {
+          "id": "S66.4",
+          "check": "rule",
+          "text": "A lease ends at most 12 hours after the owner’s last press."
+        }
+      ]
+    },
+    "mp-s67-phone-queue": {
+      "screen": "S67",
+      "groups": [
+        "LOOK",
+        "MARK"
+      ],
+      "facts": [
+        {
+          "id": "S67.1",
+          "check": "drawn",
+          "text": "The queue on the phone: one press, one card, then what changed."
+        },
+        {
+          "id": "S67.2",
+          "check": "drawn",
+          "text": "Sign to land is marked as waiting for the passkey test until it passes."
+        },
+        {
+          "id": "S67.3",
+          "check": "drawn",
+          "text": "Stop is always on the screen."
+        },
+        {
+          "id": "S67.4",
+          "check": "rule",
+          "text": "Nothing lands without the owner’s signature."
+        }
+      ]
+    },
+    "mp-s68-watch": {
+      "screen": "S68",
+      "groups": [
+        "MARK"
+      ],
+      "facts": [
+        {
+          "id": "S68.1",
+          "check": "drawn",
+          "text": "Six faces, each with the mark, one word, one line and at most one button."
+        },
+        {
+          "id": "S68.2",
+          "check": "rule",
+          "text": "A double tap presses the one button. Stop needs no signature. Nothing lands from here."
+        }
+      ]
+    },
+    "mp-s69-host-map": {
+      "screen": "S69",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S69.1",
+          "check": "drawn",
+          "text": "You, Marimba, the Delegate and the host journal sit above the cells."
+        },
+        {
+          "id": "S69.2",
+          "check": "drawn",
+          "text": "Each cell shows its repositories, attempts, mission and mark."
+        },
+        {
+          "id": "S69.3",
+          "check": "drawn",
+          "text": "What is not built says which workstream builds it."
+        },
+        {
+          "id": "S69.4",
+          "check": "rule",
+          "text": "A new project is a registration. No code is copied into it."
+        }
+      ]
+    },
+    "mp-s70-cell": {
+      "screen": "S70",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S70.1",
+          "check": "drawn",
+          "text": "The cell shows mission, plan repository, plans, delivery and theme."
+        },
+        {
+          "id": "S70.2",
+          "check": "drawn",
+          "text": "The system is drawn from the config: you, Marimba and every role with what it may write."
+        },
+        {
+          "id": "S70.3",
+          "check": "drawn",
+          "text": "One request is told in six steps."
+        },
+        {
+          "id": "S70.4",
+          "check": "rule",
+          "text": "The page is drawn from config and catalog and changes when they do."
+        }
+      ]
+    },
+    "mp-s70b-cell-prompts": {
+      "screen": "S70b",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S70b.1",
+          "check": "drawn",
+          "text": "Every prompt file with what it does, its lines and whether its copies are in step."
+        },
+        {
+          "id": "S70b.2",
+          "check": "rule",
+          "text": "Only the owner’s commit changes a prompt."
+        }
+      ]
+    },
+    "mp-s71-cell-empty": {
+      "screen": "S71",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S71.1",
+          "check": "drawn",
+          "text": "The cell says it has no attempt, since when, and what comes first."
+        },
+        {
+          "id": "S71.2",
+          "check": "drawn",
+          "text": "A short list must hold before any call is spent."
+        },
+        {
+          "id": "S71.3",
+          "check": "drawn",
+          "text": "Repositories show role, delivery and gates."
+        },
+        {
+          "id": "S71.4",
+          "check": "drawn",
+          "text": "Days, owner minutes and attempts to the first landing are shown."
+        }
+      ]
+    },
+    "mp-s72-team-beam": {
+      "screen": "S72",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S72.1",
+          "check": "drawn",
+          "text": "The team hangs from one beam, each member with its own mark and state."
+        },
+        {
+          "id": "S72.2",
+          "check": "drawn",
+          "text": "The selected member’s card is in front, with its own list."
+        },
+        {
+          "id": "S72.3",
+          "check": "drawn",
+          "text": "Was the team worth it compares landing, owner minutes and window share with one agent."
+        },
+        {
+          "id": "S72.4",
+          "check": "rule",
+          "text": "A team has at most six members, the Lead included."
+        }
+      ]
+    },
+    "mp-s73-where-things-stand": {
+      "screen": "S73",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S73.1",
+          "check": "drawn",
+          "text": "Where things stand is answered for each project, with what waits and what comes next."
+        },
+        {
+          "id": "S73.2",
+          "check": "drawn",
+          "text": "Since you last looked lists changes in order."
+        },
+        {
+          "id": "S73.3",
+          "check": "drawn",
+          "text": "The answer says what it did not check."
+        },
+        {
+          "id": "S73.4",
+          "check": "rule",
+          "text": "Nothing wakes Marimba on a clock to prepare it."
+        }
+      ]
+    },
+    "mp-s74-change-detail": {
+      "screen": "S74",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RUN"
+      ],
+      "facts": [
+        {
+          "id": "S74.1",
+          "check": "drawn",
+          "text": "The change shows its path from captured to published, with both approvals."
+        },
+        {
+          "id": "S74.2",
+          "check": "drawn",
+          "text": "The reason is the owner’s words."
+        },
+        {
+          "id": "S74.3",
+          "check": "drawn",
+          "text": "Evidence, files and the diff are on one page, with cost and time beside them."
+        },
+        {
+          "id": "S74.4",
+          "check": "drawn",
+          "text": "Who it told and what it could not check are stated."
+        }
+      ]
+    },
+    "mp-s75-waiting-on-you": {
+      "screen": "S75",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S75.1",
+          "check": "drawn",
+          "text": "The title is Waiting on you. The state word is Needs you."
+        },
+        {
+          "id": "S75.2",
+          "check": "drawn",
+          "text": "Each card says what yes does, what no does, where it came from and who commits."
+        },
+        {
+          "id": "S75.3",
+          "check": "drawn",
+          "text": "An answered or expired card moves to a list with its reason."
+        },
+        {
+          "id": "S75.4",
+          "check": "rule",
+          "text": "An item is here only when its next step is the owner’s."
+        },
+        {
+          "id": "S75.5",
+          "check": "rule",
+          "text": "A no does not come back for the same cause."
+        }
+      ]
+    },
+    "mp-s76-mission-note": {
+      "screen": "S76",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S76.1",
+          "check": "drawn",
+          "text": "The note, the cases and the diff stand side by side."
+        },
+        {
+          "id": "S76.2",
+          "check": "drawn",
+          "text": "Each answer names the line it becomes."
+        },
+        {
+          "id": "S76.3",
+          "check": "drawn",
+          "text": "A case whose answer could be guessed is replaced."
+        },
+        {
+          "id": "S76.4",
+          "check": "rule",
+          "text": "Only the owner’s commit changes the note."
+        }
+      ]
+    },
+    "mp-s77-puente": {
+      "screen": "S77",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S77.1",
+          "check": "drawn",
+          "text": "A handoff shows change, prepared, needs you and could not check."
+        },
+        {
+          "id": "S77.2",
+          "check": "drawn",
+          "text": "Each claim is checked against this project’s own records."
+        },
+        {
+          "id": "S77.3",
+          "check": "rule",
+          "text": "It is data until the owner confirms it."
+        },
+        {
+          "id": "S77.4",
+          "check": "rule",
+          "text": "One notice for each landed change."
+        }
+      ]
+    },
+    "mp-s78-settings-jobs": {
+      "screen": "S78",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "RAIL"
+      ],
+      "facts": [
+        {
+          "id": "S78.1",
+          "check": "drawn",
+          "text": "Jobs are grouped by what they need: nothing, a confirmation, a lease."
+        },
+        {
+          "id": "S78.2",
+          "check": "drawn",
+          "text": "Run now and scheduling are two controls."
+        },
+        {
+          "id": "S78.3",
+          "check": "rule",
+          "text": "A code only job spends nothing, and its finding is recorded, not acted on."
+        },
+        {
+          "id": "S78.4",
+          "check": "rule",
+          "text": "No timer wakes Marimba."
+        }
+      ]
+    },
+    "mp-s79-pendulum-homes": {
+      "screen": "S79",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S79.1",
+          "check": "rule",
+          "text": "One large mark on a screen, except a team on its beam and a night on its timeline."
+        },
+        {
+          "id": "S79.2",
+          "check": "rule",
+          "text": "It always hangs from something drawn."
+        },
+        {
+          "id": "S79.3",
+          "check": "rule",
+          "text": "When the margin is too narrow it moves to a row and keeps its state."
+        }
+      ]
+    },
+    "mp-s80-strip-component": {
+      "screen": "S80",
+      "groups": [
+        "STRIP",
+        "MARK"
+      ],
+      "facts": [
+        {
+          "id": "S80.1",
+          "check": "rule",
+          "text": "The component’s props are state, lease, line, until, waiting, running, ask, well, listening."
+        }
+      ]
+    },
+    "mp-s81-pendulum-palettes": {
+      "screen": "S81",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S81.1",
+          "check": "style",
+          "text": "Each palette’s inks are computed from the dashboard’s own tokens, as the list says. Forest keeps the owner’s four greens."
+        },
+        {
+          "id": "S81.2",
+          "check": "style",
+          "text": "The lease orange is #F26A1B on dark and #C4500D on light."
+        }
+      ]
+    },
+    "mp-s82-six-states": {
+      "screen": "S82",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S82.1",
+          "check": "rule",
+          "text": "Paused, No signal and the listening layer are in. Checking and five others are out."
+        }
+      ]
+    },
+    "mp-s83-intake": {
+      "screen": "S83",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S83.1",
+          "check": "drawn",
+          "text": "An idea shows its path from captured to planned, and where it is."
+        },
+        {
+          "id": "S83.2",
+          "check": "drawn",
+          "text": "Each source shows where it came from and whether it was read."
+        },
+        {
+          "id": "S83.3",
+          "check": "drawn",
+          "text": "A source that could not be read says why and waits on the owner."
+        },
+        {
+          "id": "S83.4",
+          "check": "drawn",
+          "text": "What Marimba understood, what it did not read and what it did not check are shown before a stronger model reads it."
+        },
+        {
+          "id": "S83.5",
+          "check": "rule",
+          "text": "A round starts only on a press."
+        }
+      ]
+    },
+    "mp-s84-phone-intake": {
+      "screen": "S84",
+      "groups": [
+        "MARK"
+      ],
+      "facts": [
+        {
+          "id": "S84.1",
+          "check": "drawn",
+          "text": "The mark listens, and the words appear."
+        },
+        {
+          "id": "S84.2",
+          "check": "drawn",
+          "text": "The note goes to an idea or a new one, and is factory or personal."
+        },
+        {
+          "id": "S84.3",
+          "check": "rule",
+          "text": "It stays on the phone until the laptop opens, and starts nothing."
+        },
+        {
+          "id": "S84.4",
+          "check": "rule",
+          "text": "A personal note never leaves the phone or the owner’s Drive."
+        }
+      ]
+    },
+    "mp-s85-rulings": {
+      "screen": "S85",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP",
+        "PRESS"
+      ],
+      "facts": [
+        {
+          "id": "S85.1",
+          "check": "drawn",
+          "text": "Each decision has its detail, the recommendation, the alternatives and an ELI."
+        },
+        {
+          "id": "S85.2",
+          "check": "drawn",
+          "text": "An answer in the owner’s words is shown as it was read before it is recorded."
+        },
+        {
+          "id": "S85.3",
+          "check": "rule",
+          "text": "Nothing is recorded until the owner confirms the reading."
+        }
+      ]
+    },
+    "mp-s86-bridges": {
+      "screen": "S86",
+      "groups": [
+        "LOOK",
+        "MARK",
+        "STRIP"
+      ],
+      "facts": [
+        {
+          "id": "S86.1",
+          "check": "drawn",
+          "text": "The folder is the whole contract: INTAKE.md, sources, questions."
+        },
+        {
+          "id": "S86.2",
+          "check": "drawn",
+          "text": "Each agent says how it reaches the folder and what is not known about it."
+        },
+        {
+          "id": "S86.3",
+          "check": "rule",
+          "text": "The folder is read only when the dashboard opens, and as data."
+        },
+        {
+          "id": "S86.4",
+          "check": "rule",
+          "text": "Nothing in the folder can start a run, and nothing personal enters it."
+        }
+      ]
+    },
+    "mp-s88-workstreams": {
+      "screen": "S88",
+      "groups": [],
+      "facts": [
+        {
+          "id": "S88.1",
+          "check": "rule",
+          "text": "A plan author selects frames from this table, and its deep plan may narrow it and say so."
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The selected phase, in full · Run: build-review, builder selected</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1460px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#run" aria-current="page">36deb464</a>
+    <span class="meta">scrolled to the selected phase</span><span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="#sessions" aria-label="Back to sessions" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">v3-w03-g03w-readiness</span>
+      <span class="lblf">✓ landed</span>
+      <span class="meta">build-review · T2 · attempt 1 · driven by Marimba</span>
+      <span class="grow"></span>
+      <a class="btn" href="#metrics">Metrics</a>
+      <a class="btn" href="#report">Run report</a>
+    </header>
+
+    
+
+    
+
+    
+
+    <section class="sec" aria-label="Selected phase evidence">
+      <div class="sech">
+        <span class="eyebrow">Selected phase evidence</span>
+        <span class="h2" style="font-size:20px">builder</span>
+        <span class="lblf">✓ succeeded</span>
+        <span class="grow"></span>
+        <span class="meta">agent · 15:10:39 → 16:02:00 · corrections 0 of 1</span>
+        <button class="icon" type="button" aria-label="Close the panel" style="border:0;background:transparent;color:#8EB69B;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+      </div>
+      <nav class="ptabs" aria-label="Evidence tabs">
+        <a class="on" href="#overview" aria-current="page">Overview</a>
+        <a href="Events.dc.html">Events<span class="n">49 calls</span></a>
+        <a href="#prompt">Prompt<span class="n">2</span></a>
+        <a href="#output">Output<span class="n">1</span></a>
+        <a href="#gates">Gates<span class="n">8</span></a>
+        <a href="EventRaw.dc.html">Raw journal</a>
+      </nav>
+      <div class="secb" style="display:flex;flex-direction:column;gap:16px;padding-top:16px">
+        <div class="grid">
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Model</span><span class="grow"></span><span class="lbl">attempt override</span></div>
+            <div class="big mono">gpt-6.1-sol</div>
+            <div class="meta">effort high · openai-codex · pi-codex adapter · identity route-attributed</div>
+            <div class="r"><span>Configured default</span><span class="rv">gpt-6-sol @ xhigh</span></div>
+          </div>
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Prompt</span><span class="grow"></span><a class="meta" href="#prompt">read it</a></div>
+            <div class="tc"><span>system</span><span class="ms">9 lines</span></div>
+            <div class="tc"><span>user · request, scope, read-first</span><span class="ms">199 lines</span></div>
+            <div class="meta">turn persistence: ephemeral · continuity off</div>
+          </div>
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Context and tokens</span><span class="grow"></span><span class="lbl">provider</span></div>
+            <div class="r"><span>Input</span><span class="rv">78.3k</span></div>
+            <div class="r"><span>Read from cache</span><span class="rv">1.78M</span></div>
+            <div class="r"><span>Output · reasoning inside</span><span class="rv">11.9k · 3.3k</span></div>
+          </div>
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Tools</span><span class="grow"></span><span class="lbl">os-enforced · bwrap</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><span class="tchip">bash 19</span><span class="tchip">read 17</span><span class="tchip">edit 9</span><span class="tchip">grep 3</span><span class="tchip">write 1</span></div>
+            <div class="r"><span>Calls that failed</span><span class="rv">5 of 49</span></div>
+            <div class="meta">Tools belong to the role. A route changes model, effort and adapter only.</div>
+          </div>
+        </div>
+
+        <div class="two">
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">What it says it did</span><span class="grow"></span><span class="meta">awsf.build-output/v1 · valid</span></div>
+            <div class="sub">Prepared unit tests and role-proof support for both shipped and G03-W configurations. All five candidate host commands pass. The scratch suite has exactly the expected cheatsheet failure.</div>
+            <div class="eyebrow" style="margin-top:4px">6 changed files · all under core/test</div>
+            <div class="tc"><span>core/test/unit/workflow/plan-author.test.ts</span></div>
+            <div class="tc"><span>core/test/unit/workflow/prompt-composition.test.ts</span></div>
+            <div class="tc"><span>core/test/unit/adapters/role-proof.test.ts</span></div>
+            <div class="tc"><span>core/test/live/support/phase-parity.ts · role-fixture.ts · interrupted-turn-proof.ts</span></div>
+            <div class="term">test: prepare plan-author coverage for G03-W enablement</div>
+          </div>
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Gates on its output · round 0</span><span class="grow"></span><span class="lblf">8 of 8</span></div>
+            <div class="r"><span class="ok">✓</span><span>head advanced</span><span class="rv">git</span></div>
+            <div class="r"><span class="ok">✓</span><span>diff matches claims</span><span class="rv">git</span></div>
+            <div class="r"><span class="ok">✓</span><span>writes within globs</span><span class="rv">filesystem</span></div>
+            <div class="r"><span class="ok">✓</span><span>no protected paths</span><span class="rv">filesystem</span></div>
+            <div class="r"><span class="ok">✓</span><span>envelope valid · json parses · artifacts exist</span><span class="rv">pure, filesystem</span></div>
+            <div class="r"><span class="ok">✓</span><span>risk tier sufficient</span><span class="rv">pure</span></div>
+            <a class="btn" href="#gates" style="align-self:flex-start">Every check</a>
+          </div>
+        </div>
+
+        <div class="tbox sec">
+          <table class="pt" style="min-width:720px">
+            <caption class="eyebrow" style="text-align:left;padding:14px 14px 4px">Route provenance · requested, effective, observed</caption>
+            <thead><tr><th scope="col">Field</th><th scope="col">Requested</th><th scope="col">Effective</th><th scope="col">Observed</th><th scope="col">Source</th></tr></thead>
+            <tbody>
+              <tr><td class="f">Adapter</td><td>codex</td><td>pi-codex</td><td>pi-codex</td><td class="s">attempt override</td></tr>
+              <tr><td class="f">Provider</td><td>openai-codex</td><td>openai-codex</td><td>openai-codex</td><td class="s">attempt override</td></tr>
+              <tr><td class="f">Model</td><td>gpt-6.1-sol</td><td>gpt-6.1-sol</td><td>gpt-6.1-sol</td><td class="s">attempt override</td></tr>
+              <tr><td class="f">Effort</td><td>high</td><td>high</td><td>not reported</td><td class="s">attempt override</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="36deb464 landed and you have seen it" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1460}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

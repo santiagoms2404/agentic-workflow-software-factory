@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marimba on the watch</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0;background:#14140F}
+</style>
+</helmet>
+<div style="width:1940px;height:460px;box-sizing:border-box;padding:40px 48px 30px;background:#14140F;color:#DAF1DE;font:400 15px/1.5 Archivo,sans-serif;display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;justify-content:space-between;gap:40px">
+  <div style="width:260px;height:316px;box-sizing:border-box;border-radius:66px;background:#051F20;box-shadow:0 0 0 9px #101110,0 18px 40px rgba(0,0,0,.4);padding:10px 20px 20px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden">
+    <span style="display:flex;flex:none"><dc-import name="Pendulum" state="idle" size="236" hint-size="236px,151px"></dc-import></span>
+    <div style="text-align:center"><div style="font:800 24px/1.1 Archivo;letter-spacing:-.025em;color:#A7BFA7">Idle</div><div style="font:400 12.5px/1.4 JetBrains Mono,monospace;color:#8EB69B;margin-top:4px">nothing needs you</div></div>
+    <span style="min-height:46px;display:flex;align-items:center;font:400 13px/1 JetBrains Mono,monospace;color:#8EB69B">0 running</span>
+  </div>
+  <div style="width:260px;height:316px;box-sizing:border-box;border-radius:66px;background:#051F20;box-shadow:0 0 0 9px #101110,0 18px 40px rgba(0,0,0,.4);padding:10px 20px 20px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden">
+    <span style="display:flex;flex:none"><dc-import name="Pendulum" state="working" lease="{{ true }}" size="236" hint-size="236px,151px"></dc-import></span>
+    <div style="text-align:center"><div style="font:800 24px/1.1 Archivo;letter-spacing:-.025em;color:#DAF1DE">Working</div><div style="font:400 12.5px/1.4 JetBrains Mono,monospace;color:#8EB69B;margin-top:4px">1 run · until 07:00</div></div>
+    <button type="button" style="min-height:46px;width:100%;border-radius:23px;border:1.5px solid rgba(218,241,222,.2);background:rgba(218,241,222,.06);color:#DAF1DE;font:700 15px/1 Archivo;cursor:pointer">Stop</button>
+  </div>
+  <div style="width:260px;height:316px;box-sizing:border-box;border-radius:66px;background:#051F20;box-shadow:0 0 0 9px #101110,0 18px 40px rgba(0,0,0,.4);padding:10px 20px 20px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden">
+    <span style="display:flex;flex:none"><dc-import name="Pendulum" state="needs" size="236" hint-size="236px,151px"></dc-import></span>
+    <div style="text-align:center"><div style="font:800 24px/1.1 Archivo;letter-spacing:-.025em;color:#F26A1B">Needs you</div><div style="font:400 12.5px/1.4 JetBrains Mono,monospace;color:#8EB69B;margin-top:4px">2 wait · sign on the phone</div></div>
+    <button type="button" style="min-height:46px;width:100%;border-radius:23px;border:1.5px solid #F26A1B;background:rgba(218,241,222,.06);color:#F26A1B;font:700 15px/1 Archivo;cursor:pointer">Open on phone</button>
+  </div>
+  <div style="width:260px;height:316px;box-sizing:border-box;border-radius:66px;background:#051F20;box-shadow:0 0 0 9px #101110,0 18px 40px rgba(0,0,0,.4);padding:10px 20px 20px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden">
+    <span style="display:flex;flex:none"><dc-import name="Pendulum" state="paused" progress="0.62" size="236" hint-size="236px,151px"></dc-import></span>
+    <div style="text-align:center"><div style="font:800 24px/1.1 Archivo;letter-spacing:-.025em;color:#A7BFA7">Paused</div><div style="font:400 12.5px/1.4 JetBrains Mono,monospace;color:#8EB69B;margin-top:4px">resets 14:20</div></div>
+    <span style="min-height:46px;display:flex;align-items:center;font:400 13px/1 JetBrains Mono,monospace;color:#8EB69B">1 run waits</span>
+  </div>
+  <div style="width:260px;height:316px;box-sizing:border-box;border-radius:66px;background:#051F20;box-shadow:0 0 0 9px #101110,0 18px 40px rgba(0,0,0,.4);padding:10px 20px 20px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden">
+    <span style="display:flex;flex:none"><dc-import name="Pendulum" state="done" size="236" hint-size="236px,151px"></dc-import></span>
+    <div style="text-align:center"><div style="font:800 24px/1.1 Archivo;letter-spacing:-.025em;color:#4FE3A1">Done</div><div style="font:400 12.5px/1.4 JetBrains Mono,monospace;color:#8EB69B;margin-top:4px">[TASK] landed</div></div>
+    <button type="button" style="min-height:46px;width:100%;border-radius:23px;border:1.5px solid #4FE3A1;background:rgba(218,241,222,.06);color:#4FE3A1;font:700 15px/1 Archivo;cursor:pointer">Seen</button>
+  </div>
+  <div style="width:260px;height:316px;box-sizing:border-box;border-radius:66px;background:#051F20;box-shadow:0 0 0 9px #101110,0 18px 40px rgba(0,0,0,.4);padding:10px 20px 20px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden">
+    <span style="display:flex;flex:none"><dc-import name="Pendulum" state="off" size="236" hint-size="236px,151px"></dc-import></span>
+    <div style="text-align:center"><div style="font:800 24px/1.1 Archivo;letter-spacing:-.025em;color:#8EB69B">No signal</div><div style="font:400 12.5px/1.4 JetBrains Mono,monospace;color:#8EB69B;margin-top:4px">since 17:02</div></div>
+    <span style="min-height:46px;display:flex;align-items:center;font:400 13px/1 JetBrains Mono,monospace;color:#8EB69B">nothing is known</span>
+  </div>
+</div>
+<div style="text-align:center;font:400 13px/1.5 JetBrains Mono,monospace;color:#8EB69B">a double tap presses the one button · stop needs no signature · nothing lands from here</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1940,"height":460}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

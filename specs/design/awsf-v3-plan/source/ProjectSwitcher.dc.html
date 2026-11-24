@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project switcher: one queue, one ledger</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1200px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" aria-current="page" href="#p">projects</a>
+    <span class="grow"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Rooms.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div style="position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;padding:40px 24px 0;gap:18px">
+    <div style="width:100%;max-width:880px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:baseline;gap:12px"><span class="h1" style="font-size:30px">Projects</span><span class="meta">opens from the name in the bar · one host</span><span class="grow"></span><span class="kbd" aria-hidden="true">Esc</span></div>
+      <input class="field" type="search" aria-label="Find a project" placeholder="Find a project" style="min-height:52px">
+      <div class="sec" style="padding:8px"><a class="li on" href="#agentic-workflow-software-factory" style="flex-direction:row;align-items:center;gap:16px;padding:14px 18px"><span class="sq" style="width:18px;height:18px;background:#1D4D3A;border:1px solid rgba(218,241,222,.5);box-sizing:border-box"></span><span style="flex:1 1 240px;min-width:0"><span style="font:700 16px/1.3 Archivo;display:block">agentic-workflow-software-factory</span><span class="lim">191 attempts · 34 landed · mission note: not written</span></span><dc-import name="Pendulum" state="needs" size="84" hint-size="84px,54px"></dc-import><span style="width:200px"><b class="pn-needs">Needs you</b><br><span class="lim">3 runs wait on your review</span></span><span class="kbd" aria-hidden="true">1</span></a><a class="li" href="#smart-health-platform" style="flex-direction:row;align-items:center;gap:16px;padding:14px 18px"><span class="sq" style="width:18px;height:18px;background:#DAF1DE;border:1px solid rgba(218,241,222,.5);box-sizing:border-box"></span><span style="flex:1 1 240px;min-width:0"><span style="font:700 16px/1.3 Archivo;display:block">smart-health-platform</span><span class="lim">0 attempts · 3 repositories · mission note: not written</span></span><dc-import name="Pendulum" state="idle" size="84" hint-size="84px,54px"></dc-import><span style="width:200px"><b class="pn-idle">Idle</b><br><span class="lim">waits on T15</span></span><span class="kbd" aria-hidden="true">2</span></a><a class="li" href="#fusion-harness" style="flex-direction:row;align-items:center;gap:16px;padding:14px 18px"><span class="sq" style="width:18px;height:18px;background:#8EB69B;border:1px solid rgba(218,241,222,.5);box-sizing:border-box"></span><span style="flex:1 1 240px;min-width:0"><span style="font:700 16px/1.3 Archivo;display:block">fusion-harness</span><span class="lim">4 attempts · 1 landed</span></span><dc-import name="Pendulum" state="idle" size="84" hint-size="84px,54px"></dc-import><span style="width:200px"><b class="pn-idle">Idle</b><br><span class="lim">last attempt 2026-08-16</span></span><span class="kbd" aria-hidden="true">3</span></a></div>
+      <div class="two" style="gap:14px">
+        <section class="gc"><div class="h3">One queue</div><div class="sub">Everything that waits on you, whichever project it belongs to.</div><div class="r"><span>Waiting on you</span><span class="rv">3</span></div><a class="btn" href="PressQueue.dc.html" style="align-self:flex-start;margin-top:8px">Open the queue</a></section>
+        <section class="gc"><div class="h3">One ledger</div><div class="sub">A subscription window is one resource, so every project draws from it.</div><div class="r"><span>sol · 5 h</span><span class="rv">[USED %]</span></div><div class="r"><span>opus · week</span><span class="rv">[USED %]</span></div></section>
+      </div>
+      <div class="btnrow"><a class="btn" href="HostMap.dc.html">See them in room 3</a><button class="btn" type="button">Register another project</button></div>
+      <div class="meta">switching changes the tab you see and the theme · it moves no run, and Marimba stays one</div>
+    </div>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="needs" lease="{{ false }}" line="3 runs wait on your review" waiting="3" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

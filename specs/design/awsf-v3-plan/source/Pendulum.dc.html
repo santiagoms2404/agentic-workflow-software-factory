@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pendulum: Marimba's mark</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="display:flex;width:{{w}}px;height:{{h}}px;flex:none">
+<svg ref="{{host}}" width="{{w}}" height="{{h}}" viewBox="-200 -50 400 256" role="img" aria-label="{{label}}" style="display:block;flex:none;overflow:visible">
+<line data-p="hg" x1="0" y1="-50" x2="0" y2="-16" stroke="{{ring}}" stroke-width="5" opacity="{{f.hgO}}"></line>
+<path data-p="t0" d="{{f.t0}}" fill="none" stroke="{{ring}}" stroke-width="3" stroke-linecap="butt" stroke-linejoin="round" opacity="{{f.t0O}}"></path>
+<path data-p="t1" d="{{f.t1}}" fill="none" stroke="{{ring}}" stroke-width="5.5" stroke-linecap="butt" stroke-linejoin="round" opacity="{{f.t1O}}"></path>
+<path data-p="t2" d="{{f.t2}}" fill="none" stroke="{{ring}}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="{{f.t2O}}"></path>
+<path data-p="vo" d="{{f.vo}}" fill="none" stroke="{{ring}}" stroke-width="5" stroke-linecap="round" opacity="{{f.voO}}"></path>
+<circle data-p="pu" cx="0" cy="78" r="{{f.puR}}" fill="none" stroke="{{glow}}" stroke-width="6" opacity="{{f.puO}}"></circle>
+<circle data-p="hb" cx="0" cy="78" r="118" fill="{{glow}}" opacity="{{f.hbO}}"></circle>
+<circle data-p="ha" cx="0" cy="78" r="96" fill="{{glow}}" opacity="{{f.haO}}"></circle>
+<g data-p="bd" opacity="{{f.nO}}">
+<line data-p="a1" x1="{{f.bx}}" y1="{{f.by}}" x2="{{f.cx}}" y2="{{f.cy}}" stroke="{{armA}}" stroke-width="{{f.w1}}" stroke-linecap="round" stroke-dasharray="{{f.da}}" opacity="{{f.aO}}"></line>
+<line data-p="a2" x1="{{f.dx}}" y1="{{f.dy}}" x2="{{f.ex}}" y2="{{f.ey}}" stroke="{{armB}}" stroke-width="{{f.w2}}" stroke-linecap="round" stroke-dasharray="{{f.da}}" opacity="{{f.aO}}"></line>
+<circle data-p="n0" cx="{{f.x0}}" cy="{{f.y0}}" r="{{f.r0}}" fill="{{f.f0}}" fill-opacity="{{f.fo}}" stroke="{{f.s0}}" stroke-width="{{f.sw}}"></circle>
+<circle data-p="n1" cx="{{f.x1}}" cy="{{f.y1}}" r="{{f.r1}}" fill="{{f.f1}}" fill-opacity="{{f.fo}}" stroke="{{f.s1}}" stroke-width="{{f.sw}}"></circle>
+<circle data-p="n2" cx="{{f.x2}}" cy="{{f.y2}}" r="{{f.r2}}" fill="{{f.f2}}" fill-opacity="{{f.fo2}}" stroke="{{f.s2}}" stroke-width="{{f.sw2}}"></circle>
+<circle data-p="co" cx="{{f.x2}}" cy="{{f.y2}}" r="{{f.coR}}" fill="{{call}}" opacity="{{f.coO}}"></circle>
+<path data-p="ck" d="{{f.ck}}" fill="none" stroke="{{ring}}" stroke-width="6" stroke-linecap="round" opacity="{{f.ckO}}"></path>
+</g>
+</svg>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["idle","working","needs","done","paused","checking","off"],"default":"working"},"lease":{"editor":"boolean","default":false},"listening":{"editor":"boolean","default":false},"palette":{"editor":"enum","options":["forest","awsf-classic","lavender-slate","earthy-obsidian","navy-sky","warm-rust","sunset"],"default":"forest"},"still":{"editor":"boolean","default":false},"seed":{"editor":"range","min":0,"max":40,"step":1,"default":0},"progress":{"editor":"range","min":0,"max":1,"step":0.05,"default":0.6},"speed":{"editor":"range","min":0.4,"max":1.4,"step":0.1,"default":1},"ground":{"editor":"enum","options":["dark","light"],"default":"dark"},"hanger":{"editor":"boolean","default":false},"size":{"editor":null,"default":480},"$preview":{"width":480,"height":308}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.host = { current: null };
+this.still = props.still === true || window.__pendulumStill === true;
+this.calm = this.still || (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+let z = Number(props.seed ?? 0) || (this.still ? 7 + String(props.state ?? '').length * 5 + Math.round(Number(props.size ?? 480) / 10) : 0);
+this.rnd = z ? () => { z = (z + 0x6d2b79f5) | 0; let t = Math.imul(z ^ (z >>> 15), 1 | z); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; } : Math.random;
+this.phase = this.rnd() * 60;
+this.time = 0;
+this.trail = [];
+this.jit = 9;
+this.pulse = 1;
+this.arm = false;
+this.s = this.name(props.state);
+this.pose(this.s);
+}
+name(s) {
+const old = { rest: 'idle', swinging: 'working', straight: 'needs' };
+const n = old[s] ?? s ?? 'working';
+return ['idle', 'working', 'needs', 'done', 'paused', 'checking', 'off'].indexOf(n) < 0 ? 'idle' : n;
+}
+goal(s) {
+return {
+g: s === 'idle' || s === 'done' || s === 'paused' || s === 'off' ? 0.86 : s === 'checking' ? 0.92 : 1,
+m: s === 'done' ? 1 : 0,
+d: s === 'idle' || s === 'paused' ? 1 : 0,
+h: s === 'off' ? 1 : 0,
+z: s === 'paused' ? 1 : 0,
+b: s === 'working' || s === 'needs' ? 0 : 1,
+l: this.props && this.props.lease === true && s !== 'done' && s !== 'off' ? 1 : 0,
+o: this.props && this.props.listening === true ? 1 : 0,
+k: s === 'needs' ? 1 : 0,
+t: s === 'working' ? 1.2 : s === 'needs' ? 0.6 : 0
+};
+}
+pose(s) {
+this.q = { a1: 0, a2: 0, w1: 0, w2: 0 };
+this.v = this.goal(s);
+this.mv = 0;
+this.beat = this.still ? 0.62 : 0;
+if (s === 'checking') { this.q.a1 = this.q.a2 = 0.46 * Math.sin(this.beat * 5.2); }
+this.trail = [];
+if (s === 'working' || s === 'needs') {
+this.kick();
+const n = 180 + Math.floor(this.rnd() * 240);
+for (let i = 0; i < n; i++) this.swing(1 / 60);
+if (s === 'needs') {
+for (let i = 0; i < 900 && !this.bent(); i++) this.swing(1 / 60);
+if (!this.bent()) { this.q.a1 = 0.95; this.q.a2 = -0.35; }
+this.q.w1 = 0; this.q.w2 = 0;
+}
+}
+}
+kick() {
+const side = this.rnd() < 0.5 ? -1 : 1;
+this.q.w1 += side * (3.2 + this.rnd() * 1.2);
+this.q.w2 -= side * (3.6 + this.rnd() * 1.6);
+}
+acc(a1, a2, w1, w2) {
+const G = 20, M1 = 1, M2 = 0.7, L1 = 1, L2 = 0.82, d = a1 - a2;
+const den = 2 * M1 + M2 - M2 * Math.cos(2 * d);
+return [
+(-G * (2 * M1 + M2) * Math.sin(a1) - M2 * G * Math.sin(a1 - 2 * a2) - 2 * Math.sin(d) * M2 * (w2 * w2 * L2 + w1 * w1 * L1 * Math.cos(d))) / (L1 * den),
+(2 * Math.sin(d) * (w1 * w1 * L1 * (M1 + M2) + G * (M1 + M2) * Math.cos(a1) + w2 * w2 * L2 * M2 * Math.cos(d))) / (L2 * den)
+];
+}
+energy() {
+const q = this.q, G = 20, M1 = 1, M2 = 0.7, L1 = 1, L2 = 0.82;
+const t = 0.5 * (M1 + M2) * q.w1 * q.w1 + 0.5 * M2 * L2 * L2 * q.w2 * q.w2 + M2 * L1 * L2 * q.w1 * q.w2 * Math.cos(q.a1 - q.a2);
+return t / G + (M1 + M2) * (1 - Math.cos(q.a1)) + M2 * L2 * (1 - Math.cos(q.a2));
+}
+swing(dt) {
+const q = this.q, n = 4, h = dt / n;
+this.time += dt;
+for (let i = 0; i < n; i++) {
+const k1 = this.acc(q.a1, q.a2, q.w1, q.w2);
+const b = [q.w1 + k1[0] * h / 2, q.w2 + k1[1] * h / 2];
+const k2 = this.acc(q.a1 + q.w1 * h / 2, q.a2 + q.w2 * h / 2, b[0], b[1]);
+const c = [q.w1 + k2[0] * h / 2, q.w2 + k2[1] * h / 2];
+const k3 = this.acc(q.a1 + b[0] * h / 2, q.a2 + b[1] * h / 2, c[0], c[1]);
+const e = [q.w1 + k3[0] * h, q.w2 + k3[1] * h];
+const k4 = this.acc(q.a1 + c[0] * h, q.a2 + c[1] * h, e[0], e[1]);
+q.a1 += h * (q.w1 + 2 * b[0] + 2 * c[0] + e[0]) / 6;
+q.a2 += h * (q.w2 + 2 * b[1] + 2 * c[1] + e[1]) / 6;
+q.w1 += h * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) / 6;
+q.w2 += h * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) / 6;
+}
+const x = this.time + this.phase;
+const want = 1.16 + 0.34 * Math.sin(x * 0.7) + 0.1 * Math.sin(x * 1.7);
+const push = Math.exp(Math.max(-2.2, Math.min(1.3, (want - this.energy()) * 1.6)) * dt);
+q.w1 *= push; q.w2 *= push;
+const p = this.tip();
+this.trail.push(p);
+if (this.trail.length > 34) this.trail.shift();
+}
+tip() {
+const q = this.q, g = this.v.g * 100;
+return [g * (Math.sin(q.a1) + 0.82 * Math.sin(q.a2)), g * (Math.cos(q.a1) + 0.82 * Math.cos(q.a2))];
+}
+bent() {
+const q = this.q, w = Math.abs(Math.atan2(Math.sin(q.a2 - q.a1), Math.cos(q.a2 - q.a1)));
+const x1 = Math.sin(q.a1), x2 = x1 + 0.82 * Math.sin(q.a2), y2 = Math.cos(q.a1) + 0.82 * Math.cos(q.a2);
+return w > 0.9 && w < 2.3 && Math.abs(x1) > 0.3 && Math.abs(x2) > 0.34 && y2 > 0;
+}
+settle(dt) {
+const q = this.q, wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+q.a1 = wrap(q.a1); q.a2 = wrap(q.a2);
+q.w1 += (-46 * q.a1 - 9 * q.w1) * dt; q.w2 += (-46 * q.a2 - 9 * q.w2) * dt;
+q.a1 += q.w1 * dt; q.a2 += q.w2 * dt;
+if (Math.abs(q.a1) + Math.abs(q.a2) < 0.003 && Math.abs(q.w1) + Math.abs(q.w2) < 0.01) { q.a1 = 0; q.a2 = 0; q.w1 = 0; q.w2 = 0; }
+if (this.trail.length) this.trail.shift();
+}
+lead(dt) {
+const q = this.q, near = (a, t) => Math.atan2(Math.sin(a - t), Math.cos(a - t));
+if (!this.to) {
+const all = [[0.95, -0.35], [-0.95, 0.35], [0.5, 1.75], [-0.5, -1.75]];
+all.sort((m, n) => Math.abs(near(q.a1, m[0])) + Math.abs(near(q.a2, m[1])) - Math.abs(near(q.a1, n[0])) - Math.abs(near(q.a2, n[1])));
+this.to = all[0];
+}
+q.w1 += (-70 * near(q.a1, this.to[0]) - 14 * q.w1) * dt; q.w2 += (-70 * near(q.a2, this.to[1]) - 14 * q.w2) * dt;
+q.a1 += q.w1 * dt; q.a2 += q.w2 * dt;
+this.trail.push(this.tip());
+if (this.trail.length > 34) this.trail.shift();
+}
+turn(s) {
+const was = this.s;
+this.s = s;
+this.arm = s === 'needs';
+this.late = 0;
+this.to = null;
+this.beat = 0;
+this.wait = was === 'working' ? 0 : 0.8;
+if ((s === 'working' || s === 'needs') && this.energy() < 0.3) this.kick();
+if (s === 'done') this.pulse = 0;
+}
+step(dt) {
+const s = this.s, go = this.goal(s);
+const was = JSON.stringify([this.q, this.v, this.pulse, this.jit > 0.6, this.say]);
+if (s === 'working') this.swing(dt);
+else if (s === 'needs') {
+if (this.arm) {
+this.late += dt;
+if (this.late > 1.3) this.lead(dt); else this.swing(dt);
+this.wait -= dt;
+if (this.late >= 2 || (this.wait <= 0 && this.v.g > 0.96 && this.bent() && !this.to)) { this.arm = false; this.q.w1 = 0; this.q.w2 = 0; this.jit = 0; }
+}
+} else if (s === 'checking') {
+this.beat += dt;
+const want = 0.46 * Math.sin(this.beat * 5.2), u = 1 - Math.exp(-dt * 9);
+this.q.a1 += (want - this.q.a1) * u; this.q.a2 += (want - this.q.a2) * u; this.q.w1 = 0; this.q.w2 = 0;
+if (this.trail.length) this.trail.shift();
+} else if (s === 'paused') {
+this.settle(dt);
+this.beat += dt;
+this.q.a1 += 0.0022 * Math.cos(this.beat * 1.5); this.q.a2 += 0.0022 * Math.cos(this.beat * 1.5);
+} else this.settle(dt);
+if (this.v.o > 0.01) this.say = (this.say ?? 0) + dt;
+const ease = (k, rate) => { this.v[k] += (go[k] - this.v[k]) * (1 - Math.exp(-dt * rate)); if (Math.abs(go[k] - this.v[k]) < 0.001) this.v[k] = go[k]; };
+ease('g', 5); ease('d', 4); ease('t', 6); ease('h', 5); ease('z', 5); ease('b', 5); ease('l', 7); ease('o', 8);
+if (!(s === 'needs' && this.arm)) ease('k', 9);
+this.mv += ((go.m - this.v.m) * 150 - this.mv * 16) * dt;
+this.v.m += this.mv * dt;
+if (Math.abs(go.m - this.v.m) < 0.0008 && Math.abs(this.mv) < 0.01) { this.v.m = go.m; this.mv = 0; }
+if (this.pulse < 1) this.pulse = Math.min(1, this.pulse + dt / 1.1);
+if (this.jit < 1) this.jit += dt;
+return was !== JSON.stringify([this.q, this.v, this.pulse, this.jit > 0.6, this.say]) || this.jit < 0.6;
+}
+componentDidMount() {
+if (this.calm) return;
+this.seen = true;
+if (typeof IntersectionObserver === 'function' && this.host.current) {
+this.io = new IntersectionObserver((es) => { this.seen = es[es.length - 1].isIntersecting; });
+this.io.observe(this.host.current);
+}
+let last = 0, acc = 0;
+const tick = (t) => {
+this.raf = requestAnimationFrame(tick);
+if (!last || !this.seen) { last = t; return; }
+const s = this.name(this.props.state);
+if (s !== this.s) this.turn(s);
+acc += Math.min(80, t - last) / 1000 * Number(this.props.speed ?? (Number(this.props.size ?? 480) < 90 ? 0.8 : 1));
+last = t;
+let moved = false;
+while (acc >= 1 / 60) { acc -= 1 / 60; moved = this.step(1 / 60) || moved; }
+if (moved) this.draw();
+};
+this.raf = requestAnimationFrame(tick);
+}
+componentWillUnmount() { cancelAnimationFrame(this.raf); if (this.io) this.io.disconnect(); }
+ink() {
+const T = {
+'awsf-classic:dark': ['#C3D1E2', '#667489', '#1D2534', '#C3D1E2', '#4ade80', '#F26A1B'],
+'forest:dark': ['#A7BFA7', '#2F7A5B', '#1D4D3A', '#A7BFA7', '#4FE3A1', '#F26A1B'],
+'forest:light': ['#0F2A1E', '#2F7A5B', '#1D4D3A', '#A7BFA7', '#12A06A', '#C4500D'],
+'lavender-slate:dark': ['#A1A0AD', '#7A7886', '#61606C', '#A1A0AD', '#88D6A5', '#F26A1B'],
+'lavender-slate:light': ['#323042', '#51505A', '#3D3B4A', '#94939F', '#1B5537', '#C4500D'],
+'earthy-obsidian:dark': ['#92A295', '#556458', '#313C34', '#92A295', '#82C995', '#F26A1B'],
+'earthy-obsidian:light': ['#050806', '#546357', '#212822', '#8A968C', '#1D522F', '#C4500D'],
+'navy-sky:dark': ['#869EB7', '#4B6A8A', '#31506F', '#869EB7', '#72CB9C', '#F26A1B'],
+'navy-sky:light': ['#0E1526', '#24405C', '#162439', '#7993AC', '#164A30', '#C4500D'],
+'warm-rust:dark': ['#BCB1A1', '#785E5B', '#452E33', '#BCB1A1', '#8BCB94', '#F26A1B'],
+'warm-rust:light': ['#1F1D20', '#46372F', '#2D2625', '#A29889', '#0F321B', '#C4500D'],
+'sunset:dark': ['#C2B59B', '#7A726E', '#49454C', '#C2B59B', '#91CEA0', '#F26A1B'],
+'sunset:light': ['#20212B', '#9E6752', '#4C3A39', '#C3A27C', '#28653D', '#C4500D']
+};
+const g = (this.props.ground ?? 'dark') === 'light' ? 'light' : 'dark', p = this.props.palette ?? 'forest';
+const k = T[p + ':' + g] ?? T[p + ':dark'] ?? T['forest:' + g];
+return { armA: k[0], armB: k[1], node: k[2], ring: k[3], glow: k[4], call: k[5] };
+}
+mix(a, b, t) {
+const u = Math.max(0, Math.min(1, t)), n = (c, i) => parseInt(c.slice(1 + i * 2, 3 + i * 2), 16);
+return 'rgb(' + [0, 1, 2].map((i) => Math.round(n(a, i) + (n(b, i) - n(a, i)) * u)).join(',') + ')';
+}
+frame() {
+const c = this.ink(), v = this.v, w = Number(this.props.size ?? 480), small = w < 80;
+const j = this.jit < 0.6 ? 0.06 * Math.exp(-this.jit * 9) * Math.sin(this.jit * 58) : 0;
+const a1 = this.q.a1 + j, a2 = this.q.a2 - j * 1.6, g = v.g * 100, m = v.m, e = Math.max(0, Math.min(1, m));
+const P = [[0, 0], [g * Math.sin(a1), g * Math.cos(a1)], [0, 0]];
+P[2] = [P[1][0] + 0.82 * g * Math.sin(a2), P[1][1] + 0.82 * g * Math.cos(a2)];
+const V = [[0, 47], [27, 94], [-27, 94]];
+const Z = P.map((p, i) => [p[0] + (V[i][0] - p[0]) * m, p[1] + (V[i][1] - p[1]) * m]);
+const base = small ? [22, 22, 22] : [21, 21, 21];
+const R = base.map((r) => r + ((small ? 47 : 42) - r) * e);
+const thick = (small ? 1.35 : 1) * (1 - 0.6 * e) * (1 - 0.55 * v.h);
+const need = v.k, lease = v.l;
+const T = this.trail, cut = (a, b) => T.length < 6 || small ? '' : T.slice(Math.round((T.length - 1) * a), Math.round((T.length - 1) * b) + 1).map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+const o = {
+hgO: (this.props.hanger ? 0.75 : 0) * (1 - 0.65 * e) * (1 - 0.35 * v.d),
+t0: cut(0, 0.36), t1: cut(0.36, 0.7), t2: cut(0.7, 1 - 0.3 * need), t0O: 0.13 * v.t, t1O: 0.24 * v.t, t2O: 0.38 * v.t,
+puR: 70 + 90 * this.pulse, puO: this.pulse < 1 ? 0.7 * (1 - this.pulse) : 0, haO: 0.1 * e, hbO: 0.07 * e,
+x0: Z[0][0], y0: Z[0][1], x1: Z[1][0], y1: Z[1][1], x2: Z[2][0], y2: Z[2][1],
+w1: 16 * thick, w2: 16 * thick, aO: Math.max(0, 1 - e * 1.7),
+r0: R[0], r1: R[1], r2: R[2], fo: 1 - 0.44 * e, sw: (small ? 8 : 5) - (small ? 4 : 1.5) * e, da: v.h > 0.5 ? '0.1 12' : 'none', nO: 1 - ((this.props.ground ?? 'dark') === 'light' ? 0.28 : 0.4) * v.d
+};
+o.fo = o.fo * (1 - v.h);
+const U = Z[2][0] - Z[1][0], W = Z[2][1] - Z[1][1], len = Math.max(1, Math.hypot(U, W)), cutBy = need * (1 - e) * (R[2] - 1);
+o.ex = Z[2][0] - U / len * cutBy; o.ey = Z[2][1] - W / len * cutBy;
+const X = Z[1][0] - Z[0][0], Y = Z[1][1] - Z[0][1], l1 = Math.max(1, Math.hypot(X, Y)), off = v.h * (R[0] + 6);
+o.bx = Z[0][0] + X / l1 * off; o.by = Z[0][1] + Y / l1 * off; o.cx = Z[1][0] - X / l1 * off; o.cy = Z[1][1] - Y / l1 * off;
+o.dx = Z[1][0] + U / len * off; o.dy = Z[1][1] + W / len * off;
+if (off) { o.ex = Z[2][0] - U / len * off; o.ey = Z[2][1] - W / len * off; }
+o.fo2 = o.fo * (1 - need); o.sw2 = o.sw + need * (small ? 3 : 4);
+o.coR = small ? 9 : 8.5; o.coO = need * lease;
+const pr = Math.max(0.02, Math.min(0.999, Number(this.props.progress ?? 0.6))) * Math.PI * 2, cr = R[2] + 17;
+o.ck = 'M' + Z[2][0].toFixed(1) + ' ' + (Z[2][1] - cr).toFixed(1) + 'A' + cr + ' ' + cr + ' 0 ' + (pr > Math.PI ? 1 : 0) + ' 1 ' + (Z[2][0] + cr * Math.sin(pr)).toFixed(1) + ' ' + (Z[2][1] - cr * Math.cos(pr)).toFixed(1);
+o.ckO = v.z;
+let vo = '';
+const t = this.say ?? (this.calm ? 3.1 : 0);
+for (let i = 0; i < 60 && v.o > 0; i++) {
+const th = i / 60 * Math.PI * 2, a = 3 + 22 * Math.pow(Math.abs(Math.sin(th * 3 + t * 2.1) * Math.sin(th * 5 - t * 3.3) * Math.cos(t * 1.7 + th)), 0.7);
+vo += 'M' + (Math.sin(th) * 138).toFixed(1) + ' ' + (78 - Math.cos(th) * 138).toFixed(1) + 'L' + (Math.sin(th) * (138 + a)).toFixed(1) + ' ' + (78 - Math.cos(th) * (138 + a)).toFixed(1);
+}
+o.vo = vo; o.voO = 0.8 * v.o;
+[0, 1, 2].forEach((i) => {
+o['f' + i] = this.mix(c.node, c.glow, e);
+o['s' + i] = this.mix(c.ring, c.glow, e);
+});
+const hot = Math.max(need, lease);
+if (hot > 0) { o.f2 = this.mix(c.node, c.call, lease); o.s2 = this.mix(c.ring, c.call, hot); }
+return o;
+}
+draw() {
+const el = this.host.current;
+if (!el) return;
+if (!this.el || this.elOf !== el) { this.el = {}; this.elOf = el; el.querySelectorAll('[data-p]').forEach((n) => { this.el[n.getAttribute('data-p')] = n; }); }
+const o = this.frame(), E = this.el, set = (k, a, x) => { if (E[k]) E[k].setAttribute(a, x); };
+set('hg', 'opacity', o.hgO); set('bd', 'opacity', o.nO);
+['t0', 't1', 't2'].forEach((k) => { set(k, 'd', o[k]); set(k, 'opacity', o[k + 'O']); });
+set('pu', 'r', o.puR); set('pu', 'opacity', o.puO); set('ha', 'opacity', o.haO); set('hb', 'opacity', o.hbO);
+set('a1', 'x1', o.bx); set('a1', 'y1', o.by); set('a1', 'x2', o.cx); set('a1', 'y2', o.cy); set('a1', 'stroke-width', o.w1); set('a1', 'opacity', o.aO);
+set('a2', 'x1', o.dx); set('a2', 'y1', o.dy); set('a2', 'x2', o.ex); set('a2', 'y2', o.ey); set('a1', 'stroke-dasharray', o.da); set('a2', 'stroke-dasharray', o.da);
+set('co', 'cx', o.x2); set('co', 'cy', o.y2); set('co', 'r', o.coR); set('co', 'opacity', o.coO); set('ck', 'd', o.ck); set('ck', 'opacity', o.ckO); set('vo', 'd', o.vo); set('vo', 'opacity', o.voO); set('a2', 'stroke-width', o.w2); set('a2', 'opacity', o.aO);
+[0, 1, 2].forEach((i) => {
+const k = 'n' + i;
+set(k, 'cx', o['x' + i]); set(k, 'cy', o['y' + i]); set(k, 'r', o['r' + i]); set(k, 'fill', o['f' + i]); set(k, 'stroke', o['s' + i]);
+set(k, 'fill-opacity', i === 2 ? o.fo2 : o.fo); set(k, 'stroke-width', i === 2 ? o.sw2 : o.sw);
+});
+}
+renderVals() {
+const w = Number(this.props.size ?? 480), c = this.ink(), s = this.name(this.props.state);
+if (this.calm && s !== this.s) { this.s = s; this.pose(s); }
+if (this.calm) this.v = this.goal(s);
+const say = { idle: 'Marimba is idle', working: 'Marimba is working', needs: 'Marimba needs you', done: 'Marimba is done', paused: 'Marimba is paused', checking: 'Marimba is checking', off: 'No signal from Marimba' };
+return { host: this.host, w: w, h: Math.round(w * 0.64), label: say[s] + (this.props.lease === true && s !== 'done' && s !== 'off' ? ', under a lease' : '') + (this.props.listening === true ? ', listening' : ''), f: this.frame(), armA: c.armA, armB: c.armB, ring: c.ring, glow: c.glow, call: c.call };
+}
+}
+</script>
+</body>
+</html>

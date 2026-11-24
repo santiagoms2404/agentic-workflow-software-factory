@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marimba on the Mac: your voice</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0;background:#051F20}
+.app{position:relative;width:1440px;height:900px;background:#051F20;color:#DAF1DE;font:400 15px/1.55 Archivo,sans-serif;overflow:hidden}
+.bokeh{position:absolute;inset:0;background:radial-gradient(46px 46px at 6% 8%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 19% 5%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 31% 12%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 44% 6%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 58% 10%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 72% 4%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 86% 9%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 95% 17%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 11% 24%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 25% 29%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 39% 22%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 53% 27%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 67% 21%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 81% 26%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 92% 33%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 4% 41%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 17% 46%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 33% 40%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 47% 44%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 61% 39%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 75% 45%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 89% 49%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 9% 58%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 23% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 37% 56%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 52% 61%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 66% 55%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 80% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 96% 66%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 5% 75%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 19% 79%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 34% 73%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 49% 78%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 63% 72%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 77% 79%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 91% 82%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 13% 92%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 28% 96%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 42% 89%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 57% 94%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 71% 90%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 86% 95%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 27% 34%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 58% 52%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 83% 68%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 14% 84%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%)}
+.tint{position:absolute;inset:0;background:linear-gradient(165deg,rgba(11,43,38,.36) 0%,rgba(5,31,32,.48) 60%,rgba(5,31,32,.55) 100%)}
+.sheen{position:absolute;inset:0;background:linear-gradient(118deg,rgba(218,241,222,.075) 0%,rgba(218,241,222,0) 34%,rgba(218,241,222,0) 66%,rgba(218,241,222,.045) 100%);border-top:1px solid rgba(218,241,222,.13)}
+.stage{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:0 120px;box-sizing:border-box;text-align:center}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:rgba(218,241,222,.08);border:1px solid rgba(218,241,222,.12);font:500 12.5px/1 "JetBrains Mono",monospace;color:#DAF1DE}
+.heard{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;border-radius:18px;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);padding:14px 18px;text-align:left}
+.btno{min-height:44px;padding:0 18px;border-radius:12px;border:1px solid #F26A1B;background:rgba(242,106,27,.07);color:#F26A1B;font:600 13.5px/1 Archivo;cursor:pointer}
+.meta{font:400 12px/1.5 "JetBrains Mono",monospace;color:#8EB69B}
+.kbd{display:inline-block;padding:3px 7px;border-radius:6px;border:1px solid rgba(218,241,222,.2);font:500 11.5px/1 "JetBrains Mono",monospace;color:#DAF1DE}
+</style>
+</helmet>
+<div class="app">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <div class="stage">
+    <div role="status" aria-label="Marimba is listening" style="margin-bottom:34px"><dc-import name="Pendulum" state="idle" listening="{{ true }}" size="300" hint-size="300px,192px"></dc-import></div>
+    
+    <span class="chip"><span style="color:#DAF1DE">●</span> escuchando · español · speech stays on this Mac</span>
+    <div style="max-width:980px">
+      <span style="font:800 44px/1.2 Archivo;letter-spacing:-.03em;color:rgba(218,241,222,.5)">Agrega un estado vacío al tablero cuando el proyecto no tiene tickets</span><span style="display:inline-block;width:3px;height:40px;background:#F26A1B;transform:translateY(6px);margin-left:4px"></span>
+    </div>
+    <div class="heard">
+      <div><div style="font:600 15px/1.3 Archivo">Heard: launch a run · backlog-empty-state</div><div class="meta">the same card as the panel · nothing runs until you confirm</div></div>
+      <button class="btno" type="button">Show the card</button>
+    </div>
+    <div class="meta"><span class="kbd">⌥ Space</span> talk · <span class="kbd">Esc</span> dismiss · English and Spanish, recognised locally</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

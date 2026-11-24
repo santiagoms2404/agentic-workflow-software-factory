@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spec: why six states</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1140px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#spec" aria-current="page">spec · the states</a>
+    <span class="grow"></span>
+    <span class="right">for builders · not a screen</span>
+  </nav>
+  <div class="layer" style="padding-top:24px;padding-bottom:44px;gap:18px">
+    <div><div class="h1" style="font-size:30px">Why six states</div><div class="sub" style="margin-top:6px">Ruled 2026-11-24. Two states and one layer were added to the first four. Each shows something the four could not. The rest were left out.</div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:16px"><article class="gc" style="gap:12px;padding:18px"><div style="display:flex;justify-content:center;align-items:center;height:250px;border-radius:14px;background:rgba(20,20,15,.28)"><dc-import name="Pendulum" state="paused" size="290" hanger="{{ true }}" progress="0.62" hint-size="290px,186px"></dc-import></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="h2">Paused</span><span class="grow"></span><span class="lbl">Paused · resets 14:20</span></div>
+      <div class="sub">Added.</div><div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>When</span><span>a quota window, a provider limit, a wait between tries</span></div><div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Shape</span><span>the ring around the last circle fills as the window resets</span></div><div class="sub" style="margin-top:auto">A run held by a quota window looked idle or busy, and both were wrong.</div></article><article class="gc" style="gap:12px;padding:18px"><div style="display:flex;justify-content:center;align-items:center;height:250px;border-radius:14px;background:rgba(20,20,15,.28)"><dc-import name="Pendulum" state="off" size="290" hanger="{{ true }}" hint-size="290px,186px"></dc-import></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="h2">No signal</span><span class="grow"></span><span class="lbl">No signal since 17:02</span></div>
+      <div class="sub">Added.</div><div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>When</span><span>the server stopped, the laptop slept, or a record is older than 30 s while a run was live</span></div><div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Shape</span><span>outlines only, dotted arms, no motion</span></div><div class="sub" style="margin-top:auto">A mark that keeps swinging on stale data is a lie. This one is about trust.</div></article><article class="gc" style="gap:12px;padding:18px"><div style="display:flex;justify-content:center;align-items:center;height:250px;border-radius:14px;background:rgba(20,20,15,.28)"><dc-import name="Pendulum" state="working" size="290" listening="{{ true }}" hint-size="290px,186px"></dc-import></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="h2">Listening</span><span class="grow"></span><span class="lbl">Listening</span></div>
+      <div class="sub">Added as a layer, with no state of its own.</div><div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>When</span><span>the microphone is open</span></div><div class="kv" style="grid-template-columns:74px minmax(0,1fr)"><span>Shape</span><span>a ring of ticks that follows your voice, around whatever state it is in</span></div><div class="sub" style="margin-top:auto">You can talk while it works, so the ring goes around the state and never replaces it.</div></article></div>
+    <section class="sec" aria-label="Considered and left out"><div class="sech"><span class="h3">Considered and left out</span></div><div class="secb"><div class="r"><span>Checking</span><span class="rv">both arms as one, like a metronome, while the host runs gates · the words already say gates 3 of 5</span></div><div class="r"><span>Starting</span><span class="rv">the first swing already says it</span></div><div class="r"><span>Stopping</span><span class="rv">the swing dies down on its own when you press Stop</span></div><div class="r"><span>Failed</span><span class="rv">a failure needs you, so it is Needs you with the cause in words</span></div><div class="r"><span>Reviewing</span><span class="rv">the words say which phase · a second model is still working</span></div><div class="r"><span>Waiting on a teammate</span><span class="rv">on a team each member has its own pendulum, frame 72</span></div></div></section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1140}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

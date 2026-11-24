@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A review that fails · Agent phase: reviewer</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+.steps{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.step{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:12px;border:1px solid rgba(218,241,222,.1);color:#DAF1DE;font:600 12.5px/1 "JetBrains Mono",monospace;text-decoration:none;white-space:nowrap}
+.step.on{border-color:#DAF1DE;background:rgba(218,241,222,.1)}
+.step .d{font-weight:400;color:#8EB69B}
+.arrow{color:#8EB69B;font:400 12px/1 "JetBrains Mono",monospace}
+.sq{display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(218,241,222,.45)}
+.sqo{display:inline-block;width:10px;height:10px;border-radius:3px;border:1.5px solid #DAF1DE;box-sizing:border-box}
+.verdict{font:800 44px/1 Archivo;letter-spacing:-.03em}
+.route{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:12px;border:1px solid rgba(218,241,222,.12);background:rgba(20,20,15,.3);flex:1 1 200px}
+</style>
+</helmet>
+<div class="app" style="min-height:900px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="RunEvidence.dc.html">d3-r2 replays</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#phase" aria-current="page">reviewer</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="RunEvidence.dc.html" aria-label="Back to the run" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">d3-r2-review-01-rep2-opus</span>
+      <span class="meta">prove · replay item review-01 · opus @ high · repetition 2</span>
+    </header>
+
+    <nav class="steps" aria-label="Phases of prove"><span class="step"><span class="sqo"></span>seed <span class="d">2s</span></span><span class="arrow">›</span><span class="step"><span class="sqo"></span>tests <span class="d">2m 01s</span></span><span class="arrow">›</span><span class="step"><span class="dmd"></span>review-context <span class="d">2s</span></span><span class="arrow">›</span><span class="step on" aria-current="step"><span class="sq"></span>reviewer</span></nav>
+
+    
+
+    <section class="sec" aria-label="When the review fails">
+      <div class="sech"><span class="eyebrow">Selected phase evidence · reviewer</span><span class="grow"></span><span class="meta">prove · d3-r2-review-01-rep2-opus-high · 81b627de</span></div>
+      <div class="secb">
+        <div class="side">
+          <div class="main">
+            <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px"><span class="verdict" style="font-size:34px">Blocked</span><span class="lblx">× verdict_consistent</span></div>
+            <div class="sub">A finding pointed at a file outside the candidate's context, so the verdict could not be trusted.</div>
+            <div class="term">outside candidate: core/test/unit/api/routes.test.ts</div>
+            <div class="r"><span>Correction</span><span class="rv">0 of 1 · not offered</span></div>
+            <div class="r"><span>Why not</span><span class="rv">cold correction covers envelope-form gates only</span></div>
+          </div>
+          <div class="aside">
+            
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="no replay runs" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridges: agents that may send you ideas</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1700px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="SettingsGlance.dc.html">settings</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" aria-current="page" href="#b">bridges</a>
+    <span class="grow"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Rooms.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div class="layer" style="padding-top:24px;padding-bottom:44px;gap:18px">
+    <header class="head"><a class="icon" href="SettingsSources.dc.html" aria-label="Back to sources" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a><span style="font:700 17px/1 Archivo">Bridges</span><span class="meta">settings · sources · agents that may send you ideas</span></header>
+    <div><div class="h1" style="font-size:30px">One folder, any agent</div><div class="sub" style="margin-top:6px;max-width:860px">You can change agents without changing the factory. Each one writes the same folder, and the factory reads only the folder. Nothing an agent sends can start a run.</div></div>
+    <section class="sec" aria-label="The folder"><div class="sech"><span class="h3">The folder</span><span class="meta">the whole contract</span></div><div class="secb"><div class="r"><span><span class="mono">INTAKE.md</span></span><span class="rv">what it is about · who sent it · what was not checked · factory or personal</span></div><div class="r"><span><span class="mono">sources/</span></span><span class="rv">links, transcripts with their times, notes, screenshots</span></div><div class="r"><span><span class="mono">questions.md</span></span><span class="rv">what the agent could not decide</span></div><div class="r"><span>Size and type</span><span class="rv">[N] MB · text, images, PDF · anything else is refused by name</span></div><div class="r"><span>Personal</span><span class="rv">never enters the folder · it stays on your phone or your Drive</span></div></div></section>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:16px"><article class="gc" style="gap:10px;padding:20px"><div style="display:flex;align-items:center;gap:10px"><span class="h2" style="font-size:19px;flex:1">Muse</span><span class="lbl">first</span></div><div class="sub">Where your ideas start today, on the phone.</div><div class="kv"><span>Reaches here</span><span>a private repository it may write, through its GitHub connector</span></div><div class="kv"><span>Can do</span><span>runs after you close it · GitHub, Notion and mail connectors</span></div><div class="kv"><span>Not known</span><span>whether its connector may write a folder · test it first</span></div></article><article class="gc" style="gap:10px;padding:20px"><div style="display:flex;align-items:center;gap:10px"><span class="h2" style="font-size:19px;flex:1">Claude Duet</span><span class="lbl">next · waitlist</span></div><div class="sub">Same account and memory as your strongest model.</div><div class="kv"><span>Reaches here</span><span>a Drive folder, or a message you send it</span></div><div class="kv"><span>Can do</span><span>records a voice message · Drive connector · mobile apps</span></div><div class="kv"><span>Not known</span><span>whether GitHub and your own server work</span></div></article><article class="gc" style="gap:10px;padding:20px"><div style="display:flex;align-items:center;gap:10px"><span class="h2" style="font-size:19px;flex:1">Grok Bot</span><span class="lbl">after the always-on box</span></div><div class="sub">Each bot has its own computer.</div><div class="kv"><span>Reaches here</span><span>your own MCP server, or a repository</span></div><div class="kv"><span>Can do</span><span>routines on a schedule · your own MCP servers</span></div><div class="kv"><span>Not known</span><span>Linux desktop and Android are not supported</span></div></article><article class="gc" style="gap:10px;padding:20px"><div style="display:flex;align-items:center;gap:10px"><span class="h2" style="font-size:19px;flex:1">By hand</span><span class="lblf">on</span></div><div class="sub">The backup. Always works, on any of them.</div><div class="kv"><span>Reaches here</span><span>drop a zip on Intake, or share from the phone</span></div><div class="kv"><span>Can do</span><span>nothing to set up</span></div><div class="kv"><span>Not known</span><span>nothing</span></div></article></div>
+    <section class="sec" aria-label="How it comes in"><div class="sech"><span class="h3">How it comes in</span></div><div class="secb"><div class="r" style="align-items:flex-start"><span class="num">1</span><span style="flex:1 1 300px"><b>The agent writes the folder.</b> Your laptop may be asleep.</span></div><div class="r" style="align-items:flex-start"><span class="num">2</span><span style="flex:1 1 300px"><b>You open the dashboard.</b> It lists what is new. Nothing is pulled while it is closed.</span></div><div class="r" style="align-items:flex-start"><span class="num">3</span><span style="flex:1 1 300px"><b>Marimba reads it as data.</b> It never follows an instruction found inside.</span></div><div class="r" style="align-items:flex-start"><span class="num">4</span><span style="flex:1 1 300px"><b>You say what it becomes.</b> A new idea, part of one, or nothing.</span></div><div class="r" style="align-items:flex-start"><span class="num">5</span><span style="flex:1 1 300px"><b>Word goes back the same way.</b> A short status file the agent can read, with nothing personal in it.</span></div></div></section>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="nothing new in the folder" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1700}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project cell: what it is made of</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1700px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" aria-current="page" href="Cell.dc.html">cell</a>
+    <span class="grow"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Room1.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div class="cols">
+    <aside class="lc" aria-label="Project cells"><div class="pn-bay" role="status" aria-label="Marimba, needs you"><dc-import name="Pendulum" state="needs" size="236" hanger="{{ true }}" hint-size="236px,151px"></dc-import><span class="pn-w pn-needs">Needs you</span><span class="pn-n">3 runs wait on your review</span></div><div class="grp" style="padding-top:4px">Project cells · 3</div><a class="li on" href="Cell.dc.html" aria-current="page"><span class="lit2"><span class="sq" style="background:#1D4D3A;border:1px solid rgba(218,241,222,.5);box-sizing:border-box"></span>agentic-workflow-software-factory</span><span class="lim">191 attempts · 34 landed</span></a><a class="li" href="CellEmpty.dc.html"><span class="lit2"><span class="sq" style="background:#DAF1DE;border:1px solid rgba(218,241,222,.5);box-sizing:border-box"></span>smart-health-platform</span><span class="lim">0 attempts</span></a><a class="li" href="#"><span class="lit2"><span class="sq" style="background:#8EB69B;border:1px solid rgba(218,241,222,.5);box-sizing:border-box"></span>fusion-harness</span><span class="lim">4 attempts · 1 landed</span></a><div class="grp">Prompts in step</div><div class="lim" style="padding:0 12px">37 files in three Smart Health repositories, 37 identical to this cell's. Checked 2026-11-23.</div><div style="padding:12px"><a class="btn" href="SettingsJobs.dc.html">Check again</a></div></aside>
+    <main class="cc">
+      <div style="display:flex;flex-wrap:wrap;gap:8px"><span class="ref">awsf.config.yaml</span><span class="ref">awsf.project.yaml</span><span class="ref">host at 3aa0a3c</span><span class="grow"></span><span class="lblf">✓ drawn from config</span></div>
+      <nav class="ptabs" aria-label="Cell views" style="padding:0"><a href="#cell" class="on" aria-current="page">Cell</a><a href="Runs.dc.html">Runs<span class="n">191</span></a><a href="ChangeDetail.dc.html">Changelog<span class="n">34</span></a><a href="CellPrompts.dc.html">Prompts<span class="n">19</span></a><a href="Mission.dc.html">Mission<span class="n">none</span></a></nav>
+      <section class="gc" style="padding:26px 28px;gap:12px;background:linear-gradient(160deg,rgba(47,122,91,.34),rgba(29,77,58,.16))">
+        <div class="eyebrow">Project cell</div>
+        <div class="h1" style="font-size:38px">agentic-workflow-software-factory</div>
+        <div class="sub" style="font-size:16px;max-width:720px">[MISSION: the first paragraph of MISSION.md, once you commit it]</div>
+        <div style="display:flex;flex-wrap:wrap;gap:14px 40px;margin-top:6px">
+          <div><div class="eyebrow">Plan repository</div><div class="mono" style="margin-top:6px;font-size:13px">awsf · main</div></div>
+          <div><div class="eyebrow">Plans</div><div class="mono" style="margin-top:6px;font-size:13px">specs · awsf-plan-html/v1</div></div>
+          <div><div class="eyebrow">Delivery</div><div class="mono" style="margin-top:6px;font-size:13px">service</div></div>
+          <div><div class="eyebrow">Theme</div><div class="mono" style="margin-top:6px;font-size:13px">Forest</div></div>
+        </div>
+      </section>
+      <div class="strip">
+        <div class="cell"><div class="cellv">9</div><div class="celll">roles</div></div>
+        <div class="cell"><div class="cellv">11</div><div class="celll">workflows on</div></div>
+        <div class="cell"><div class="cellv">5</div><div class="celll">gates</div></div>
+        <div class="cell"><div class="cellv">19</div><div class="celll">prompt files · 155 lines</div></div>
+        <div class="cell"><div class="cellv">11</div><div class="celll">protected paths</div></div>
+      </div>
+      <section class="sec" aria-label="The system">
+        <div class="sech"><span class="h3">The system</span><span class="meta">you, the one you talk to, and every role in the config</span></div>
+        <div style="padding:20px;display:flex;flex-direction:column;align-items:center;gap:10px">
+          <div class="rc" style="text-align:center;min-width:190px;padding:10px 16px"><div class="h3">You</div><div class="meta">near the loop</div></div>
+          <span style="height:18px;border-left:2px solid #8EB69B" aria-hidden="true"></span>
+          <div class="rc" style="display:flex;align-items:center;gap:4px;border-color:#A7BFA7;padding:4px 20px 4px 4px"><span style="display:inline-flex;flex:none;width:84px;height:54px;"><dc-import name="Pendulum" state="needs" size="84" hint-size="84px,54px"></dc-import></span><span><span class="h3" style="display:block">Marimba</span><span class="meta">its list is conversations · it never builds</span></span></div>
+          <span style="height:18px;border-left:2px solid #8EB69B" aria-hidden="true"></span>
+          <div class="grid" style="width:100%;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))"><div class="rc" style="text-align:center;padding:12px"><div class="h3" style="font-size:14.5px">planner</div><div class="meta">read only · claude</div></div><div class="rc" style="text-align:center;padding:12px"><div class="h3" style="font-size:14.5px">builder</div><div class="meta">writes in its worktree · codex</div></div><div class="rc" style="text-align:center;padding:12px"><div class="h3" style="font-size:14.5px">reviewer</div><div class="meta">read only, other provider · claude</div></div><div class="rc" style="text-align:center;padding:12px"><div class="h3" style="font-size:14.5px">documenter</div><div class="meta">docs only · claude</div></div><div class="rc" style="text-align:center;padding:12px"><div class="h3" style="font-size:14.5px">scout</div><div class="meta">read only · claude</div></div><div class="rc" style="text-align:center;padding:12px"><div class="h3" style="font-size:14.5px">intake</div><div class="meta">tickets only · claude</div></div><div class="rc" style="text-align:center;padding:12px"><div class="h3" style="font-size:14.5px">designer</div><div class="meta">read only · claude</div></div><div class="rc" style="text-align:center;padding:12px"><div class="h3" style="font-size:14.5px">architecture-reviewer</div><div class="meta">read only, other provider · codex</div></div><div class="rc" style="text-align:center;padding:12px"><div class="h3" style="font-size:14.5px">plan-author</div><div class="meta">session output only · codex</div></div></div>
+          <div class="meta" style="margin-top:6px">a review always goes to the provider opposite the builder</div>
+        </div>
+      </section>
+      <section class="sec" aria-label="One request, end to end">
+        <div class="sech"><span class="h3">One request, end to end</span></div>
+        <div class="secb"><div class="r" style="align-items:flex-start"><span class="num">1</span><span style="flex:1 1 300px"><b>You write it.</b> Marimba drafts the run. Nothing has started.</span></div><div class="r" style="align-items:flex-start"><span class="num">2</span><span style="flex:1 1 300px"><b>You confirm it.</b> Preflight reads offline first. The card shows routes, ceiling and tickets.</span></div><div class="r" style="align-items:flex-start"><span class="num">3</span><span style="flex:1 1 300px"><b>The host compiles it.</b> Calls are held before they are made, under a ceiling code enforces.</span></div><div class="r" style="align-items:flex-start"><span class="num">4</span><span style="flex:1 1 300px"><b>The builder works.</b> In a managed worktree, inside the sandbox. Its writes are checked after.</span></div><div class="r" style="align-items:flex-start"><span class="num">5</span><span style="flex:1 1 300px"><b>The host proves it.</b> Your five gates run on the exact commit, then the other provider reviews.</span></div><div class="r" style="align-items:flex-start"><span class="num">6</span><span style="flex:1 1 300px"><b>You land it.</b> Journey first, then land. Publishing is a separate press.</span></div></div>
+      </section>
+      
+      <div class="grid">
+        <div class="gc"><div class="eyebrow">How you reach it</div><div class="h3">Dashboard</div><div class="sub">Reads every record. Owner presses are signed.</div></div>
+        <div class="gc"><div class="eyebrow">&nbsp;</div><div class="h3">Terminal</div><div class="sub mono" style="font-size:13px">awsf new · preflight · start · status · land</div></div>
+        <div class="gc"><div class="eyebrow">&nbsp;</div><div class="h3">HTTP API</div><div class="sub">The same read routes the dashboard uses. No write route lands anything.</div></div>
+      </div>
+      <div class="meta">drawn from the config and the catalog · when they change, this page changes · nobody edits it</div>
+    </main>
+  </div>
+<div class="pn-bar flat"><dc-import name="Bar" state="needs" lease="{{ false }}" line="3 runs wait on your review" waiting="3" running="0" well="{{ false }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1700}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

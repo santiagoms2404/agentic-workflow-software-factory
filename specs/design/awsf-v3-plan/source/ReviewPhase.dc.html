@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent phase: reviewer</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+.steps{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.step{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:12px;border:1px solid rgba(218,241,222,.1);color:#DAF1DE;font:600 12.5px/1 "JetBrains Mono",monospace;text-decoration:none;white-space:nowrap}
+.step.on{border-color:#DAF1DE;background:rgba(218,241,222,.1)}
+.step .d{font-weight:400;color:#8EB69B}
+.arrow{color:#8EB69B;font:400 12px/1 "JetBrains Mono",monospace}
+.sq{display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(218,241,222,.45)}
+.sqo{display:inline-block;width:10px;height:10px;border-radius:3px;border:1.5px solid #DAF1DE;box-sizing:border-box}
+.verdict{font:800 44px/1 Archivo;letter-spacing:-.03em}
+.route{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:12px;border:1px solid rgba(218,241,222,.12);background:rgba(20,20,15,.3);flex:1 1 200px}
+</style>
+</helmet>
+<div class="app" style="min-height:1480px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="RunEvidence.dc.html">36deb464</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#phase" aria-current="page">reviewer</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="RunEvidence.dc.html" aria-label="Back to the run" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">v3-w03-g03w-readiness</span>
+      <span class="meta">build-review</span>
+    </header>
+
+    <nav class="steps" aria-label="Phases of build-review">
+      <a class="step" href="RequestOwner.dc.html"><span class="dmd"></span>request</a><span class="arrow">›</span>
+      <a class="step" href="RunEvidence.dc.html"><span class="sq"></span>builder <span class="d">51m 21s</span></a><span class="arrow">›</span>
+      <a class="step" href="CodePhase.dc.html"><span class="sqo"></span>tests <span class="d">26m 07s</span></a><span class="arrow">›</span>
+      <a class="step" href="#context"><span class="dmd"></span>review-context</a><span class="arrow">›</span>
+      <a class="step on" href="#reviewer" aria-current="step"><span class="sq"></span>reviewer <span class="d">1m 18s</span></a><span class="arrow">›</span>
+      <a class="step" href="RequestOwner.dc.html"><span class="dmdf"></span>owner-journey</a>
+    </nav>
+
+    <section class="sec" aria-label="Selected phase evidence">
+      <div class="sech">
+        <span class="eyebrow">Selected phase evidence</span>
+        <span class="h2" style="font-size:20px">reviewer</span>
+        <span class="lblf">✓ succeeded</span>
+        <span class="grow"></span>
+        <span class="meta">agent · 16:28:12 → 16:29:30 · corrections 0 of 1 · 5.2k tokens</span>
+      </div>
+      <nav class="ptabs" aria-label="Evidence tabs">
+        <a class="on" href="#verdict" aria-current="page">Verdict</a>
+        <a href="#findings">Findings<span class="n">0</span></a>
+        <a href="#limits">Limits<span class="n">2</span></a>
+        <a href="#context">What it saw</a>
+        <a href="#prompt">Prompt</a>
+        <a href="#gates">Gates<span class="n">7</span></a>
+        <a href="Events.dc.html">Events</a>
+        <a href="EventRaw.dc.html">Raw journal</a>
+      </nav>
+      <div class="secb" style="display:flex;flex-direction:column;gap:16px;padding-top:18px">
+        <div class="side">
+          <div class="main">
+            <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px"><span class="verdict">Accept</span><span class="meta">reviewed 486d190 against base 4c75b5c · no blocking defect</span></div>
+            <div class="sub">Six test-only files make the prompt-composition, role-proof and phase-parity, and plan-author unit tests hold on the shipped config and on the config with G03-W applied. All edits are confined to core/test. Each changed assertion still fails when its property is broken in either config state. No declared role is skipped.</div>
+
+            <div class="sec">
+              <div class="sech"><span class="eyebrow">Limits it named · 2</span><span class="grow"></span><span class="meta">what it could not check</span></div>
+              <div class="secb">
+                <div class="gc" style="margin-bottom:10px">
+                  <div class="h3">Not run with G03-W applied</div>
+                  <div class="sub">It could not run the unit suite on a scratch copy with the G03-W block applied. The host evidence covers only the shipped-config run. Its judgment of the plan-author prompt and permission behaviour comes from reading the code only.</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px"><span class="ref">role-proof.test.ts</span><span class="ref">phase-parity.ts</span><span class="ref">role-fixture.ts</span><span class="ref">prompt-composition.test.ts</span><span class="ref">plan-author.test.ts</span></div>
+                </div>
+                <div class="gc">
+                  <div class="h3">One expectation never compared on the shipped config</div>
+                  <div class="sub">On the shipped config, the plan-author expectation is never compared with the plan-author prompt files, be…</div>
+                  <a class="meta" href="#limits">read it whole</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="aside">
+            <div class="gc">
+              <div class="eyebrow">The other provider</div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <div class="route"><span class="meta">built by</span><span class="mono" style="font-weight:600">openai-codex</span><span class="meta">gpt-6.1-sol @ high</span></div>
+                <div class="route" style="border-color:#DAF1DE"><span class="meta">reviewed by</span><span class="mono" style="font-weight:600">anthropic</span><span class="meta">claude-opus-5-5 · stream-authoritative</span></div>
+              </div>
+              <div class="meta">Review inverts the provider by default. Same-provider review needs your degrade-review act.</div>
+            </div>
+            <div class="gc">
+              <div class="eyebrow">What it saw</div>
+              <div class="r"><span>The request, verbatim</span><span class="rv">1</span></div>
+              <div class="r"><span>Changed files, inline diff</span><span class="rv">6 of 6</span></div>
+              <div class="r"><span>Host command results</span><span class="rv">5 of 5 passed</span></div>
+              <div class="r"><span>Inline diff size</span><span class="rv">[N]k of 96k characters</span></div>
+              <div class="meta">Past the cap a file is listed, not shown. The panel says so in this row.</div>
+            </div>
+            <div class="gc">
+              <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Gates on the review</span><span class="grow"></span><span class="lblf">7 of 7</span></div>
+              <div class="r"><span class="ok">✓</span><span>verdict consistent</span></div>
+              <div class="r"><span class="ok">✓</span><span>review evidence present</span></div>
+              <div class="r"><span class="ok">✓</span><span>envelope valid · json parses · artifacts exist</span></div>
+              <div class="r"><span class="ok">✓</span><span>writes within globs · no protected paths</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="36deb464 landed and you have seen it" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1480}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

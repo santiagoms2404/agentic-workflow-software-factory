@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marimba: team room</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0;background:#051F20}
+a{color:#DAF1DE}a:hover{color:#F26A1B}
+.app{position:relative;background:#051F20;color:#DAF1DE;font:400 15px/1.55 Archivo,sans-serif;overflow:hidden;display:flex;flex-direction:column}
+.bokeh{position:absolute;inset:0;background:radial-gradient(46px 46px at 6% 8%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 31% 12%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 58% 10%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 86% 9%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 25% 29%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 53% 27%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 92% 33%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 17% 46%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(53px 53px at 47% 44%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(50px 50px at 75% 45%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(52px 52px at 23% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 52% 61%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 80% 62%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 19% 79%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(49px 49px at 63% 72%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(46px 46px at 91% 82%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(48px 48px at 42% 89%,rgba(142,182,155,.14) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 27% 34%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 58% 52%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 83% 68%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%),radial-gradient(63px 63px at 14% 84%,rgba(218,241,222,.17) 0%,rgba(0,0,0,0) 70%)}
+.tint{position:absolute;inset:0;background:linear-gradient(165deg,rgba(11,43,38,.36) 0%,rgba(5,31,32,.48) 60%,rgba(5,31,32,.55) 100%)}
+.sheen{position:absolute;inset:0;background:linear-gradient(118deg,rgba(218,241,222,.075) 0%,rgba(218,241,222,0) 34%,rgba(218,241,222,0) 66%,rgba(218,241,222,.045) 100%);border-top:1px solid rgba(218,241,222,.13)}
+.tabs{position:relative;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:0 24px;padding:0 32px;border-bottom:1px solid rgba(218,241,222,.08)}
+.tabs .brand{font:700 15px/1 Archivo;letter-spacing:.02em;margin-right:8px}
+.tabs a{display:inline-flex;align-items:center;min-height:52px;font:500 14px/1 Archivo;color:#8EB69B;text-decoration:none}
+.tabs a.on{color:#DAF1DE;box-shadow:inset 0 -2px 0 #F26A1B}
+.tabs .right{margin-left:auto;font:400 12px/1 "JetBrains Mono",monospace;color:#8EB69B}
+.meta{font:400 12px/1.5 "JetBrains Mono",monospace;color:#8EB69B}
+.eyebrow{font:600 11px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#8EB69B}
+.h2{font:800 24px/1.15 Archivo;letter-spacing:-.025em}
+.sub{font-size:14.5px;line-height:1.6;color:rgba(218,241,222,.82)}
+.rc{border-radius:16px;background:rgba(218,241,222,.06);border:1px solid rgba(218,241,222,.1);padding:14px 16px}
+.lbl{display:inline-flex;align-items:center;min-height:24px;padding:0 10px;border-radius:999px;border:1px solid rgba(218,241,222,.24);font:600 10.5px/1 "JetBrains Mono",monospace;letter-spacing:.04em;color:#8EB69B;white-space:nowrap}
+.lblo{display:inline-flex;align-items:center;min-height:24px;padding:0 10px;border-radius:999px;border:1px solid #F26A1B;font:600 10.5px/1 "JetBrains Mono",monospace;letter-spacing:.04em;color:#F26A1B;white-space:nowrap}
+.btn{min-height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 14px;border-radius:14px;border:1px solid rgba(218,241,222,.14);background:rgba(218,241,222,.05);color:#DAF1DE;font:600 13.5px/1 Archivo;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btnk{min-height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 14px;border-radius:14px;border:1px solid rgba(218,241,222,.38);background:rgba(218,241,222,.08);color:#DAF1DE;font:600 13.5px/1 Archivo;cursor:pointer;white-space:nowrap}
+.btns{min-height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 16px;border-radius:14px;border:1px solid #F26A1B;background:rgba(242,106,27,.07);color:#F26A1B;font:600 13.5px/1 Archivo;cursor:pointer;white-space:nowrap}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px}
+.seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:4px;border-radius:14px;background:rgba(218,241,222,.05);border:1px solid rgba(218,241,222,.09)}
+.segb{min-height:36px;padding:0 14px;border:0;border-radius:10px;background:transparent;color:#8EB69B;font:500 13px/1 Archivo;cursor:pointer}
+.segon{min-height:36px;padding:0 14px;border:0;border-radius:10px;background:rgba(218,241,222,.1);color:#DAF1DE;font:600 13px/1 Archivo;cursor:pointer}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:24px;padding:0 7px;border-radius:6px;border:1px solid rgba(218,241,222,.24);font:600 11px/1 "JetBrains Mono",monospace;color:#8EB69B}
+.panes{position:relative;z-index:2;flex:1;display:flex;flex-wrap:wrap}
+.pane-l{flex:1 1 260px;max-width:320px;border-right:1px solid rgba(218,241,222,.1);padding:14px 12px 24px;box-sizing:border-box;display:flex;flex-direction:column;gap:2px}
+.pane-c{flex:999 1 520px;min-width:0;padding:20px 28px 28px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px}
+.pane-r{flex:1 1 340px;max-width:420px;border-left:1px solid rgba(218,241,222,.14);background:rgba(5,31,32,.74);padding:18px 20px 24px;box-sizing:border-box;display:flex;flex-direction:column;gap:14px}
+.lig{display:flex;align-items:center;gap:8px;font:600 11px/1 Archivo;letter-spacing:.16em;text-transform:uppercase;color:#8EB69B;padding:16px 12px 6px}
+.li{display:flex;flex-direction:column;justify-content:center;gap:4px;min-height:48px;padding:8px 12px;border-radius:12px;box-sizing:border-box;color:#DAF1DE;text-decoration:none}
+.li.on{background:rgba(218,241,222,.1)}
+.lit{display:flex;align-items:center;gap:8px;font:600 14px/1.25 Archivo}
+.lit .kbd{margin-left:auto}
+.lis{font:400 12px/1.4 Archivo;color:#8EB69B}
+.search{min-height:44px;box-sizing:border-box;background:rgba(218,241,222,.06);border:1px solid rgba(218,241,222,.11);border-radius:12px;padding:0 14px;color:#DAF1DE;font:400 14px Archivo;margin:0 12px}
+.gS{display:inline-flex;align-items:center;min-height:22px;padding:0 8px;border-radius:999px;background:#DAF1DE;color:#051F20;font:700 10.5px/1 "JetBrains Mono",monospace;white-space:nowrap}
+.gW{display:inline-flex;align-items:center;min-height:22px;padding:0 8px;border-radius:999px;border:1px solid rgba(218,241,222,.6);color:#DAF1DE;font:700 10.5px/1 "JetBrains Mono",monospace;white-space:nowrap}
+.msg{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-top:1px solid rgba(218,241,222,.07)}
+.msgh{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font:600 14px/1.2 Archivo}
+.msgh .meta{margin-left:auto}
+.msgb{font-size:14.5px;line-height:1.55;color:rgba(218,241,222,.88)}
+.refs{display:flex;flex-wrap:wrap;gap:6px}
+.ref{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;background:rgba(218,241,222,.08);font:400 11.5px/1 "JetBrains Mono",monospace;color:#8EB69B;text-decoration:none}
+.trace{padding:8px 12px;border-radius:10px;background:rgba(20,20,15,.35);border:1px solid rgba(218,241,222,.07);font:400 12.5px/1.45 "JetBrains Mono",monospace;color:rgba(218,241,222,.72)}
+.brief{margin:8px 0 0;padding-left:20px;font-size:14.5px;line-height:1.6;color:rgba(218,241,222,.86)}
+.comp{display:flex;flex-direction:column;gap:10px;border-top:1px solid rgba(218,241,222,.12);padding-top:14px}
+.field{flex:1 1 300px;min-height:46px;box-sizing:border-box;background:rgba(218,241,222,.07);border:1px solid rgba(218,241,222,.11);border-radius:14px;padding:0 16px;color:#DAF1DE;font:400 14.5px Archivo}
+.send{width:46px;height:46px;display:inline-flex;align-items:center;justify-content:center;border-radius:14px;border:1px solid rgba(218,241,222,.2);background:rgba(218,241,222,.08);color:#DAF1DE;cursor:pointer}
+.card{border-radius:16px;border:1px solid rgba(218,241,222,.14);background:rgba(218,241,222,.05);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.cardo{border-color:rgba(242,106,27,.6)}
+.cq{font:700 16px/1.35 Archivo}
+.opt{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 12px;border-radius:12px;border:1px solid rgba(218,241,222,.14);background:transparent;color:#DAF1DE;font:500 14px/1.3 Archivo;text-align:left;cursor:pointer;box-sizing:border-box}
+.opt.on{border-color:#DAF1DE;background:rgba(218,241,222,.08)}
+.opt .meta{margin-left:auto}
+.mix{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:3px}
+.mix span{display:block;height:8px;border-radius:4px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 0;border-top:1px solid rgba(218,241,222,.07);font-size:14px}
+.row .meta{margin-left:auto}
+</style>
+</helmet>
+<div class="app" style="min-height:1580px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span aria-hidden="true" style="color:#8EB69B;margin:0 -12px">›</span>
+    <a class="on" href="#teams" aria-current="page">orquesta</a>
+    <span style="flex:1"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="panes">
+    <aside class="pane-l" aria-label="Team and rooms">
+      <div class="pn-bay" style="margin-top:-14px" role="status" aria-label="Marimba, needs you"><dc-import name="Pendulum" state="needs" size="220" hanger="{{ true }}" hint-size="220px,141px"></dc-import><span class="pn-w pn-needs">Needs you</span><span class="pn-n">2 cards wait on you</span></div>
+      <a class="li" href="ShiftView.dc.html"><span class="lis">‹ Runs</span></a>
+      <div style="padding:4px 12px 2px"><span class="eyebrow">Planning team</span></div>
+      <div style="padding:6px 12px 0"><span class="h2" style="font-size:22px">W08 deep plan</span></div>
+      <div class="lis" style="padding:4px 12px 8px">brief from you · [DATE] · ends with this task</div>
+
+      <div class="lig">Team · 4 of 6</div>
+      <a class="li on" href="#lead">
+        <span class="lit"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" style="flex:none"><circle cx="7" cy="7" r="5.5" fill="none" stroke="#DAF1DE" stroke-width="1.5"></circle><circle cx="7" cy="7" r="2" fill="#DAF1DE"></circle></svg>Lead · Marimba<span style="display:inline-flex;flex:none;margin:-8px 0 -8px auto"><dc-import name="Pendulum" state="needs" size="60" hint-size="60px,38px"></dc-import></span><span class="kbd">1</span></span>
+        <span class="lis">Conversations · <span class="gS">S+ · medium</span> · answering you</span>
+      </a>
+      <a class="li" href="#author">
+        <span class="lit"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="2" y="2" width="10" height="10" fill="#DAF1DE"></rect></svg>Author<span style="display:inline-flex;flex:none;margin:-8px 0 -8px auto"><dc-import name="Pendulum" state="working" size="60" hint-size="60px,38px"></dc-import></span><span class="kbd">2</span></span>
+        <span class="lis">Plan text · <span class="gW">A · high</span> · working: drafting M2</span>
+      </a>
+      <a class="li" href="#grounding">
+        <span class="lit"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="#DAF1DE"></circle></svg>Grounding<span style="display:inline-flex;flex:none;margin:-8px 0 -8px auto"><dc-import name="Pendulum" state="idle" size="60" hint-size="60px,38px"></dc-import></span><span class="kbd">3</span></span>
+        <span class="lis">Evidence · <span class="gW">A · medium</span> · waiting on Author</span>
+      </a>
+      <a class="li" href="#readiness">
+        <span class="lit"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 1.5l5.5 10.5h-11z" fill="#DAF1DE"></path></svg>Readiness<span style="display:inline-flex;flex:none;margin:-8px 0 -8px auto"><dc-import name="Pendulum" state="needs" size="60" hint-size="60px,38px"></dc-import></span><span class="kbd">4</span></span>
+        <span class="lis">Buildability · <span class="gW">A · high</span> · needs you: 2 of 5</span>
+      </a>
+
+      <div class="lig">Rooms</div>
+      <label class="lis" for="room-search" style="padding:0 12px 6px">Search titles, summaries and messages</label>
+      <input class="search" id="room-search" type="search" placeholder="Search rooms">
+      <a class="li on" href="#c1" style="margin-top:6px">
+        <span class="lit">C-1 · Round 2 of 3</span>
+        <span class="lis">group · 4 people · 23 messages · 4m</span>
+      </a>
+      <a class="li" href="#c2">
+        <span class="lit">C-2 · Lead and Author</span>
+        <span class="lis">direct · 6 messages · 12m</span>
+      </a>
+      <a class="li" href="#c3">
+        <span class="lit">C-3 · Lead and Readiness</span>
+        <span class="lis">direct · 3 messages · 31m</span>
+      </a>
+      <div class="lis" style="padding:8px 12px 0">Archived · 2. A new message brings a room back.</div>
+    </aside>
+
+    <main class="pane-c">
+      <div class="seg" role="tablist" aria-label="Room tabs" style="align-self:flex-start">
+        <button class="segon" type="button" role="tab" aria-selected="true">Room</button>
+        <button class="segb" type="button" role="tab" aria-selected="false">Lead</button>
+        <button class="segb" type="button" role="tab" aria-selected="false">Author</button>
+        <button class="segb" type="button" role="tab" aria-selected="false">Grounding</button>
+        <button class="segb" type="button" role="tab" aria-selected="false">Readiness</button>
+        <button class="segb" type="button" role="tab" aria-selected="false">Cards · 2</button>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px">
+        <span class="h2">C-1 · Round 2 of 3</span>
+        <span class="lbl">open</span>
+        <span style="flex:1"></span>
+        <button class="btn" type="button">Rename</button>
+        <button class="btn" type="button">Close</button>
+        <button class="btn" type="button">Archive</button>
+      </div>
+      <div class="meta" style="margin-top:-8px">group · Lead, Author, Grounding, Readiness · 23 messages · last 4m ago · every line is a journal record</div>
+
+      <div class="rc">
+        <span class="eyebrow">Round brief · from the Lead</span>
+        <div style="font:700 16px/1.35 Archivo;margin-top:8px">Round 2 of 3: challenge and settle.</div>
+        <ol class="brief">
+          <li>Name one challenge to another member's proposal.</li>
+          <li>Answer the challenge aimed at you, in one message.</li>
+          <li>Mark each pick as settled, a working choice, or open.</li>
+        </ol>
+        <div class="meta" style="margin-top:8px">Done when each lane replies here with one line and a ref to its section.</div>
+      </div>
+
+      <div class="rc" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l8-8M16 7l3 3"></path></svg>
+<div style="flex:1 1 300px"><div style="font:600 14px/1.35 Archivo">Your grant for this task</div><div class="meta">The Lead may apply members' settings that are already built. No new code. Ends with this task.</div></div>
+        <button class="btnk" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l8-8M16 7l3 3"></path></svg>Revoke</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column">
+        <div class="msg">
+          <div class="msgh"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="2" y="2" width="10" height="10" fill="#DAF1DE"></rect></svg>Author<span class="lis">Plan text</span><span class="meta">14:02</span></div>
+          <div class="msgb">Proposal for M1: the phase view reads route provenance from the journal, so it needs no new record.</div>
+          <div class="refs"><a class="ref" href="#draft-m1">W08 draft · M1</a></div>
+        </div>
+        <div class="msg">
+          <div class="msgh"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="#DAF1DE"></circle></svg>Grounding<span class="lis">Evidence</span><span class="meta">14:04</span></div>
+          <div class="msgb">@Author, one challenge: the phase inspector shows compiled prompts, not route provenance. M1 needs a reader for the route records. I read the file, not the running page.</div>
+          <div class="refs"><a class="ref" href="#src">PhaseInspector.vue</a><a class="ref" href="#draft-m1">W08 draft · M1</a></div>
+        </div>
+        <div class="msg">
+          <div class="msgh"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 1.5l5.5 10.5h-11z" fill="#DAF1DE"></path></svg>Readiness<span class="lis">Buildability</span><span class="meta">14:05</span></div>
+          <div class="msgb">@Author, one challenge: T03 has no done line a builder can test. Proposed: "the phase view lists the four route fields, each with its source."</div>
+          <div class="refs"><a class="ref" href="#draft-t03">W08 draft · T03</a></div>
+        </div>
+        <div class="msg">
+          <div class="msgh"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="2" y="2" width="10" height="10" fill="#DAF1DE"></rect></svg>Author<span class="lis">Plan text</span><span class="meta">14:07</span></div>
+          <div class="msgb">Both accepted. M1 gains a route reader, and T03 takes Readiness's done line.</div>
+          <div class="refs"><a class="ref" href="#draft-r4">W08 draft · rev 4</a></div>
+        </div>
+        <div class="msg">
+          <div class="msgh"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="#DAF1DE" stroke-width="1.5"></circle><circle cx="7" cy="7" r="2" fill="#DAF1DE"></circle></svg>Lead<span class="lis">Marimba</span><span class="meta">14:08</span></div>
+          <div class="msgb">Ruling: window share per phase is a working choice. Work goes ahead on it, and you can overrule it on card 2.</div>
+          <div class="refs"><a class="ref" href="#card-2">Decision 2 of 5</a></div>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
+            <div class="tc"><span class="ok">✓</span><span>Posted the ruling to C-1 and opened card 2 for you</span><span class="ms">room post · card open · 11ms</span></div>
+            <div class="meta">The line is written by a template from the step names, the same way as a phase's events. No model.</div>
+          </div>
+        </div>
+        <div class="msg">
+          <div class="trace">Lead: I sent no reply to Grounding's note on fonts, since none was needed.</div>
+          <div class="trace">Grounding asked for thinking high → medium on its lane. That narrows, so no card. The Lead applied it under your grant, from the next attempt.</div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="meta">Reaches: Lead, Author, Grounding, Readiness · everyone in C-1</div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+          <label for="room-msg" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Message to C-1</label>
+          <input class="field" id="room-msg" type="text" placeholder="Message C-1, or @mention a lane">
+          <button class="send" type="button" aria-label="Send"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+          <div class="seg" role="group" aria-label="While a member is busy">
+            <button class="segon" type="button" aria-pressed="true">Message</button>
+            <button class="segb" type="button" aria-pressed="false">Queue for after this run</button>
+            <button class="segb" type="button" aria-pressed="false">Steer the current run</button>
+          </div>
+          <span class="meta" style="margin-left:auto">Post as you</span>
+        </div>
+        <div class="meta">A mention asks a lane for an answer. It never widens scope or adds writes. Only you, the ticket and the Lead's brief instruct.</div>
+      </div>
+
+      
+    </main>
+
+    <aside class="pane-r" aria-label="Cards">
+      <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">Cards</span><span style="flex:1"></span><span class="lblo">waiting on you · 2</span></div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font:700 14px/1.3 Archivo">W08 draft · rev 4</span><span style="flex:1"></span><span class="meta">12 picks</span></div>
+        <div class="mix" aria-hidden="true"><span style="width:58%;background:#8EB69B"></span><span style="width:25%;border:1px solid #DAF1DE;box-sizing:border-box"></span><span style="width:17%;border:1px dashed rgba(218,241,222,.5);box-sizing:border-box"></span></div>
+        <div class="row" style="border-top:0"><span>Settled</span><span class="meta">7</span></div>
+        <div class="row"><span>Working choice</span><span class="meta">3 · you can overrule</span></div>
+        <div class="row"><span>Needs research</span><span class="meta">1</span></div>
+        <div class="row"><span>Waits on your policy</span><span class="meta">1</span></div>
+      </div>
+
+      <div class="card cardo">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><span class="meta">Decision 2 of 5</span><span style="flex:1"></span><span class="meta">blocks T04 to T06</span></div>
+        <div class="cq">Window share: show it per phase, or per run only?</div>
+        <div class="sub">Readiness picks per phase. A shift spends unevenly, and a per-run total hides the expensive ticket.</div>
+        <button class="opt on" type="button" aria-pressed="true">Per phase<span class="meta">the pick</span></button>
+        <button class="opt" type="button" aria-pressed="false">Per run only</button>
+        <button class="opt" type="button" aria-pressed="false">+ Other</button>
+        <div class="btnrow"><button class="btns" type="button">Pick one</button><button class="btn" type="button">Dismiss</button></div>
+        <a class="ref" href="#c1" style="align-self:flex-start">from Readiness in C-1</a>
+      </div>
+
+      <div class="card cardo">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><span class="meta">Decision 3 of 5</span><span style="flex:1"></span><span class="meta">blocks T07</span></div>
+        <div class="cq">Keep the call ceiling at [N] per ticket?</div>
+        <div class="sub">No means you give other numbers.</div>
+        <div class="btnrow"><button class="btns" type="button">Yes</button><button class="btn" type="button">No, I'll give numbers</button></div>
+        <a class="ref" href="#c3" style="align-self:flex-start">from the Lead in C-3</a>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><span class="meta">Decision 1 of 5 · answered</span><span style="flex:1"></span><span class="meta">[TIME]</span></div>
+        <div style="font:600 14px/1.4 Archivo">The plan viewer comes before any format change.</div>
+      </div>
+
+      <div class="trace">Decision 4 was withdrawn by the Lead. Its cause went away when M3 merged into M2.</div>
+      <div class="trace">Not cards: the team budget and the rule text need your own words.</div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1580}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+/* The pendulum's homes: where Marimba's mark hangs. Every name starts with pn-. */
+.pn-idle{color:#A7BFA7}
+.pn-working{color:#DAF1DE}
+.pn-needs{color:#F26A1B}
+.pn-done{color:#4FE3A1}
+.pn-paused{color:#A7BFA7}
+.pn-off{color:#8EB69B}
+.pn-w{font:800 19px/1.15 Archivo,sans-serif;letter-spacing:-.02em}
+.pn-n{font:400 12px/1.5 "JetBrains Mono",monospace;color:#8EB69B;max-width:214px}
+.pn-hang{position:absolute;z-index:2;top:53px;left:calc(50% - 620px);width:240px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.pn-row{display:none;flex:none}
+@media (max-width:1259px){.pn-hang{display:none}.pn-row{display:inline-flex}}
+.pn-bay{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;margin:-22px 0 8px;padding-bottom:14px;border-bottom:1px solid rgba(218,241,222,.08)}
+.pn-head{display:flex;flex-wrap:wrap;align-items:flex-start;gap:0 22px}
+.pn-head>div{flex:1 1 320px;min-width:0;padding-top:34px}
+.pn-well{position:absolute;left:32px;bottom:0;width:204px;height:138px;border:1px solid rgba(218,241,222,.16);border-bottom:0;border-radius:20px 20px 0 0;background:#06211f;display:flex;justify-content:center;align-items:flex-start;box-sizing:border-box}
+@media (max-width:760px){.pn-well{position:relative;left:0;height:136px;border:1px solid rgba(218,241,222,.16);border-radius:20px}}
+.pn-hang.wide{left:calc(50% - 690px)}
+@media (max-width:1399px){.pn-hang.wide{display:none}.pn-row.wide{display:inline-flex}}
+.bar.pn-wellpad{padding-left:292px}
+.pn-well.tall{width:240px;height:176px}
+@media (max-width:900px){.bar.pn-wellpad{padding-left:32px}.pn-well.tall{position:relative;left:0;width:240px;height:152px}}
+.pn-bar{position:relative;z-index:3;margin-top:auto;padding-top:74px;width:100%;box-sizing:border-box}
+.pn-bar.flat{padding-top:0}
+@media (max-width:900px){.pn-bar{padding-top:20px}}
+/* The strip. One component, Bar.dc.html. */
+.mbar{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 32px 14px;border-top:1px solid rgba(218,241,222,.12);background:rgba(5,31,32,.88);box-sizing:border-box;width:100%;color:#DAF1DE;font:400 15px/1.5 Archivo,sans-serif}
+.mbar.well{padding-left:292px;min-height:118px}
+.mbar .mwell{position:absolute;left:32px;bottom:0;width:240px;height:176px;border:1px solid rgba(218,241,222,.16);border-bottom:0;border-radius:20px 20px 0 0;background:#06211f;display:flex;justify-content:center;align-items:flex-start;box-sizing:border-box;overflow:hidden}
+.mbar .mline{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;min-height:38px}
+.mbar .mwords{flex:1 1 320px;min-width:0;font:600 13.5px/1.45 "JetBrains Mono",monospace;color:#DAF1DE}
+.mbar .mwords i{font-style:normal;color:#8EB69B}
+.mbar .mnever{font:400 12.5px/1.4 "JetBrains Mono",monospace;color:#8EB69B}
+.mbar .mchip{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid rgba(218,241,222,.14);background:rgba(218,241,222,.07);color:#DAF1DE;font:600 13.5px/1 Archivo;text-decoration:none;white-space:nowrap}
+.mbar .mchip b{width:9px;height:9px;border-radius:50%;box-sizing:border-box;border:2px solid #F26A1B;display:inline-block}
+.mbar .mchip.none{color:#8EB69B}.mbar .mchip.none b{border-color:rgba(142,182,155,.5)}
+.mbar .mfield{flex:1 1 240px;min-width:0;min-height:44px;box-sizing:border-box;background:rgba(218,241,222,.06);border:1px solid rgba(218,241,222,.12);border-radius:14px;padding:0 16px;color:#DAF1DE;font:400 14.5px Archivo}
+.mbar .mkey{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:24px;padding:0 7px;border-radius:6px;border:1px solid rgba(218,241,222,.24);font:600 11px/1 "JetBrains Mono",monospace;color:#8EB69B;box-sizing:border-box}
+.mbar .mmeta{font:400 12px/1.5 "JetBrains Mono",monospace;color:#8EB69B;white-space:nowrap}
+.mbar .mstop{min-height:44px;padding:0 18px;border-radius:12px;border:1px solid rgba(218,241,222,.18);background:rgba(218,241,222,.05);color:#DAF1DE;font:600 13.5px/1 Archivo;cursor:pointer}
+.mbar .mstop:disabled{color:rgba(142,182,155,.7);cursor:default}
+@media (max-width:900px){.mbar.well{padding-left:32px;padding-top:0}.mbar .mwell{position:relative;left:0;height:152px;margin-bottom:8px}}

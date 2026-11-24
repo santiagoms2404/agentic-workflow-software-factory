@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marimba: a lease, hour by hour</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="marimba.css">
+<link rel="stylesheet" href="meta.css">
+<link rel="stylesheet" href="pendulum.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+.tk{position:absolute;bottom:0;transform:translateX(-50%);font:400 11.5px/1 "JetBrains Mono",monospace;color:#8EB69B}
+.lh{position:relative;height:98px;margin:22px 24px 0}
+.lh-b{position:absolute;top:26px;height:34px;box-sizing:border-box}
+.lh-d{position:absolute;top:36px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#DAF1DE;box-shadow:0 0 0 4px #123c36}
+.lh-p{position:absolute;top:35px;width:15px;height:15px;margin-left:-8px;transform:rotate(45deg);background:#F26A1B}
+</style>
+</helmet>
+<div class="app" style="min-height:1360px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="Rest.dc.html">marimba</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" aria-current="page" href="Lease.dc.html">lease</a>
+    <span class="grow"></span>
+    <a href="Workspace.dc.html">Workspace</a>
+    <a href="SettingsGlance.dc.html">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="Room1.dc.html">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+  <div class="layer" style="padding-top:28px;gap:18px;padding-bottom:40px">
+    <div>
+      <div class="h1" style="font-size:38px">A lease, hour by hour</div>
+      <div class="meta" style="margin-top:6px">lease [LEASE-ID] · one shift · tickets T1 to T3 · a sample night, each change of state is a record</div>
+    </div>
+    <section class="sec" aria-label="The night, from 18:00 to 08:00">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:14px 8px;padding:0 10px"><div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center"><dc-import name="Pendulum" state="idle" size="168" hanger="{{ true }}" hint-size="168px,108px"></dc-import><span class="pn-w pn-idle">Idle</span><span class="meta"><span class="num" style="width:20px;height:20px;border-radius:6px;font-size:11px;margin-right:6px">1</span>18:00 · nothing runs</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center"><dc-import name="Pendulum" state="working" lease="{{ true }}" size="168" hanger="{{ true }}" hint-size="168px,108px"></dc-import><span class="pn-w pn-working">Working</span><span class="meta"><span class="num" style="width:20px;height:20px;border-radius:6px;font-size:11px;margin-right:6px">2</span>19:02 · you granted a lease</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center"><dc-import name="Pendulum" state="paused" lease="{{ true }}" progress="0.5" size="168" hanger="{{ true }}" hint-size="168px,108px"></dc-import><span class="pn-w pn-paused">Paused</span><span class="meta"><span class="num" style="width:20px;height:20px;border-radius:6px;font-size:11px;margin-right:6px">3</span>02:50 to 03:40 · the window</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center"><dc-import name="Pendulum" state="needs" size="168" hanger="{{ true }}" hint-size="168px,108px"></dc-import><span class="pn-w pn-needs">Needs you</span><span class="meta"><span class="num" style="width:20px;height:20px;border-radius:6px;font-size:11px;margin-right:6px">4</span>05:02 · a ticket stopped</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center"><dc-import name="Pendulum" state="working" size="168" hanger="{{ true }}" hint-size="168px,108px"></dc-import><span class="pn-w pn-working">Working</span><span class="meta"><span class="num" style="width:20px;height:20px;border-radius:6px;font-size:11px;margin-right:6px">5</span>06:10 · you pressed rework</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center"><dc-import name="Pendulum" state="needs" size="168" hanger="{{ true }}" hint-size="168px,108px"></dc-import><span class="pn-w pn-needs">Needs you</span><span class="meta"><span class="num" style="width:20px;height:20px;border-radius:6px;font-size:11px;margin-right:6px">6</span>07:20 · ready to land</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center"><dc-import name="Pendulum" state="done" size="168" hanger="{{ true }}" hint-size="168px,108px"></dc-import><span class="pn-w pn-done">Done</span><span class="meta"><span class="num" style="width:20px;height:20px;border-radius:6px;font-size:11px;margin-right:6px">7</span>07:40 · you landed</span></div></div>
+      <div class="lh" role="img" aria-label="Idle until 19:02, working under a lease until 05:02 with a pause from 02:50 to 03:40, waiting on you until 06:10, working until 07:20, waiting on you until 07:40, then done">
+        <span class="lh-b" style="left:0.00%;width:7.38%;border-top:2px solid rgba(218,241,222,.3);top:42px;height:0"></span><span class="lh-b" style="left:7.38%;width:71.43%;border-radius:10px 3px 3px 10px;background:rgba(47,122,91,.5);border:1px solid #A7BFA7"></span><span class="lh-b" style="left:78.81%;width:8.10%;border:1px solid #F26A1B;background:repeating-linear-gradient(135deg,rgba(242,106,27,.24) 0 2px,rgba(0,0,0,0) 2px 8px)"></span><span class="lh-b" style="left:86.91%;width:8.33%;background:rgba(47,122,91,.22);border:1px dashed #A7BFA7"></span><span class="lh-b" style="left:95.24%;width:2.39%;border:1px solid #F26A1B;background:repeating-linear-gradient(135deg,rgba(242,106,27,.24) 0 2px,rgba(0,0,0,0) 2px 8px)"></span><span class="lh-b" style="left:97.62%;width:2.38%;border-top:4px solid #4FE3A1;top:41px;height:0"></span>
+        <span class="lh-b" style="left:63.10%;width:5.95%;background:#06211f;border:1px dotted #A7BFA7"></span><span class="lh-d" style="left:58.81%"></span><span class="lh-d" style="left:69.05%"></span><span class="lh-d" style="left:77.62%"></span><span class="lh-p" style="left:7.38%"></span><span class="lh-p" style="left:86.91%"></span><span class="lh-p" style="left:97.62%"></span>
+        <span style="position:absolute;top:18px;bottom:20px;left:93.09%;border-left:2px dashed #DAF1DE"></span>
+        <span class="num" style="position:absolute;top:-6px;left:0.00%;width:20px;height:20px;border-radius:6px;font-size:11px;">1</span><span class="num" style="position:absolute;top:-6px;left:7.38%;width:20px;height:20px;border-radius:6px;font-size:11px;">2</span><span class="num" style="position:absolute;top:-6px;left:63.10%;width:20px;height:20px;border-radius:6px;font-size:11px;">3</span><span class="num" style="position:absolute;top:-6px;left:78.81%;width:20px;height:20px;border-radius:6px;font-size:11px;">4</span><span class="num" style="position:absolute;top:-6px;left:86.91%;width:20px;height:20px;border-radius:6px;font-size:11px;">5</span><span class="num" style="position:absolute;top:-6px;left:95.24%;width:20px;height:20px;border-radius:6px;font-size:11px;transform:translateX(-118%)">6</span><span class="num" style="position:absolute;top:-6px;left:97.62%;width:20px;height:20px;border-radius:6px;font-size:11px;">7</span><span class="tk" style="left:0.00%">18:00</span><span class="tk" style="left:14.29%">20:00</span><span class="tk" style="left:28.57%">22:00</span><span class="tk" style="left:42.86%">00:00</span><span class="tk" style="left:57.14%">02:00</span><span class="tk" style="left:71.43%">04:00</span><span class="tk" style="left:85.71%">06:00</span><span class="tk" style="left:100.00%">08:00</span>
+      </div>
+      <div class="keyrow" style="padding:10px 24px 18px">
+        <span class="key"><span style="width:12px;height:12px;transform:rotate(45deg);background:#F26A1B"></span>your press</span>
+        <span class="key"><span style="width:12px;height:12px;border-radius:50%;background:#DAF1DE"></span>the Delegate acted</span>
+        <span class="key"><i style="background:rgba(47,122,91,.5);border:1px solid #A7BFA7"></i>working, lease live</span>
+        <span class="key"><i style="background:rgba(47,122,91,.22);border:1px dashed #A7BFA7"></i>working, no lease</span>
+        <span class="key"><i style="background:#06211f;border:1px dotted #A7BFA7"></i>paused, lease live</span>
+        <span class="key"><i style="background:repeating-linear-gradient(135deg,rgba(242,106,27,.6) 0 2px,rgba(0,0,0,0) 2px 6px)"></i>waiting on you</span>
+        <span class="key"><i style="height:4px;background:#4FE3A1"></i>done</span>
+        <span class="key"><span style="height:14px;border-left:2px dashed #DAF1DE"></span>07:02 · 12 h after your press, the longest a lease may run</span>
+      </div>
+    </section>
+
+    <div class="two">
+      <section class="sec" aria-label="What happened"><div class="sech"><span class="h3">What the Delegate did</span><span class="meta">journaled as actor: delegate</span></div><div class="secb"><div class="r"><span class="mono" style="min-width:56px;font-weight:600">02:14</span><span>Raised the ceiling by 1 on ticket T2</span><span class="rv">lease allows 2 · 1 used</span></div><div class="r"><span class="mono" style="min-width:56px;font-weight:600">03:40</span><span>Continued after the quota window reset</span><span class="rv">nothing to decide</span></div><div class="r"><span class="mono" style="min-width:56px;font-weight:600">04:52</span><span>Fell back to the second route for the review</span><span class="rv">shadow disagreed · flagged</span></div><div class="r"><span class="mono" style="min-width:56px;font-weight:600">05:02</span><span>Handed ticket T3 back to you</span><span class="rv">the lease ended here</span></div></div></section>
+      <section class="sec" aria-label="What ends a lease"><div class="sech"><span class="h3">What ends it</span><span class="meta">whichever comes first</span></div><div class="secb">
+        <div class="r"><span>The end you wrote</span><span class="rv">07:00</span></div>
+        <div class="r"><span>Twelve hours after your last press</span><span class="rv">07:02</span></div>
+        <div class="r"><span>The first BLOCKED</span><span class="rv">05:02 · this one</span></div>
+        <div class="r"><span>Stop, from any surface</span><span class="rv">anyone may stop</span></div>
+        <div class="r"><span>You revoke it</span><span class="rv">any time</span></div>
+      </div></section>
+    </div>
+
+    <div class="h2" style="margin-top:6px">One name on screen, two parts below it</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:stretch">
+      <div class="gc" style="flex:1 1 220px"><div style="display:flex;align-items:center;gap:8px;min-height:54px"><span style="flex:1"><span class="h3" style="display:block">You</span><span class="meta">02:13 · from your phone</span></span></div><div class="sub">“Raise it by one.” You say it to Marimba. Words are not an act.</div></div><span aria-hidden="true" style="align-self:center;color:#8EB69B;font:400 20px/1 JetBrains Mono,monospace">›</span>
+      <div class="gc" style="flex:1 1 220px"><div style="display:flex;align-items:center;gap:8px;min-height:54px"><span style="flex:1"><span class="h3" style="display:block">Marimba</span><span class="meta">the one you talk to</span></span><span style="display:inline-flex;flex:none;width:84px;height:54px;"><dc-import name="Pendulum" state="working" lease="{{ true }}" size="84" hint-size="84px,54px"></dc-import></span></div><div class="sub">Passes the ask on and shows the answer. Its message is never the act, and no lease verb is open to it.</div></div><span aria-hidden="true" style="align-self:center;color:#8EB69B;font:400 20px/1 JetBrains Mono,monospace">›</span>
+      <div class="gc" style="flex:1 1 220px"><div style="display:flex;align-items:center;gap:8px;min-height:54px"><span style="flex:1"><span class="h3" style="display:block">The Delegate</span><span class="meta">host code · it never talks</span></span></div><div class="sub">Holds the lease. Checks the ask against it: raise ≤ 2, 1 left. Acts, or waits for you.</div></div><span aria-hidden="true" style="align-self:center;color:#8EB69B;font:400 20px/1 JetBrains Mono,monospace">›</span>
+      <div class="gc" style="flex:1 1 220px"><div style="display:flex;align-items:center;gap:8px;min-height:54px"><span style="flex:1"><span class="h3" style="display:block">The journal</span><span class="meta">one record</span></span></div><div class="sub">actor: delegate, with the lease id and the decision id. You confirm or flag it in the morning.</div></div>
+    </div>
+
+    <section class="rc" aria-label="Still open">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px"><span class="eyebrow">For routines</span><span class="lblx">open · W05 and W14 settle these</span></div>
+      <div class="sub" style="margin-top:8px">The twelve-hour limit takes effect the day the always-on host exists. Until then a routine runs only while this dashboard is open. Each firing of a routine is one task, so its lease has a task to belong to. The open page keeps the clock. When it is closed, nothing fires. W05 and W14 write both rules.</div>
+    </section>
+  </div>
+<div class="pn-bar flat"><dc-import name="Bar" state="done" lease="{{ false }}" line="T1 to T3 landed at 07:40" waiting="0" running="0" well="{{ false }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1360}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

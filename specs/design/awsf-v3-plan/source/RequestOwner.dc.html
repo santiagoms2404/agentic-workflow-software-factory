@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Engineer and owner phases</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+.act{display:grid;grid-template-columns:70px 18px minmax(0,1fr);gap:12px;align-items:start;padding:11px 0;border-top:1px solid rgba(218,241,222,.07)}
+.act:first-child{border-top:0}
+.act .tt{font:400 12px/1.5 "JetBrains Mono",monospace;color:#8EB69B}
+.act .w{font:600 14px/1.4 Archivo}
+.act .why{font:400 13px/1.5 Archivo;color:rgba(218,241,222,.8);margin-top:2px}
+</style>
+</helmet>
+<div class="app" style="min-height:1680px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="ShiftView.dc.html" aria-current="page">f59bab60</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="ShiftView.dc.html" aria-label="Back to the shift" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">v3-w03-m4m6-shift</span>
+      <span class="lblf">✓ landed · closed</span>
+      <span class="meta">shift · T2 · the engineer phases bring the request in, the owner phase takes it out</span>
+    </header>
+
+    <div class="strip">
+      <div class="cell"><div class="cellv">12:29</div><div class="celll">first act · driver preflight</div></div>
+      <div class="cell"><div class="cellv">2 raises</div><div class="celll">ceiling 5 → 15, each with a reason</div></div>
+      <div class="cell"><div class="cellv">6 briefs</div><div class="celll">one engineer phase per ticket</div></div>
+      <div class="cell"><div class="cellv">1h 23m</div><div class="celll">waited on you after the review</div></div>
+      <div class="cell"><div class="cellv">7d399944</div><div class="celll">closure record · T09–T14</div></div>
+    </div>
+
+    <div class="two">
+      <section class="sec" aria-label="Engineer phases">
+        <div class="sech"><span class="dmd"></span><span class="eyebrow">Engineer phases · the request</span><span class="grow"></span><span class="lbl">no model</span></div>
+        <nav class="ptabs" aria-label="Request tabs">
+          <a class="on" href="#req" aria-current="page">Request</a>
+          <a href="#selection">Selection<span class="n">6</span></a>
+          <a href="#acts">Your acts<span class="n">5</span></a>
+          <a href="#briefs">Briefs<span class="n">6</span></a>
+        </nav>
+        <div class="secb" style="display:flex;flex-direction:column;gap:14px;padding-top:14px">
+          <div class="eyebrow">Recorded verbatim</div>
+          <div class="quote">Take one milestone shift over M4, M5 and M6 of specs/awsf-v3-w03-ticket-closure.html. M4 is T09-T10: status, doctor, K2 and K1 read closure, and M4's Testing Strategy. M5 is T11: light tickets start, close and keep their state out of intake's reach. M6 is T12-T14: plan admission with design-to-plan on it, the plan-author recipe's code half, and M6's Testing Strategy. Close the sh…</div>
+          <a class="meta" href="#req">read it whole</a>
+          <div class="r"><span>Tickets sealed</span><span class="rv">T09 T10 T11 T12 T13 T14</span></div>
+          <div class="r"><span>Request digest</span><span class="rv">3c7d457f…</span></div>
+          <div class="r"><span>Paths digest</span><span class="rv">f7ba8e0c…</span></div>
+          <div class="r"><span>Base</span><span class="rv">8390f54</span></div>
+
+          <div class="eyebrow" style="margin-top:6px">Your acts before the first call</div>
+          <div>
+            <div class="act"><span class="tt">12:29:06</span><span class="dmd" style="margin-top:6px"></span><div><div class="w">Driver preflight recorded</div><div class="why">at base 8390f54, with the config digest</div></div></div>
+            <div class="act"><span class="tt">12:34:52</span><span class="dmdf" style="margin-top:6px"></span><div><div class="w">Raised the call ceiling 5 → 10</div><div class="why">"six-ticket shift over M4-M6 needs at least 7 calls; first of two raises"</div></div></div>
+            <div class="act"><span class="tt">12:36:41</span><span class="dmdf" style="margin-top:6px"></span><div><div class="w">Raised the call ceiling 10 → 15</div><div class="why">"second raise to 15: room for corrections across six tickets and the review"</div></div></div>
+            <div class="act"><span class="tt">12:39:04</span><span class="dmdf" style="margin-top:6px"></span><div><div class="w">Confirmed the request</div><div class="why">request and paths digests sealed</div></div></div>
+            <div class="act"><span class="tt">12:41:24</span><span class="dmd" style="margin-top:6px"></span><div><div class="w">Started · PREPARED → RUNNING · L4</div><div class="why">"compiled workflow and held first call"</div></div></div>
+          </div>
+
+          <div class="eyebrow" style="margin-top:6px">Briefs · one per ticket</div>
+          <div class="tc"><span>t09-brief · Carry T09 "Status, doctor, K2 and K1 read closure"</span><span class="ms">53ms</span></div>
+          <div class="tc"><span>t10-brief · Carry T10 "Testing Strategy for M4"</span><span class="ms">68ms</span></div>
+          <div class="tc"><span>t11-brief to t14-brief</span><span class="ms">4 more</span></div>
+        </div>
+      </section>
+
+      <section class="sec" aria-label="Owner phase">
+        <div class="sech"><span class="dmdf"></span><span class="eyebrow">Owner phase · journey, land, close</span><span class="grow"></span><span class="lblo">next: publish</span></div>
+        <nav class="ptabs" aria-label="Owner tabs">
+          <a class="on" href="#journey" aria-current="page">Journey</a>
+          <a href="#acts2">Acts<span class="n">3</span></a>
+          <a href="#closure">Closure</a>
+          <a href="#audit">Lifecycle<span class="n">4</span></a>
+        </nav>
+        <div class="secb" style="display:flex;flex-direction:column;gap:14px;padding-top:14px">
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="h3">w03-m4m6-closure-light-admission</span><span class="grow"></span><span class="lblf">3 of 3</span></div>
+            <div class="r"><span class="ok">✓</span><span>journey ran</span><span class="rv">22:59:48</span></div>
+            <div class="r"><span class="ok">✓</span><span>journey passed</span><span class="rv">passed</span></div>
+            <div class="r"><span class="ok">✓</span><span>candidate SHA exact</span><span class="rv">bad3980 = bad3980</span></div>
+            <div class="meta">A T2 land is refused until a journey passes on the exact candidate.</div>
+          </div>
+          <div class="gc">
+            <div class="eyebrow">Closure record</div>
+            <div class="r"><span>Record</span><span class="rv">7d399944 · awsf.closure-record/v1</span></div>
+            <div class="r"><span>Plan</span><span class="rv">awsf-v3-w03-ticket-closure</span></div>
+            <div class="r"><span>Tickets closed</span><span class="rv">T09 to T14</span></div>
+            <div class="r"><span>Parent and candidate</span><span class="rv">bad3980</span></div>
+            <div class="r"><span>Written</span><span class="rv">23:04:27 · intent, prepared, record</span></div>
+          </div>
+          <div class="gc">
+            <div class="eyebrow">What you can do next</div>
+            <div class="sub">One act remains, and it runs in your terminal.</div>
+            <div class="term">awsf publish v3-w03-m4m6-shift [FLAGS]</div>
+            <div class="btnrow"><button class="btns" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l8-8M16 7l3 3"></path></svg>Copy the publish line</button></div>
+            <div class="meta">The key marks an owner act. The panel copies the line. It never runs it.</div>
+          </div>
+          <div class="gc">
+            <div class="eyebrow">Lifecycle · 4 transitions</div>
+            <div class="r"><span class="mono">L4</span><span>PREPARED → RUNNING</span><span class="rv">12:41:24 · host</span></div>
+            <div class="r"><span class="mono">L7</span><span>RUNNING → GATING</span><span class="rv">21:33:38 · all phases and candidate gates passed</span></div>
+            <div class="r"><span class="mono">L11</span><span>GATING → REVIEWING</span><span class="rv">21:33:38 · held one call for anthropic</span></div>
+            <div class="r"><span class="mono">L15</span><span>REVIEWING → AWAITING_OWNER</span><span class="rv">21:36:56 · review returned accept</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="needs" lease="{{ false }}" line="publishing v3-w03-m4m6-shift is your act" waiting="1" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1680}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

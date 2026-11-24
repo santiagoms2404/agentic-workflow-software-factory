@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Code phase: tests</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+.steps{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.step{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:12px;border:1px solid rgba(218,241,222,.1);color:#DAF1DE;font:600 12.5px/1 "JetBrains Mono",monospace;text-decoration:none;white-space:nowrap}
+.step.on{border-color:#DAF1DE;background:rgba(218,241,222,.1)}
+.step .d{font-weight:400;color:#8EB69B}
+.arrow{color:#8EB69B;font:400 12px/1 "JetBrains Mono",monospace}
+.sq{display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(218,241,222,.45)}
+.sqo{display:inline-block;width:10px;height:10px;border-radius:3px;border:1.5px solid #DAF1DE;box-sizing:border-box}
+</style>
+</helmet>
+<div class="app" style="min-height:1660px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="RunEvidence.dc.html">36deb464</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#phase" aria-current="page">tests</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="RunEvidence.dc.html" aria-label="Back to the run" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">v3-w03-g03w-readiness</span>
+      <span class="meta">build-review · the phase strip follows the workflow</span>
+    </header>
+
+    <nav class="steps" aria-label="Phases of build-review">
+      <a class="step" href="RequestOwner.dc.html"><span class="dmd"></span>request</a><span class="arrow">›</span>
+      <a class="step" href="RunEvidence.dc.html"><span class="sq"></span>builder <span class="d">51m 21s</span></a><span class="arrow">›</span>
+      <a class="step on" href="#tests" aria-current="step"><span class="sqo"></span>tests <span class="d">26m 07s</span></a><span class="arrow">›</span>
+      <a class="step" href="ReviewPhase.dc.html"><span class="dmd"></span>review-context</a><span class="arrow">›</span>
+      <a class="step" href="ReviewPhase.dc.html"><span class="sq"></span>reviewer <span class="d">1m 18s</span></a><span class="arrow">›</span>
+      <a class="step" href="RequestOwner.dc.html"><span class="dmdf"></span>owner-journey</a>
+    </nav>
+
+    <section class="sec" aria-label="Selected phase evidence">
+      <div class="sech">
+        <span class="eyebrow">Selected phase evidence</span>
+        <span class="h2" style="font-size:20px">tests</span>
+        <span class="lblf">✓ succeeded</span>
+        <span class="grow"></span>
+        <span class="meta">code · host · 16:02:03 → 16:28:10 · no model, no calls spent</span>
+      </div>
+      <nav class="ptabs" aria-label="Evidence tabs">
+        <a class="on" href="#commands" aria-current="page">Commands<span class="n">5</span></a>
+        <a href="#checks">Checks<span class="n">41</span></a>
+        <a href="#output">Output<span class="n">5 files</span></a>
+        <a href="EventRaw.dc.html">Raw journal</a>
+      </nav>
+      <div class="secb" style="display:flex;flex-direction:column;gap:16px;padding-top:16px">
+        <div class="strip">
+          <div class="cell"><div class="cellv">5 of 5</div><div class="celll">commands exited 0</div></div>
+          <div class="cell"><div class="cellv">41 of 41</div><div class="celll">checks pass · 2 gates</div></div>
+          <div class="cell"><div class="cellv">26m 04s</div><div class="celll">inside commands</div></div>
+          <div class="cell"><div class="cellv">486d190</div><div class="celll">candidate measured, exact</div></div>
+        </div>
+
+        <div>
+          <div class="rib" role="img" aria-label="Command time: journeys 63 percent, unit 27, traps 6, typecheck 4"><span class="iV" style="width:63.3%"></span><span class="iE" style="width:27.4%"></span><span class="iM" style="width:5.7%"></span><span class="iC" style="width:3.5%"></span></div>
+          <div class="keyrow" style="margin-top:8px"><span class="key"><i class="iV"></i>test:journeys 63%</span><span class="key"><i class="iE"></i>test:unit 27%</span><span class="key"><i class="iM"></i>test:traps 6%</span><span class="key"><i class="iC"></i>typecheck 4%</span><span class="key">lint under 1%</span></div>
+        </div>
+
+        <div class="tbox sec">
+          <table class="pt" style="min-width:760px">
+            <thead><tr><th scope="col">Gate</th><th scope="col">Command</th><th scope="col">Exit</th><th scope="col">Took</th><th scope="col">Output</th></tr></thead>
+            <tbody>
+              <tr><td class="f">test</td><td>npm run test:unit</td><td><span class="ok">✓</span> 0</td><td class="n">7m 08s</td><td class="s"><a href="#o1">raw/command-tests-test-0.txt</a></td></tr>
+              <tr><td class="f">typecheck</td><td>npm run typecheck</td><td><span class="ok">✓</span> 0</td><td class="n">55.4s</td><td class="s"><a href="#o2">raw/command-tests-typecheck-0.txt</a></td></tr>
+              <tr><td class="f">lint</td><td>npm run lint</td><td><span class="ok">✓</span> 0</td><td class="n">906ms</td><td class="s"><a href="#o3">raw/command-tests-lint-0.txt</a></td></tr>
+              <tr class="sel"><td class="f">journeys</td><td>npm run test:journeys</td><td><span class="ok">✓</span> 0</td><td class="n"><span class="tchip long">16m 29s</span></td><td class="s"><a href="#o4">raw/command-tests-journeys-0.txt</a></td></tr>
+              <tr><td class="f">traps</td><td>npm run test:traps</td><td><span class="ok">✓</span> 0</td><td class="n">1m 30s</td><td class="s"><a href="#o5">raw/command-tests-traps-0.txt</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="two">
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">commands_pass · subprocess</span><span class="grow"></span><span class="lblf">35 of 35</span></div>
+            <div class="mx" style="grid-template-columns:110px repeat(7,minmax(0,1fr))" role="table" aria-label="Seven checks for each of five commands">
+              <span class="mxh"></span><span class="mxh">gate recorded</span><span class="mxh">argv exact</span><span class="mxh">SHA exact</span><span class="mxh">clean before</span><span class="mxh">exit 0</span><span class="mxh">clean after</span><span class="mxh">tail bounded</span>
+              <span class="mxh">test</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span>
+              <span class="mxh">typecheck</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span>
+              <span class="mxh">lint</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span>
+              <span class="mxh">journeys</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span>
+              <span class="mxh">traps</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span><span class="mxc">✓</span>
+            </div>
+            <div class="meta">A failed cell becomes a dashed box with ×, and its note opens below the grid.</div>
+          </div>
+          <div class="gc">
+            <div style="display:flex;align-items:center;gap:8px"><span class="eyebrow">candidate_hygiene · git</span><span class="grow"></span><span class="lblf">6 of 6</span></div>
+            <div class="r"><span class="ok">✓</span><span>base SHA exact</span><span class="rv">4c75b5c..486d190</span></div>
+            <div class="r"><span class="ok">✓</span><span>candidate HEAD before</span><span class="rv">486d190</span></div>
+            <div class="r"><span class="ok">✓</span><span>clean before</span><span class="rv">worktree clean</span></div>
+            <div class="r"><span class="ok">✓</span><span>git diff --check</span><span class="rv">no findings</span></div>
+            <div class="r"><span class="ok">✓</span><span>2 more checks</span><span class="rv">open</span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sech"><span class="eyebrow">Output · test:journeys · last lines</span><span class="grow"></span><a class="meta" href="#o4">raw/command-tests-journeys-0.txt</a></div>
+          <div class="secb"><div class="code"># tests [N]
+# pass [N]
+# fail 0
+# duration_ms [N]</div><div class="meta" style="margin-top:8px">The tail is bounded by the gate. The whole file stays in the attempt's raw folder.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="two">
+      
+      <div class="rc">
+        <span class="eyebrow">Across the M4–M6 shift</span>
+        <div class="sub" style="margin-top:8px">This phase ran after each of six tickets, 24 to 26 minutes each: 2h 32m of the shift's 8h 55m. The shift view shows it per ticket.</div>
+        <a class="btn" href="ShiftView.dc.html" style="margin-top:10px">Open the shift</a>
+      </div>
+    </div>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="36deb464 landed and you have seen it" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1660}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

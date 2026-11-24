@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Turns · Agent phase: events</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pendulum.css">
+<link rel="stylesheet" href="marimba.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" style="min-height:1960px">
+  <div class="bokeh"></div>
+  <div class="tint"></div>
+  <div class="sheen"></div>
+  <nav class="tabs" aria-label="Dashboard">
+    <span class="brand">agentic-workflow-software-factory</span>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="#sessions">sessions</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a href="ShiftView.dc.html">f59bab60</a>
+    <span class="sep" aria-hidden="true">›</span>
+    <a class="on" href="#phase" aria-current="page">t11-build</a>
+    <span class="grow"></span>
+    <a href="#workspace">Workspace</a>
+    <a href="#settings">Settings</a>
+    <a href="#metrics">Metrics</a>
+    <a href="#canvas">Canvas</a>
+    <a href="#groups">Sessions log</a>
+    <a href="#backlog">Backlog</a>
+    <span class="right">● live · sol 5 h [USED %]</span>
+  </nav>
+
+  <div class="layer">
+    <header class="head">
+      <a class="icon" href="ShiftView.dc.html" aria-label="Back to the shift" style="margin-left:-12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+      <span style="font:700 17px/1 Archivo">t11-build</span>
+      <span class="lblf">✓ succeeded</span>
+      <span class="meta">agent · builder · T11 of the M4–M6 shift · 15:03:22 → 16:12:53 · corrections 1 of 1</span>
+    </header>
+
+    <section class="sec" aria-label="Selected phase evidence">
+      <nav class="ptabs" aria-label="Evidence tabs">
+        <a href="RunEvidence.dc.html">Overview</a>
+        <a class="on" href="#events" aria-current="page">Events<span class="n">3,684 records</span></a>
+        <a href="#prompt">Prompt<span class="n">2</span></a>
+        <a href="#output">Output<span class="n">2</span></a>
+        <a href="#gates">Gates<span class="n">9</span></a>
+        <a href="EventRaw.dc.html">Raw journal</a>
+      </nav>
+      <div class="secb" style="padding-top:16px">
+        <div class="strip">
+          <div class="cell"><div class="cellv">69m 31s</div><div class="celll">phase</div></div>
+          <div class="cell"><div class="cellv">97</div><div class="celll">model turns · 96 + 1 correction</div></div>
+          <div class="cell"><div class="cellv">148</div><div class="celll">tool calls · 8 failed</div></div>
+          <div class="cell"><div class="cellv">220k</div><div class="celll">peak context of 500k</div></div>
+          <div class="cell"><div class="cellv">245k / 33k</div><div class="celll">tokens in / out · 13.9M cached</div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="side">
+      <div class="main">
+        
+
+        
+
+        <section class="sec" aria-label="Turns">
+          <div class="sech">
+            <span class="eyebrow">Turns · one line each</span>
+            <span class="grow"></span>
+            <div class="seg" role="group" aria-label="Filter turns">
+              <button class="segon" type="button" aria-pressed="true">All 97</button>
+              <button class="segb" type="button" aria-pressed="false">Commands 26</button>
+              <button class="segb" type="button" aria-pressed="false">Changes</button>
+              <button class="segb" type="button" aria-pressed="false">Failed 8</button>
+              <button class="segb" type="button" aria-pressed="false">Long, 1 min+ 8</button>
+            </div>
+          </div>
+          <div>
+            <div class="pe"><span class="tt">15:03:22</span><span class="dmd"></span><span>Compiled the prompts: system 9 lines, user 191 lines. Resolved the route: gpt-6.1-sol @ high, every field from the attempt override.</span><span class="k">point</span></div>
+            <div class="pe"><span class="tt">15:03:24</span><span class="dmd"></span><span>Run started on pi-codex. The model answered as gpt-6.1-sol, route-attributed.</span><span class="k">point</span></div>
+            <button class="turn" type="button" aria-expanded="false"><span class="tt">15:03:27</span><span class="tn">#1</span><span class="tl">Checked the worktree: pwd, git status, the last 3 commits</span><span class="chips"><span class="tchip">bash</span></span><span class="td">160ms</span></button>
+            <button class="turn open" type="button" aria-expanded="true"><span class="tt">15:03:32</span><span class="tn">#2</span><span class="tl">Read 3 files and searched 1: AGENTS.md, the W03 build prompts, package.json</span><span class="chips"><span class="tchip">read 3</span><span class="tchip">grep 1</span></span><span class="td">1.9s</span></button>
+            <div class="call"><span class="ok">✓</span><span class="nm">read</span><span>AGENTS.md</span><span class="ms">452ms</span><span class="res"># AGENTS.md · Invariants for any agent session working on AWSF…</span></div>
+            <div class="call"><span class="ok">✓</span><span class="nm">read</span><span>specs/awsf-v3-w03-ticket-closure-build-prompts.md</span><span class="ms">462ms</span><span class="res"># AWSF v3 W03 · Ticket closure: build prompts…</span></div>
+            <div class="call"><span class="ok">✓</span><span class="nm">grep</span><span>Amendment|Handoff|task-11|T11 in specs/awsf-v3-w03-ticket-closure.html</span><span class="ms">[N]ms</span><span class="res">awsf-v3-w03-ticket-closure.html-149- &lt;summary&gt;M…</span></div>
+            <div class="call"><span class="ok">✓</span><span class="nm">read</span><span>package.json</span><span class="ms">[N]ms</span><span class="res">{ "name": "awsf", "private": true, "version": "0.0.0", …</span></div>
+            <button class="turn err" type="button" aria-expanded="false"><span class="tt">15:03:35</span><span class="tn">#3</span><span class="tl">Tried to write a baseline log to /tmp: read-only file system</span><span class="chips"><span class="x">×</span><span class="tchip">bash</span></span><span class="td">182ms</span></button>
+            <button class="turn" type="button" aria-expanded="false" style="background:rgba(218,241,222,.09)"><span class="tt">15:03:37</span><span class="tn">#4</span><span class="tl">Ran npm run test:unit · passed</span><span class="chips"><span class="tchip long">bash · 1 of 3</span></span><span class="td">6m 43s</span></button>
+            <button class="turn" type="button" aria-expanded="false"><span class="tt">15:10:28</span><span class="tn">#5–9</span><span class="tl">Read the W03 plan, T11, the tickets README and the closure sources</span><span class="chips"><span class="tchip">read 28+</span><span class="tchip">grep 1</span><span class="x">×</span></span><span class="td">&lt;10s</span></button>
+            <button class="turn" type="button" aria-expanded="false"><span class="tt">15:11:34</span><span class="tn">#11–31</span><span class="tl">Edited 15 times: new.ts, status.ts, model.ts, intake-state.ts, production-run.ts and 10 edits with no path in the record</span><span class="chips"><span class="tchip">edit 15</span></span><span class="td">&lt;1s</span></button>
+            <button class="turn" type="button" aria-expanded="false"><span class="tt">15:13:56</span><span class="tn">#32</span><span class="tl">Ran npm run typecheck:core · passed</span><span class="chips"><span class="tchip">bash</span></span><span class="td">34.6s</span></button>
+            <button class="turn err" type="button" aria-expanded="false"><span class="tt">15:14:38</span><span class="tn">#34</span><span class="tl">Ran the ticket-selection and closure unit tests · failed</span><span class="chips"><span class="x">×</span><span class="tchip">bash</span></span><span class="td">24.8s</span></button>
+            <button class="turn err" type="button" aria-expanded="false"><span class="tt">15:20:14</span><span class="tn">#60</span><span class="tl">Ran typecheck:core and the light-ticket journey · failed</span><span class="chips"><span class="x">×</span><span class="tchip">bash</span></span><span class="td">31.1s</span></button>
+            <button class="turn" type="button" aria-expanded="false"><span class="tt">15:21:41</span><span class="tn">#69</span><span class="tl">Ran the light-ticket journey · passed, after one more failure at #63</span><span class="chips"><span class="tchip">bash</span></span><span class="td">33.8s</span></button>
+            <button class="turn" type="button" aria-expanded="false" style="background:rgba(218,241,222,.09)"><span class="tt">15:24:35</span><span class="tn">#74</span><span class="tl">Ran npm run test:unit · passed</span><span class="chips"><span class="tchip long">bash · 2 of 3</span></span><span class="td">6m 24s</span></button>
+            <button class="turn" type="button" aria-expanded="false" style="background:rgba(218,241,222,.09)"><span class="tt">15:31:03</span><span class="tn">#75</span><span class="tl">Ran npm run test:journeys · passed</span><span class="chips"><span class="tchip long">bash · 1 of 2</span></span><span class="td">13m 01s</span></button>
+            <button class="turn" type="button" aria-expanded="false"><span class="tt">15:44:09</span><span class="tn">#76–80</span><span class="tl">Ran test:traps, typecheck, lint and test:contract · all passed</span><span class="chips"><span class="tchip">bash 5</span></span><span class="td">2m 15s</span></button>
+            <button class="turn" type="button" aria-expanded="false" style="background:rgba(218,241,222,.09)"><span class="tt">15:48:23</span><span class="tn">#89</span><span class="tl">Ran npm run test:unit · passed</span><span class="chips"><span class="tchip long">bash · 3 of 3</span></span><span class="td">6m 56s</span></button>
+            <button class="turn" type="button" aria-expanded="false" style="background:rgba(218,241,222,.09)"><span class="tt">15:55:24</span><span class="tn">#90</span><span class="tl">Ran npm run test:journeys · passed</span><span class="chips"><span class="tchip long">bash · 2 of 2</span></span><span class="td">12m 50s</span></button>
+            <button class="turn" type="button" aria-expanded="false"><span class="tt">16:08:22</span><span class="tn">#91–95</span><span class="tl">Ran test:traps, typecheck, lint and test:contract · all passed</span><span class="chips"><span class="tchip">bash 5</span></span><span class="td">2m 16s</span></button>
+            <div class="pe"><span class="tt">16:12:04</span><span class="dmdf"></span><span>Run completed, exit 0. Gate envelope_valid failed in round 0, so the host offered the one correction.</span><span class="k">gate ✕</span></div>
+            <button class="turn" type="button" aria-expanded="false"><span class="tt">16:12:15</span><span class="tn">#97</span><span class="tl">Correction c1: rewrote the output envelope, no tool calls</span><span class="chips"><span class="tchip">c1</span></span><span class="td">35s</span></button>
+            <div class="pe"><span class="tt">16:12:53</span><span class="dmdf"></span><span>Round 1 gates: 7 of 7 pass. diff_matches_claims checked 52 items, no_protected_paths 45.</span><span class="k">gate ✓</span></div>
+            <div class="r" style="padding:12px 16px"><a class="btn" href="#more">Show the 48 turns in between</a><span class="rv">every line is read from a record</span></div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="aside" aria-label="Selected turn">
+        <section class="sec">
+          <div class="sech"><span class="eyebrow">Turn #4</span><span class="grow"></span><span class="lblf">long</span></div>
+          <div class="secb">
+            <div class="term">$ npm run test:unit</div>
+            <div class="r" style="margin-top:8px"><span>Started</span><span class="rv">15:03:37</span></div>
+            <div class="r"><span>Took</span><span class="rv">6m 43s · 402,866 ms</span></div>
+            <div class="r"><span>Outcome</span><span class="rv">ok</span></div>
+            <div class="r"><span>Same command in this phase</span><span class="rv">3 times · 20m 03s</span></div>
+            <div class="eyebrow" style="margin:12px 0 8px">Result, first line</div>
+            <div class="code"># Subtest: the preview line reads what the pre…</div>
+            <div class="btnrow" style="margin-top:12px"><a class="btn" href="#raw-output">Open the raw output</a><a class="btn" href="EventRaw.dc.html">In the raw journal</a></div>
+          </div>
+        </section>
+        <section class="sec">
+          <div class="sech"><span class="eyebrow">Failed calls · 8</span></div>
+          <div class="secb">
+            <div class="r"><span class="x">×</span><span>3 reads of files that do not exist</span><span class="rv">tickets, intake, tr21 tests</span></div>
+            <div class="r"><span class="x">×</span><span>4 commands</span><span class="rv">/tmp read-only · 3 test runs</span></div>
+            <div class="r"><span class="x">×</span><span>1 search with a literal \n</span><span class="rv">rg refused it</span></div>
+          </div>
+        </section>
+        <div class="rc">
+          <span class="eyebrow">How each line is written</span>
+          <div class="sub" style="margin-top:8px">A template turns each call's tool and input into words: a read names its files, a command names what it ran and whether it passed. No model writes them, so a line never claims more than the record shows. Calls in one turn share a line, and runs of the same kind fold together.</div>
+          <a class="btn" href="SettingsSummaries.dc.html" style="margin-top:10px">Step line settings</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+<div class="pn-bar"><dc-import name="Bar" state="idle" lease="{{ false }}" line="f59bab60 landed and you have seen it" waiting="0" running="0" well="{{ true }}" hint-size="100%,118px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1960}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
