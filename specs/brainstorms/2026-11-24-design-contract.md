@@ -2,11 +2,11 @@
 
 **Status:** brainstorm record. Nothing in this file is a rule. A rule changes only by an owner commit through gate GA of `specs/awsf-v3-plan.html`.
 
-**Written:** 2026-11-24, in a direct session with the owner, after the owner ruled on Q75 to Q104 and asked for the record and the frozen frames. **To resume work, read sections 2, 6 and 11 first.**
+**Written:** 2026-11-24, in a direct session with the owner, after the owner ruled on Q75 to Q104 and asked for the record and the frozen frames. A second round the same day ruled on Q105 to Q116 (sections 7 and 13). **To resume work, read sections 2, 6 and 11 first.**
 
 **Follows:** `specs/brainstorms/2026-11-23-meta-factory.md`. The codes K27+, C25+, G29+, Q74+ and P14+ continue its series. DF, DC and ST are new here.
 
-**Captured:** the owner said on 2026-11-24 that every question is answered and everything is settled. The canvas is settled at version 52 (U2). Section 7 is open.
+**Captured:** the owner said on 2026-11-24 that every question is answered and everything is settled. The canvas is settled at version 52 (U2). Nothing in this file waits for a ruling.
 
 **Design reference:** the Marimba Harness Panel canvas, version 52, 100 boards (private to the owner, linked from the frame index). A second canvas, version 32, holds 27 boards generated from it. Only the first is edited.
 
@@ -14,12 +14,13 @@
 
 | Code | Meaning |
 | --- | --- |
-| Q | a question, with the owner's ruling in section 2, or a recommendation in section 7 |
+| Q | a question, with the owner's ruling in section 2 |
 | K | a correction, checked against code, records or a primary page |
 | C | conflict between the vision and what is decided |
 | DF | a finding about how the design reaches a builder today |
 | DC | a part of the design contract |
 | ST | a surface a stage can show |
+| NF | a finding of the second round, section 13 |
 | G | gap: something the vision leaves out |
 | P | planned step |
 
@@ -67,6 +68,18 @@ All made on 2026-11-24. "As recommended" unless the row says otherwise. A ruling
 | Q102 | The design source in the public repository | Committed, at `specs/design/awsf-v3-plan/source/`. |
 | Q103 | When is the proof built? | As W08's first milestone, before any screen. It needs an amendment (section 10). |
 | Q104 | `gpt-6.1-sol` and images | One small demonstration run, by the owner. |
+| Q105 | What is the builders' simulator? | The stage, owned by the host. |
+| Q106 | Who uses it? | The builder may look inside its own phase, with a limit on looks. The host's own capture is the only evidence. |
+| Q107 | How is it watched live? | Each look is a record. The run screen shows the newest look beside its frame, with the earlier ones as a filmstrip. |
+| Q108 | In what order? | ST1 and ST2 with DC5. ST3 after the MacBook and W12. ST4 last, after a test. |
+| Q109 | Where do Apple's simulators run? | On macOS, reached by a bridge that carries only the three verbs, from wherever the factory lives (K30). |
+| Q110 | Use "Install as app" now? | The owner's own answer: wait until it leaves beta, or until the owner says so. |
+| Q111 | Does it replace W15's Mac app? | No. W15's deep plan compares three builds: native, the dashboard installed from the browser, and an installed artifact. |
+| Q112 | When does a tecla ask permission again? | A recipe asks when its declared access changes. A program asks after any change to its bytes, the owner's own edits included. It sharpens NR4 and goes into AM6. |
+| Q113 | Must a bug fix prove the bug first? | Yes. The ticket carries a check that the host runs on the base, where it must fail, and on the candidate, where it must pass. A light ticket after DC4. |
+| Q114 | Does W08 limit the size of a turn? | Yes, 16,000 prompt tokens from its first version. The owner will raise or lower it from experience, so it is a setting with a record of each change. W09's median target under 10k stays. |
+| Q115 | W10's base models | 9B first stays. The challenger becomes Qwen3.6-35B-A3B, and Gemma 4 26B-A4B joins the untuned baselines. It changes the spine's Q6, so it is applied when W10's deep plan is authored. |
+| Q116 | What does a word search return? | The section under a heading. No trained retriever. It refines D18. Smart Health decides for itself. |
 
 Q98 was folded into Q96.
 
@@ -88,6 +101,10 @@ Q98 was folded into Q96.
 | K27 | W07's evidence says the browser's remote-debugging protocol does not work from WSL. | It does for a Linux headless browser inside WSL. Inside the worker sandbox's own flags, with the network cut, Node's built-ins alone opened a page, clicked a button, read computed styles and 398 accessibility nodes, and took a screenshot in 969 ms. The browser was up in 248 ms. | a probe on 2026-11-24, chrome-headless-shell 1243, Node 22.23.1, `bwrap --unshare-all` with a read-only root |
 | K28 | Nine frames were too tall and needed splitting. | Five of them were mostly empty space. Three other boards (46, 47, 59) had content cut off at the bottom. | the boards at canvas version 47 |
 | K29 | The team-size and success evidence of the videos. | The raw transcripts could not be read on 2026-11-24 (HTTP 403). The package's summary and frames give no upper limit. Keys 1 to 6 open a member. One frame compares an agent alone (60 minutes) with five (15 minutes, 75 agent-minutes). No success measure for a running factory is shown. | the package of 2026-11-18 and 2026-11-23 |
+| K30 | Q109's recommendation assumed a Linux VM on the Mac. | D31 and D34 put the factory on an always-on Linux box first. The VM is the fallback. The bridge is needed either way. | the 2026-11-09 record, D31 and D34 |
+| K31 | The package's speed for a 35B-A3B model on the planned Mac is about 25.6 tokens per second. | That figure is from an M4 Pro. A community test of Qwen3.5-35B-A3B at 4 bits on an M5 Pro with 20 GPU cores and 64 GB gives 103 at 1k of context, 83 at 16k, 44 at 64k and 28 at 128k. Reading the prompt runs at 2,149 tokens per second at 16k and 806 at 128k. | https://omlx.ai/benchmarks/pg5gqj14, read 2026-11-24 |
+| K32 | TensorFold serves the candidates for the local driver. | Its list calls Gemma 4 26B-A4B "Python-only", does not qualify a 35B-A3B on Metal, and its release notes say LoRA overlays are not yet wired to a flag. Nemotron 3.5 Lightning 30B-A3B is qualified. | its supported-models page and the v1.3.4 release, read 2026-11-24 |
+| K33 | The base models of the local driver are open. | Q6 of the spine was ruled on 2026-10-02. | `specs/awsf-v3-plan.html`, Q6 |
 
 ## 4. The pendulum
 
@@ -146,9 +163,9 @@ A machine can prove unchanged and can check facts. Only the owner can judge bett
 4. The reviewer answers pass or fail for each cited fact.
 5. At the owner's journey the design, the built screen and the facts are side by side, and the owner presses.
 
-## 7. Open: a stage for builders
+## 7. A stage for builders
 
-The owner asked on 2026-11-24 whether builders can have a simulator for the web, the phone and the watch, go back and forth until the result meets the design, be watched while they do it, and end with a comparison. This section is a recommendation, not a ruling.
+The owner asked on 2026-11-24 whether builders can have a simulator for the web, the phone and the watch, go back and forth until the result meets the design, be watched while they do it, and end with a comparison. Ruled on 2026-11-24 as recommended, with Q109 corrected (K30). The rulings are in section 2.
 
 **What the vendors offer does not reach factory workers.** Claude Code's computer use needs an interactive session and is not available with `-p`. Its simulator pane runs in the desktop app's local sessions on macOS. Codex's computer use is in its desktop app. The factory's workers run `--print` and `-p`. The owner can use these in direct sessions on a Mac.
 
@@ -168,9 +185,9 @@ The owner asked on 2026-11-24 whether builders can have a simulator for the web,
 | Q106 | Who uses it? | The builder may look inside its own phase, with a limit on looks. The host's own capture is the only evidence. | host only, with correction rounds |
 | Q107 | How is it watched live? | Each look is a record. The run screen shows the newest look beside its frame, with the earlier ones as a filmstrip. | live video, or the preview in a frame |
 | Q108 | In what order? | ST1 and ST2 with DC5. ST3 after the MacBook and W12. ST4 last, after a test. | all at once |
-| Q109 | Where do Apple's simulators run? | On macOS, reached from the Linux VM by a bridge that carries only the three verbs. | the worker on macOS, without its Linux sandbox |
+| Q109 | Where do Apple's simulators run? | On macOS, reached from the factory's host by a bridge that carries only the three verbs. | the worker on macOS, without its Linux sandbox |
 
-C25. W12 puts the factory in a Linux VM on the Mac, and Apple's simulators run only on macOS. Q109 is the answer to that.
+C25. W12 puts the factory in a Linux VM on the Mac, D31 prefers an always-on Linux box, and Apple's simulators run only on macOS. Q109's bridge answers both cases.
 
 **Cost, as an estimate.** ST1 and ST2 are small, because the probe already does the three verbs with Node alone and no dependency. The builder's limit and its records are small to medium. The live filmstrip is medium. ST3 with the bridge is large. ST4 is unknown.
 
@@ -231,6 +248,16 @@ The owner's idea of 2026-11-24 for voice: Whisper, OpenAI's open model, on the M
 
 AM6 is still unwritten. GA takes one amendment at a time.
 
+### One line for AM6 (Q112)
+
+> A recipe asks the owner again when its declared access changes. A program asks again after any change to its bytes, including the owner's own edits.
+
+### One line for W08's deep plan (Q114)
+
+> A driver turn carries at most 16,000 prompt tokens. The limit is an owner setting, and a change to it records the old value, the new one and the reason. Every turn records its size, and a turn over the limit is refused before it is sent.
+
+The refusal in the last clause is the author's proposal. The owner has not ruled on it separately.
+
 ## 11. Gaps and plan
 
 | Code | Gap |
@@ -249,7 +276,12 @@ AM6 is still unwritten. GA takes one amendment at a time.
 | P18 | AM6, then AM7. | the owner's commits through GA |
 | P19 | Q104's demonstration run. | the owner |
 | P20 | W04's deep plan, then W08's, with the first slice of section 5. | P16, P18 |
-| P21 | Rulings on Q105 to Q109. | the owner |
+| P21 | Rulings on Q105 to Q109. Done on 2026-11-24, with Q110 to Q116. | |
+| P22 | Q112's line goes into AM6. | P18 |
+| P23 | Q113 as a light ticket. | P17 |
+| P24 | Q114's line goes into W08's deep plan. | P20 |
+| P25 | Q115 is applied when W10's deep plan is authored, as a change to Q6. | W10 |
+| P26 | Q116 goes into W04 and W16. | P20 |
 
 ## 12. Not verified
 
@@ -257,4 +289,38 @@ AM6 is still unwritten. GA takes one amendment at a time.
 - Whether the outside agents of frame 86 can write a folder.
 - Whether a watchOS Simulator can be driven without a person.
 - The size of the facts' effect on a build. No build has used them yet.
-- The vendors' pages of section 7 were read on 2026-11-24 and change often.
+- The vendors' pages of sections 7 and 13 were read on 2026-11-24 and change often.
+- Whether a design canvas can be installed as an app, and what an installed app sends to its vendor.
+- The speeds of K31 on the owner's own machine. They are one person's published runs.
+- How many owner confirmations exist to train on. The projection held 6 attributions and was last written on 2026-11-09.
+
+## 13. The second round: Install as app and local AI
+
+The owner brought a vendor announcement of 2026-11-24 and a package of four threads: Shirudo, STAIR, Gemini 4 Neon with TensorFold, and mixture-of-experts models. Its factory parts are read here. Q40 sends new ideas to intake, so only Q112 and Q114 touch work that comes next.
+
+### Findings
+
+| Code | Finding | Where |
+| --- | --- | --- |
+| NF1 | Install as app turns an artifact into a Mac or Windows app with its own icon and window, in beta. With permission it can have shortcuts, notifications and always-on-top windows. It must be online and signed in. | https://claude.com/resources/articles/install-as-app |
+| NF2 | Its permission "only covers the current version of the app", so it asks again "after every update, even your own edits". NR4 did not say which change. | the same page, and section 6 of the 2026-11-09 record |
+| NF3 | The size of a turn matters more than the choice of model. A Marimba turn carries 146,748 prompt tokens at the median and all recorded turns write 744 tokens on average. With K31's speeds that is about 3.5 minutes from scratch, about 37 seconds with a warm cache, and about 13 seconds at 10k tokens. These three are estimates. | the corpus report, 2026-11-24 |
+| NF4 | 96.3% of the recorded prompt tokens were cache reads, and a turn adds 8,788 new ones on average. | the corpus index |
+| NF5 | In Shirudo an operator approves each shield (OpenAI), and the demonstration was "fully automated" (Isovalent). The factory's rule is stricter. | the two announcements of 2026-11-23 |
+| NF6 | STAIR's figures are correct as the package quotes them. "Per-document fine-tuning" is an inference, because the paper does not say it. | arXiv 2609.03874 |
+| NF7 | No gate in `core/src/gates` runs a reproducing check on the base before a fix. | a search on 2026-11-24 |
+| NF8 | 356 of 495 tracked Markdown documents under `specs/` and `docs/` have three or more headings. | a count on 2026-11-24 |
+
+### The package's other questions
+
+These were answered from decisions that already hold, and the owner kept the answers.
+
+| Package question | Answer |
+| --- | --- |
+| A signed envelope or a temporary act class | No. One press per act holds (decisions 4 and 14, invariant 13). W17's passkey signs the exact command, and leases already carry limits and revocation. |
+| A receipt for a landing that others can verify | No. W17's signature is the evidence, and invariant 10 keeps receipt files out of git. |
+| Agents speak code | Yes for checks, no for owner acts. |
+| Build an inference engine for the Mac | Not before a base model is chosen. |
+| The first experiment on the Mac | Serve and measure the untuned models on the trap and intent suites, with an MLX-based stack as Q6 says. |
+| Fine-tuning data | Decision 2 already says which data. Data is the likely limit, not the method. |
+| Grades for the local driver | No. It drives and does not build (decision 13, gate GR). |
