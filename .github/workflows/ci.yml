@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   verify:
-    name: lint · typecheck · four test layers
+    name: lint · typecheck · test layers
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -52,11 +52,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # The four layers run as separate steps so a failure names the layer it
-      # broke in. `if: '!cancelled()'` keeps the later layers running after an
-      # earlier one fails, which is what the root `npm test` script does by
-      # OR-ing the four exit codes — one red run reports every layer's state
-      # rather than only the first to break.
+      # Every layer of the root `npm test` script runs as its own step, so a
+      # failure names the layer it broke in. `if: '!cancelled()'` keeps the
+      # later layers running after an earlier one fails, which is what that
+      # script does by OR-ing the exit codes: one red run reports every
+      # layer's state rather than only the first to break.
       - name: Test — unit
         if: ${{ !cancelled() }}
         run: npm run test:unit
@@ -74,6 +74,10 @@ jobs:
         # Fixture-backed end to end. Spends no provider quota and needs no
         # API key, which is why the whole suite is runnable in CI at all.
         run: npm run test:journeys
+
+      - name: Test — traps
+        if: ${{ !cancelled() }}
+        run: npm run test:traps
 
       - name: Build the dashboard
         if: ${{ !cancelled() }}
