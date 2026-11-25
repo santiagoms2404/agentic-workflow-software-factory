@@ -634,16 +634,16 @@ sequenceDiagram
 
     <!-- ================= M7 ================= -->
     <section class="phase">
-      <h3><code class="status">[]</code> Milestone M7: GM retired <span class="wtag">managed</span> <span class="wtag raise">retires gate GM</span></h3>
+      <h3><code class="status">[x]</code> Milestone M7: GM retired <span class="wtag">managed</span> <span class="wtag raise">retires gate GM</span></h3>
       <p><strong>W03's <code>[x]</code> retires gate GM, and nothing earlier does.</strong> Testing shares the task.</p>
 
       <h4>15. The closing record, and the workstream's closing duties</h4>
       <p class="sub">Serves <code class="serves">AC-7</code></p>
       <ul class="checklist">
-        <li><code class="status">[]</code> Every W03 task landed from G03-C on was closed with <code>awsf close</code>, and each closure record's commit passes the delta when re-checked</li>
-        <li><code class="status">[]</code> T01, T02, G03-C, G03-W and, per W03-Q5, G03-I landed</li>
-        <li><code class="status">[]</code> <code>npm run test:unit</code>, <code>test:contract</code>, <code>test:sim</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0, each run alone</li>
-        <li><code class="status">[]</code> The closing record for the owner: each task's final state, landing and closure SHAs, gate counts, decisions taken, surprises, and the handoff findings for W09 and for every later deep-plan session</li>
+        <li><code class="status">[x]</code> Every W03 task landed from G03-C on was closed with <code>awsf close</code>, and each closure record's commit passes the delta when re-checked</li>
+        <li><code class="status">[x]</code> T01, T02, G03-C, G03-W and, per W03-Q5, G03-I landed</li>
+        <li><code class="status">[x]</code> <code>npm run test:unit</code>, <code>test:contract</code>, <code>test:sim</code>, <code>test:journeys</code>, <code>test:traps</code>, <code>typecheck</code> and <code>lint</code> exit 0, each run alone</li>
+        <li><code class="status">[x]</code> The closing record for the owner: each task's final state, landing and closure SHAs, gate counts, decisions taken, surprises, and the handoff findings for W09 and for every later deep-plan session</li>
       </ul>
       <div class="loop">🔁 <strong>GM retires here and nowhere else.</strong> This task's own landing is closed by <code>awsf close</code>, which rolls W03 up to the spine.</div>
     </section>
