@@ -69,6 +69,7 @@ test("the catalogue assigns all K1 fields and the complementary existing refusal
     ["TR-13", "ProductionExecutableUnavailable"], ["TR-14", "ProductionQuotaRefused"],
     ["TR-15", "ProductionQuotaRefused"], ["TR-17", "StartPlacementRefused"],
     ["TR-19", "StartPreflightRefused"], ["TR-20", "ProtectedGrantBoundaryRefused"],
+    ["TR-22", "TicketFileMismatch"], ["TR-23", "CanonicalCheckoutNotClean"],
   ]);
   assert.deepEqual(TRAPS.flatMap(trap => trap.seeds).sort(), ["C5-baseline", "C8-adopt", "C8-later-grant", "G02", "G09", "G11", "S11", "S17", "S21", "S24", "S27", "S34", "S36", "S42"]);
   // S34's two refusal points and S27's partial K1 coverage do not duplicate

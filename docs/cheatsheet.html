@@ -732,6 +732,8 @@ npm run awsf -- land TASK</pre>
   <pre>npm run awsf -- preflight TASK --where core/src/example.ts</pre>
 
   <p><code>closure</code> (TR-21) refuses preparation while any attempt in the project landed after <code>2026-10-09T22:02:56Z</code> with a sealed ticket selection and no closure record. The refusal names each attempt and its <code>awsf close</code> command. No flag or environment variable bypasses it, including on intake or proving runs. A closure leaving rows open by your choice counts; a pre-cut landing does not.</p>
+  <p><code>ticket-bytes</code> (TR-22): <code>awsf new</code> seals only tracked ticket files whose exact checkout bytes match <code>HEAD</code>. <code>preflight</code> and <code>start</code> refuse a changed or missing sealed ticket, and plan-author checks again before composing its prompt. To use revised ticket bytes, commit them and seal a new selection.</p>
+  <p><code>canonical-clean</code> (TR-23): <code>preflight</code> and <code>start</code> refuse an unclean canonical checkout before preparing the attempt or reserving any calls. <code>land</code> and <code>close</code> also name the dirty paths rather than reporting an ancestry problem. The message lists up to five paths and counts the rest; the host does not move or clean your files.</p>
   <p><code>status</code>, including <code>--json</code>, and doctor&rsquo;s markers row distinguish <em>closed</em>, <em>open by the owner&rsquo;s choice</em> and <em>not closed</em> from journal records. <code>next --json</code> prepares <code>close</code> for a LANDED attempt with a selection and no record as an interactive owner act, never a driver act.</p>
 
   <h3>One command, three spellings</h3>

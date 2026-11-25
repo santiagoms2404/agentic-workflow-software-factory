@@ -3,7 +3,7 @@ import { basename, relative, resolve, sep } from "node:path";
 import { parseStoredTicket, TicketStore } from "../../persistence/ticket-store.ts";
 import { lightTicketAgreement } from "../../registry/plan-agreement.ts";
 import { sealTicketSelection, type TicketSelection } from "../../contracts/ticket-selection-record.ts";
-import { ticketFileDigest } from "../../persistence/plan-ticket-body.ts";
+import { committedTicketDigest } from "../../persistence/ticket-bytes.ts";
 import { parsePlanTicketData } from "../../persistence/plan-tickets.ts";
 import { ticketStoreFor } from "./ticket.ts";
 import { loadCatalog } from "../../registry/catalog.ts";
@@ -39,20 +39,21 @@ export async function sealLightTicketSelection(repository: string, values: reado
   const ids = parseTicketSelection(values);
   if (ids.length !== 1 || !/^T\d\d$/u.test(ids[0]!)) throw new Error("--ticket without --plan requires exactly one flat light ticket (Tnn)");
   const store = await lightTicketStore(repository);
+  const absolute = resolve(store.directory, `${ids[0]}.md`);
+  const path = relative(repository, absolute).split(sep).join("/");
   const records = await store.load();
   const violations = lightTicketAgreement(records);
-  if (violations.length > 0) throw new Error(`light ticket agreement: ${violations.map(row => row.message).join("; ")}`);
-  const absolute = resolve(store.directory, `${ids[0]}.md`);
+  if (violations.length > 0) throw new Error(`light ticket agreement for ${path}: ${violations.map(row => row.message).join("; ")}`);
   let bytes: Buffer;
   try { bytes = await readFile(absolute); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    throw new Error(`--ticket ${ids[0]} is not a flat light ticket in the plans root's ticket store`);
+    throw new Error(`--ticket ${ids[0]} is not a flat light ticket in the plans root's ticket store: ${path}`);
   }
   const record = parseStoredTicket(bytes.toString("utf8"), absolute);
-  if (record.ticket === null || record.ticket.id !== ids[0]) throw new Error(`--ticket ${ids[0]} is not a valid flat light ticket`);
+  if (record.ticket === null || record.ticket.id !== ids[0]) throw new Error(`--ticket ${ids[0]} is not a valid flat light ticket: ${path}`);
   return sealTicketSelection({ plan: null, tickets: [{ id: record.ticket.id,
-    path: relative(repository, absolute).split(sep).join("/"), digest: ticketFileDigest(bytes),
+    path, digest: committedTicketDigest(repository, record.ticket.id, path, bytes),
     tier: record.ticket.tier, workflow: record.ticket.workflow }] });
 }
 
@@ -67,15 +68,17 @@ export async function sealPlanTicketSelection(options: ResolvePlanRefOptions, va
   const tickets = [];
   for (const id of ids) {
     const absolute = resolve(source.ticketsPath, `${id}.md`);
+    const path = relative(options.repository, absolute).split(sep).join("/");
     let bytes: Buffer;
     try { bytes = await readFile(absolute); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      throw new Error(`--ticket ${id} is outside the registered ticket set for ${options.stem}`);
+      throw new Error(`--ticket ${id} is outside the registered ticket set for ${options.stem}: ${path}`);
     }
+    const digest = committedTicketDigest(options.repository, id, path, bytes);
     const ticket = parsePlanTicketData(bytes.toString("utf8"));
-    if (ticket?.id !== id) throw new Error(`--ticket ${id} is not a valid registered ticket for ${options.stem}`);
-    tickets.push({ id, path: relative(options.repository, absolute).split(sep).join("/"), digest: ticketFileDigest(bytes),
+    if (ticket?.id !== id) throw new Error(`--ticket ${id} is not a valid registered ticket for ${options.stem}: ${path}`);
+    tickets.push({ id, path, digest,
       ...(ticket.tier === undefined ? {} : { tier: ticket.tier }),
       ...(ticket.workflow === undefined ? {} : { workflow: ticket.workflow }) });
   }

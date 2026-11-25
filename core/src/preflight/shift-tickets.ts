@@ -1,7 +1,8 @@
 import { lstat, open, readFile, realpath } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import type { ShiftManifest } from "../contracts/shift-selection-record.ts";
-import { parsePlanTicketBody, ticketFileDigest } from "../persistence/plan-ticket-body.ts";
+import { parsePlanTicketBody } from "../persistence/plan-ticket-body.ts";
+import { assertTicketFileDigest } from "../persistence/ticket-bytes.ts";
 import { loadCatalog } from "../registry/catalog.ts";
 import { IMPLEMENTED_PLAN_FORMATS, UnsupportedPlanFormatError } from "../registry/plan-source.ts";
 import { ShiftTicketDigestMismatch } from "../workflow/shift/compile.ts";
@@ -52,8 +53,7 @@ export async function readShiftTicketDoBlocks(repository: string, manifest: Shif
       throw new Error(`ticket ${ticket.id} at ${ticket.path} is not in registered plan ${manifest.plan}'s ticket set`);
     }
     const bytes = await readFile(registered);
-    const actual = ticketFileDigest(bytes);
-    if (actual !== ticket.digest) throw new ShiftTicketDigestMismatch(ticket.id, ticket.digest, actual);
+    assertTicketFileDigest(ticket, bytes, actual => new ShiftTicketDigestMismatch(ticket.id, ticket.digest, actual));
     tickets.push({ id: ticket.id, doBlock: ticketDoBlock(parsePlanTicketBody(bytes.toString("utf8"), ticket.id).text) });
   }
   return tickets;

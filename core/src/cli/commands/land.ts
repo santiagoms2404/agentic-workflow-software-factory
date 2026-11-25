@@ -5,6 +5,7 @@ import { assertProtectedCandidateAuthorization, protectedFactDigest, type Protec
 import { recoveryDigest } from "../../contracts/phase-recovery.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import {
+  assertLandingCheckoutClean,
   completeLanding,
   inspectLanding,
   recoverLanding,
@@ -87,7 +88,7 @@ function authorizeLanding(
         requiredReviewPresent: status.requiredReviewPresent,
         journeyApproved: status.journeyApproved,
         protectedApprovalsValid: status.protectedApprovalsValid,
-        fastForwardPreflightPasses: inspection.clean && inspection.fastForwardPossible,
+        fastForwardPreflightPasses: inspection.fastForwardPossible,
         // Flags a stub run wrote are fixture attestations; L20 refuses them at
         // T2 (owner call O7). Keyed on the run's provenance, not on the start
         // mark: a stub-started attempt driven by a real run and a real journey
@@ -278,7 +279,7 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
   const noInspection: LandingInspection = {
     headSha: "",
     candidateSha: current.candidateSha ?? "",
-    clean: false,
+    dirtyPaths: null,
     fastForwardPossible: false,
     ahead: 0,
     behind: 0,
@@ -317,6 +318,7 @@ async function landUnderLease(options: LandCommandOptions): Promise<LandCommandR
   const hasProtectedGrant = protectedState.grants.length > 0;
   const inspection = inspectLanding(current.repository, current.candidateSha, undefined,
     seed === null && !hasProtectedGrant ? undefined : { integrationBaseSha: seed?.integrationBaseSha ?? current.baseSha! });
+  assertLandingCheckoutClean(inspection);
   if (seed !== null) {
     options.terminal.write(`Seeded candidate ${seed.seedCandidateSha}. Integration base pinned to ${seed.integrationBaseSha}. Fresh target assurance only.`);
     if (seed.ownerAmendment !== null) options.terminal.write(`Owner supplement: ${JSON.stringify(seed.ownerAmendment.text)}`);

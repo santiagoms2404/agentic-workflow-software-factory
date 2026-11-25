@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import { stringify } from "yaml";
 import { loadConfig } from "../../../src/config/load.ts";
@@ -268,8 +268,16 @@ test("the test configuration runs private authoring, host admission, quality com
   installPrompts(w.root, ["plan-author", "reviewer"]); writeFileSync(configPath, stringify(cfg));
   const projection = createDashboardProjection(stateRoot);
   try {
+    const ticket = selection.tickets[0]!;
+    const path = join(w.repo, ticket.path);
+    mkdirSync(dirname(path), { recursive: true });
+    const bytes = Buffer.from("Fixture spine instructions.\n");
+    writeFileSync(path, bytes);
+    git(w.repo, "add", "."); git(w.repo, "commit", "-m", "test: commit selected spine ticket");
+    const baseSha = git(w.repo, "rev-parse", "HEAD");
     const created = await newCommand({ stateRoot, project: cfg.project.slug, taskId: "author", repository: w.repo, workflow: "plan-author", tier: 2,
-      ...binding, request: k1Request("Author the fixture deep plan", "nothing; private authoring followed by host admission"), configSnapshotJson: toConfigSnapshotJson(cfg), projectRecord: projection.project });
+      planRef: binding.planRef, ticketSelection: sealTicketSelection({ plan: selection.plan, tickets: [{ ...ticket, digest: ticketFileDigest(bytes) }] }),
+      request: k1Request("Author the fixture deep plan", "nothing; private authoring followed by host admission"), configSnapshotJson: toConfigSnapshotJson(cfg), projectRecord: projection.project });
     await startUnderK1({ attemptDir: created.attemptDir, configPath, worktreeRoot: join(w.root, "worktrees"), preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
     const launched: string[] = [];
     const status = await runProductionCommand({ attemptDir: created.attemptDir, stateRoot, config: cfg, configPath, projectRecord: projection.project,
@@ -280,7 +288,7 @@ test("the test configuration runs private authoring, host admission, quality com
     assert.deepEqual(launched, ["openai-codex", "anthropic"]);
     assert.ok(status.requiredReviewPresent);
     assert.ok(status.candidateSha);
-    assert.equal(git(w.repo, "rev-parse", "HEAD"), w.baseSha, "canonical never advances during authoring");
+    assert.equal(git(w.repo, "rev-parse", "HEAD"), baseSha, "canonical never advances during authoring");
     assert.ok((await readAttemptEvidence(created.attemptDir)).some(row => row.type === "envelope" && row.envelope.payload?.schema === "awsf.plan-author-output/v1"));
     assert.match(readFileSync(join(status.worktree!, "specs/tickets/authored-plan/T01.md"), "utf8"), /state: todo/u);
   } finally { projection.close(); w.close(); }

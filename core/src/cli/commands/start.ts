@@ -12,6 +12,7 @@ import {
 } from "../../contracts/driver-preflight.ts";
 import { evaluateClosure, evaluateFreshness, type FreshnessFailure } from "../../preflight/fields.ts";
 import { gatherFreshness, K1_EXEMPT_WORKFLOWS, pinnedBaseSha, resolveAttemptRecipe } from "./preflight.ts";
+import { assertPreparationCheckout } from "../../preflight/checkout.ts";
 export { resolveAttemptRecipe } from "./preflight.ts";
 import { runGit, systemGitRunner } from "../../git/changes.ts";
 import { assertWorktreeAvailable, AttemptWorktreeExists, createWorktree, seedWorktreePaths, type ManagedWorktree } from "../../git/worktrees.ts";
@@ -264,6 +265,7 @@ export async function startCommand(options: StartCommandOptions): Promise<Attemp
     });
     throw new Error("unreachable start authorization");
   }
+  await assertPreparationCheckout(current);
   const configPath = resolve(options.configPath ?? join(current.repository, "awsf.config.yaml"));
   const config = loadConfig(await readFile(configPath, "utf8"));
   if (config.project.slug !== current.project) {

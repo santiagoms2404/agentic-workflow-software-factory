@@ -9,7 +9,7 @@ import type { Availability, BrokerProcessRegistration, HarnessAdapter, ModelInfo
 import { main } from "../../src/cli/main.ts";
 import { readAttempt, type AttemptEvent } from "../../src/cli/commands/attempt.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
-import { runProductionCommand } from "../../src/cli/commands/production-run.ts";
+import { prepareResumeInstruction, runProductionCommand, type RecoveryInspection } from "../../src/cli/commands/production-run.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 import { loadConfig } from "../../src/config/load.ts";
@@ -128,7 +128,7 @@ class AuthorAdapter implements HarnessAdapter {
   }
 }
 
-async function world(defect?: Defect) {
+async function world(defect?: Defect, changeSealedTicket = false) {
   const root = mkdtempSync(join(tmpdir(), "awsf-plan-author-journey-"));
   const canonical = join(root, "canonical"), stateRoot = join(root, "state"), configPath = join(root, "awsf.config.yaml");
   const projection = createDashboardProjection(stateRoot);
@@ -182,6 +182,10 @@ async function world(defect?: Defect) {
       preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
     assert.equal(prepared.ticketSelection?.plan, SPINE);
     assert.equal(prepared.ticketSelection?.tickets[0]?.id, "W01");
+    if (changeSealedTicket) {
+      const path = join(canonical, spineTicket);
+      writeFileSync(path, `${readFileSync(path, "utf8")}\nNew authoring instructions.\n`);
+    }
     const before = checkoutBytes(canonical), managedBefore = checkoutBytes(prepared.worktree!);
     const calls: string[] = [];
     const done = await runProductionCommand({ attemptDir, stateRoot, config, configPath, projectRecord: projection.project,
@@ -189,7 +193,7 @@ async function world(defect?: Defect) {
       infrastructure: { adapterFor: (_entry, id) => new AuthorAdapter(id, calls, defect), createBroker: fakeBroker,
         resolveExecutable: () => { throw new Error("no quota probe in this offline journey"); }, sandboxProbe: () => false } });
     assert.deepEqual(checkoutBytes(canonical), before, "author/admission/review never changes canonical");
-    return { root, canonical, projection, attemptDir, prepared, before, managedBefore, calls, done, invoke };
+    return { root, canonical, projection, attemptDir, stateRoot, config, configPath, prepared, before, managedBefore, calls, done, invoke };
   } catch (error) { projection.close(); rmSync(root, { recursive: true, force: true }); throw error; }
 }
 
@@ -232,10 +236,28 @@ test("a private stub author admits a deep plan, delivers its diff to opposite-pr
     assert.ok(readFileSync(join(w.done.worktree!, `specs/tickets/${DEEP}/T01.md`), "utf8").endsWith(`${prompt}\n`));
     const journey = await w.invoke(["journey", TASK, "--journey", "fixture-plan-author", "--sha", candidate]);
     assert.equal(journey.code, 0, journey.err.join("\n"));
+    const ownerPath = join(w.canonical, "untracked owner work.txt");
+    const dirtyRefusal = async (command: "land" | "close") => {
+      writeFileSync(ownerPath, "Keep this file.\n");
+      const head = git(w.canonical, "rev-parse", "HEAD");
+      const refused = await w.invoke([command, TASK], { interactive: true, write: () => {}, confirm: async () => {
+        assert.fail("dirty checkout should be refused before prompting");
+      } });
+      assert.equal(refused.code, 1);
+      assert.match(refused.err.join("\n"), /canonical checkout.*untracked owner work\.txt/u);
+      assert.doesNotMatch([...refused.out, ...refused.err].join("\n"), /fast-forward/iu);
+      assert.equal(git(w.canonical, "rev-parse", "HEAD"), head);
+      assert.equal(readFileSync(ownerPath, "utf8"), "Keep this file.\n");
+      rmSync(ownerPath); // fixture-owned file, not command cleanup
+    };
+    await dirtyRefusal("land");
+    assert.equal((await readAttempt(w.attemptDir)).lifecycleState, "AWAITING_OWNER");
     const landed = await w.invoke(["land", TASK]);
     assert.equal(landed.code, 0, landed.err.join("\n"));
     assert.equal(git(w.canonical, "rev-parse", "HEAD"), candidate);
     assert.equal((await readAttempt(w.attemptDir)).lifecycleState, "LANDED");
+    await dirtyRefusal("close");
+    assert.ok((await readAttemptEvidence(w.attemptDir)).every(row => row.type !== "closure-intent"));
     const choices: string[] = [];
     const closed = await w.invoke(["close", TASK], { interactive: true, write: () => {}, confirm: async question => {
       choices.push(question);
@@ -265,6 +287,23 @@ test("a private stub author admits a deep plan, delivers its diff to opposite-pr
     assert.match(readFileSync(join(w.canonical, spinePath), "utf8"), /\[wip\]<\/code> Milestone/u);
     for (const path of admittedPaths) assert.deepEqual(after.tree.get(path), admitted.tree.get(path), "approval earns no deep-plan marker or state");
     assert.equal(git(w.canonical, "status", "--porcelain"), "");
+  } finally { dispose(w); }
+});
+
+test("both author prompt sites refuse a ticket changed after start", async () => {
+  const w = await world(undefined, true);
+  try {
+    assert.equal(w.done.lifecycleState, "BLOCKED");
+    const changed = /specs\/tickets\/fixture-spine\/W01\.md.*changed since selection/u;
+    assert.match(w.done.blocker?.detail ?? "", changed);
+    assert.deepEqual(w.calls, []);
+    assert.equal(w.done.budget.callsReserved, 0);
+    assert.equal(w.done.budget.callsSpent, 0);
+    // Exercise the resume instruction composer with the author as the next
+    // unstarted phase. Recovery eligibility is tested separately.
+    const inspected = { status: w.prepared, checkpoint: { prefix: [{ phaseKey: "request" }] },
+      envelopes: new Map(), instructions: [] } as unknown as RecoveryInspection;
+    await assert.rejects(prepareResumeInstruction(w, inspected), changed);
   } finally { dispose(w); }
 });
 

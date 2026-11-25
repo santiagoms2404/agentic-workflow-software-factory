@@ -129,6 +129,7 @@ import type { ContractGateRequirement } from "../../registry/contracts.ts";
 import { scanJournal } from "../../persistence/replay.ts";
 import { PLAN_AUTHOR_OUTPUT_SCHEMA_ID, type PlanAuthorOutput } from "../../contracts/plan-author-output.ts";
 import { readPlanAuthorInput } from "../../workflow/plan-author-input.ts";
+import { assertSelectedTicketFiles } from "../../persistence/ticket-bytes.ts";
 import { assertPlanAuthorRole, compilePlanAuthor, PLAN_AUTHOR_WORKFLOW_ID } from "../../workflow/recipes/plan-author.ts";
 import type { PlanAdmissionRecord } from "../../contracts/plan-admission.ts";
 import { resolveProject, type ResolvedProject } from "../../registry/resolve.ts";
@@ -2867,12 +2868,11 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       if (reconciliation.outcome === "not-committed") return null;
       return { candidateSha: reconciliation.commitSha, verified };
     };
+    const planAuthorSuffix = phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID ? await planAuthorPromptSuffix(status, runtimeDir) : "";
     const rolePrompt = renderProductionRolePrompt(phase, previous, designContext, status.request, route.agent);
     const grantContext = protectedPromptContext(phaseGrant);
     const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions) + grantContext +
-      (visualDelivery === null ? "" : visualReferencePrompt(visualDelivery)) + reviewDiffPrompt(reviewContext?.evidence ?? null) +
-      (phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID
-        ? `\nHost-sealed spine selection: ${JSON.stringify(status.ticketSelection)}\nHost-provided session-runtime output directory: ${runtimeDir}\nWrite plan.html, build-prompts.md and tickets.json here only.\n` : "");
+      (visualDelivery === null ? "" : visualReferencePrompt(visualDelivery)) + reviewDiffPrompt(reviewContext?.evidence ?? null) + planAuthorSuffix;
     const amendment = phase.id === seed?.builderPhaseKey ? seed.ownerAmendment : null;
     const instruction = instructionFor(phase.id);
     if (instruction !== null) {
@@ -4575,6 +4575,12 @@ async function readRecoveryQuota(options: ProductionRunOptions, inspected: Recov
     threshold: threshold.minutes, observedAt, readoutDigest: recoveryDigest(row) };
 }
 
+async function planAuthorPromptSuffix(status: AttemptStatus, runtimeDir: string): Promise<string> {
+  const selection = status.ticketSelection!; // Recipe compilation requires a sealed spine selection.
+  await assertSelectedTicketFiles(status.repository, selection.tickets);
+  return `\nHost-sealed spine selection: ${JSON.stringify(selection)}\nHost-provided session-runtime output directory: ${runtimeDir}\nWrite plan.html, build-prompts.md and tickets.json here only.\n`;
+}
+
 export async function prepareResumeInstruction(options: ProductionRunOptions, inspected: RecoveryInspection) {
   if (inspected.checkpoint.pending !== undefined) throw new Error("a saved reply cannot receive a new instruction before validation");
   const recipe = (await attemptRecipe(options, inspected.status))!;
@@ -4605,7 +4611,7 @@ export async function prepareResumeInstruction(options: ProductionRunOptions, in
   const visual = bound === null || !bound.phases.includes(phase.id) ? ""
     : visualReferencePrompt(plannedDelivery(bound, deliveryDirectory(options.attemptDir, `${inspected.status.sessionId}:${phase.id}:run`)));
   const planAuthorSuffix = phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID
-    ? `\nHost-sealed spine selection: ${JSON.stringify(inspected.status.ticketSelection)}\nHost-provided session-runtime output directory: ${join(options.attemptDir, "private", PLAN_AUTHOR_WORKFLOW_ID)}\nWrite plan.html, build-prompts.md and tickets.json here only.\n`
+    ? await planAuthorPromptSuffix(inspected.status, join(options.attemptDir, "private", PLAN_AUTHOR_WORKFLOW_ID))
     : "";
   const originalPrompt = renderProductionRolePrompt(phase, previous, design ?? null, inspected.status.request, agent) +
     seedContext(inspected.status) + resumeInstructionContext(inspected.instructions) + protectedPromptContext(protectedGrantForPhase(options.attemptDir, phase.id)) + visual +

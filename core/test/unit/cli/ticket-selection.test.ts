@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -7,6 +8,9 @@ import { Value } from "@sinclair/typebox/value";
 import { main } from "../../../src/cli/main.ts";
 import { readAttempt } from "../../../src/cli/commands/attempt.ts";
 import { newCommand } from "../../../src/cli/commands/new.ts";
+import { sealShiftSelection } from "../../../src/cli/commands/shift.ts";
+import { parsePlanTicketData } from "../../../src/persistence/plan-tickets.ts";
+import { commit, git } from "../../fixtures/trap-world.ts";
 import { parseTicketSelection, sealPlanTicketSelection, sealLightTicketSelection } from "../../../src/cli/commands/ticket-selection.ts";
 import { assertTicketSelection, sealTicketSelection, TicketSelectionSchema, TICKET_SELECTION_SCHEMA_ID } from "../../../src/contracts/ticket-selection-record.ts";
 import { RECORD_SCHEMAS, ENVELOPE_SCHEMAS } from "../../../src/contracts/registry.ts";
@@ -27,6 +31,8 @@ function world(t: { after(fn: () => void): void }) {
   writeFileSync(join(repository, "awsf.project.yaml"), "version: awsf.project/v1\nproject: {slug: agentic-workflow-software-factory}\nrepositories:\n  app: {role: plan, default_branch: main}\nplans: {root: plans, format: awsf-plan-html/v1}\n");
   writeFileSync(join(repository, "plans", "selected-plan.html"), "<title>selected plan</title>\n");
   for (const id of ["T01", "T02"]) writeFileSync(join(directory, `${id}.md`), `---\nid: ${id}\ntitle: ${id}\nmilestone: M1\nstate: todo\ndepends_on: []\n---\n## Build prompt\nWrite a source.\n`);
+  execFileSync("git", ["init", "-q", "-b", "main", repository]);
+  commit(repository);
   const configPath = join(root, "awsf.config.yaml");
   writeFileSync(configPath, readFileSync(resolve("awsf.config.yaml")));
   const stateRoot = join(root, "state");
@@ -75,6 +81,8 @@ test("repeatable selection seals registered paths and exact bytes, journals and 
   assert.match((await w.cli(["status", "unrelated-name"])).out.join("\n"), /Tickets: selected-plan T02,T01/);
   assert.deepEqual(JSON.parse((await w.cli(["status", "unrelated-name", "--json"])).out.join("\n")).ticketSelection, selection);
   writeFileSync(join(w.directory, "T01.md"), readFileSync(join(w.directory, "T01.md"), "utf8") + "changed\n");
+  await assert.rejects(sealPlanTicketSelection(w.options, ["T02,T01"]), /plans\/tickets\/selected-plan\/T01\.md.*differ from HEAD/u);
+  commit(w.repository);
   assert.notEqual((await sealPlanTicketSelection(w.options, ["T02,T01"])).selectionDigest, selection.selectionDigest);
   assert.deepEqual((await readAttempt(dir)).ticketSelection, selection, "journal remains the sealed authority");
 });
@@ -108,6 +116,8 @@ test("B7-60: light selection falls back to the catalog-less flat ticket store", 
   const ticketPath = join(repository, "specs", "tickets", "T00.md");
   mkdirSync(join(repository, "specs", "tickets"), { recursive: true });
   writeFileSync(ticketPath, flatSource(flatTicket));
+  execFileSync("git", ["init", "-q", "-b", "main", repository]);
+  commit(repository);
 
   const selection = await sealLightTicketSelection(repository, ["T00"]);
   assert.equal(selection.plan, null);
@@ -121,6 +131,7 @@ test("light selection uses the non-default plans root, seals one exact file and 
   const w = world(t);
   const path = join(w.repository, "plans/tickets/T00.md");
   writeFileSync(path, flatSource(flatTicket));
+  commit(w.repository);
   const result = await w.cli(["new", "light-build", "small work", "--workflow", "build-review", "--ticket", "T00"]);
   assert.equal(result.code, 0, result.err.join("\n"));
   const dir = join(w.stateRoot, "projects", w.options.project, "tasks/light-build/1");
@@ -131,6 +142,8 @@ test("light selection uses the non-default plans root, seals one exact file and 
   assert.match((await w.cli(["status", "light-build"])).out.join("\n"), /Tickets: light T00/);
   assert.deepEqual(JSON.parse((await w.cli(["status", "light-build", "--json"])).out.join("\n")).ticketSelection, status.ticketSelection);
   writeFileSync(path, flatSource({ ...flatTicket, title: "Changed title" }));
+  await assert.rejects(sealLightTicketSelection(w.repository, ["T00"]), /plans\/tickets\/T00\.md.*differ from HEAD/u);
+  commit(w.repository);
   assert.notEqual((await sealLightTicketSelection(w.repository, ["T00"])).selectionDigest, status.ticketSelection!.selectionDigest);
 });
 
@@ -155,9 +168,35 @@ test("light selection refuses vocabulary, filename identity and dependency-cycle
   await assert.rejects(sealLightTicketSelection(w.repository, ["T00"]), /dependency cycle/);
 });
 
+for (const kind of ["plan", "light", "shift"] as const) test(`${kind} seals only ticket bytes tracked at the same path in HEAD`, async t => {
+  const w = world(t);
+  const id = kind === "light" ? "T00" : "T03";
+  const path = `plans/tickets/${kind === "light" ? "" : "selected-plan/"}${id}.md`;
+  const absolute = join(w.repository, path);
+  const source = flatSource({ ...flatTicket, id });
+  writeFileSync(absolute, source);
+  const seal = () => kind === "light" ? sealLightTicketSelection(w.repository, [id])
+    : kind === "plan" ? sealPlanTicketSelection(w.options, [id])
+    : sealShiftSelection(w.repository, { plan: w.options.stem, milestones: ["M1"], tier: 1,
+      tickets: [{ uid: id, plan: w.options.stem, path: absolute, ticket: parsePlanTicketData(source)! }] });
+  await assert.rejects(seal, { name: "TicketFileMismatch", message: `ticket ${id} at ${path} cannot be sealed: untracked or missing from HEAD` });
+  git(w.repository, "add", "--", path);
+  await assert.rejects(seal, /missing from HEAD/u);
+  commit(w.repository);
+  assert.equal((await seal()).tickets[0]!.digest, ticketFileDigest(Buffer.from(source)));
+  writeFileSync(absolute, source + "Changed after commit.\n");
+  await assert.rejects(seal, { name: "TicketFileMismatch", message: `ticket ${id} at ${path} cannot be sealed: checkout bytes differ from HEAD` });
+  git(w.repository, "add", "--", path);
+  await assert.rejects(seal, /differ from HEAD/u);
+  writeFileSync(absolute, source);
+  git(w.repository, "rm", "-f", "--cached", "--", path);
+  await assert.rejects(seal, /untracked or missing from HEAD/u);
+});
+
 test("light selection cannot bind to a --plan and cannot seal several tickets", async t => {
   const w = world(t), path = join(w.repository, "plans/tickets/T00.md");
   writeFileSync(path, flatSource(flatTicket));
+  commit(w.repository);
   const selection = await sealLightTicketSelection(w.repository, ["T00"]);
   await assert.rejects(newCommand({ stateRoot: w.stateRoot, project: w.options.project, taskId: "misbound-light", repository: w.repository,
     workflow: "build-review", tier: 2, request: "request", planRef: "selected-plan", ticketSelection: selection }), /requires its registered/);

@@ -14,8 +14,8 @@ import {
   parsePlanTicketBody,
   parsePlanTicketHandoff,
   parsePlanTicketIdentity,
-  ticketFileDigest,
 } from "../../persistence/plan-ticket-body.ts";
+import { assertTicketFileDigest } from "../../persistence/ticket-bytes.ts";
 import type { Tier } from "../../state/tiers.ts";
 import { assertEarnedDescription, type WorkflowRecipe } from "../compiler.ts";
 import type { LocalPhaseDefinition, PhaseDefinition } from "../phase.ts";
@@ -232,8 +232,7 @@ export function compileShift(
   const phases: PhaseDefinition[] = [];
   for (const ticket of manifest.tickets) {
     const bytes = bodies.get(ticket.id)!;
-    const actual = ticketFileDigest(bytes);
-    if (actual !== ticket.digest) throw new ShiftTicketDigestMismatch(ticket.id, ticket.digest, actual);
+    assertTicketFileDigest(ticket, bytes, actual => new ShiftTicketDigestMismatch(ticket.id, ticket.digest, actual));
     phases.push(...ticketPhases(ticket.id, bytes, config));
   }
   phases.push(

@@ -160,6 +160,22 @@ export function worktreeStatus(runner: GitRunner): string {
   return runGit(runner, ["status", "--porcelain", "--untracked-files=all"]);
 }
 
+/** Display porcelain paths without status columns, keeping Git's path quoting. */
+export function dirtyPathSummary(paths: readonly string[]): string {
+  const visible = paths.slice(0, 5).join(", ");
+  return paths.length <= 5 ? visible : `${visible}, and ${String(paths.length - 5)} more`;
+}
+
+export function canonicalCheckoutDirt(runner: GitRunner): string | null {
+  const paths = new Set(worktreeStatus(runner).split("\n").filter(Boolean).flatMap(row => {
+    const path = row.slice(3);
+    // Rename/copy rows can name two paths. A quoted name can itself contain ` -> `.
+    const pair = /^[RC]/u.test(row) || /^.[RC]/u.test(row) ? /^("(?:[^"\\]|\\.)*"|.*?) -> (.*)$/u.exec(path) : null;
+    return pair === null ? [path] : [pair[1]!, pair[2]!];
+  }));
+  return paths.size === 0 ? null : dirtyPathSummary([...paths]);
+}
+
 /** A safety-cleanliness predicate must not inherit status.showUntrackedFiles. */
 export function isWorktreeClean(runner: GitRunner): boolean {
   return worktreeStatus(runner).trim().length === 0;

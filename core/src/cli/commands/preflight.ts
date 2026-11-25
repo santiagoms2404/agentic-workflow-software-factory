@@ -42,6 +42,7 @@ import {
 } from "../../preflight/fields.ts";
 import { writingPhases } from "../../preflight/grant-plan.ts";
 import { storageMode } from "../../preflight/storage-mode.ts";
+import { assertPreparationCheckout } from "../../preflight/checkout.ts";
 import { readShiftTicketDoBlocks } from "../../preflight/shift-tickets.ts";
 import {
   gatherSuite,
@@ -389,6 +390,7 @@ export function renderPreflightLines(result: PreflightCommandResult): readonly s
 export async function preflightCommand(options: PreflightCommandOptions): Promise<PreflightCommandResult> {
   const current = await readAttempt(options.attemptDir);
   if (current.lifecycleState !== "DRAFT") throw new PreflightAttemptNotDraft(current.taskId, current.lifecycleState);
+  await assertPreparationCheckout(current);
   const configPath = resolve(options.configPath ?? join(current.repository, "awsf.config.yaml"));
   const config = loadConfig(await readFile(configPath, "utf8"));
   if (config.project.slug !== current.project) {

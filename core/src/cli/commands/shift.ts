@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { relative, sep } from "node:path";
 import { sealShiftManifest, type ShiftManifest } from "../../contracts/shift-selection-record.ts";
-import { ticketFileDigest } from "../../persistence/plan-ticket-body.ts";
+import { committedTicketDigest } from "../../persistence/ticket-bytes.ts";
 import { CallCeilingExceeded } from "../../state/errors.ts";
 import { ceilingFor, MAX_CALL_CEILING, raiseActsNeeded, type RaisePlan, type ResolvedCeiling, type Tier } from "../../state/tiers.ts";
 import type { ShiftSelection } from "../../workflow/shift/select.ts";
@@ -156,7 +156,7 @@ export async function sealShiftSelection(repository: string, selection: ShiftSel
     tickets.push({
       id: record.ticket.id,
       path,
-      digest: ticketFileDigest(await readFile(record.path)),
+      digest: committedTicketDigest(repository, record.ticket.id, path, await readFile(record.path)),
       ...(record.ticket.tier === undefined ? {} : { tier: record.ticket.tier }),
       ...(record.ticket.workflow === undefined ? {} : { workflow: record.ticket.workflow }),
     });

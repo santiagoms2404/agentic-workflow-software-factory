@@ -6,7 +6,7 @@ import { loadCatalog } from "../registry/catalog.ts";
 import { closureDelta } from "../closure/delta.ts";
 import type { ClosureRegistry, ClosureTree } from "../closure/tree.ts";
 import type { ClosureRecord } from "../contracts/closure-record.ts";
-import { runGit, type GitRunner } from "./changes.ts";
+import { canonicalCheckoutDirt, dirtyPathSummary, runGit, type GitRunner } from "./changes.ts";
 import { hostIdentityEnv } from "./commit.ts";
 
 export function closureGitRunner(repository: string): GitRunner {
@@ -76,7 +76,6 @@ export function readClosureSnapshot(git: GitRunner, sha: string): ClosureSnapsho
 }
 
 export function closureHead(git: GitRunner): string { return runGit(git, ["rev-parse", "HEAD"]).trim(); }
-export function closureClean(git: GitRunner): boolean { return runGit(git, ["status", "--porcelain", "--untracked-files=all"]).trim() === ""; }
 export function closureAncestor(git: GitRunner, ancestor: string, descendant: string): boolean {
   const result = git(["merge-base", "--is-ancestor", ancestor, descendant]);
   if (result.status === 0) return true;
@@ -147,19 +146,27 @@ export function finishClosureCheckout(repository: string, record: ClosureRecord,
   const indexTree = runGit(git, ["write-tree"]).trim();
   const parentTree = runGit(git, ["rev-parse", `${record.parentSha}^{tree}`]).trim();
   const commitTree = runGit(git, ["rev-parse", `${record.commitSha}^{tree}`]).trim();
-  if (indexTree !== parentTree && indexTree !== commitTree) throw new Error("interrupted closure: index changed; no automatic replay");
-  const dirty = runGit(git, ["diff", "--name-only", "--no-renames", "-z", record.parentSha, "--"]).split("\0").filter(Boolean);
-  if (dirty.some(path => !record.blobs.some(blob => blob.path === path)) || runGit(git, ["ls-files", "--others", "--exclude-standard", "-z"]).length > 0) throw new Error("interrupted closure: checkout changed; no automatic replay");
+  if (indexTree !== parentTree && indexTree !== commitTree) {
+    const paths = canonicalCheckoutDirt(git);
+    throw new Error(`interrupted closure: index changed${paths === null ? "" : `: ${paths}`}; no automatic replay`);
+  }
+  const unexpected = runGit(git, ["diff", "--name-only", "--no-renames", "-z", record.parentSha, "--"]).split("\0")
+    .filter(path => path && !record.blobs.some(blob => blob.path === path));
+  const untracked = runGit(git, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
+  if (unexpected.length + untracked.length > 0) {
+    throw new Error(`interrupted closure: checkout changed: ${dirtyPathSummary([...new Set([...unexpected, ...untracked])].map(path => JSON.stringify(path)))}; no automatic replay`);
+  }
   for (const blob of record.blobs) {
     const physical = join(repository, blob.path);
-    assertNoSymlinkParents(repository, physical, "interrupted closure: symlink parent; no automatic replay");
+    assertNoSymlinkParents(repository, physical, `interrupted closure: symlink parent of ${blob.path}; no automatic replay`);
     const bytes = readFileSync(physical);
-    if (!bytes.equals(Buffer.from(before.tree.get(blob.path)!)) && !bytes.equals(Buffer.from(after.tree.get(blob.path)!))) throw new Error("interrupted closure: checkout bytes changed; no automatic replay");
+    if (!bytes.equals(Buffer.from(before.tree.get(blob.path)!)) && !bytes.equals(Buffer.from(after.tree.get(blob.path)!))) throw new Error(`interrupted closure: checkout bytes changed: ${blob.path}; no automatic replay`);
     const stat = lstatSync(join(repository, blob.path));
-    if (!stat.isFile() || stat.nlink !== 1) throw new Error("interrupted closure: non-regular file; no automatic replay");
+    if (!stat.isFile() || stat.nlink !== 1) throw new Error(`interrupted closure: non-regular file: ${blob.path}; no automatic replay`);
   }
   // No checkout filters or hooks can transform the proved after bytes.
   for (const blob of record.blobs) writeFileSync(join(repository, blob.path), after.tree.get(blob.path)!);
   runGit(git, ["read-tree", record.commitSha]);
-  if (!closureClean(git)) throw new Error("interrupted closure: canonical checkout is not clean after completion");
+  const dirty = canonicalCheckoutDirt(git);
+  if (dirty !== null) throw new Error(`interrupted closure: canonical checkout is not clean after completion: ${dirty}`);
 }

@@ -2,7 +2,7 @@
 // land; the CLI's single L20 call site does that before any mutation reaches
 // this boundary.
 
-import { isWorktreeClean, runGit, systemGitRunner, type GitRunner } from "./changes.ts";
+import { canonicalCheckoutDirt, runGit, systemGitRunner, type GitRunner } from "./changes.ts";
 
 export type LandingBlockCode =
   | "non-fast-forward"
@@ -20,7 +20,7 @@ export interface Divergence {
 export interface LandingInspection extends Divergence {
   readonly headSha: string;
   readonly candidateSha: string;
-  readonly clean: boolean;
+  readonly dirtyPaths: string | null;
   readonly fastForwardPossible: boolean;
   readonly summary: string;
 }
@@ -52,10 +52,6 @@ function parseCounts(text: string): Divergence {
   const match = /^\s*(\d+)\s+(\d+)\s*$/.exec(text);
   if (match === null) throw new Error(`git returned unreadable ahead/behind counts: ${JSON.stringify(text)}`);
   return { ahead: Number(match[1]), behind: Number(match[2]) };
-}
-
-function clean(runner: GitRunner): boolean {
-  return isWorktreeClean(runner);
 }
 
 function head(runner: GitRunner): string {
@@ -97,7 +93,7 @@ function inspectLandingWithSummary(
       ...counts,
       headSha,
       candidateSha,
-      clean: clean(runner),
+      dirtyPaths: canonicalCheckoutDirt(runner),
       fastForwardPossible: headSha === candidateSha || isAncestor(runner, headSha, candidateSha),
       summary: includeSummary ? summary(runner, candidateSha) : "",
     };
@@ -116,10 +112,14 @@ export function inspectLanding(
   return inspectLandingWithSummary(candidateSha, runner, seedPin, true);
 }
 
-function assertPreflight(inspection: LandingInspection): void {
-  if (!inspection.clean) {
-    throw new LandingBlocked("dirty-canonical-tree", "canonical checkout is dirty", inspection);
+export function assertLandingCheckoutClean(inspection: LandingInspection): void {
+  if (inspection.dirtyPaths !== null) {
+    throw new LandingBlocked("dirty-canonical-tree", `canonical checkout is dirty: ${inspection.dirtyPaths}`, inspection);
   }
+}
+
+function assertPreflight(inspection: LandingInspection): void {
+  assertLandingCheckoutClean(inspection);
   if (!inspection.fastForwardPossible) {
     throw new LandingBlocked("non-fast-forward", "candidate is not a descendant of canonical HEAD", inspection);
   }
@@ -132,7 +132,7 @@ function verify(
   runner: GitRunner,
 ): LandingOutcome {
   const headSha = head(runner);
-  const checkoutClean = clean(runner);
+  const dirty = canonicalCheckoutDirt(runner);
   if (headSha !== candidateSha) {
     throw new LandingBlocked(
       "git-failure",
@@ -140,10 +140,10 @@ function verify(
       counts,
     );
   }
-  if (!checkoutClean) {
-    throw new LandingBlocked("dirty-canonical-tree", "canonical checkout became dirty during landing", counts);
+  if (dirty !== null) {
+    throw new LandingBlocked("dirty-canonical-tree", `canonical checkout became dirty during landing: ${dirty}`, counts);
   }
-  return { ...counts, headSha, candidateSha, checkoutClean };
+  return { ...counts, headSha, candidateSha, checkoutClean: true };
 }
 
 /** Re-check, fast-forward locally, then prove exact HEAD and cleanliness. */

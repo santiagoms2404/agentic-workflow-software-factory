@@ -34,7 +34,7 @@ test("completeLanding omits the owner-facing candidate summary", () => {
   const outcome = completeLanding("/repo", "candidate", runner);
   assert.deepEqual(outcome, {
     ahead: 0, behind: 1, headSha: "candidate", candidateSha: "candidate",
-    clean: true, fastForwardPossible: true, summary: "", checkoutClean: true,
+    dirtyPaths: null, fastForwardPossible: true, summary: "", checkoutClean: true,
   });
   assert.equal(calls.some((command) => command.startsWith("show ") || command.startsWith("diff --stat ")), false);
 });

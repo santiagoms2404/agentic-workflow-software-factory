@@ -13,9 +13,9 @@ import { selectionOf } from "../../closure/model.ts";
 import { closureDelta } from "../../closure/delta.ts";
 import { proposeClosure, applyClosureChoices, type ClosureRow } from "../../closure/propose.ts";
 import { proposeSpineRollUp } from "../../closure/spine.ts";
-import { assertClosureFiles, closureAncestor, closureClean, closureHead, closureGitRunner, finishClosureCheckout,
+import { assertClosureFiles, closureAncestor, closureHead, closureGitRunner, finishClosureCheckout,
   prepareClosureCommit, readClosureSnapshot, verifyClosureCommit, type ClosureSnapshot } from "../../git/closure.ts";
-import { runGit } from "../../git/changes.ts";
+import { canonicalCheckoutDirt, runGit, type GitRunner } from "../../git/changes.ts";
 import { compileShift } from "../../workflow/shift/compile.ts";
 import { shiftTicketCandidates } from "../../workflow/shift/bind.ts";
 import { registeredTicketPaths, ticketFrontmatter, treeText } from "../../closure/tree.ts";
@@ -49,6 +49,11 @@ export class ClosureRefused extends Error {
   constructor(code: string, message: string) { super(message); this.name = "ClosureRefused"; this.code = code; }
 }
 function refuse(code: string, message: string): never { throw new ClosureRefused(code, message); }
+
+function assertClosureClean(git: GitRunner): void {
+  const dirty = canonicalCheckoutDirt(git);
+  if (dirty !== null) refuse("E_CLOSURE_DIRTY", `closure requires a clean canonical checkout: ${dirty}`);
+}
 
 async function builtTickets(attemptDir: string, status: AttemptStatus, base: ClosureSnapshot): Promise<ReadonlySet<string> | undefined> {
   if (status.shift == null) return undefined;
@@ -121,7 +126,7 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
     assertClosureRecord(completed);
     verifyClosureCommit(git, completed);
     if (!closureAncestor(git, completed.commitSha, head)) refuse("E_CLOSURE_INTERRUPTED", "recorded closure is not in canonical HEAD");
-    if (!closureClean(git)) refuse("E_CLOSURE_DIRTY", "closure requires a clean canonical checkout");
+    assertClosureClean(git);
     return withJournal(async (_append, reconcile) => {
       await reconcile();
       return { confirmed: true, record: completed };
@@ -142,7 +147,7 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
       return { confirmed: true, record: prepared };
     });
   }
-  if (!closureClean(git)) refuse("E_CLOSURE_DIRTY", "closure requires a clean canonical checkout");
+  assertClosureClean(git);
   const base = readClosureSnapshot(git, baseSha);
   const before = readClosureSnapshot(git, head);
   const light = plan === null;
@@ -206,10 +211,10 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
   assertClosureFiles(repository, before, paths);
   if (!await options.terminal.confirm("Commit these exact closure substitutions?")) return { confirmed: false, record: null };
   if (closureHead(git) !== head) refuse("E_CLOSURE_HEAD_MOVED", "canonical HEAD moved during closure confirmation");
-  if (!closureClean(git)) refuse("E_CLOSURE_DIRTY", "closure requires a clean canonical checkout");
+  assertClosureClean(git);
   return withJournal(async (append) => {
     if (closureHead(git) !== head) refuse("E_CLOSURE_HEAD_MOVED", "canonical HEAD moved during closure confirmation");
-    if (!closureClean(git)) refuse("E_CLOSURE_DIRTY", "closure requires a clean canonical checkout");
+    assertClosureClean(git);
     assertClosureFiles(repository, before, paths);
     const id = randomUUID();
     const at = (options.now ?? (() => new Date().toISOString()))();
@@ -230,7 +235,8 @@ export async function closeCommand(options: CloseCommandOptions): Promise<CloseC
     await append({ type: "closure-prepared", record });
     await options.onStep?.("prepared");
     // Any late external movement is reported with its durable intent, never retried.
-    if (!closureClean(git)) refuse("E_CLOSURE_INTERRUPTED", "interrupted closure: checkout changed before HEAD publication; no automatic replay");
+    const dirty = canonicalCheckoutDirt(git);
+    if (dirty !== null) refuse("E_CLOSURE_INTERRUPTED", `interrupted closure: checkout changed before HEAD publication: ${dirty}; no automatic replay`);
     runGit(git, ["update-ref", "HEAD", record.commitSha, head]);
     await options.onStep?.("published");
     finishClosureCheckout(repository, record, git);
