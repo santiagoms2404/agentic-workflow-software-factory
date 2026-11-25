@@ -48,7 +48,11 @@ function oneByte(tree: ClosureTree, path: string, start: number, end: number): M
   const left = corpus.get(path) === tree.get(path) ? corpus.get(path)! : Buffer.from(before);
   const right = after.get(path)!;
   assert.equal(left.length, right.length);
-  assert.equal([...left].filter((byte, i) => byte !== right[i]).length, 1);
+  let differences = 0;
+  for (let i = 0; i < left.length; i++) {
+    if (left[i] !== right[i]) differences++;
+  }
+  assert.equal(differences, 1);
   return after;
 }
 

@@ -120,7 +120,9 @@ export function closureDelta(before: ClosureTree, after: ClosureTree, registry: 
   try {
     for (const path of paths) {
       currentPath = path;
-      if (Buffer.from(before.get(path)!).equals(Buffer.from(after.get(path)!))) continue;
+      const beforeBytes = before.get(path)!;
+      const afterBytes = after.get(path)!;
+      if (beforeBytes === afterBytes || Buffer.compare(beforeBytes, afterBytes) === 0) continue;
       if (!plans.has(path) && !tickets.has(path) && !lights.has(path)) {
         return refusal(before, after, path, "content", "changed path is not a registered plan or ticket");
       }

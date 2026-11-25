@@ -1,8 +1,9 @@
+import { isUtf8 } from "node:buffer";
 import { posix } from "node:path";
 import { isMap, isScalar, parseDocument } from "yaml";
 import { parsePlanTicketBody } from "../persistence/plan-ticket-body.ts";
 import { planAgreement, lightTicketAgreement, type AgreementTicket, type PlanAgreementViolation, type SectionBBlock } from "../registry/plan-agreement.ts";
-import { parseAwsfPlanHtmlV1, UnsupportedPlanFormatError, type ResolvedPlanSource } from "../registry/plan-source.ts";
+import { parseAwsfPlanHtmlV1, UnsupportedPlanFormatError, type ParsedAwsfPlan, type ResolvedPlanSource } from "../registry/plan-source.ts";
 
 /** Complete tree snapshots; paths and registered sources use the same namespace. */
 export type ClosureTree = ReadonlyMap<string, Uint8Array>;
@@ -26,12 +27,24 @@ export class ClosureTreeError extends Error {
   }
 }
 
-export function treeText(tree: ClosureTree, path: string): string {
+function treeBytes(tree: ClosureTree, path: string): Buffer {
   const bytes = tree.get(path);
   if (bytes === undefined) throw new ClosureTreeError(path, "missing registered file");
-  const text = Buffer.from(bytes).toString("utf8");
-  if (!Buffer.from(text).equals(Buffer.from(bytes))) throw new ClosureTreeError(path, "invalid UTF-8");
-  return text;
+  if (bytes.byteLength === 0) return Buffer.alloc(0);
+  // Shared backing memory can change between validation and decoding. Use a
+  // snapshot for that case; ordinary bytes only need a view of the file span.
+  return bytes.buffer instanceof ArrayBuffer
+    ? Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    : Buffer.from(bytes);
+}
+
+function utf8Text(bytes: Buffer, path: string): string {
+  if (!isUtf8(bytes)) throw new ClosureTreeError(path, "invalid UTF-8");
+  return bytes.toString("utf8");
+}
+
+export function treeText(tree: ClosureTree, path: string): string {
+  return utf8Text(treeBytes(tree, path), path);
 }
 
 export interface TicketFrontmatter {
@@ -111,6 +124,23 @@ export function agreementTicket(source: string, path: string): AgreementTicket {
   };
 }
 
+// One successful parse per live source. Keep a private byte snapshot rather
+// than trusting the identity of a mutable view (or of its backing buffer).
+const parsedPlans = new WeakMap<ClosurePlanSource, { label: string; bytes: Buffer; plan: ParsedAwsfPlan }>();
+
+function agreementPlan(tree: ClosureTree, source: ClosurePlanSource): ParsedAwsfPlan {
+  const { label, planPath } = source;
+  const bytes = treeBytes(tree, planPath);
+  const cached = parsedPlans.get(source);
+  if (cached?.label === label && cached.bytes.equals(bytes)) return cached.plan;
+
+  const snapshot = Buffer.alloc(bytes.length); // Do not expose the snapshot through a shared Buffer pool.
+  bytes.copy(snapshot);
+  const plan = parseAwsfPlanHtmlV1(utf8Text(snapshot, planPath), label);
+  parsedPlans.set(source, { label, bytes: snapshot, plan });
+  return plan;
+}
+
 /** The same agreement rules as the fence, over the host-resolved after tree. */
 export function treeAgreement(tree: ClosureTree, registry: ClosureRegistry): readonly PlanAgreementViolation[] {
   const knownStems = registry.plans.map((source) => source.label);
@@ -154,7 +184,7 @@ export function treeAgreement(tree: ClosureTree, registry: ClosureRegistry): rea
     if (source.format !== "awsf-plan-html/v1") throw new UnsupportedPlanFormatError(source.format, source.label);
     let plan;
     try {
-      plan = parseAwsfPlanHtmlV1(treeText(tree, source.planPath), source.label);
+      plan = agreementPlan(tree, source);
     } catch (error) {
       if (!(error instanceof Error)) throw error;
       throw new ClosureTreeError(source.planPath, error.message);
