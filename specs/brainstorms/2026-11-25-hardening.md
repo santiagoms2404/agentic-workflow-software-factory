@@ -6,7 +6,7 @@
 
 **Follows:** `specs/brainstorms/2026-11-24-design-contract.md`. The codes K46+, NF28+, IM13+ and Q130+ continue its series. OC is an owner commit.
 
-**Measured:** at `44ff534`, with the TypeScript compiler's own parser over all 1,095 tracked code files (353 in core/src, 83 in dashboard/src, 5 in dashboard/shared, 3 in docs/driving, 650 tests, 1 other). The four shell files, nine migrations and six style sheets are outside that parser and were not measured. T23 gives them an area. The CI workflow was read. CI is green on that commit.
+**Measured:** at `44ff534`, unless a row names a later commit, with the TypeScript compiler's own parser over all 1,095 tracked code files (353 in core/src, 83 in dashboard/src, 5 in dashboard/shared, 3 in docs/driving, 650 tests, 1 other). The four shell files, nine migrations and six style sheets are outside that parser and were not measured. T23 gives them an area. The CI workflow was read. CI is green on that commit.
 
 ## 1. The plan in short
 
@@ -19,7 +19,7 @@ The order of Q40 stands: A12, W04, W08, W16.
 
 ## 2. Rulings
 
-Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this record was read. Section 7 keeps their alternatives.
+Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this record was read, and section 7 keeps their alternatives. Q136 to Q138 came from the first two tickets.
 
 | Code | Question | Ruling |
 | --- | --- | --- |
@@ -42,6 +42,9 @@ Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this recor
 | Q133 | The order of the sandbox trial | Reviewers first, then one builder in a third mode. |
 | Q134 | The risk map | Tier 2 for the parts of NF28, and the credential patterns become a protected path (OC4). |
 | Q135 | The split of the run loop | v3 W18, added by AM8 after AM6 and AM7 (OC6). |
+| Q136 | Are the light tickets made visible? | Yes, as T31, after T23. |
+| Q137 | T20's review findings: rework or a later ticket? | T20 landed as built. F1 to F4 are T32, before W04's deep plan. |
+| Q138 | T21's second acceptance line | Accepted for its purpose: the plan whose bytes changed since its last check is parsed again. No follow-up ticket. |
 
 ## 3. Corrections and findings
 
@@ -62,19 +65,35 @@ Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this recor
 | NF34 | Its check for unhandled promises needs a second package outside invariant 7's list. It stays out. | the rule list, `type_aware` |
 | NF35 | Inside an agent session two credential traps fail, because the session's environment holds credential-shaped values. In a clean environment 78 of 78 pass. | two runs on one clone |
 | IM13 | Put the parts of NF28 in tier 2, and protect the credential patterns like `core/src/policy`. | Q134 |
+| NF36 | No command and no screen shows a light ticket when a catalog is present. `awsf ticket show T20` prints the first plan's T20. | `core/src/cli/main.ts`, `ticketStoreForList`, and the tickets route |
+
+### What T20 and T21 showed
+
+T20 landed as `ff29952` and closed in `7dbe76a`. T21 landed as `e8b471b` and closed in `350d4f9`. The builder of both was `gpt-6.2-sol` at high, on its first two tasks here, and the reviewer was Opus 5.5. Both reviews accepted. Each was checked again by an independent session before the journey.
+
+| Code | Finding | Answer |
+| --- | --- | --- |
+| F1 of T20, medium | The plan author's ticket check also runs when resume only validates a saved reply, and can seal the attempt. | T32 |
+| F2 of T20, low | `ticket new` and `refine` leave a stray DRAFT when the checkout is not clean. | T32 |
+| F3 of T20, low | On a fresh run the same check comes after L4, so a ticket edit seals the attempt with no call spent. T20's own acceptance line allowed it. | T32 |
+| F4 of T20, low | Two of twelve mutants survive: a missing sealed file, and a rename row in the list of paths. | T32 |
+| F1 of T21, low | The parse cache keeps one entry per plan, so checks that alternate between plans parse one more. The result is the same. | Q138 |
+
+Measured for T21: with 44 plans in place of 22, one plan's test grows 2% where the base grew 23%. The unit gate took 319 s, against 423 s in T20's run.
 
 ## 4. Order
 
 | Step | What | Who | Codes |
 | --- | --- | --- | --- |
 | 1 | Push T15's two commits | done 2026-11-25, CI green | |
-| 2 | OC0: W03's closing record and Validation rows | owner commit, prepared | |
-| 3 | OC1: CI runs the trap layer | owner commit, prepared | IM1 |
-| 4 | OC3: the plan author names the cheapest check | owner commit, prepared | Q123 |
-| 5 | T20 | factory | Q127, Q128 |
-| 6 | T21 | factory | IM3 |
+| 2 | OC0: W03's closing record and Validation rows | done, `d4d56ee` | |
+| 3 | OC1: CI runs the trap layer | done, `f1858f7`, 78 of 78 in CI | IM1 |
+| 4 | OC3: the plan author names the cheapest check | done, `0de38a2` | Q123 |
+| 5 | T20 | done | Q127, Q128 |
+| 6 | T21 | done | IM3 |
 | 7 | T22 | factory | LC1, LS1, LS2, NF29 |
 | 8 | T23 | factory | LC3, K47, invariants 1, 2 and 13 |
+| 8a | T32, then T31 | factory | F1 to F4, NF36 |
 | 9 | OC4: the risk map and the credential patterns | owner commit through GA, between attempts | IM13 |
 | 10 | W04's deep plan, authored through the factory | factory | |
 | 11 | OC2: linter and its configuration | owner commit | IM5 |
@@ -94,7 +113,7 @@ Nothing of the evaluation, the October sort or the open questions is left out.
 | --- | --- | --- | --- | --- |
 | IM1 | CI runs every layer | OC1 | the step itself, and T23 compares CI with `npm test` | 4 of 5 |
 | IM2 | `attempt.ts` below `cli` | T24 | lint ban and a meta-test | 25 imports in 21 files |
-| IM3 | Plan corpus tests | T21 | a parse count in a test | 294 s of 415 s |
+| IM3 | Plan corpus tests | T21, done | a parse count in a test | 2% for twice the plans |
 | IM4, LC6 | Split the run loop, one provider loop | its own plan before W06 (AM8) | T25's ratchet | 2,820 lines, 3 loops |
 | IM5 | Linter and size ratchet | OC2, T25 | lint in the worker's loop, a ratchet by function | 18, 42 and 52 sites |
 | IM6 | The line budget | T25 deletes it | T23 refuses a test that cannot fail | 1 |
@@ -121,7 +140,9 @@ Nothing of the evaluation, the October sort or the open questions is left out.
 | Q123 | Cheapest check | OC3 | the plan review | |
 | Q124 | Crash orders | W05 | the simulation layer | |
 | Q125 | W08's first commit | W08 | its own CI | |
-| Q127, Q128 | Ticket bytes, clean checkout | T20 | two traps | |
+| Q127, Q128 | Ticket bytes, clean checkout | T20, done | TR-22 and TR-23 | |
+| F1 to F4 of T20 | A ticket edit never costs a paid reply | T32, before W04 | journeys and mutants | |
+| NF36 | Light tickets can be seen | T31 | the list, the route and the screen | 0 of 13 |
 | Q129 | Publish after close | T30 | the publish fences | |
 
 **What is not taken, and why.** Bombadil: a dependency outside the list, and experimental. TLA+ and Lean: Q124 comes first. A ban on comments: Q121. Automatic merging: decisions 4 and 14, and invariant 13. A duplicate detector: a new dependency for 157 findings that held 10 bugs.
@@ -160,10 +181,10 @@ All six were ruled as recommended on 2026-11-25. Nothing in this file waits for 
 
 | Code | Content | State |
 | --- | --- | --- |
-| OC0 | W03: the closing record as a dated Amendment, six Validation rows, dates and commits | prepared and tested |
-| OC1 | `.github/workflows/ci.yml`: the trap step, and a comment that no longer counts layers | prepared. Its first CI run is the proof |
+| OC0 | W03: the closing record as a dated Amendment, six Validation rows, dates and commits | done, `d4d56ee` |
+| OC1 | `.github/workflows/ci.yml`: the trap step, and a comment that no longer counts layers | done, `f1858f7` |
 | OC2 | `npm install --save-dev --save-exact oxlint@1.93.0`, and `.oxlintrc.json` with the three limits, the ban on imports of `cli` and today's files as exceptions. Tests are exempt from size. 1.93.0 is 16 days old, and 1.95.0 is two. | the trial found 25 imports in 21 files, with the message a worker would see |
-| OC3 | `prompts/plan-author/system.md`: the cheapest-check rule, with the unit test that pins that prompt's bytes | prepared and tested |
+| OC3 | `prompts/plan-author/system.md`: the cheapest-check rule, with the unit test that pins that prompt's bytes | done, `0de38a2` |
 | OC4 | `awsf.config.yaml`: `risk.paths` and `policy.protected_paths`, as Q134 | not written. It ends any DRAFT attempt's snapshot (TR-10) |
 | OC5 | The three edges removed, and the header of `task-machine.ts` | not written |
 | OC6 | AM8, after AM6 and AM7 | draft below |
@@ -182,8 +203,8 @@ All six were ruled as recommended on 2026-11-25. Nothing in this file waits for 
 
 | Number | Today | Finished |
 | --- | --- | --- |
-| Layers in CI | 4 of 5 | 5 of 5, and a test compares |
-| Unit suite in a gate | 415 s of 600 | under 300, and not growing with plans |
+| Layers in CI | 5 of 5 | a test compares them |
+| Unit suite in a gate | 319 s of 600, after T21 | under 300, and not growing with plans |
 | Fences that cannot be shown to fail | 6 | 0, and a new one is refused |
 | Tracked code files in no area | not measured | 0, and a new one is refused |
 | Imports of `cli` from below | 25 | 0 after T24 |
@@ -191,12 +212,10 @@ All six were ruled as recommended on 2026-11-25. Nothing in this file waits for 
 | Functions over the limits | 18, 42 and 52 | may only shrink |
 | Lines of landing and gate code in tier 1 | all | 0 after OC4 |
 | Values no production code reads | 68 | may only shrink |
-| Kinds of `--ticket` selection never compared after `awsf new` | 2 (plan and light) | 0 after T20 |
+| Kinds of `--ticket` selection never compared after `awsf new` | 0, after T20 | 0 |
 
 ## 10. Not verified
 
-- OC1 on GitHub's machine. Traps passed on a clone here in a clean environment.
-- The size of T21's last step, the parse that grows with plans. Only the first two causes were measured.
 - The counts of LC4 are candidates found by shape. Not every fixed-size cut is a fault.
 - The complexity numbers are the linter's, and the function lengths quoted as 2,820 and similar count every line.
 - The 80 replays of v2 W18 were reviewers. No builder ran narrow.
