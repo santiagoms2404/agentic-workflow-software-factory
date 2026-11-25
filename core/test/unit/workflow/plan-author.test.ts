@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import { stringify } from "yaml";
 import { loadConfig } from "../../../src/config/load.ts";
+import { loadCatalog } from "../../../src/registry/catalog.ts";
+import { resolvePlanSources } from "../../../src/registry/plan-source.ts";
+import { ticketFileDigest } from "../../../src/persistence/plan-ticket-body.ts";
 import { toConfigSnapshotJson } from "../../../src/config/effective-config.ts";
 import type { AwsfConfig } from "../../../src/config/schema.ts";
 import { sealTicketSelection } from "../../../src/contracts/ticket-selection-record.ts";
@@ -60,6 +63,50 @@ function config(): AwsfConfig {
       prompt: { system: "prompts/plan-author/system.md", user: "prompts/plan-author/user.md" },
       tools: { profile: "managed-worker", allow: ["read", "grep", "find", "ls", "edit", "write"] }, writes: [] }] };
 }
+
+test("the shipped plan-author compiles a committed registered spine selection, independently of closure state", () => {
+  const root = resolve(".");
+  const shipped = loadConfig(readFileSync(join(root, "awsf.config.yaml"), "utf8"));
+  const catalogPath = join(root, "awsf.project.yaml");
+  const sources = resolvePlanSources(catalogPath, loadCatalog(readFileSync(catalogPath, "utf8")));
+  const spine = sources.find(source => basename(source.planPath) === "awsf-v3-plan.html");
+  const deep = sources.find(source => basename(source.planPath) === "awsf-v3-w03-ticket-closure.html");
+  assert.ok(spine);
+  assert.ok(deep);
+  const committedTickets = (directory: string, pattern: RegExp) =>
+    git(root, "ls-tree", "--name-only", "HEAD", `${relative(root, directory)}/`).split("\n")
+      .filter(path => pattern.test(basename(path)))
+      .map(path => ({ id: basename(path, ".md"), path,
+        digest: ticketFileDigest(execFileSync("git", ["-C", root, "show", `HEAD:${path}`])) }));
+  const [first, second] = committedTickets(spine.ticketsPath, /^W\d{2}\.md$/u);
+  const [task] = committedTickets(deep.ticketsPath, /^T\d{2}\.md$/u);
+  assert.ok(first);
+  assert.ok(second);
+  assert.ok(task);
+  const selected = sealTicketSelection({ plan: "awsf-v3-plan", tickets: [first] });
+  // No marker or ticket state is consulted: the input is the committed file's exact bytes.
+  const compileCommittedSelection = (cfg: AwsfConfig, sealed: typeof selected) => {
+    assert.ok(cfg.workflows.enabled.includes("plan-author"));
+    assertPlanAuthorRole(cfg);
+    for (const ticket of sealed.tickets) assert.equal(ticket.digest,
+      ticketFileDigest(execFileSync("git", ["-C", root, "show", `HEAD:${ticket.path}`])),
+      "selection digest must match committed ticket bytes");
+    return compileWorkflow(compilePlanAuthor({ planRef: sealed.plan, ticketSelection: sealed }), 2);
+  };
+  const compiled = compileCommittedSelection(shipped, selected);
+  const author = compiled.phases.find(phase => phase.id === "plan-author");
+  assert.equal(author?.owner, shipped.agents.find(agent => agent.name === "plan-author")?.name);
+  assert.equal(compiled.id, "plan-author");
+  assert.throws(() => compileCommittedSelection({ ...shipped,
+    agents: shipped.agents.filter(agent => agent.name !== "plan-author") }, selected), /explicit managed-worker role/u);
+  const stale = sealTicketSelection({ plan: selected.plan, tickets: [{ ...first,
+    digest: ticketFileDigest(Buffer.concat([execFileSync("git", ["-C", root, "show", `HEAD:${first.path}`]), Buffer.from("\n")])) }] });
+  assert.throws(() => compileCommittedSelection(shipped, stale), /selection digest must match committed ticket bytes/u);
+  for (const invalid of [
+    sealTicketSelection({ plan: "awsf-v3-w03-ticket-closure", tickets: [task] }),
+    sealTicketSelection({ plan: selected.plan, tickets: [first, second] }),
+  ]) assert.throws(() => compileCommittedSelection(shipped, invalid), /requires exactly one sealed Wnn/u);
+});
 
 test("plan-author compiles only against one sealed spine ticket and declares an independent reviewer", () => {
   const recipe = compilePlanAuthor(binding), compiled = compileWorkflow(recipe, 2);
