@@ -146,6 +146,8 @@ export const REGISTRY: Readonly<Record<string, Registration>> = {
     "README reference checks refuse planted omissions, a broken example and a dead link"),
   "redaction-boundary.test.ts": fence("Sensitive boundaries use the one shared scrubber and refusal policy", ["core", "dashboard", "shared"], [],
     "boundary check rejects comments or imports without active scrubber calls", "second credential vocabulary definition is caught, even non-exported"),
+  "risk-map.test.ts": fence("Every part of core/src has a risk tier by name", ["hostConfig"], ["$git-index"],
+    "the risk map check names a planted part, a stale entry, a credential-named key and an empty scan"),
   "scope-registry.test.ts": fence("Every tracked code path has one area, and every meta file has a live registration", ["tests"], [META + "/"],
     "Git-backed scope names a staged code file with no area", "the registry rejects unlisted files, stale rows, missing plant tests and empty inputs"),
   "shift-no-raise-import.test.ts": fence("Shift and prove cannot reach the raise command", ["core"], [source("core/src/workflow/shift/"), source("core/src/workflow/prove/")],

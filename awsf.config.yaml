@@ -148,12 +148,39 @@ risk:
   default: T1
   call_ceiling: { T0: 1, T1: 3, T2: 5 }
   correction_allowance: { auto: 1, owner: 1 }
+  # Every part of core/src is named with its tier, so a new part is a choice
+  # made here and never a silent fall to the default (IM13).
   paths:
+    "core/src/closure/**": T2
+    "core/src/config/**": T2
+    "core/src/decision/**": T2
+    "core/src/delegate/**": T2
     "core/src/execution/**": T2
-    "core/src/policy/**": T2
-    "core/src/state/**": T2
-    "core/src/persistence/**": T2
+    "core/src/gates/**": T2
+    "core/src/git/**": T2
+    "core/src/lifecycle/**": T2
     "core/src/observability/**": T2
+    "core/src/persistence/**": T2
+    "core/src/policy/**": T2
+    "core/src/preflight/**": T2
+    "core/src/publish/**": T2
+    "core/src/quota/**": T2
+    "core/src/state/**": T2
+    "core/src/traps/**": T2
+    "core/src/cli/commands/close.ts": T2
+    "core/src/cli/commands/land.ts": T2
+    "core/src/cli/commands/publish.ts": T2
+    "core/src/adapters/**": T1
+    "core/src/api/**": T1
+    "core/src/backlog.ts": T1
+    "core/src/cli/**": T1
+    "core/src/contracts/**": T1
+    "core/src/doctor/**": T1
+    "core/src/metrics/**": T1
+    "core/src/planning/**": T1
+    "core/src/registry/**": T1
+    "core/src/stages/**": T1
+    "core/src/workflow/**": T1
     "dashboard/**": T1
 
 policy:
