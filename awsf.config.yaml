@@ -192,6 +192,7 @@ policy:
     - core/src/policy/**
     - core/src/observability/migrations/**
     - core/src/execution/transport-broker.ts
+    - dashboard/shared/credential-patterns.ts
     - docs/driving/**
     - specs/*.html
     - specs/*-build-prompts.md
