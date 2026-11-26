@@ -41,28 +41,52 @@ function checkSupplementalDependencies(pkg: Record<string, unknown>, allowed: st
   }
 }
 
-test("core/package.json dependencies match the D2 allowlist exactly", () => {
-  const pkg = readJson(join(repoRoot(), "core", "package.json"));
+function checkCore(pkg: Record<string, unknown>): void {
   const deps = Object.keys((pkg.dependencies as Record<string, string>) ?? {});
   assert.deepEqual(deps.sort(), [...CORE_DEPS].sort());
   assert.equal(pkg.devDependencies, undefined);
   checkSupplementalDependencies(pkg, CORE_DEPS);
-});
+}
 
-test("dashboard/package.json dependencies match the D2 allowlist exactly", () => {
-  const pkg = readJson(join(repoRoot(), "dashboard", "package.json"));
+function checkDashboard(pkg: Record<string, unknown>): void {
   const deps = Object.keys((pkg.dependencies as Record<string, string>) ?? {});
   const devDeps = Object.keys((pkg.devDependencies as Record<string, string>) ?? {});
   assert.deepEqual(deps.sort(), [...DASHBOARD_DEPS].sort());
   assert.deepEqual(devDeps.sort(), [...DASHBOARD_DEV_DEPS].sort());
   checkSupplementalDependencies(pkg, [...DASHBOARD_DEPS, ...DASHBOARD_DEV_DEPS]);
-});
+}
 
-test("root package.json devDependencies match the D2 allowlist exactly", () => {
-  const pkg = readJson(join(repoRoot(), "package.json"));
+function checkRoot(pkg: Record<string, unknown>): void {
   const devDeps = Object.keys((pkg.devDependencies as Record<string, string>) ?? {});
   assert.deepEqual(devDeps.sort(), [...ROOT_DEV_DEPS].sort());
   assert.equal(pkg.dependencies, undefined);
   // Root's allowance is dev-only, not permission to install runtime dependencies.
   checkSupplementalDependencies(pkg, []);
+}
+
+test("core/package.json dependencies match the D2 allowlist exactly", () => {
+  checkCore(readJson(join(repoRoot(), "core", "package.json")));
+});
+
+test("dashboard/package.json dependencies match the D2 allowlist exactly", () => {
+  checkDashboard(readJson(join(repoRoot(), "dashboard", "package.json")));
+});
+
+test("root package.json devDependencies match the D2 allowlist exactly", () => {
+  checkRoot(readJson(join(repoRoot(), "package.json")));
+});
+
+test("the D2 checks reject planted dependencies in each package", () => {
+  const deps = (names: readonly string[]) => Object.fromEntries(names.map(name => [name, "*"]));
+  const cases = [
+    [checkCore, { dependencies: deps(CORE_DEPS) }, "dependencies"],
+    [checkDashboard, { dependencies: deps(DASHBOARD_DEPS), devDependencies: deps(DASHBOARD_DEV_DEPS) }, "devDependencies"],
+    [checkRoot, { devDependencies: deps(ROOT_DEV_DEPS) }, "devDependencies"],
+  ] as const;
+  for (const [check, pkg, field] of cases) {
+    const clean: Record<string, unknown> = pkg;
+    assert.throws(() => check({ ...clean, [field]: { ...clean[field] as object, planted: "1.0.0" } }), /planted/u);
+    assert.throws(() => check({ ...pkg, optionalDependencies: { planted: "1.0.0" } }), /optionalDependencies: planted/u);
+    assert.throws(() => check({}), { code: "ERR_ASSERTION" });
+  }
 });

@@ -86,13 +86,13 @@ function sourceFile(path: string): ts.SourceFile {
 
 const location = sourceLocation;
 
-function timerOffenders(): readonly string[] {
+function timerOffenders(sources: readonly ts.SourceFile[]): readonly string[] {
+  assert.ok(sources.length > 0, `empty scan root: ${STAGES_ROOT}`);
   const offenders: string[] = [];
   const timerIdentifiers = new Set(["setTimeout", "setInterval", "setImmediate", "queueMicrotask"]);
   const scheduledMembers = new Set(["nextTick", "postTask", "scheduleCallback"]);
 
-  for (const path of walkFiles(STAGES_ROOT, [".ts", ".tsx"])) {
-    const source = sourceFile(path);
+  for (const source of sources) {
     const visit = (node: ts.Node): void => {
       if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)
         && (node.moduleSpecifier.text === "node:timers" || node.moduleSpecifier.text === "node:timers/promises")) {
@@ -110,9 +110,7 @@ function timerOffenders(): readonly string[] {
   return [...new Set(offenders)].sort();
 }
 
-function parsedStageFlags(): readonly string[] {
-  const path = join(SOURCE_ROOT, "cli", "main.ts");
-  const source = sourceFile(path);
+function parsedStageFlags(source: ts.SourceFile): readonly string[] {
   const stageBranches: ts.Statement[] = [];
   const findStageBranch = (node: ts.Node): void => {
     if (ts.isIfStatement(node) && ts.isBinaryExpression(node.expression)) {
@@ -162,9 +160,9 @@ function parsedStageFlags(): readonly string[] {
   return [...new Set(matches[0])].sort();
 }
 
-test("stage modules cannot transitively reach a process launch site", () => {
-  const graph = buildRelativeImportGraph();
+function processOffenders(graph: ReadonlyMap<string, readonly ImportEdge[]>): string[] {
   const starts = [...graph.keys()].filter((file) => file.startsWith(STAGES_PREFIX)).sort();
+  assert.ok(starts.length > 0, `empty scan root: ${STAGES_ROOT}`);
   const reachable = reachablePaths(starts, graph);
   const offenders: string[] = [];
 
@@ -175,14 +173,34 @@ test("stage modules cannot transitively reach a process launch site", () => {
     }
   }
 
-  assert.deepEqual(offenders.sort(), []);
+  return offenders.sort();
+}
+
+function flagOffenders(source: ts.SourceFile): readonly string[] {
+  return parsedStageFlags(source).filter((flag) => !READ_ONLY_STAGE_FLAGS.has(flag));
+}
+
+test("stage modules cannot transitively reach a process launch site", () => {
+  assert.deepEqual(processOffenders(buildRelativeImportGraph()), []);
 });
 
 test("stage modules contain no timer or scheduled callback", () => {
-  assert.deepEqual(timerOffenders(), []);
+  assert.deepEqual(timerOffenders(walkFiles(STAGES_ROOT, [".ts", ".tsx"]).map(sourceFile)), []);
 });
 
 test("awsf stage's parsed flag list contains only read-only path flags", () => {
-  const offenders = parsedStageFlags().filter((flag) => !READ_ONLY_STAGE_FLAGS.has(flag));
-  assert.deepEqual(offenders, []);
+  assert.deepEqual(flagOffenders(sourceFile(join(SOURCE_ROOT, "cli", "main.ts"))), []);
+});
+
+test("the stage checks report a planted launch path, timer and acting flag", () => {
+  const planted = "core/src/stages/planted.ts";
+  const intermediate = "core/src/other.ts";
+  const boundary = "core/src/execution/process-controller.ts";
+  const graph = new Map([[planted, [{ target: intermediate, line: 1 }]], [intermediate, [{ target: boundary, line: 2 }]]]);
+  assert.deepEqual(processOffenders(graph), [`${intermediate}:2 ${planted} -> ${intermediate} -> ${boundary}`]);
+  const parse = (text: string) => ts.createSourceFile(planted, text, ts.ScriptTarget.Latest, true);
+  assert.match(timerOffenders([parse("queueMicrotask(job);")])[0]!, /planted\.ts.*uses queueMicrotask/u);
+  assert.deepEqual(flagOffenders(parse('if (command === "stage") { Object.keys(parsed.flags).filter(flag => flag === "apply"); }')), ["apply"]);
+  assert.throws(() => processOffenders(new Map()), /empty scan root/u);
+  assert.throws(() => timerOffenders([]), /empty scan root/u);
 });

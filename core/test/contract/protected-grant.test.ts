@@ -43,7 +43,7 @@ for (const path of ["", "/absolute.ts", "../escape.ts", "a/../b.ts", "a//b.ts", 
   test(`exact protected path refuses ${JSON.stringify(path)}`, () => assert.throws(() => assertExactProtectedPath(path), /exact normalized/));
 }
 test("exact protected path accepts normalized Unicode and literal internal spaces", () => {
-  assertExactProtectedPath("core/src/café file.ts");
+  assert.doesNotThrow(() => assertExactProtectedPath("core/src/café file.ts"));
 });
 
 for (const field of ["id", "generationId", "reason", "anchorRevision", "subject", "files"] as const) {
@@ -104,7 +104,7 @@ test("final protected approval binds exact target, candidate, delta and chain", 
 
 test("an unused exception can bind a commit with no protected delta without granting any additional path", () => {
   const g = grant(); const c = consumption(g); const b = binding(g, c);
-  assertProtectedCandidateBinding(sign({ ...b, deltas: [] }), g, c);
+  assert.doesNotThrow(() => assertProtectedCandidateBinding(sign({ ...b, deltas: [] }), g, c));
 });
 
 test("protected candidate permits new non-executable regular content only", () => {

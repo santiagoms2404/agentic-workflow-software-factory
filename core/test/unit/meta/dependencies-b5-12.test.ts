@@ -31,7 +31,8 @@ function runFence(path: string, mutate: (pkg: Record<string, unknown>) => void):
     assert.equal(result.error, undefined);
     assert.equal(result.signal, null);
     const output = result.stdout + result.stderr;
-    assert.match(output, /# tests 3\b/, output);
+    assert.match(output, /# tests 4\b/, output);
+    assert.match(output, /^ok \d+ - the D2 checks reject planted dependencies in each package$/mu, output);
     assert.equal(result.status, output.includes("# fail 0\n") ? 0 : 1, output);
     return output;
   } finally {

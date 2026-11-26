@@ -305,9 +305,9 @@ test("a workflow whose minimum cannot fit the tier is rejected before execution"
 });
 
 test("a workflow that exactly fills the ceiling is admitted", () => {
-  admitWorkflow({ id: "exactly-one", minimumCalls: 1 }, 0);
-  admitWorkflow({ id: "exactly-three", minimumCalls: 3 }, 1);
-  admitWorkflow({ id: "exactly-five", minimumCalls: 5 }, 2);
+  assert.doesNotThrow(() => admitWorkflow({ id: "exactly-one", minimumCalls: 1 }, 0));
+  assert.doesNotThrow(() => admitWorkflow({ id: "exactly-three", minimumCalls: 3 }, 1));
+  assert.doesNotThrow(() => admitWorkflow({ id: "exactly-five", minimumCalls: 5 }, 2));
 });
 
 test("the hook measures against what the ledger has already committed, not only the tier", () => {

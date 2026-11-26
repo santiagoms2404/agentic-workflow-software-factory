@@ -95,10 +95,19 @@ function planRows(): PlanRow[] {
   });
 }
 
-test("the forensics map's eight rows are the owner's G01-F rows, each in reach or out of it exactly once", () => {
-  const rows = planRows();
+function checkRowIds(rows: readonly PlanRow[]): void {
   assert.deepEqual(rows.map((row) => row.id), ["11", "14", "17", "18", "22", "27", "34", "36"]);
   assert.deepEqual([...Object.keys(IN_REACH), ...Object.keys(OUT_OF_REACH)].sort(), rows.map((row) => row.id).sort());
+}
+
+test("the forensics map's eight rows are the owner's G01-F rows, each in reach or out of it exactly once", () => {
+  checkRowIds(planRows());
+});
+
+test("the forensics row check refuses a planted id and an empty map", () => {
+  const rows = planRows();
+  assert.throws(() => checkRowIds([...rows, { ...rows[0]!, id: "99" }]), /'99'/u);
+  assert.throws(() => checkRowIds([]), { code: "ERR_ASSERTION" });
 });
 
 test("every row K1 reaches names K1 fields, and each is refused by tests that still exist under their names", () => {

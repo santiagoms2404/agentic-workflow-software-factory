@@ -12,12 +12,16 @@ const source = (path: string) => {
   return text!;
 };
 
-test("there is one ticket file digest comparison in core/src", () => {
-  const filesUsingTicketDigest = [...sources].filter(([, text]) => /\bticketFileDigest\b/u.test(text)).map(([path]) => path);
+function checkDigestSites(files: ReadonlyMap<string, string>): void {
+  const filesUsingTicketDigest = [...files].filter(([, text]) => /\bticketFileDigest\b/u.test(text)).map(([path]) => path);
   assert.deepEqual(filesUsingTicketDigest, ["persistence/plan-ticket-body.ts", "persistence/ticket-bytes.ts"]);
-  const comparisons = [...sources].flatMap(([path, text]) =>
+  const comparisons = [...files].flatMap(([path, text]) =>
     text.split("\n").filter(line => /(?:[!=]==?\s*ticket\.digest\b|\bticket\.digest\s*[!=]==?)/u.test(line)).map(() => path));
   assert.deepEqual(comparisons, ["persistence/ticket-bytes.ts"]);
+}
+
+test("there is one ticket file digest comparison in core/src", () => {
+  checkDigestSites(sources);
   for (const path of ["workflow/shift/compile.ts", "preflight/shift-tickets.ts"]) {
     assert.match(source(path), /assertTicketFileDigest\(ticket, bytes/u);
   }
@@ -44,10 +48,14 @@ const unchecked = {
   preview: "Starts only a local server for a verified candidate in its managed worktree; it spends no provider call.",
 };
 
-test("canonical-cleanliness coverage and intentional exceptions at work-start boundaries", () => {
+function checkWorkStart(read: (path: string) => string): void {
   for (const [command, [path, guard]] of Object.entries(checked)) {
-    assert.ok(source(path!).includes(guard!), `${command} checks the canonical checkout`);
+    assert.ok(read(path!).includes(guard!), `${command} checks the canonical checkout`);
   }
+}
+
+test("canonical-cleanliness coverage and intentional exceptions at work-start boundaries", () => {
+  checkWorkStart(source);
   const main = source("cli/main.ts");
   assert.match(main, /if \(command === "ticket"\)[^]*?await startCommand\(/u);
   // Pin the CLI routes that actually begin execution or materialize checked work.
@@ -58,4 +66,12 @@ test("canonical-cleanliness coverage and intentional exceptions at work-start bo
   for (const [command, reason] of Object.entries(unchecked)) {
     assert.match(main, new RegExp(`case "${command}":`), reason);
   }
+});
+
+test("preparation checks refuse a second digest comparison and a missing checkout guard", () => {
+  const altered = new Map(sources);
+  altered.set("planted.ts", "if (saved !== ticket.digest) check();");
+  assert.throws(() => checkDigestSites(altered), /planted\.ts/u);
+  assert.throws(() => checkDigestSites(new Map()), { code: "ERR_ASSERTION" });
+  assert.throws(() => checkWorkStart(path => path === checked.start[0] ? "" : source(path)), /start checks the canonical checkout/u);
 });

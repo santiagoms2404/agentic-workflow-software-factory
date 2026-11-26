@@ -20,12 +20,18 @@ const root = repoRoot();
  */
 const API_READ_PATH = "core/src/api/planning-route.ts";
 
-test("only the dedicated CLI planning route reaches planning modules", () => {
+type Source = { readonly path: string; readonly text: string };
+
+function sources(directory: string): Source[] {
+  return walkFiles(join(root, directory), [".ts"]).map(path => ({ path, text: readFileSync(path, "utf8") }));
+}
+
+function checkPlanningImports(files: readonly Source[]): void {
+  assert.ok(files.length > 0, "empty core source scan");
   const allowed = new Set([join(root, "core/src/cli/commands/group.ts"), join(root, API_READ_PATH)]);
   const violations: string[] = [];
-  for (const path of walkFiles(join(root, "core/src"), [".ts"])) {
+  for (const { path, text } of files) {
     if (path.startsWith(join(root, "core/src/planning") + "/") || allowed.has(path)) continue;
-    const text = readFileSync(path, "utf8");
     const ast = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
     const visit = (node: ts.Node): void => {
       if (ts.isStringLiteralLike(node)) {
@@ -36,14 +42,17 @@ test("only the dedicated CLI planning route reaches planning modules", () => {
     };
     visit(ast);
   }
-  assert.deepEqual(violations, [], "gates, lifecycle and accounting cannot acquire a planning import");
+  assert.deepEqual(violations, [], `gates, lifecycle and accounting cannot acquire a planning import: ${violations.join(", ")}`);
+}
+
+test("only the dedicated CLI planning route reaches planning modules", () => {
+  checkPlanningImports(sources("core/src"));
   const main = readFileSync(join(root, "core/src/cli/main.ts"), "utf8");
   assert.match(main, /if \(command === "group"\) \{[\s\S]*?await import\("\.\/commands\/group\.ts"\)/u);
   assert.equal(main.split('./commands/group.ts').length - 1, 1);
 });
 
-test("the API read layer reaches only the read-only view module, and no mutating function through it", () => {
-  const source = readFileSync(join(root, API_READ_PATH), "utf8");
+function checkPlanningReadRoute(source: string): void {
   const ast = ts.createSourceFile(API_READ_PATH, source, ts.ScriptTarget.Latest, true);
 
   // ONE planning module, and it is the read-only one. `store.ts` is where
@@ -74,7 +83,11 @@ test("the API read layer reaches only the read-only view module, and no mutating
     ts.forEachChild(node, visitIdentifiers);
   };
   visitIdentifiers(ast);
-  assert.deepEqual(offenders, [], "the API read layer must reach no planning write surface");
+  assert.deepEqual(offenders, [], `the API read layer must reach no planning write surface: ${offenders.join(", ")}`);
+}
+
+test("the API read layer reaches only the read-only view module, and no mutating function through it", () => {
+  checkPlanningReadRoute(readFileSync(join(root, API_READ_PATH), "utf8"));
 
   // And the module it does import exports no writer either, so the allowance
   // cannot be widened later by re-exporting one from views.ts.
@@ -85,11 +98,12 @@ test("the API read layer reaches only the read-only view module, and no mutating
   }
 });
 
-test("planning never calls lifecycle or accounting mutation APIs", () => {
+function checkPlanningMutations(files: readonly Source[]): void {
+  assert.ok(files.length > 0, "empty planning source scan");
   const forbidden = new Set(["persistAttempt", "nextRevision", "newCommand", "startCommand", "runProductionCommand", "runStubCommand", "reworkCommand", "landCommand", "cancelCommand", "retryCommand", "publishCommand", "raiseCommand", "CallBudget", "transition", "phaseTransition"]);
   const offenders: string[] = [];
-  for (const path of walkFiles(join(root, "core/src/planning"), [".ts"])) {
-    const ast = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+  for (const { path, text } of files) {
+    const ast = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
     const visit = (node: ts.Node): void => {
       if (ts.isIdentifier(node) && forbidden.has(node.text)) offenders.push(`${path}: ${node.text}`);
       ts.forEachChild(node, visit);
@@ -97,20 +111,28 @@ test("planning never calls lifecycle or accounting mutation APIs", () => {
     visit(ast);
   }
   assert.deepEqual(offenders, []);
+}
+
+test("planning never calls lifecycle or accounting mutation APIs", () => {
+  checkPlanningMutations(sources("core/src/planning"));
   const evidence = readFileSync(join(root, "core/src/planning/evidence.ts"), "utf8");
   assert.match(evidence, /import \{ readFile, readdir \} from "node:fs\/promises"/u);
   assert.doesNotMatch(evidence, /\b(?:writeFile|appendFile|unlink|rename|mkdir|rm)\b/u);
 });
 
-test("the installable skill is small, references shipped commands and loads through the allowed read tool", () => {
-  const directory = join(root, "docs/driving/skills/marimba-plan");
-  const body = readFileSync(join(directory, "SKILL.md"), "utf8");
-  assert.ok(Buffer.byteLength(body) <= 5 * 1024);
+function checkSkill(body: string, directory: string): void {
+  assert.ok(Buffer.byteLength(body) <= 5 * 1024, "skill exceeds its byte budget");
   const frontmatter = parse(/^---\n([\s\S]*?)\n---/u.exec(body)?.[1] ?? "") as Record<string, unknown>;
   assert.equal(frontmatter.name, "marimba-plan");
   assert.equal(typeof frontmatter.description, "string");
   assert.ok(String(frontmatter.description).length <= 1024);
-  for (const match of body.matchAll(/\]\((references\/[^)]+)\)/gu)) assert.ok(existsSync(join(directory, match[1]!)));
+  for (const match of body.matchAll(/\]\((references\/[^)]+)\)/gu)) assert.ok(existsSync(join(directory, match[1]!)), match[1]);
+}
+
+test("the installable skill is small, references shipped commands and loads through the allowed read tool", () => {
+  const directory = join(root, "docs/driving/skills/marimba-plan");
+  const body = readFileSync(join(directory, "SKILL.md"), "utf8");
+  checkSkill(body, directory);
   assert.equal(delegationViolation("read"), false);
   assert.equal(delegationViolation("agent"), true);
   for (const act of OWNER_ACTS) assert.equal(ownerActViolation(`npm run awsf --silent -- awsf ${act} example`), act);
@@ -119,4 +141,18 @@ test("the installable skill is small, references shipped commands and loads thro
   assert.match(readFileSync(join(directory, "references/activation.md"), "utf8"), /Keep its existing `-e` guard/u);
   // No installation in worker auto-discovery roots is part of this package.
   for (const path of [".claude/skills/marimba-plan", ".pi/skills/marimba-plan", ".agents/skills/marimba-plan"]) assert.equal(existsSync(join(root, path)), false);
+});
+
+test("planning fences refuse planted imports, mutations and broken skill references", () => {
+  const path = join(root, "core/src/gates/planted.ts");
+  assert.throws(() => checkPlanningImports([{ path, text: 'import "../planning/store.ts";' }]), /planted\.ts/u);
+  assert.throws(() => checkPlanningImports([]), /empty core source scan/u);
+  assert.throws(() => checkPlanningReadRoute('import "../planning/store.ts";'), /planning\/store\.ts/u);
+  assert.throws(() => checkPlanningReadRoute('import "../planning/views.ts"; capture();'), /capture/u);
+  assert.throws(() => checkPlanningMutations([{ path, text: "persistAttempt();" }]), /persistAttempt/u);
+  assert.throws(() => checkPlanningMutations([]), /empty planning source scan/u);
+  const directory = join(root, "docs/driving/skills/marimba-plan");
+  const body = readFileSync(join(directory, "SKILL.md"), "utf8");
+  assert.throws(() => checkSkill(`${body}\n[Planted](references/missing-planted.md)`, directory), /missing-planted/u);
+  assert.throws(() => checkSkill("x".repeat(5 * 1024 + 1), directory), /byte budget/u);
 });

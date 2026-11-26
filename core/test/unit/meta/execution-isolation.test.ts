@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { repoRoot } from "./_walk.ts";
 import { DRIVING_REL } from "./_driving.ts";
@@ -23,7 +24,7 @@ import { DRIVING_REL } from "./_driving.ts";
 
 const PI_DESCRIPTOR_TEST = join(repoRoot(), "core", "test", "unit", "adapters", "pi-codex.test.ts");
 
-test("the repository root contains no .claude/ — this asserts ABSENCE, not isolation", () => {
+function checkClaudeDiscovery(root: string): void {
   // Read the claim precisely. It does not say a worker phase is isolated from
   // owner-tier instructions; nothing in this repository can say that, because
   // whether a CLI exposes a discovered tree is a question about that CLI's
@@ -41,16 +42,15 @@ test("the repository root contains no .claude/ — this asserts ABSENCE, not iso
   // `core/src/adapters/claude-code.ts`) — so until then, placement is the
   // control and this line is the fence.
   assert.equal(
-    existsSync(join(repoRoot(), ".claude")),
+    existsSync(join(root, ".claude")),
     false,
     `.claude/ exists at the repository root. Every Claude-route phase runs with this tree in ` +
       `its cwd and no verified flag suppresses discovery, so owner-tier documents belong at ` +
       `${DRIVING_REL}/ and are installed by the owner from there.`,
   );
-});
+}
 
-test("pi's --no-skills is pinned in the descriptor test's argv order, not carried as a new copy", () => {
-  const text = readFileSync(PI_DESCRIPTOR_TEST, "utf8");
+function checkPiDescriptor(text: string): void {
 
   // The five clean-room flags in the order `pi-codex.ts` emits them, as they
   // appear inside the exact-argv assertions. The ORDER is the point: a bare
@@ -81,4 +81,23 @@ test("pi's --no-skills is pinned in the descriptor test's argv order, not carrie
     pins.length + 1,
     "--no-skills is asserted somewhere other than an exact-argv pin and the clean-room flag loop",
   );
+}
+
+test("the repository root contains no .claude/ — this asserts ABSENCE, not isolation", () => {
+  checkClaudeDiscovery(repoRoot());
+});
+
+test("pi's --no-skills is pinned in the descriptor test's argv order, not carried as a new copy", () => {
+  checkPiDescriptor(readFileSync(PI_DESCRIPTOR_TEST, "utf8"));
+});
+
+test("execution isolation refuses planted discovery and descriptor drift", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-isolation-"));
+  const discovery = join(root, ".claude");
+  mkdirSync(discovery);
+  t.after(() => { rmdirSync(discovery); rmdirSync(root); });
+  assert.throws(() => checkClaudeDiscovery(root), /\.claude\/ exists/u);
+  assert.throws(() => checkPiDescriptor('assert.ok(argv.includes("--no-skills"));'), /argv order/u);
+  const descriptor = readFileSync(PI_DESCRIPTOR_TEST, "utf8");
+  assert.throws(() => checkPiDescriptor(`${descriptor}\nassert.ok(argv.includes("--no-skills"));`), /somewhere other/u);
 });

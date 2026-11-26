@@ -62,7 +62,7 @@ test("AppendOnlyLog does not sync directory if journal.jsonl already exists", as
 test("syncDirectory successfully syncs an existing directory", async () => {
   const dir = tempDir();
   try {
-    await syncDirectory(dir);
+    await assert.doesNotReject(() => syncDirectory(dir));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

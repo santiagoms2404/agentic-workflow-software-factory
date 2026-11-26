@@ -290,9 +290,9 @@ test("a workflow whose minimum cannot fit the selected tier is rejected before e
 
 test("a workflow that exactly fills the ceiling is admitted — the check is not off by one", async () => {
   const { assertWorkflowFitsTier } = await tiers();
-  assertWorkflowFitsTier({ id: "exactly-one", minimumCalls: 1 }, 0);
-  assertWorkflowFitsTier({ id: "exactly-three", minimumCalls: 3 }, 1);
-  assertWorkflowFitsTier({ id: "exactly-five", minimumCalls: 5 }, 2);
+  assert.doesNotThrow(() => assertWorkflowFitsTier({ id: "exactly-one", minimumCalls: 1 }, 0));
+  assert.doesNotThrow(() => assertWorkflowFitsTier({ id: "exactly-three", minimumCalls: 3 }, 1));
+  assert.doesNotThrow(() => assertWorkflowFitsTier({ id: "exactly-five", minimumCalls: 5 }, 2));
 });
 
 // ---------------------------------------------------------------------------

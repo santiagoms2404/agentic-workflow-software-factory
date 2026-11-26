@@ -51,7 +51,7 @@ test("exactly the two acting stages are effectful, and every earlier stage only 
 });
 
 test("every stage accepts its own commit evidence and nothing else", () => {
-  for (const stage of HOST_VALIDATION_STAGES) assertHostValidationProgress(progress(stage));
+  for (const stage of HOST_VALIDATION_STAGES) assert.doesNotThrow(() => assertHostValidationProgress(progress(stage)), stage);
 });
 
 test("a stage before the commit may not carry a commit intent", () => {
@@ -96,7 +96,7 @@ test("an empty change-set can never have produced a commit", () => {
 
 test("a protected commit stage names its consumption instead of carrying a second intent", () => {
   for (const stage of ["commit", "verify-candidate", "accept"] as const) {
-    assertHostValidationProgress(progress(stage, { commitIntent: null, commitResult: null, protectedConsumptionId: "consumption-1" }));
+    assert.doesNotThrow(() => assertHostValidationProgress(progress(stage, { commitIntent: null, commitResult: null, protectedConsumptionId: "consumption-1" })), stage);
   }
 });
 
