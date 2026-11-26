@@ -418,6 +418,20 @@ test("a declared v1 source with Phase headings fails loudly instead of parsing z
   assert.equal(existsSync(removedRoot), false, `temporary fixture remains at ${removedRoot}`);
 });
 
+test("a catalog at ..x inside the checkout self-places its plan sources", () => {
+  withForeignRepository((_root, repository, catalogPath) => {
+    const previous = process.cwd();
+    mkdirSync(join(repository, ".git"));
+    const localCatalog = join(repository, "..x");
+    writeFileSync(localCatalog, readFileSync(catalogPath));
+    try {
+      process.chdir(repository);
+      assert.deepEqual(resolvePlanSources(localCatalog, foreignCatalog()).map(source => source.planPath),
+        [join(repository, "specs", "alpha.html")]);
+    } finally { process.chdir(previous); }
+  });
+});
+
 test("B10-39: a plan HTML that is a symbolic link to a plan file is resolved, not dropped without a trace", () => {
   withForeignRepository((_root, repository, catalogPath) => {
     symlinkSync(join(repository, "specs", "alpha.html"), join(repository, "specs", "linked.html"));

@@ -376,6 +376,28 @@ test("owner rework rejects non-TTY, decline, blank defect, and wrong state witho
   }
 });
 
+test("owner rework accepts a materialized system prompt named ..x inside its runtime", async () => {
+  const fixture = await world();
+  const adapter = new AvailableAdapter();
+  try {
+    const result = await reworkCommand({
+      attemptDir: fixture.attemptDir, stateRoot: fixture.stateRoot, defect: DEFECT,
+      terminal: terminal(true), config: fixture.config, configPath: fixture.configPath,
+      projectRecord: fixture.projection.project,
+      infrastructure: {
+        ...infra(adapter, (options) => releasedBroker(options)),
+        writeSystemPrompt: async (text, directory) => {
+          const path = join(directory!, "..x");
+          writeFileSync(path, text, { mode: 0o600 });
+          return path;
+        },
+      },
+    });
+    assert.equal(result.confirmed, true);
+    assert.equal(adapter.launches, 1);
+  } finally { await cleanup(fixture); }
+});
+
 test("credential-shaped owner and retained inputs fail before confirmation with no byte crossing any boundary", async () => {
   const credential = ["sk", "owner-rework-verifier-12345678"].join("-");
   for (const source of ["defect", "request"] as const) {

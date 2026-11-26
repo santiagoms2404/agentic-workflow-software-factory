@@ -28,6 +28,7 @@ test("compiled policy globs preserve matching behavior for repeated checks", () 
 
 test("a leading tilde can name a literal repository path", () => {
   assert.equal(normalizeRepositoryPath("~/notes.md"), "~/notes.md");
+  assert.equal(normalizeRepositoryPath("..x"), "..x");
 });
 
 test("paths are refused rather than repaired into a different authorization", () => {

@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import type { ProjectCatalog } from "./catalog-schema.ts";
 import type { Placement } from "./placement-schema.ts";
 import {
@@ -278,11 +279,6 @@ function checkoutRoot(start: string): string {
   }
 }
 
-function isInside(path: string, root: string): boolean {
-  const offset = relative(root, path);
-  return offset === "" || (!offset.startsWith("..") && !isAbsolute(offset));
-}
-
 function planRepositoryId(catalog: ProjectCatalog): string {
   const entry = Object.entries(catalog.repositories).find(([, repository]) => repository.role === "plan");
   if (entry === undefined) throw new Error(`project ${JSON.stringify(catalog.project.slug)} has no plan repository`);
@@ -316,7 +312,7 @@ export function resolvePlanSources(
   const resolvedCatalogPath = resolve(catalogPath);
 
   let repositoryRoot: string;
-  if (isInside(resolvedCatalogPath, localCheckout)) {
+  if (isContainedRelativePath(relative(localCheckout, resolvedCatalogPath))) {
     // Self-placement is decided before placement is touched, keeping this path hermetic.
     repositoryRoot = localCheckout;
   } else {

@@ -863,9 +863,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
           // path/containment checks remain production checks before any worktree.
           // The attempt mark is persistent (owner call O7): only a marked attempt
           // takes `run --stub true`, and its attestations cannot satisfy T2 land.
-          ...(parsed.flags.stub === "true"
-            ? { adapterAvailability: () => true, stub: true }
-            : {}),
+          stub: parsed.flags.stub === "true",
           ...(parsed.flags["visual-references"] === undefined ? {} : { visualReferences: parsed.flags["visual-references"] }),
           projectRecord: projection.project,
         });

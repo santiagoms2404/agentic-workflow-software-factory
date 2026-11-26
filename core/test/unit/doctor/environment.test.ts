@@ -128,12 +128,17 @@ test("gatherer uses one sandboxed quota probe, renders every row, writes nothing
     const stateRoot = join(root, "state");
     const before = snapshot(root);
     const invocations: string[][] = [];
-    const rows = await gatherDoctorRows({ cwd: root, stateRoot, env: { PATH: "/synthetic/bin" }, now,
+    const seenGitEnvs: Array<Readonly<Record<string, string>> | undefined> = [];
+    const rows = await gatherDoctorRows({ cwd: root, stateRoot, env: { PATH: "/synthetic/bin", GIT_DIR: "/unrelated" }, now,
       resolveExecutable: (executable, env) => { assert.equal(env.PATH, "/synthetic/bin"); return `/synthetic/bin/${executable}`; },
       runCommand: (executable, argv, options) => {
         invocations.push([executable, ...argv]);
         assert.ok(options.timeoutMs > 0);
-        if (executable.endsWith("/git")) return { status: 0, error: null, stderr: "", stdout: argv.includes("--git-common-dir") ? gitRoot : root };
+        if (executable.endsWith("/git")) {
+          // Callers may convert an injected exception into a finding; assert after gathering instead.
+          seenGitEnvs.push(options.env);
+          return { status: 0, error: null, stderr: "", stdout: argv.includes("--git-common-dir") ? gitRoot : root };
+        }
         assert.ok(executable.endsWith("/bwrap"));
         assert.deepEqual(argv.slice(0, 10), ["--die-with-parent", "--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev", "--setenv", "QUOTA_AXI_CODEX_BINARY"]);
         assert.equal(argv[10], "/dev/null", "the provider RPC fallback cannot execute");
@@ -142,6 +147,7 @@ test("gatherer uses one sandboxed quota probe, renders every row, writes nothing
       },
     });
     assert.equal(invocations.length, 6, "four read-only git queries, quota version and one JSON probe");
+    assert.deepEqual(seenGitEnvs, Array.from({ length: 4 }, () => ({ PATH: "/synthetic/bin", GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" })));
     assert.equal(rows.quota.status, "warn");
     assert.match(rows.quota.detail[0]!, /latency=\d+ ms/);
     assert.deepEqual(snapshot(root), before, "including absence of state root and quota retention files");

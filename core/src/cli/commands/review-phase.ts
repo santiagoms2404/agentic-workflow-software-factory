@@ -36,7 +36,8 @@
 // reviewer told what to find is not a reviewer.
 
 import { existsSync, promises as fs } from "node:fs";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { isContainedRelativePath } from "../../persistence/path-containment.ts";
 import type {
   BrokerProcessRegistration,
   HarnessAdapter,
@@ -329,7 +330,7 @@ async function validateMaterializedSystemPrompt(
   const runtimePhysical = await realpath(runtimeDir);
   const promptPhysical = await realpath(systemPromptPath);
   const fromRuntime = relative(runtimePhysical, promptPhysical);
-  if (fromRuntime.startsWith("..") || isAbsolute(fromRuntime)) {
+  if (!isContainedRelativePath(fromRuntime)) {
     throw new AdapterError(adapterId, "E_REDACTION", "the private system prompt file is outside its session runtime");
   }
   const materialized = credentialSafeText(await readFile(promptPhysical, "utf8"), "materialized system prompt", true);

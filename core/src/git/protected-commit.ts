@@ -2,7 +2,7 @@ import { closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdtempSync, mkd
 import { basename, dirname, join, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { runSystemCommand } from "../execution/transport-broker.ts";
-import { hostIdentityEnv } from "./commit.ts";
+import { buildGitEnvironment } from "./environment.ts";
 import { ownExecutionLease } from "../execution/operation-lease.ts";
 import { assertOwnedRegular, assertProtectedLockWitness, assertWitnessedLockAtMutationBoundary, captureLockWitness, descriptorDigest, lockIdentityOf, readOwnedRegularFile, type ProtectedLockWitness } from "./protected-lock.ts";
 import { runGit, systemGitRunner, type GitRunner } from "./changes.ts";
@@ -66,7 +66,11 @@ export function protectedCommitIndexPath(git: GitRunner, worktreeGitDir: string)
     throw new Error("the worktree Git directory differs from the one granted to the protected commit");
   }
   const indexPath = join(worktreeGitDir, "index");
-  if (runGit(git, ["rev-parse", "--path-format=absolute", "--git-path", "index"]).trim() !== indexPath) {
+  // The runner strips redirects. Preserve the protected writer's explicit refusal
+  // rather than silently continuing with a different index than the caller named.
+  const inheritedIndex = process.env["GIT_INDEX_FILE"];
+  if ((inheritedIndex !== undefined && inheritedIndex !== indexPath) ||
+      runGit(git, ["rev-parse", "--path-format=absolute", "--git-path", "index"]).trim() !== indexPath) {
     throw new Error("the Git index path is redirected away from the granted worktree Git directory");
   }
   return indexPath;
@@ -143,9 +147,9 @@ export async function commitProtectedAsHost(options: {
   mkdirSync(stagingRoot, { recursive: true, mode: 0o700 });
   const stage = mkdtempSync(join(stagingRoot, "candidate-"));
   const privateIndex = join(stage, "index");
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-    GIT_INDEX_FILE: privateIndex, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", ...hostIdentityEnv() };
-  const stagedGit: GitRunner = argv => runSystemCommand("git", ["-C", root, "-c", "core.fsync=all", ...argv], { timeoutMs: 30_000, env });
+  const stagedGit: GitRunner = argv => runSystemCommand("git", ["-C", root, "-c", "core.fsync=all", ...argv], {
+    timeoutMs: 30_000, env: buildGitEnvironment({ indexFile: privateIndex, noOptionalLocks: true, asHost: true }),
+  });
   runGit(stagedGit, ["read-tree", grant.subject.preWriteHeadSha]);
   const snapshots = new Map<string, string>();
   let totalBytes = 0;

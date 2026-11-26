@@ -112,7 +112,7 @@ function git(repository: string, ...argv: string[]): string {
   return execFileSync("git", ["-C", repository, ...argv], { encoding: "utf8" }).trim();
 }
 
-test("the baseline suite dispatch hands every gate the filtered env, never the inherited one", async () => {
+test("the baseline suite filters the gate env and measures duration across a backward wall-clock step", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "awsf-gate-env-"));
   const previous = process.env[JEV_KEY];
   process.env[JEV_KEY] = "probe-sentinel-jev";
@@ -133,16 +133,21 @@ test("the baseline suite dispatch hands every gate the filtered env, never the i
       },
     };
     const seen: Array<SystemCommandOptions["env"]> = [];
+    let wallTime = 100_000;
+    t.mock.method(Date, "now", () => wallTime);
     const gathering = await runBaselineSuite({
       repository, worktreeRoot: join(root, "worktrees"), project: loaded.project.slug,
       baseSha: git(repository, "rev-parse", "HEAD"), config, outputDir: join(root, "out"),
       runCommand: (_executable, _argv, options) => {
+        wallTime -= 10_000;
         seen.push(typeof options === "number" ? undefined : options.env);
         return { status: 0, stdout: "", stderr: "", error: null };
       },
     });
     assert.equal(gathering.unavailable, null);
     assert.equal(seen.length, 2, "both configured gates were dispatched");
+    assert.equal(Date.now(), 80_000);
+    for (const { durationMs } of gathering.runs) assert.ok(durationMs >= 0, `elapsed duration: ${durationMs} ms`);
     const expected = gateEnv(process.env);
     assert.deepEqual(seen, [expected, expected], "each gate received exactly the gate env builder's output");
     assert.equal(seen[0]?.[JEV_KEY], undefined, "the Jev credential reached a gate");

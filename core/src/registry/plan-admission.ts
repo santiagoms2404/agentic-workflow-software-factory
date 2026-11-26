@@ -299,7 +299,7 @@ export function planAdmissionExemptionAllows(value: unknown, path: string): bool
   if (proof === undefined || !proof.documents.has(path)) return false;
   try {
     const cached = verifiedProofCache.get(proof);
-    if (cached !== undefined && Date.now() - cached.verifiedAt < 5000) {
+    if (cached !== undefined && performance.now() - cached.verifiedAt < 5000) {
       assertCurrentBytes(proof, path);
       return true;
     }
@@ -312,7 +312,7 @@ export function planAdmissionExemptionAllows(value: unknown, path: string): bool
     assertAbsentAtBase(proof, cachedBasePaths(proof.worktree, proof.baseSha));
     for (const admitted of proof.documents.keys()) assertCurrentBytes(proof, admitted);
     assertGitBytes(proof);
-    verifiedProofCache.set(proof, { headSha: head, verifiedAt: Date.now() });
+    verifiedProofCache.set(proof, { headSha: head, verifiedAt: performance.now() });
     return true;
   } catch { return false; }
 }

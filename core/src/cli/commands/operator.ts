@@ -1,5 +1,6 @@
 import { access, readdir } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
+import { isContainedRelativePath } from "../../persistence/path-containment.ts";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AwsfConfig } from "../../config/schema.ts";
 import { createApiRouter, type ApiRouter } from "../../api/routes.ts";
@@ -169,7 +170,7 @@ export async function dashCommand(options: DashOptions): Promise<"not-built" | "
     }
     const path = target === "/" ? index : join(root, target.replace(/^\//, ""));
     const fromRoot = relative(root, resolve(path));
-    if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
+    if (!isContainedRelativePath(fromRoot)) {
       response.writeHead(404, SECURITY_HEADERS);
       response.end("not found");
       return;

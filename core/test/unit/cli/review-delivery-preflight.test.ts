@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadConfig } from "../../../src/config/load.ts";
 import { PiCodexAdapter } from "../../../src/adapters/pi-codex.ts";
@@ -34,7 +34,11 @@ test("replacement and owner-rework preserve literal replacement sequences in del
     const adapter = new DescriptorObserver();
     const infra: ReviewPhaseInfrastructure = { adapterFor: (_entry, id) => id === "codex" ? new PiCodexAdapter() : adapter,
       createBroker: () => { throw new Error("preflight cannot launch"); },
-      writeSystemPrompt: writeSystemPromptFile, now: () => "2026-10-08T00:00:00.000Z", sandboxProbe: () => true };
+      writeSystemPrompt: async (text, directory) => {
+        const path = join(directory!, "..x");
+        writeFileSync(path, text, { mode: 0o600 });
+        return path;
+      }, now: () => "2026-10-08T00:00:00.000Z", sandboxProbe: () => true };
     const route = await resolveReviewRoute({ config, configPath, infra, recipe: buildReviewWorkflow,
       reviewPhaseId: "reviewer", workerProvider: "openai-codex", requireAvailable: false,
       routeOverrides: { reviewer: { adapter: "claude", provider: "anthropic", model: "claude:sonnet" } } });
@@ -45,6 +49,7 @@ test("replacement and owner-rework preserve literal replacement sequences in del
         config, infra, recipe: buildReviewWorkflow, reviewPhaseId: "reviewer", route, generation,
         intent: context, testOutput: context.testOutput, workerProvider: "openai-codex" });
       const request = adapter.requests.at(-1)!;
+      assert.ok(request.systemPromptPath?.endsWith("/..x"));
       assert.equal(prepared.context.diffTruncated, true);
       for (const sequence of sequences) assert.ok(prepared.context.diff.includes(sequence));
       const serialized = JSON.stringify(prepared.context, null, 2);

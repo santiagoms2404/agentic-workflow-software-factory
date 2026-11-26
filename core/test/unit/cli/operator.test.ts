@@ -182,6 +182,10 @@ test("dash serves built modules with security headers from loopback only", async
     }), "serving");
     const address = server?.address();
     if (address === null || address === undefined || typeof address === "string") throw new Error("missing dashboard address");
+    writeFileSync(join(dist, "..x"), "contained dashboard asset");
+    const dotFile = await httpGet(address.port, "/..x");
+    assert.equal(dotFile.status, 200);
+    assert.equal(dotFile.body, "contained dashboard asset");
     const script = await httpGet(address.port, "/assets/app.js");
     assert.equal(script.status, 200);
     assert.match(header(script.headers, "content-type"), /^text\/javascript/);

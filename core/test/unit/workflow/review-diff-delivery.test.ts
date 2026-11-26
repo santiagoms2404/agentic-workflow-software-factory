@@ -42,7 +42,9 @@ test("full per-path delivery reproduces the retained diff byte for byte, includi
     assert.equal(parseEnvelope(JSON.stringify(validReviewContext()), context.schema).valid, true, "old retained contexts remain valid");
     const replayed = await redeliverReviewDiff(context, world.location);
     assert.deepEqual(replayed, context, "recovery verifies without changing a retained index");
-    const retry = await redeliverReviewDiff(context, { ...world.location, runId: "retry" });
+    const retry = await redeliverReviewDiff(context, { ...world.location, attemptDir: join(world.location.attemptDir, "..x"), runId: "retry" });
+    assert.ok(retry.diffDelivery!.directory.startsWith(join(world.location.attemptDir, "..x", "private") + "/"));
+    assert.deepEqual(await Promise.all(retry.diffDelivery!.files.map(file => readFile(join(retry.diffDelivery!.directory, file.file)))), bytes);
     assert.notEqual(retry.diffDelivery!.directory, delivery.directory);
     assert.notEqual(retry.diffDelivery!.indexSha256, delivery.indexSha256, "a new run has a new token");
   } finally { world.cleanup(); }

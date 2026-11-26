@@ -15,6 +15,7 @@ import {
   systemGitRunner,
   type GitRunner,
 } from "../../../src/git/changes.ts";
+import { buildGitEnvironment, HOST_IDENTITY } from "../../../src/git/environment.ts";
 
 function runner(outputs: Record<string, string[]>): GitRunner {
   return (argv) => {
@@ -24,6 +25,53 @@ function runner(outputs: Record<string, string[]>): GitRunner {
     return { status: 0, stdout, stderr: "", error: null };
   };
 }
+
+test("system git uses the named checkout despite ambient repository redirects", () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-git-env-"));
+  const previous = process.env.GIT_DIR;
+  try {
+    execFileSync("git", ["init", "-q", root]);
+    process.env.GIT_DIR = join(root, "not-a-repository");
+    const result = systemGitRunner(root)(["rev-parse", "--absolute-git-dir"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), join(root, ".git"));
+  } finally {
+    if (previous === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Git environment filters ambient index, object, config, and identity settings before adding host settings", () => {
+  const names = ["GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0",
+    "GIT_CONFIG_VALUE_0", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_GLOBAL", "GIT_AUTHOR_NAME",
+    "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"];
+  const originals = names.map(name => process.env[name]);
+  try {
+    for (const name of names) process.env[name] = "ambient sentinel";
+    const read = buildGitEnvironment();
+    for (const name of names) assert.equal(read[name], undefined, name);
+    assert.equal(read.PATH, process.env.PATH);
+    assert.equal(read.GIT_TERMINAL_PROMPT, "0");
+
+    const date = "1234567890 +0000";
+    const write = buildGitEnvironment({ asHost: true, date, indexFile: "/operation-owned/index", noOptionalLocks: true });
+    assert.equal(write.GIT_INDEX_FILE, "/operation-owned/index");
+    assert.equal(write.GIT_OPTIONAL_LOCKS, "0");
+    for (const role of ["AUTHOR", "COMMITTER"]) {
+      assert.equal(write[`GIT_${role}_NAME`], HOST_IDENTITY.name);
+      assert.equal(write[`GIT_${role}_EMAIL`], HOST_IDENTITY.email);
+      assert.equal(write[`GIT_${role}_DATE`], date);
+    }
+    for (const name of names) assert.equal(process.env[name], "ambient sentinel", name);
+  } finally {
+    names.forEach((name, index) => {
+      if (originals[index] === undefined) delete process.env[name];
+      else process.env[name] = originals[index];
+    });
+  }
+});
 
 test("fingerprint records numstat and untracked paths", () => {
   const git = runner({

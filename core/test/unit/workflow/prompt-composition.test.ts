@@ -259,6 +259,16 @@ test("synthetic interactive alias bytes have no typed or runtime input path", as
   });
 });
 
+test("configured prompts accept a contained file named ..x", async (t) => {
+  const root = fixtureRoot(t);
+  const [base] = prepareRoles(root);
+  write(root, "..x", "contained prompt\n");
+  const agent = { ...base!, prompt: { ...base!.prompt, user: "..x" } };
+  for (const pathway of LOADERS) {
+    assert.equal((await pathway.load(join(root, "awsf.config.yaml"), agent)).userPrompt, "contained prompt\n");
+  }
+});
+
 test("all three current readers reject absolute, config-root, lexical-escape, and symlink-escape prompt paths", async (t) => {
   const root = fixtureRoot(t);
   const configPath = join(root, "awsf.config.yaml");

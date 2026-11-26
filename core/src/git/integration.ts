@@ -13,7 +13,7 @@
 
 import { runSystemCommand } from "../execution/transport-broker.ts";
 import { GitCommandFailed, runGit, systemGitRunner, type GitRunner } from "./changes.ts";
-import { HOST_IDENTITY } from "./commit.ts";
+import { buildGitEnvironment, HOST_IDENTITY } from "./environment.ts";
 
 export class IntegrationRefused extends Error {
   constructor(detail: string) {
@@ -141,22 +141,11 @@ export function verifyIntegrationCommit(
 
 /** Write the plan's merge commit object. No ref, index or checkout moves. */
 export function writeIntegrationCommit(repository: string, plan: IntegrationPlan, committedAt: string): IntegrationRecord {
-  const { name, email } = HOST_IDENTITY;
-  const date = gitDate(committedAt);
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) env[key] = value;
-  }
-  // Pinned rather than inherited: a session's own Git identity must never reach
-  // a commit (AGENTS.md invariant 11), and a fixed date makes the bytes replayable.
-  Object.assign(env, {
-    GIT_TERMINAL_PROMPT: "0",
-    GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_AUTHOR_DATE: date,
-    GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email, GIT_COMMITTER_DATE: date,
-  });
   const argv = ["-C", repository, "commit-tree", "--no-gpg-sign", plan.treeSha,
     "-p", plan.integrationBaseSha, "-p", plan.sourceCandidateSha, "-m", integrationMessage(plan)];
-  const result = runSystemCommand("git", argv, { timeoutMs: 30_000, env });
+  const result = runSystemCommand("git", argv, {
+    timeoutMs: 30_000, env: buildGitEnvironment({ asHost: true, date: gitDate(committedAt) }),
+  });
   if (result.status !== 0) throw new GitCommandFailed(argv, result);
   const record = { integrationBaseSha: plan.integrationBaseSha, integratedCandidateSha: result.stdout.trim(), committedAt };
   verifyIntegrationCommit(repository, plan, record);

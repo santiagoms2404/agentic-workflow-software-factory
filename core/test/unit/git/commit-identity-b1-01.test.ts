@@ -136,7 +136,7 @@ test("B9-01: the four pinned variables all derive from HOST_AUTHOR", () => {
 test("B1-62 and B1-65: protected commits and integration use the shared owner identity", () => {
   const protectedCommit = readFileSync(new URL("../../../src/git/protected-commit.ts", import.meta.url), "utf8");
   const integration = readFileSync(new URL("../../../src/git/integration.ts", import.meta.url), "utf8");
-  assert.match(protectedCommit, /hostIdentityEnv\(\)/u);
+  assert.match(protectedCommit, /env: buildGitEnvironment\(\{[^}]*\basHost: true/u);
   assert.doesNotMatch(protectedCommit, /GIT_(?:AUTHOR|COMMITTER)_(?:NAME|EMAIL):\s*["']/u);
   assert.match(integration, /HOST_IDENTITY/u);
   assert.doesNotMatch(integration, /function owner\(|HOST_AUTHOR/u);

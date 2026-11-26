@@ -25,6 +25,7 @@ const ALLOWED_LOCAL_MODULES = [
   "core/src/execution/transport-broker.ts",
   "core/src/git/changes.ts",
   "core/src/git/commit.ts",
+  "core/src/git/environment.ts", // shared host Git settings and identity, with no imports
 ] as const;
 
 // The broker is the approved host-process boundary. It is deliberately isolated

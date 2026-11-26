@@ -155,12 +155,12 @@ export async function runBaselineSuite(request: BaselineSuiteRequest): Promise<S
   const runs: GateRun[] = [];
   for (const [gateId, gate] of Object.entries(request.config.gates)) {
     const [executable, ...argv] = gate.argv;
-    const started = Date.now();
+    const started = performance.now();
     const result = runCommand(executable!, argv, {
       timeoutMs: gate.timeout_seconds * 1_000, cwd: baseline.path, maxBuffer: request.config.runtime.max_output_bytes,
       env: gateEnvironment,
     });
-    const durationMs = Date.now() - started;
+    const durationMs = Math.round(performance.now() - started);
     const outputPath = join(request.outputDir, `preflight-${gateId}.txt`);
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`, { mode: 0o600 });

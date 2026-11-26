@@ -116,6 +116,13 @@ test("the token scan finds paths and file names through prose punctuation, and s
 
 // ---------------------------------------------------------------- write-boundary
 
+test("repository path token parsing distinguishes the ..x segment from parent traversal", () => {
+  assert.deepEqual(extractPathTokens("../..x/file.txt ..x/file.txt"), [
+    { text: "../..x/file.txt", candidates: ["..x/file.txt", "file.txt"] },
+    { text: "..x/file.txt", candidates: ["..x/file.txt"] },
+  ]);
+});
+
 function boundary(overrides: Partial<WriteBoundaryFacts> = {}): WriteBoundaryFacts {
   return { request: REQUEST, where: ["core/src/preflight/**", "core/test/**"], read: [], protectedPaths: PROTECTED, writers: [BUILDER], shift: null, ...overrides };
 }
@@ -541,7 +548,7 @@ test("freshness names the first failing field in K1's order", () => {
 test("fields.ts reads no file, runs no Git and asks no clock: it imports only pure modules", () => {
   const source = readFileSync(resolve("core/src/preflight/fields.ts"), "utf8");
   const imports = [...source.matchAll(/from\s+"([^"]+)"/gu)].map((match) => match[1]);
-  assert.deepEqual(imports.sort(), ["../closure/model.ts", "../contracts/driver-preflight.ts", "../policy/path-policy.ts", "../state/task-machine.ts", "node:crypto"]);
+  assert.deepEqual(imports.sort(), ["../closure/model.ts", "../contracts/driver-preflight.ts", "../persistence/path-containment.ts", "../policy/path-policy.ts", "../state/task-machine.ts", "node:crypto"]);
   const code = source.split("\n").filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*") && !line.trim().startsWith("/**")).join("\n");
   for (const forbidden of [/\bDate\b/u, /\bprocess\./u, /\brequire\(/u, /\bimport\(/u, /\bsetTimeout\b/u, /\bperformance\b/u]) {
     assert.doesNotMatch(code, forbidden);

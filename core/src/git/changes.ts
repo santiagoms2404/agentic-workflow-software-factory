@@ -1,6 +1,7 @@
 // Host-owned change-set capture. Agents never receive a Git command capability.
 import { createHash } from "node:crypto";
 import { runSystemCommand } from "../execution/transport-broker.ts";
+import { buildGitEnvironment } from "./environment.ts";
 
 export interface GitResult {
   status: number | null;
@@ -18,32 +19,18 @@ export type GitRunner = (argv: readonly string[]) => GitResult;
 export type GitByteRunner = (argv: readonly string[]) => GitByteResult;
 export type ChangeSetFingerprint = Readonly<Record<string, string>>;
 
-function gitEnvironment(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) env[key] = value;
-  }
-  // spawnSync captures stdio, so the subprocess has no terminal and a prompt
-  // would hang until the timeout rather than reach anybody. This is a process
-  // liveness setting, not a credential control.
-  env["GIT_TERMINAL_PROMPT"] = "0";
-  return env;
-}
-
 export function systemGitRunner(repository: string): GitRunner {
-  const env = gitEnvironment();
   return (argv) => runSystemCommand("git", ["-C", repository, ...argv], {
     timeoutMs: 30_000,
-    env,
+    env: buildGitEnvironment(),
   });
 }
 
 /** The same host Git as systemGitRunner, for reads whose stored bytes are the value (blob reads). */
 export function systemGitByteRunner(repository: string): GitByteRunner {
-  const env = gitEnvironment();
   return (argv) => {
     // latin1 maps each byte to one character, so the round trip back to bytes is exact.
-    const result = runSystemCommand("git", ["-C", repository, ...argv], { timeoutMs: 30_000, env, encoding: "latin1" });
+    const result = runSystemCommand("git", ["-C", repository, ...argv], { timeoutMs: 30_000, env: buildGitEnvironment(), encoding: "latin1" });
     return { ...result, stdout: Buffer.from(result.stdout, "latin1") };
   };
 }

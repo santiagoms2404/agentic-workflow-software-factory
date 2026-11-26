@@ -1,48 +1,14 @@
 // Only the host creates candidate commits; agent-facing code receives no commit capability.
 import { runSystemCommand } from "../execution/transport-broker.ts";
 import { assertClean, runGit, worktreeStatus, type GitRunner } from "./changes.ts";
+import { buildGitEnvironment, HOST_AUTHOR, HOST_IDENTITY } from "./environment.ts";
+export { HOST_AUTHOR, HOST_IDENTITY, hostIdentityEnv } from "./environment.ts";
 
-/**
- * The one identity every AWSF-made commit carries as author and committer
- * (AGENTS.md invariant 11). Every other identity in core/src derives from this
- * constant; nothing reads `git config user.*` to decide who a commit is by.
- */
-export const HOST_AUTHOR = "Santiago Marin <santiagomarinsuarez@me.com>";
-
-function splitHostAuthor(): { readonly name: string; readonly email: string } {
-  const match = /^(.+) <([^<>]+)>$/u.exec(HOST_AUTHOR);
-  if (match === null) throw new Error(`host author ${JSON.stringify(HOST_AUTHOR)} is not "name <email>"`);
-  return Object.freeze({ name: match[1]!, email: match[2]! });
-}
-
-export const HOST_IDENTITY = splitHostAuthor();
-
-/**
- * All four identity variables, pinned. Git ranks GIT_AUTHOR_* and
- * GIT_COMMITTER_* from the environment above `-c user.*`, so a commit-making
- * git child that merely inherits the launching environment would let an
- * exported committer (a session's own identity) win (H9: B1-12 B7-08 B8-04
- * B8-05 B9-09). Setting all four explicitly leaves nothing ambient to win.
- */
-export function hostIdentityEnv(): Readonly<Record<string, string>> {
-  return Object.freeze({
-    GIT_AUTHOR_NAME: HOST_IDENTITY.name, GIT_AUTHOR_EMAIL: HOST_IDENTITY.email,
-    GIT_COMMITTER_NAME: HOST_IDENTITY.name, GIT_COMMITTER_EMAIL: HOST_IDENTITY.email,
-  });
-}
-
-/**
- * The system git runner for a worktree the host commits in: the inherited
- * environment, a no-prompt git, and the host identity pinned over anything
- * ambient. Same broker port as `systemGitRunner`; no new spawn path.
- */
+/** The system Git runner for a worktree the host commits in. */
 export function hostCommitGitRunner(repository: string): GitRunner {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) env[key] = value;
-  }
-  Object.assign(env, { GIT_TERMINAL_PROMPT: "0" }, hostIdentityEnv());
-  return (argv) => runSystemCommand("git", ["-C", repository, ...argv], { timeoutMs: 30_000, env });
+  return (argv) => runSystemCommand("git", ["-C", repository, ...argv], {
+    timeoutMs: 30_000, env: buildGitEnvironment({ asHost: true }),
+  });
 }
 
 export interface HostCommit {

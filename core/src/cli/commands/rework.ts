@@ -5,7 +5,8 @@ import { argvDigest, gateConfigDigest, gatesConfigDigest, COMMAND_LEDGER_PROTOCO
 import { ledgerGovernanceFailure, planCommandRecovery } from "../../workflow/command-ledger.ts";
 import { occurrenceKeyForRework, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
 import { withExecutionLease, assertOwnExecutionLease } from "../../execution/operation-lease.ts";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { isContainedRelativePath } from "../../persistence/path-containment.ts";
 import type {
   AdapterEntry,
   AgentDefinition,
@@ -521,7 +522,7 @@ async function validateMaterializedSystemPrompt(
   const runtimePhysical = await realpath(runtimeDir);
   const promptPhysical = await realpath(systemPromptPath);
   const fromRuntime = relative(runtimePhysical, promptPhysical);
-  if (fromRuntime.startsWith("..") || isAbsolute(fromRuntime)) {
+  if (!isContainedRelativePath(fromRuntime)) {
     throw new AdapterError(adapterId, "E_REDACTION", "the private system prompt file is outside its session runtime");
   }
   const materialized = credentialSafeText(
@@ -1187,7 +1188,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
     const gatesDigest = gatesConfigDigest(options.config.gates);
     const worktreeRealPath = await realpath(status.worktree!);
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
-      const started = Date.now();
+      const started = performance.now();
       const cleanBefore = isWorktreeClean(git) && runGit(git, ["rev-parse", "HEAD"]).trim() === candidate;
       const outputRelative = join("raw", `command-${phaseKey}-${candidate}-${gateId}.txt`);
       const planned = planCommandRecovery(ledger, {
@@ -1225,7 +1226,7 @@ async function runReworkCommand(options: ReworkCommandOptions): Promise<ReworkCo
         });
         rawCommandOutput = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
         exit = result.status ?? -1;
-        durationMs = Date.now() - started;
+        durationMs = Math.round(performance.now() - started);
         try {
           credentialSafeText(rawCommandOutput, "configured gate output");
         } catch (error) {

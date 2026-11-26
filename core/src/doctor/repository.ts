@@ -9,6 +9,7 @@ import type { AwsfConfig } from "../config/schema.ts";
 import type { DoctorReadout } from "../contracts/doctor-readout.ts";
 import type { TicketState } from "../contracts/ticket.ts";
 import { resolveExecutable, runSystemCommand } from "../execution/transport-broker.ts";
+import { buildGitEnvironment } from "../git/environment.ts";
 import { discoverAttempts } from "../observability/rebuild.ts";
 import { parseStoredTicket } from "../persistence/ticket-store.ts";
 import { parsePlanTicketData } from "../persistence/plan-tickets.ts";
@@ -57,7 +58,9 @@ export async function gatherRepositoryRows(input: RepositoryInput): Promise<Repo
     if (git === null) return null;
     try {
       // GIT_OPTIONAL_LOCKS=0 keeps even status from opportunistically refreshing the index.
-      const response = run(git, [...argv], { cwd, env: { ...input.env, GIT_OPTIONAL_LOCKS: "0" }, timeoutMs: 8000, maxBuffer: 4 * 1024 * 1024 });
+      const response = run(git, [...argv], {
+        cwd, env: buildGitEnvironment({ noOptionalLocks: true }, input.env), timeoutMs: 8000, maxBuffer: 4 * 1024 * 1024,
+      });
       return response.status === 0 && response.error === null ? response.stdout : null;
     } catch { return null; }
   };

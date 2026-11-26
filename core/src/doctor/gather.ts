@@ -6,6 +6,7 @@ import { loadConfig } from "../config/load.ts";
 import type { AwsfConfig } from "../config/schema.ts";
 import type { DoctorReadout, DoctorRow } from "../contracts/doctor-readout.ts";
 import { resolveExecutable, runSystemCommand } from "../execution/transport-broker.ts";
+import { buildGitEnvironment } from "../git/environment.ts";
 import { scrubCredentials } from "../policy/redaction.ts";
 import { storageMode } from "../preflight/storage-mode.ts";
 import { DEFAULT_QUOTA_PROBE_TIMEOUTS, probeQuota, type RunQuotaCommand, type ResolveQuotaExecutable } from "../quota/probe.ts";
@@ -77,11 +78,15 @@ export async function gatherDoctorRows(input: GatherDoctorInput): Promise<Enviro
   measure("quota-axi", "quota-axi");
   let common: string | null = null;
   let worktreeRoot = configured.cwd;
-  if (git.resolved !== null) {
-    const options = { cwd: configured.cwd, env: input.env, timeoutMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs, maxBuffer: 1024 * 1024 };
+  const gitExecutable = git.resolved;
+  if (gitExecutable !== null) {
+    const query = (argv: string[]) => run(gitExecutable, argv, {
+      cwd: configured.cwd, env: buildGitEnvironment({ noOptionalLocks: true }, input.env),
+      timeoutMs: DEFAULT_QUOTA_PROBE_TIMEOUTS.interactivePreflightMs, maxBuffer: 1024 * 1024,
+    });
     try {
-      const directory = run(git.resolved, ["rev-parse", "--path-format=absolute", "--git-common-dir"], options);
-      const root = run(git.resolved, ["rev-parse", "--show-toplevel"], options);
+      const directory = query(["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+      const root = query(["rev-parse", "--show-toplevel"]);
       if (directory.status === 0 && directory.error === null) common = resolve(configured.cwd, directory.stdout.trim());
       if (root.status === 0 && root.error === null) worktreeRoot = resolve(configured.cwd, root.stdout.trim());
     } catch { /* No readable Git root: storage reports not measured. */ }

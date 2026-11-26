@@ -63,6 +63,28 @@ test("B2-16: resolves routes from placed plan repository when plans root contain
   }
 });
 
+test("a local catalog named ..x resolves quota routes even if the checkout has no plan HTML", async () => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-quota-dot-name-"));
+  const previous = process.cwd();
+  try {
+    mkdirSync(join(root, ".git"));
+    writeFileSync(join(root, "awsf.config.yaml"), toYaml(routeConfig()));
+    const catalogPath = join(root, "..x");
+    writeFileSync(catalogPath, toYaml({
+      version: "awsf.project/v1", project: { slug: "route-project" },
+      repositories: { plans: { role: "plan", default_branch: "main" } },
+      plans: { root: "specs", format: "awsf-plan-html/v1" },
+    }));
+    process.chdir(root);
+    const resolved = await resolveProjectQuotaRoutes({ catalogPath });
+    assert.equal(resolved.planRepositoryPath, root);
+    assert.deepEqual(resolved.probeRoutes, [{ provider: "codex" }]);
+  } finally {
+    process.chdir(previous);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("B2-16: still throws E_QUOTA_PLAN_REPOSITORY_UNRESOLVED if plan repository placement is missing", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-quota-routes-b2-16-"));
   try {

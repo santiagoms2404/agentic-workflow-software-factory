@@ -1,4 +1,5 @@
-import { isAbsolute, relative, resolve } from "node:path";
+import { relative } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import type { DesignContext } from "../contracts/design-context.ts";
 import type { ResolvedProject, ResolvedRepository } from "../registry/resolve.ts";
 import type { PhaseGateContext } from "../workflow/phase.ts";
@@ -8,11 +9,6 @@ const EVIDENCE_LIMIT = "this proves which revisions were available to the design
 
 function listed(values: readonly string[]): string {
   return values.length === 0 ? "none" : values.join(", ");
-}
-
-function isInside(path: string, root: string): boolean {
-  const offset = relative(resolve(root), resolve(path));
-  return offset === "" || (!offset.startsWith("..") && !isAbsolute(offset));
 }
 
 function targetCounts(context: DesignContext): ReadonlyMap<string, number> {
@@ -82,7 +78,7 @@ export function designEvidencePresent(
   );
 
   const worktreeBelongsToPlan = planRepository !== undefined
-    && isInside(context.worktree, planRepository[1].worktreeRoot);
+    && isContainedRelativePath(relative(planRepository[1].worktreeRoot, context.worktree));
   report.check(
     "attempt worktree belongs to the plan repository",
     worktreeBelongsToPlan,

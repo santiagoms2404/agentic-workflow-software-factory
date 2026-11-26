@@ -39,7 +39,7 @@ test("B1-28: protected publication refuses an inherited index redirected outside
     const runner = systemGitRunner(world.path);
     const observed = runGit(runner, ["rev-parse", "--path-format=absolute", "--git-path", "index"]).trim();
 
-    assert.equal(observed, redirectedIndex, "Git itself honors the inherited redirect that protected publication must reject");
+    assert.equal(observed, world.indexPath, "the host Git runner never forwards the redirect");
     assert.throws(() => protectedCommitIndexPath(runner, world.gitDir), /redirected away from the granted worktree Git directory/);
     assert.deepEqual(readFileSync(world.indexPath), canonicalIndex);
     assert.deepEqual(readFileSync(redirectedIndex), sentinel);

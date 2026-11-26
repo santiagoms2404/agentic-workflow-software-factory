@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { chmod, lstat, mkdir, readFile, realpath, readdir, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import type { ReviewContext, ReviewDiffDelivery } from "../contracts/review-context.ts";
 import type { DiffFileSection } from "../gates/review-diff.ts";
 
@@ -21,8 +22,7 @@ export function reviewDeliveryDirectory(location: ReviewDeliveryLocation): strin
 }
 
 function inside(root: string, path: string): boolean {
-  const rel = relative(root, path);
-  return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith("../"));
+  return isContainedRelativePath(relative(root, path));
 }
 
 /** Only this small input directory is exposed, never an enclosing state or checkout root. */

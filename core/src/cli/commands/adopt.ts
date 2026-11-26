@@ -930,7 +930,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
             await closeOccurrence(occurrenceKey, `the candidate moved before ${gateId} was dispatched`);
             throw error;
           }
-          const started = Date.now();
+          const started = performance.now();
           const relative = join("raw", `command-adoption-tests-${pair.candidateSha}-${gateId}-0.txt`);
           const absolute = join(attemptDir, relative);
           const planned = planCommandRecovery(ledger, {
@@ -970,7 +970,7 @@ async function executeAdoption(options: AdoptCommandOptions): Promise<AdoptComma
           });
           const raw = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
           exitCode = result.status ?? -1;
-          durationMs = Date.now() - started;
+          durationMs = Math.round(performance.now() - started);
           try {
             output = credentialSafeGateOutput(raw);
           } catch (error) {

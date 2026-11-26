@@ -1,5 +1,6 @@
 import { readFile, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 
 import type { AgentDefinition } from "../config/schema.ts";
 import { sha256 } from "../contracts/owner-amendment.ts";
@@ -62,7 +63,8 @@ export class PromptCredentialRejected extends Error {
 }
 
 function isEscaping(rel: string): boolean {
-  return isAbsolute(rel) || rel === ".." || rel.startsWith("../") || rel.startsWith("..\\");
+  // Prompt configuration also treats a backslash as a separator on POSIX.
+  return isAbsolute(rel) || !isContainedRelativePath(rel.replaceAll("\\", "/"), "posix");
 }
 
 async function readContainedPrompt(configPath: string, path: string): Promise<string> {

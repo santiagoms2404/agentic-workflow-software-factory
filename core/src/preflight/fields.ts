@@ -15,6 +15,7 @@ import {
   type ProtectedPlanEntry,
   type RequestConfirmationRecord,
 } from "../contracts/driver-preflight.ts";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import { matchesPathGlob, normalizeGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import type { TaskState } from "../state/task-machine.ts";
 
@@ -168,9 +169,13 @@ function repositorySpellings(word: string): string[] {
   let path = word;
   let rooted = false;
   for (;;) {
-    if (path.startsWith("/")) [path, rooted] = [path.slice(1), true];
+    const slash = path.indexOf("/");
+    if (slash === 0) [path, rooted] = [path.slice(1), true];
     else if (path.startsWith("./")) path = path.slice(2);
-    else if (path.startsWith("../")) [path, rooted] = [path.slice(3), true];
+    // Classify only the first slash-delimited segment; leave the rest intact.
+    else if (slash !== -1 && !isContainedRelativePath(path.slice(0, slash), "posix")) {
+      [path, rooted] = [path.slice(slash + 1), true];
+    }
     else break;
   }
   path = path.replace(/\/+$/u, "");

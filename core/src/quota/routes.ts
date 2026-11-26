@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import { loadConfig } from "../config/load.ts";
 import {
   KNOWN_ADAPTER_KINDS,
@@ -252,11 +253,6 @@ function findCheckoutRoot(start: string): string | null {
   }
 }
 
-function isInside(path: string, root: string): boolean {
-  const offset = relative(root, path);
-  return offset === "" || (!offset.startsWith("..") && !isAbsolute(offset));
-}
-
 function planRepositoryId(catalog: ProjectCatalog): string | undefined {
   const entry = Object.entries(catalog.repositories).find(([, repository]) => repository.role === "plan");
   return entry?.[0];
@@ -272,7 +268,7 @@ function resolvePlanRepository(
 
   const localCheckout = findCheckoutRoot(process.cwd());
   const resolvedCatalogPath = resolve(catalogPath);
-  if (localCheckout !== null && isInside(resolvedCatalogPath, localCheckout)) {
+  if (localCheckout !== null && isContainedRelativePath(relative(localCheckout, resolvedCatalogPath))) {
     return { repositoryId, repositoryPath: localCheckout };
   }
 

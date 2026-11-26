@@ -7,12 +7,12 @@ import { closureDelta } from "../closure/delta.ts";
 import type { ClosureRegistry, ClosureTree } from "../closure/tree.ts";
 import type { ClosureRecord } from "../contracts/closure-record.ts";
 import { canonicalCheckoutDirt, dirtyPathSummary, runGit, type GitRunner } from "./changes.ts";
-import { hostIdentityEnv } from "./commit.ts";
+import { buildGitEnvironment } from "./environment.ts";
 
 export function closureGitRunner(repository: string): GitRunner {
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-    GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" };
-  return argv => runSystemCommand("git", ["-C", repository, "--literal-pathspecs", ...argv], { timeoutMs: 30_000, env });
+  return argv => runSystemCommand("git", ["-C", repository, "--literal-pathspecs", ...argv], {
+    timeoutMs: 30_000, env: buildGitEnvironment({ noOptionalLocks: true }),
+  });
 }
 
 export interface ClosureSnapshot {
@@ -116,14 +116,10 @@ export function prepareClosureCommit(repository: string, attemptDir: string, par
   const root = join(attemptDir, "private", "closure");
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const stage = mkdtempSync(join(root, "stage-"));
-  // Identity is HOST_AUTHOR, pinned in all four variables: never the checkout's
-  // `git config user.*` and never an ambient author/committer override (AGENTS.md
-  // invariant 11; H9: B1-01 B1-07 B9-01).
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-    GIT_INDEX_FILE: join(stage, "index"), ...hostIdentityEnv(), GIT_TERMINAL_PROMPT: "0" };
-  delete (env as Record<string, string>)["GIT_AUTHOR_DATE"];
-  delete (env as Record<string, string>)["GIT_COMMITTER_DATE"];
-  const git: GitRunner = argv => runSystemCommand("git", ["-C", repository, "-c", "core.fsync=all", "--literal-pathspecs", ...argv], { timeoutMs: 30_000, env });
+  const indexFile = join(stage, "index");
+  const git: GitRunner = argv => runSystemCommand("git", ["-C", repository, "-c", "core.fsync=all", "--literal-pathspecs", ...argv], {
+    timeoutMs: 30_000, env: buildGitEnvironment({ indexFile, asHost: true }),
+  });
   runGit(git, ["read-tree", parent]);
   const blobs = paths.map((path, index) => {
     const file = join(stage, `bytes-${index}`);

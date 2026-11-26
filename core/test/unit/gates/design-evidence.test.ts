@@ -149,6 +149,7 @@ test("the catalog plan repository must be a target", () => {
 });
 
 test("the attempt worktree must belong to the plan repository", () => {
+  assert.equal(designEvidencePresent(gateContext(envelope(), "/work/smart-health/plans-worktrees/..x"), catalog()).passed, true);
   assert.ok(
     failedItems(gateContext(envelope(), "/work/smart-health/service-worktrees/T11"))
       .includes("attempt worktree belongs to the plan repository"),

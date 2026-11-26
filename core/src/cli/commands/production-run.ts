@@ -2468,7 +2468,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
     const renderedSections: string[] = [];
     const commandPins = new Map<string, { cleanBefore: boolean; cleanAfter: boolean }>();
     for (const [gateId, configured] of Object.entries(options.config.gates)) {
-      const started = Date.now();
+      const started = performance.now();
       const outputRelative = join("raw", `command-${phaseId}-${gateId}-${String(round)}.txt`);
       const outputAbsolute = join(options.attemptDir, outputRelative);
       const expectation = {
@@ -2516,7 +2516,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
         // asked for it.
         output = `${result.stdout}${result.stderr}${result.error === null ? "" : `\n${result.error}`}`;
         exitCode = result.status ?? -1;
-        durationMs = Date.now() - started;
+        durationMs = Math.round(performance.now() - started);
         try {
           output = credentialSafeCommandOutput(output);
         } catch (error) {
