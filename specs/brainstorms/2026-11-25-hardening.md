@@ -19,7 +19,7 @@ The order of Q40 stands: A12, W04, W08, W16.
 
 ## 2. Rulings
 
-Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this record was read, and section 7 keeps their alternatives. Q136 to Q138 came from the first two tickets.
+Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this record was read, and section 7 keeps their alternatives. Q136 to Q138 came from the first two tickets. Q139 to Q143 came from T22, T23 and OC4, and were ruled as recommended on 2026-11-26.
 
 | Code | Question | Ruling |
 | --- | --- | --- |
@@ -45,6 +45,11 @@ Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this recor
 | Q136 | Are the light tickets made visible? | Yes, as T31, after T23. |
 | Q137 | T20's review findings: rework or a later ticket? | T20 landed as built. F1 to F4 are T32, before W04's deep plan. |
 | Q138 | T21's second acceptance line | Accepted for its purpose: the plan whose bytes changed since its last check is parsed again. No follow-up ticket. |
+| Q139 | T22's review finding: rework or a later ticket? | T22 landed as built. F1 of T22 is T32. |
+| Q140 | T23's first attempt blocked on a timing test it never touched | Attributed to the factory, after spend and with no trap, then retried. Attempt 2 landed. The race is T33. |
+| Q141 | T23's ratchet: does "the list may only shrink" need a check against the previous list? | No. The ratchet holds an exact list, and review catches a list that grows. T25, its first user, decides whether to compare with the base commit's list. |
+| Q142 | Where does the fix for close's index go? | T32. Until it lands, one plain `git status` after each close. |
+| Q143 | Do the land, close and publish commands join tier 2 with their folders? | Yes, by file, in OC4. |
 
 ## 3. Corrections and findings
 
@@ -66,6 +71,7 @@ Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this recor
 | NF35 | Inside an agent session two credential traps fail, because the session's environment holds credential-shaped values. In a clean environment 78 of 78 pass. | two runs on one clone |
 | IM13 | Put the parts of NF28 in tier 2, and protect the credential patterns like `core/src/policy`. | Q134 |
 | NF36 | No command and no screen shows a light ticket when a catalog is present. `awsf ticket show T20` prints the first plan's T20. | `core/src/cli/main.ts`, `ticketStoreForList`, and the tickets route |
+| NF38 | **A `risk.paths` key that reads as credential-named breaks owner rework.** The scrubber redacts the value of any key matching its credential rule, `credential` and `token` among them, and rework then refuses the whole configuration as credential-shaped. So the credential patterns are a protected path in OC4 and have no risk key. `risk-map.test.ts` refuses such a key. | `core/src/policy/redaction.ts:9`, four tests of `provider-silence-b8-01.test.ts` red with the key and green without it |
 
 ### What T20 and T21 showed
 
@@ -81,6 +87,22 @@ T20 landed as `ff29952` and closed in `7dbe76a`. T21 landed as `e8b471b` and clo
 
 Measured for T21: with 44 plans in place of 22, one plan's test grows 2% where the base grew 23%. The unit gate took 319 s, against 423 s in T20's run.
 
+### What T22 and T23 showed
+
+T22 landed as `3d4b505` and closed in `88d698b`. T23's second attempt landed as `35813a6` and closed in `fc7065c`. The builder of both was `gpt-6.2-sol` at high. The reviewer was Opus 5.5, at high for T22 and at medium for T23. T22's review raised a concern with one medium finding. T23's first attempt blocked at the unit gate, and the review of its second accepted with no finding. An independent session checked each candidate before the journey.
+
+| Code | Finding | Answer |
+| --- | --- | --- |
+| F1 of T22, medium | Fence 4 refuses only the strings `".."` and `"../"`. A template such as `` `..${sep}` `` passes it, and eight sites spell their own check that way. Each is correct today, because each also tests for `".."` exactly. | T32 (Q139) |
+| F2 of T22 | 20 production files read `process.env` at `44ff534` and at `2c58cdb`, where T22's ticket said 17. After T22, 16 do. | a count by `git grep`, without tests |
+| F3 of T22 | Host commits no longer take `GIT_AUTHOR_DATE`, `GIT_COMMITTER_DATE` or `GIT_CONFIG_*` from the environment. | intended by fence 1 |
+| F1 of T23 | The first attempt blocked on `liveness-silence-b1-13.test.ts:177`. The launch window, 1 s in that test, expired before the monitor started. Every test in that run took about 28% longer than in T22's run, and the candidate changed only `core/test/unit/meta`. | Q140, T33 |
+| F2 of T23 | A candidate whose build finished and whose gate failed can be neither adopted nor seeded, because both need L7 (`adopt.ts:344`). Its builder call is lost. | recorded, no ticket yet |
+| F3 of T23 | The ratchet compares the code with an exact list. Nothing compares the list with its previous version. | Q141 |
+| F4 of T23 | Close ends with `git read-tree` on the canonical index (`closure.ts:165`), which drops the file stats of every entry. AWSF runs Git with optional locks off, so each later `git status` hashes all 1,923 tracked files: 18.0 s, against 3.2 s after `read-tree -m`. Both closes needed a second run. | T32 (Q142) |
+
+Measured: the unit gate took 315 s in T22's run, 408 s in T23's first attempt and 326 s in its second.
+
 ## 4. Order
 
 | Step | What | Who | Codes |
@@ -91,10 +113,10 @@ Measured for T21: with 44 plans in place of 22, one plan's test grows 2% where t
 | 4 | OC3: the plan author names the cheapest check | done, `0de38a2` | Q123 |
 | 5 | T20 | done | Q127, Q128 |
 | 6 | T21 | done | IM3 |
-| 7 | T22 | factory | LC1, LS1, LS2, NF29 |
-| 8 | T23 | factory | LC3, K47, invariants 1, 2 and 13 |
-| 8a | T32, then T31 | factory | F1 to F4, NF36 |
-| 9 | OC4: the risk map and the credential patterns | owner commit through GA, between attempts | IM13 |
+| 7 | T22 | done | LC1, LS1, LS2, NF29 |
+| 8 | T23 | done | LC3, K47, invariants 1, 2 and 13 |
+| 8a | OC4: the risk map and the credential patterns | done, `258ca3c` and `0921029`, with no attempt open | IM13, Q143 |
+| 9 | T32, then T33, then T31 | factory | F1 to F4 of T20, F1 of T22, F1 and F4 of T23, NF36 |
 | 10 | W04's deep plan, authored through the factory | factory | |
 | 11 | OC2: linter and its configuration | owner commit | IM5 |
 | 12 | T24 to T30, in any gap | factory | IM2, IM5, IM6, IM12, Q121, DC4, Q113, Q129 |
@@ -123,7 +145,7 @@ Nothing of the evaluation, the October sort or the open questions is left out.
 | IM10 | One render test per component slice | W08 | DC5's browser | 0 |
 | IM11 | One card for a landing | K4 and W17, as planned | | 5 commands |
 | IM12 | What core reads from the dashboard | T26 | a closed list of five files | 18 imports in 10 files |
-| IM13 | The risk map | OC4 | a test that every part of `core/src` has a tier by name | 18% |
+| IM13 | The risk map | OC4, done | `risk-map.test.ts`: every part of `core/src` has a tier by name | 18% |
 | LC1, LS1, LS2 | Identity, containment and clock | T22 | five fences | 8 Git starts, 10 and 10 sites |
 | LC2 | Hostile input table | W04, first milestone | its own unit layer | 63 JSON and 6 YAML parse calls |
 | LC3 | A bite for every fence | T23 | the registry | 6 without |
@@ -142,6 +164,9 @@ Nothing of the evaluation, the October sort or the open questions is left out.
 | Q125 | W08's first commit | W08 | its own CI | |
 | Q127, Q128 | Ticket bytes, clean checkout | T20, done | TR-22 and TR-23 | |
 | F1 to F4 of T20 | A ticket edit never costs a paid reply | T32, before W04 | journeys and mutants | |
+| F1 of T22 | Every spelling of a raw containment prefix | T32 | fence 4, with each spelling planted | 8 sites |
+| F4 of T23 | Close keeps the index's file stats | T32 | a test that reads the index after a close | 18 s against 3 s |
+| F1 of T23 | The silence tests race their own launch | T33 | a planted 2 s stall | 2 tests |
 | NF36 | Light tickets can be seen | T31 | the list, the route and the screen | 0 of 13 |
 | Q129 | Publish after close | T30 | the publish fences | |
 
@@ -185,7 +210,7 @@ All six were ruled as recommended on 2026-11-25. Nothing in this file waits for 
 | OC1 | `.github/workflows/ci.yml`: the trap step, and a comment that no longer counts layers | done, `f1858f7` |
 | OC2 | `npm install --save-dev --save-exact oxlint@1.93.0`, and `.oxlintrc.json` with the three limits, the ban on imports of `cli` and today's files as exceptions. Tests are exempt from size. 1.93.0 is 16 days old, and 1.95.0 is two. | the trial found 25 imports in 21 files, with the message a worker would see |
 | OC3 | `prompts/plan-author/system.md`: the cheapest-check rule, with the unit test that pins that prompt's bytes | done, `0de38a2` |
-| OC4 | `awsf.config.yaml`: `risk.paths` and `policy.protected_paths`, as Q134 | not written. It ends any DRAFT attempt's snapshot (TR-10) |
+| OC4 | `awsf.config.yaml`: `risk.paths` and `policy.protected_paths`, as Q134 and Q143, with `core/test/unit/meta/risk-map.test.ts` | done, `258ca3c` for the risk map and its test, `0921029` for the protected path, with no attempt open (TR-10) |
 | OC5 | The three edges removed, and the header of `task-machine.ts` | not written |
 | OC6 | AM8, after AM6 and AM7 | draft below |
 
@@ -203,14 +228,14 @@ All six were ruled as recommended on 2026-11-25. Nothing in this file waits for 
 
 | Number | Today | Finished |
 | --- | --- | --- |
-| Layers in CI | 5 of 5 | a test compares them |
-| Unit suite in a gate | 319 s of 600, after T21 | under 300, and not growing with plans |
-| Fences that cannot be shown to fail | 6 | 0, and a new one is refused |
-| Tracked code files in no area | not measured | 0, and a new one is refused |
+| Layers in CI | 5 of 5, compared by a test since T23 | a test compares them |
+| Unit suite in a gate | 326 s of 600, after T23 | under 300, and not growing with plans |
+| Fences that cannot be shown to fail | 0, after T23 | 0, and a new one is refused |
+| Tracked code files in no area | 0, after T23 | 0, and a new one is refused |
 | Imports of `cli` from below | 25 | 0 after T24 |
 | Parts in one cycle | 27 | 18 after T24, 0 after W06 |
 | Functions over the limits | 18, 42 and 52 | may only shrink |
-| Lines of landing and gate code in tier 1 | all | 0 after OC4 |
+| Lines of landing and gate code in tier 1 | the gate runner inside `production-run.ts`, after OC4 | 0, once Q117's split gives it a part of its own |
 | Values no production code reads | 68 | may only shrink |
 | Kinds of `--ticket` selection never compared after `awsf new` | 0, after T20 | 0 |
 
