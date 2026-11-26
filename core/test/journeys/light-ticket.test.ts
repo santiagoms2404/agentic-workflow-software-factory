@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { stringify } from "yaml";
 import type { Availability, BrokerProcessRegistration, HarnessAdapter, ModelInfo, ModelRequest, ProcessSpec, ProcessTransport, TransportBroker } from "../../src/adapters/interface.ts";
@@ -142,9 +142,15 @@ for (const done of [true, false]) test(`ticket new, selected build-review, landi
   assert.equal((await w.invoke(["land", "small-build"])).code, 0);
   const dir = join(w.stateRoot, "projects", PROJECT, "tasks/small-build/1");
   assert.equal((await readClosure(dir, await readAttempt(dir))).state, "not closed");
+  git(w.repository, "update-index", "--refresh");
+  const unchanged = git(w.repository, "ls-files").split("\n").filter(path => path !== PATH);
+  const indexStats = () => unchanged.map(path => git(w.repository, "ls-files", "--debug", "--", path));
+  const beforeStats = indexStats();
+  assert.ok(beforeStats.length > 0 && beforeStats.every(entry => /mtime: [1-9]/u.test(entry)), "the index was populated before close");
   const out: string[] = [], err: string[] = [];
   assert.equal(await main({ argv: ["close", "small-build", "--config", join(w.root, "awsf.config.yaml"), "--state-root", w.stateRoot], cwd: w.repository,
     terminal: { interactive: true, write: line => out.push(line), confirm: async prompt => prompt.startsWith("Mark ") ? done : true }, writeOut: line => out.push(line), writeError: line => err.push(line) }), 0, err.join("\n"));
+  assert.deepEqual(indexStats(), beforeStats, "close preserves every unchanged entry's stat cache");
   const readout = await readClosure(dir, await readAttempt(dir));
   assert.equal(readout.state, done ? "closed" : "open by the owner's choice");
   assert.deepEqual(readout.record!.blobs.map(blob => blob.path), [PATH]);
@@ -158,6 +164,21 @@ for (const done of [true, false]) test(`ticket new, selected build-review, landi
   const doctor = await w.invoke(["doctor", "--json"], undefined, unconfiguredDoctorEnvironment(w.root));
   assert.equal(doctor.code, 0, [...doctor.err, ...doctor.out].join("\n"));
   assert.match(doctor.out.join("\n"), new RegExp(`light/T00=${done ? "done" : "wip"}|${readout.state}`));
+});
+
+for (const action of ["new", "refine"] as const) test(`dirty ticket ${action} refuses before creating an attempt`, async t => {
+  const w = await world(t);
+  if (action === "refine") {
+    await new TicketStore(join(w.repository, "specs/tickets")).write(ticket, body);
+    git(w.repository, "add", "."); git(w.repository, "commit", "-m", "test: seed refinement");
+  }
+  writeFileSync(join(w.repository, "README.md"), "Owner's uncommitted edit\n");
+  writeFileSync(join(w.repository, "untracked.txt"), "Owner's untracked notes\n");
+  const refused = await w.invoke(["ticket", action, "T00", "Keep the fixture observable"], ticket);
+  assert.equal(refused.code, 1);
+  assert.match(refused.err.join("\n"), /canonical checkout is not clean: README\.md, untracked\.txt/u);
+  const tasks = join(w.stateRoot, "projects", PROJECT, "tasks");
+  assert.deepEqual(existsSync(tasks) ? readdirSync(tasks) : [], [], "no stray DRAFT");
 });
 
 test("one-step ticket intake is refused by closure before any tree or call", async t => {

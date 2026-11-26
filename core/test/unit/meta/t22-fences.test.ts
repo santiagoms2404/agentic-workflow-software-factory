@@ -135,12 +135,41 @@ function injectedDouble(file: ts.SourceFile, node: ts.Node): boolean {
   return options === undefined ? callee !== "runStubCommand" : inspect(options);
 }
 
-const PROTECTED_CONTAINMENT = "core/src/policy/path-policy.ts";
+// The owner-protected checks already distinguish the parent segment from ..x.
+// Exempt only these exact calls, once per file, not their surrounding code.
+const PROTECTED_CONTAINMENT = new Map([
+  ["core/src/policy/path-policy.ts", 'normalized.startsWith("../")'],
+  ["core/src/policy/sandbox-broker.ts", 'path.startsWith(`..${sep}`)'],
+]);
+
+/** Known leading text, ending at the first dynamic part of a string expression. */
+function leadingText(expr: ts.Expression): { text: string; complete: boolean } {
+  if (ts.isStringLiteralLike(expr)) return { text: expr.text, complete: true };
+  if (ts.isParenthesizedExpression(expr) || ts.isAsExpression(expr) || ts.isTypeAssertionExpression(expr) ||
+      ts.isSatisfiesExpression(expr) || ts.isNonNullExpression(expr)) return leadingText(expr.expression);
+  if (ts.isTemplateExpression(expr)) {
+    let text = expr.head.text;
+    for (const span of expr.templateSpans) {
+      const part = leadingText(span.expression);
+      text += part.text;
+      if (!part.complete) return { text, complete: false };
+      text += span.literal.text;
+    }
+    return { text, complete: true };
+  }
+  if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const left = leadingText(expr.left);
+    if (!left.complete) return left;
+    const right = leadingText(expr.right);
+    return { text: left.text + right.text, complete: right.complete };
+  }
+  return { text: "", complete: false };
+}
 
 function rawContainment(_file: ts.SourceFile, node: ts.Node): boolean {
   if (!ts.isCallExpression(node) || spelling(node.expression) !== "startsWith") return false;
   const [prefix] = node.arguments;
-  return prefix !== undefined && ts.isStringLiteralLike(prefix) && ["..", "../"].includes(prefix.text);
+  return prefix !== undefined && leadingText(prefix).text.startsWith("..");
 }
 
 // The HTTP-date subtraction must compare epoch times. Dashboard polling and
@@ -184,7 +213,10 @@ const FENCES = [
     'quotaCommand({ resolveExecutable: fake })',
   ] },
   { name: "no raw containment prefixes", check: rawContainment, plants: [
-    'offset.startsWith("..")', "offset['startsWith']('../')",
+    'offset.startsWith("..")', "offset['startsWith']('../')", 'offset.startsWith("..\\\\")',
+    'offset.startsWith("..x")', 'offset.startsWith(`..${sep}`)', 'offset.startsWith(`../`)',
+    'offset.startsWith(".." + sep)', 'offset.startsWith(("." + ".") + sep)',
+    'offset.startsWith(`.${"."}${sep}`)', 'offset.startsWith((".." as const) + sep)',
   ] },
   { name: "wall-clock reads are explicitly named", check: wallClock, budget: WALL_CLOCK, plants: [
     'Date.now()', 'Date["now"]()',
@@ -196,10 +228,8 @@ function violations(file: ts.SourceFile, fence: (typeof FENCES)[number]): string
   let usedProtectedException = false;
   function visit(node: ts.Node): void {
     if (fence.check(file, node)) {
-      // The exact policy check is owner-protected and already checks equality
-      // with "..". Exempt only this occurrence, never the surrounding file.
-      if (fence.check === rawContainment && file.fileName === PROTECTED_CONTAINMENT &&
-          !usedProtectedException && node.getText(file) === 'normalized.startsWith("../")') {
+      if (fence.check === rawContainment && !usedProtectedException &&
+          node.getText(file) === PROTECTED_CONTAINMENT.get(file.fileName)) {
         usedProtectedException = true;
       } else {
         const { line } = file.getLineAndCharacterOfPosition(node.getStart(file));
@@ -246,7 +276,11 @@ test("T22's wall-clock allowlist does not admit extra reads in a named file", ()
   assert.equal(violations(parse(path, `${actual.text}\nDate.now();`), FENCES[4]!).length, 1);
 });
 
-test("T22's protected containment exception covers only one expression", () => {
-  const file = parse(PROTECTED_CONTAINMENT, 'normalized.startsWith("../"); normalized.startsWith("../"); offset.startsWith("..");');
-  assert.equal(violations(file, FENCES[3]!).length, 2);
+test("T22's named protected containment exceptions each cover only one expression", () => {
+  for (const [path, expression] of PROTECTED_CONTAINMENT) {
+    const file = production.find(file => file.fileName === path)!;
+    assert.ok(file.text.includes(expression), path);
+    assert.equal(violations(parse(path, `${file.text}\n${expression}; offset.startsWith("..");`), FENCES[3]!).length, 2);
+  }
+  assert.deepEqual(violations(parse("core/src/planted.ts", 'offset.startsWith(`.${separator}..`);'), FENCES[3]!), []);
 });

@@ -20,7 +20,8 @@
 
 import { createHash } from "node:crypto";
 import { constants, promises as fs } from "node:fs";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import { Value } from "@sinclair/typebox/value";
 import { parse as parseYaml } from "yaml";
 import type { ModelInfo, ObservedToolImage } from "../adapters/interface.ts";
@@ -102,7 +103,7 @@ function sha256(bytes: Buffer | string): string {
 function isContained(root: string, candidate: string): boolean {
   const offset = relative(root, candidate);
   // Only a leading ".." component is a parent-directory escape; `..archive` is an ordinary name (B6-26).
-  return offset === "" || (offset !== ".." && !offset.startsWith(`..${sep}`) && !isAbsolute(offset));
+  return isContainedRelativePath(offset);
 }
 
 function relativePath(value: string, code: VisualRefusalCode, label: string): string {

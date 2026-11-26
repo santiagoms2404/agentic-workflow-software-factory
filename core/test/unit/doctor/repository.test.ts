@@ -208,6 +208,7 @@ test("NUL worktree paths preserve spaces/newlines and factory root containment i
   assert.equal(trees[0]!.path, path);
   assert.equal(trees[0]!.branch, "task");
   assert.equal(insideWorktreeRoot("/synthetic/trees", path), true);
+  assert.equal(insideWorktreeRoot("/synthetic/trees", "/synthetic/trees/..x"), true);
   assert.equal(insideWorktreeRoot("/synthetic/trees", "/synthetic/trees-other/task"), false);
   assert.throws(() => parseWorktrees("broken\0\0"));
 });

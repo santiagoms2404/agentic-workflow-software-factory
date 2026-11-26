@@ -135,10 +135,10 @@ function sha256(bytes: Uint8Array): string {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
-function projectionYaml(role: "produces" | "consumes", digest: string): string {
+function projectionYaml(role: "produces" | "consumes", digest: string, path = CONTRACT_PATH): string {
   return toYaml({
     version: "awsf.contracts/v1",
-    contracts: [{ id: CONTRACT_ID, role, path: CONTRACT_PATH, digest }],
+    contracts: [{ id: CONTRACT_ID, role, path, digest }],
   });
 }
 
@@ -232,6 +232,17 @@ async function assertFixtureGreen(fixture: ContractFixture): Promise<void> {
 function failureKeys(failures: readonly { readonly kind: string; readonly repositoryId: string }[]): string[] {
   return failures.map((failure) => `${failure.kind}:${failure.repositoryId}`);
 }
+
+test("contract_digest accepts an artifact under the contained ..x component", t => {
+  const root = mkdtempSync(join(tmpdir(), "awsf-contract-contained-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = "..x/openapi.json", bytes = Buffer.from('{"openapi":"3.0.1"}\n'), digest = sha256(bytes);
+  mkdirSync(join(root, "..x"));
+  writeFileSync(join(root, path), bytes);
+  writeFileSync(join(root, "awsf.contracts.yaml"), projectionYaml("produces", digest, path));
+  const report = contractDigest(root, [{ id: CONTRACT_ID, role: "produces", path, digest }]);
+  assert.equal(report.passed, true, JSON.stringify(report.checks));
+});
 
 test("two committed contract copies reconcile and all three drift modes are distinguished", async () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-contract-fences-"));

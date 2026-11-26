@@ -104,8 +104,8 @@ test("CLI export accepts only export flags and reports its path and digest", asy
       assert.equal(await invoke(args), 1, args.join(" "));
     }
     assert.equal(existsSync(join(f.stateRoot, "exports")), false);
-    assert.equal(await invoke(["--output", "named.jsonl"]), 0, err.join("\n"));
-    assert.deepEqual(out, [`Export: ${join(f.stateRoot, "exports/route-metrics/named.jsonl")}`,
+    assert.equal(await invoke(["--output", "..x/rows.jsonl"]), 0, err.join("\n"));
+    assert.deepEqual(out, [`Export: ${join(f.stateRoot, "exports/route-metrics/..x/rows.jsonl")}`,
       `SHA-256 (rows): ${createHash("sha256").update("").digest("hex")}`]);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });

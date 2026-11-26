@@ -1,5 +1,6 @@
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { join, relative, resolve } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import { readContractArtifactDigestSync } from "../contracts/artifact-digest.ts";
 import { loadContractProjection, type ContractGateRequirement } from "../registry/contracts.ts";
 import { GateReport } from "./interface.ts";
@@ -11,7 +12,7 @@ function errorText(error: unknown): string {
 
 function within(root: string, path: string): boolean {
   const offset = relative(root, path);
-  return offset !== "" && offset !== ".." && !offset.startsWith(`..${sep}`) && !isAbsolute(offset);
+  return offset !== "" && isContainedRelativePath(offset);
 }
 
 function readArtifact(repositoryRoot: string, path: string): { readonly digest: string } | { readonly error: string } {

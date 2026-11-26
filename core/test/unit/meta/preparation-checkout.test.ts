@@ -28,15 +28,16 @@ test("there is one ticket file digest comparison in core/src", () => {
   assert.match(source("preflight/checkout.ts"), /await assertSelectedTicketFiles\(/u);
   assert.match(source("persistence/ticket-bytes.ts"), /assertTicketFileDigest\(ticket, bytes\)/u);
   const runner = source("cli/commands/production-run.ts");
-  assert.equal([...runner.matchAll(/await planAuthorPromptSuffix\(/gu)].length, 2);
-  assert.match(runner, /async function planAuthorPromptSuffix[^]*?await assertSelectedTicketFiles\(/u);
+  assert.equal([...runner.matchAll(/await assertSelectedTicketFiles\(/gu)].length, 2);
+  assert.match(runner, /function planAuthorPromptSuffix\([^\n]*\): string/u);
 });
 
 // Work-start boundaries, not readouts or DRAFT-only commands (new, prove,
-// retry without --adopt). `ticket new/refine` uses the checked start boundary.
+// retry without --adopt). `ticket new/refine` also checks before creating a DRAFT.
 const checked = {
   preflight: ["cli/commands/preflight.ts", "assertPreparationCheckout(current)"],
   start: ["cli/commands/start.ts", "assertPreparationCheckout(current)"],
+  "ticket new/refine": ["cli/main.ts", "assertPreparationCheckout({ repository: cwd })"],
   rework: ["cli/commands/rework.ts", 'assertClean(status.repository, "before", canonical)'],
   review: ["cli/commands/review.ts", 'assertClean(status.repository, "before", canonical)'],
   "retry --adopt": ["cli/commands/adopt.ts", 'assertClean(candidate.source.repository, "before", canonical)'],

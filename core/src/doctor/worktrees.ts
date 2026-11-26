@@ -1,4 +1,5 @@
-import { isAbsolute, relative, resolve } from "node:path";
+import { relative, resolve } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import type { DoctorRow } from "../contracts/doctor-readout.ts";
 
 export interface WorktreeFact {
@@ -21,7 +22,7 @@ export function parseWorktrees(text: string): readonly WorktreeFact[] {
 
 export function insideWorktreeRoot(root: string, path: string): boolean {
   const offset = relative(resolve(root), resolve(path));
-  return offset === "" || (offset !== ".." && !offset.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) && !isAbsolute(offset));
+  return isContainedRelativePath(offset);
 }
 
 export interface WorktreeCounts {

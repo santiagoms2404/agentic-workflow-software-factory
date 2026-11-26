@@ -37,12 +37,12 @@ test("listing limits the host view to the configured worktree root", () => {
 });
 
 test("safe worktree names beginning with two dots remain inside their configured root", () => {
-  assert.equal(worktreePath("/worktrees", "..cache"), "/worktrees/..cache");
+  assert.equal(worktreePath("/worktrees", "..x"), "/worktrees/..x");
   const git = scripted({
-    "worktree list --porcelain": "worktree /worktrees/..cache\nHEAD bbb\n\n",
+    "worktree list --porcelain": "worktree /worktrees/..x\nHEAD bbb\n\n",
   });
   assert.deepEqual(listWorktrees("/repo", "/worktrees", git.runner), [
-    { attemptId: "..cache", path: "/worktrees/..cache", head: "bbb" },
+    { attemptId: "..x", path: "/worktrees/..x", head: "bbb" },
   ]);
 });
 

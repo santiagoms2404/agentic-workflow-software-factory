@@ -2,7 +2,8 @@
 // artifacts: only a new file beneath the state root's exports/route-metrics.
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, unlinkSync, writeSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { isContainedRelativePath } from "../../persistence/path-containment.ts";
 import { fileURLToPath } from "node:url";
 import { readMetricsPayload } from "./metrics.ts";
 
@@ -28,7 +29,7 @@ export interface MetricsExportHeader {
 
 function beneath(root: string, path: string): boolean {
   const tail = relative(root, path);
-  return tail !== "" && tail !== ".." && !tail.startsWith(`..${sep}`) && !isAbsolute(tail);
+  return tail !== "" && isContainedRelativePath(tail);
 }
 
 function refuseRepository(path: string, repository?: string): void {

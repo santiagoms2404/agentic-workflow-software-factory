@@ -1,6 +1,7 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 import { randomUUID } from "node:crypto";
+import { assertPreparationCheckout } from "../preflight/checkout.ts";
 import { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "./command-table.ts";
 export { CLI_BOOLEAN_FLAGS, CLI_COMMANDS } from "./command-table.ts";
 import { existsSync, realpathSync } from "node:fs";
@@ -459,6 +460,7 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const configPath = resolve(parsed.flags.config ?? `${cwd}/awsf.config.yaml`);
       const config = loadConfig(await readFile(configPath, "utf8"));
       if (!config.workflows.enabled.includes("intake")) throw new Error("the intake workflow is not enabled");
+      await assertPreparationCheckout({ repository: cwd });
       const project = parsed.flags.project ?? config.project.slug;
       // Each intake/refinement is a distinct task-lifetime budget. Reusing a
       // prior T0 task would either collide or make a second refinement inherit

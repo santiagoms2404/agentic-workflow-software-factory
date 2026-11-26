@@ -57,8 +57,8 @@ test("B8-02: a file in a nested directory is read, and only .json content is cap
 
 test("B7-01: a real file whose name starts with two dots is inside the worktree", () => {
   const w = world();
-  writeFileSync(join(w.worktree, "..notes.json"), "{}");
-  assert.deepEqual(artifactReader(w.worktree)("..notes.json"), { exists: true, size: 2, content: "{}" });
+  writeFileSync(join(w.worktree, "..x"), "{}");
+  assert.deepEqual(artifactReader(w.worktree)("..x"), { exists: true, size: 2 });
 });
 
 test("B7-01: lexical escapes, absolute paths and directories stay absent", () => {

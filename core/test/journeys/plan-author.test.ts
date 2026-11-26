@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import fsPromises from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -9,13 +11,16 @@ import type { Availability, BrokerProcessRegistration, HarnessAdapter, ModelInfo
 import { main } from "../../src/cli/main.ts";
 import { readAttempt, type AttemptEvent } from "../../src/cli/commands/attempt.ts";
 import { createDashboardProjection } from "../../src/cli/commands/dashboard-projection.ts";
-import { prepareResumeInstruction, runProductionCommand, type RecoveryInspection } from "../../src/cli/commands/production-run.ts";
+import { resumeProductionCommand, runProductionCommand, type ProductionRunOptions } from "../../src/cli/commands/production-run.ts";
+import { preflightCommand } from "../../src/cli/commands/preflight.ts";
+import { startCommand } from "../../src/cli/commands/start.ts";
 import { readAttemptEvidence } from "../../src/cli/commands/review-record.ts";
 import type { OwnerTerminal } from "../../src/cli/tty.ts";
 import { loadConfig } from "../../src/config/load.ts";
 import { closureDelta } from "../../src/closure/delta.ts";
 import { treeAgreement } from "../../src/closure/tree.ts";
 import type { NormalizedEvent } from "../../src/contracts/normalized-events.ts";
+import { recoveryBudgetDigest } from "../../src/contracts/phase-recovery.ts";
 import type { PlanAuthorOutput } from "../../src/contracts/plan-author-output.ts";
 import type { ReviewOutput } from "../../src/contracts/review-output.ts";
 import { closureGitRunner, readClosureSnapshot, verifyClosureCommit } from "../../src/git/closure.ts";
@@ -128,7 +133,7 @@ class AuthorAdapter implements HarnessAdapter {
   }
 }
 
-async function world(defect?: Defect, changeSealedTicket = false) {
+async function world(defect?: Defect, stopAt: "draft" | "prepared" | "complete" = "complete") {
   const root = mkdtempSync(join(tmpdir(), "awsf-plan-author-journey-"));
   const canonical = join(root, "canonical"), stateRoot = join(root, "state"), configPath = join(root, "awsf.config.yaml");
   const projection = createDashboardProjection(stateRoot);
@@ -178,22 +183,20 @@ async function world(defect?: Defect, changeSealedTicket = false) {
       "--workflow", "plan-author", "--plan", SPINE, "--ticket", "W01"]);
     assert.equal(created.code, 0, created.err.join("\n"));
     const attemptDir = join(stateRoot, "projects", PROJECT, "tasks", TASK, "1");
-    const prepared = await startUnderK1({ attemptDir, configPath, worktreeRoot: join(root, "worktrees"),
+    const worktreeRoot = join(root, "worktrees");
+    const prepared = stopAt === "draft" ? await readAttempt(attemptDir) : await startUnderK1({ attemptDir, configPath, worktreeRoot,
       preflight: () => ({ adapter: true, sandbox: true, observability: true }), projectRecord: projection.project });
     assert.equal(prepared.ticketSelection?.plan, SPINE);
     assert.equal(prepared.ticketSelection?.tickets[0]?.id, "W01");
-    if (changeSealedTicket) {
-      const path = join(canonical, spineTicket);
-      writeFileSync(path, `${readFileSync(path, "utf8")}\nNew authoring instructions.\n`);
-    }
-    const before = checkoutBytes(canonical), managedBefore = checkoutBytes(prepared.worktree!);
+    const before = checkoutBytes(canonical), managedBefore = prepared.worktree === null ? null : checkoutBytes(prepared.worktree);
     const calls: string[] = [];
-    const done = await runProductionCommand({ attemptDir, stateRoot, config, configPath, projectRecord: projection.project,
+    const options = { attemptDir, stateRoot, config, configPath, projectRecord: projection.project,
       assertAdvancement: projection.assertAdvancement, assertLaunchProjection: projection.assertLaunchPermitted,
-      infrastructure: { adapterFor: (_entry, id) => new AuthorAdapter(id, calls, defect), createBroker: fakeBroker,
-        resolveExecutable: () => { throw new Error("no quota probe in this offline journey"); }, sandboxProbe: () => false } });
+      infrastructure: { adapterFor: (_entry, id) => new AuthorAdapter(id, calls, defect), createBroker: fakeBroker, sandboxProbe: () => false,
+        resolveExecutable: () => { throw new Error("no quota probe in this offline journey"); } } } satisfies ProductionRunOptions;
+    const done = stopAt === "complete" ? await runProductionCommand(options) : prepared;
     assert.deepEqual(checkoutBytes(canonical), before, "author/admission/review never changes canonical");
-    return { root, canonical, projection, attemptDir, stateRoot, config, configPath, prepared, before, managedBefore, calls, done, invoke };
+    return { root, canonical, projection, attemptDir, worktreeRoot, prepared, before, managedBefore, calls, done, invoke, options, terminal };
   } catch (error) { projection.close(); rmSync(root, { recursive: true, force: true }); throw error; }
 }
 
@@ -290,21 +293,133 @@ test("a private stub author admits a deep plan, delivers its diff to opposite-pr
   } finally { dispose(w); }
 });
 
-test("both author prompt sites refuse a ticket changed after start", async () => {
-  const w = await world(undefined, true);
+const changed = { name: "TicketFileMismatch", message: /specs\/tickets\/fixture-spine\/W01\.md.*changed since selection/u };
+
+for (const change of ["edited", "deleted"] as const) test(`fresh author refuses a sealed ticket ${change} after start before L4`, async t => {
+  const w = await world(undefined, "prepared"); t.after(() => dispose(w));
+  const path = join(w.canonical, spineTicket), original = readFileSync(path);
+  if (change === "deleted") {
+    git(w.canonical, "rm", spineTicket); git(w.canonical, "commit", "-m", "test: delete the selected ticket");
+    assert.equal(git(w.canonical, "status", "--porcelain"), "");
+  } else writeFileSync(path, "Uncommitted authoring edit.\n");
+  const journal = join(w.attemptDir, "journal.jsonl"), before = readFileSync(journal);
+  await assert.rejects(runProductionCommand(w.options), changed);
+  assert.deepEqual(await readAttempt(w.attemptDir), w.prepared);
+  assert.deepEqual(readFileSync(journal), before, "neither L4 nor BLOCKED is journaled");
+  assert.deepEqual(w.calls, []);
+  if (change === "edited") {
+    writeFileSync(path, original);
+    const result = await runProductionCommand(w.options);
+    assert.equal(result.lifecycleState, "AWAITING_OWNER", result.blocker?.detail);
+    assert.deepEqual(w.calls, ["plan-author:codex", "reviewer:claude"]);
+  }
+});
+
+for (const boundary of ["preflight", "start"] as const) test(`a committed deletion refuses at ${boundary} before preparation`, async t => {
+  const w = await world(undefined, "draft"); t.after(() => dispose(w));
+  git(w.canonical, "rm", spineTicket); git(w.canonical, "commit", "-m", "test: delete the selected ticket");
+  assert.equal(git(w.canonical, "status", "--porcelain"), "");
+  const options = { ...w.options, worktreeRoot: w.worktreeRoot };
+  await assert.rejects(boundary === "preflight"
+    ? preflightCommand({ ...options, where: [], read: [], consulted: [] })
+    : startCommand({ ...options, preflight: () => assert.fail("start must not contact adapters") }), changed);
+  assert.deepEqual(await readAttempt(w.attemptDir), w.prepared);
+  assert.deepEqual(w.calls, []);
+});
+
+async function cutAtAuthorReply(w: Awaited<ReturnType<typeof world>>) {
+  const { assertAdvancement: _advance, assertLaunchProjection: _launch, projectRecord: _project, ...options } = w.options;
+  const indexPath = git(w.prepared.worktree!, "rev-parse", "--path-format=absolute", "--git-path", "index");
+  let index: Buffer | undefined;
+  const run = await runProductionCommand({ ...options, projectRecord: record => {
+    if (record.event.evidence?.type === "phase-result-ready" && record.event.evidence.checkpoint.pending?.phaseKey === "plan-author") {
+      index = readFileSync(indexPath);
+    }
+  } });
+  assert.equal(run.lifecycleState, "AWAITING_OWNER", run.blocker?.detail);
+  assert.deepEqual(w.calls, ["plan-author:codex", "reviewer:claude"]);
+  assert.ok(index);
+  // Rewind only this disposable worktree; keep the author's private output.
+  git(w.prepared.worktree!, "reset", "--hard", w.prepared.baseSha!);
+  writeFileSync(indexPath, index);
+  const journal = join(w.attemptDir, "journal.jsonl"), statusFile = join(w.attemptDir, "status.json");
+  const rows = readFileSync(journal, "utf8").trim().split("\n").map(line => JSON.parse(line) as { event: AttemptEvent });
+  const end = rows.findIndex(row => row.event.evidence?.type === "phase-result-ready" && row.event.evidence.checkpoint.pending?.phaseKey === "plan-author");
+  assert.ok(end > 0, "a paid reply has a durable pre-validation checkpoint");
+  const rewind = (index: number) => {
+    writeFileSync(journal, rows.slice(0, index + 1).map(row => JSON.stringify(row)).join("\n") + "\n");
+    writeFileSync(statusFile, JSON.stringify(rows[index]!.event.next));
+  };
+  return { options, rows, end, rewind, journal };
+}
+
+test("resume validates a paid author reply without reading the edited canonical ticket or launching a model", async t => {
+  const w = await world(undefined, "prepared"); t.after(() => dispose(w));
+  const saved = await cutAtAuthorReply(w);
+  saved.rewind(saved.end);
+  w.calls.length = 0;
+  const path = join(w.canonical, spineTicket);
+  writeFileSync(path, "Uncommitted authoring edit.\n");
+  const readFile = fsPromises.readFile;
+  const guard = t.mock.method(fsPromises, "readFile", ((file, ...args) => {
+    assert.notEqual(file, path, "saved validation must not read the canonical ticket");
+    return Reflect.apply(readFile, fsPromises, [file, ...args]);
+  }) as typeof readFile);
+  syncBuiltinESMExports();
   try {
-    assert.equal(w.done.lifecycleState, "BLOCKED");
-    const changed = /specs\/tickets\/fixture-spine\/W01\.md.*changed since selection/u;
-    assert.match(w.done.blocker?.detail ?? "", changed);
-    assert.deepEqual(w.calls, []);
-    assert.equal(w.done.budget.callsReserved, 0);
-    assert.equal(w.done.budget.callsSpent, 0);
-    // Exercise the resume instruction composer with the author as the next
-    // unstarted phase. Recovery eligibility is tested separately.
-    const inspected = { status: w.prepared, checkpoint: { prefix: [{ phaseKey: "request" }] },
-      envelopes: new Map(), instructions: [] } as unknown as RecoveryInspection;
-    await assert.rejects(prepareResumeInstruction(w, inspected), changed);
-  } finally { dispose(w); }
+    let validated = false;
+    const resumed = await resumeProductionCommand({ ...saved.options, terminal: w.terminal, reason: "validate the saved author reply",
+      projectRecord: (record, status) => {
+        const evidence = record.event.evidence;
+        if (evidence?.type !== "phase-accepted" || evidence.phase.key !== "plan-author") return;
+        assert.deepEqual(w.calls, [], "validation launched no model");
+        assert.equal(status.budget.callsSpent, 1, "validation kept only the original debit");
+        validated = true;
+      } });
+    assert.equal(resumed.confirmed, true);
+    assert.equal(resumed.status.lifecycleState, "AWAITING_OWNER", resumed.status.blocker?.detail);
+    assert.ok(validated, "the paid reply was accepted");
+    assert.deepEqual(w.calls, ["reviewer:claude"], "only the separately required review ran after validation");
+  } finally { guard.mock.restore(); syncBuiltinESMExports(); }
+});
+
+test("resume owing an author call refuses before confirmation without sealing or updating the attempt", async t => {
+  const w = await world(undefined, "prepared"); t.after(() => dispose(w));
+  const saved = await cutAtAuthorReply(w);
+  // The first phase normally holds L4's reservation across the request. Model
+  // a quiescent recovery frontier at that boundary using real prefix evidence,
+  // but without the original call, its reservation or any of its phase rows.
+  const request = saved.rows.findIndex(row => row.event.evidence?.type === "phase-accepted" && row.event.evidence.phase.key === "request");
+  assert.ok(request > 0);
+  const { pending: _pending, ...checkpoint } = saved.rows[saved.end]!.event.next.recovery!;
+  const anchor = saved.rows[request]!.event.next;
+  const budget = { ...anchor.budget, callsReserved: 0 };
+  const row = saved.rows[request]!;
+  saved.rows[request] = { ...row, event: { ...row.event, next: { ...anchor, budget, activeOperation: null,
+    recovery: { ...checkpoint, kind: "completed-phase", budgetDigest: recoveryBudgetDigest(budget) } } } };
+  saved.rewind(request);
+  const path = join(w.canonical, spineTicket), original = readFileSync(path);
+  const before = readFileSync(saved.journal), status = await readAttempt(w.attemptDir);
+  const resume = { ...saved.options, reason: "continue unstarted authoring" };
+  assert.equal(status.lifecycleState, "RUNNING");
+  for (const instruction of [undefined, "Keep fixture findings."]) {
+    let confirmations = 0;
+    const terminal = { ...w.terminal, confirm: async () => { confirmations++; return false; } };
+    const input = { ...resume, ...(instruction === undefined ? {} : { instruction }), terminal };
+    assert.equal((await resumeProductionCommand(input)).confirmed, false, "unchanged frontier reaches confirmation");
+    writeFileSync(path, "Uncommitted authoring edit.\n");
+    await assert.rejects(resumeProductionCommand(input), changed);
+    assert.equal(confirmations, 1, "changed ticket does not reach confirmation");
+    assert.deepEqual(await readAttempt(w.attemptDir), status);
+    assert.deepEqual(readFileSync(saved.journal), before, "no activation, reservation, or BLOCKED transition");
+    writeFileSync(path, original);
+  }
+  await assert.rejects(resumeProductionCommand({ ...resume, terminal: { ...w.terminal, confirm: async () => {
+    writeFileSync(path, "Edited while confirming.\n"); return true;
+  } } }), changed);
+  assert.deepEqual(await readAttempt(w.attemptDir), status);
+  assert.deepEqual(readFileSync(saved.journal), before);
+  assert.deepEqual(w.calls, ["plan-author:codex", "reviewer:claude"], "resume launched no model");
 });
 
 for (const defect of ["existing plan change", "existing stem", "non-idle marker", "non-todo state"] as const) {

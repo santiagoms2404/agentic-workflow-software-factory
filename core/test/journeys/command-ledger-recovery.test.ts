@@ -222,6 +222,22 @@ test("retained output altered after the fact refuses instead of restoring it", a
   } finally { w.dispose(); }
 });
 
+test("the command ledger observes a retained output named ..x inside its attempt", async () => {
+  const w = await world();
+  try {
+    killAt("post-result", w);
+    const status = await readAttempt(w.attemptDir);
+    const result = (await readCommandLedger(w.attemptDir)).results[0]!;
+    assert.ok(result.outputRef);
+    writeFileSync(join(w.attemptDir, "..x"), readFileSync(join(w.attemptDir, result.outputRef)));
+    await persistAttempt(w.attemptDir, status.revision, { kind: "attempt.updated", next: nextRevision(status, {}),
+      evidence: { type: "command-dispatch-result", result: { ...result, outputRef: "..x" } } });
+    assert.deepEqual((await readCommandLedger(w.attemptDir)).retained.at(-1), {
+      intentId: result.intentId, bytes: result.outputBytes, digest: result.outputDigest,
+    });
+  } finally { w.dispose(); }
+});
+
 test("a changed argv refuses rather than answering the new command with the old result", async () => {
   const w = await world();
   try {

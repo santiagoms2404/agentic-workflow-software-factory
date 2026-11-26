@@ -1,6 +1,7 @@
 // Managed execution trees live under the machine-local Q8 root, never in state or the canonical checkout.
 import { existsSync, promises as fs } from "node:fs";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import { renderRestartAdvice } from "../lifecycle/renderer.ts";
 import { matchesPathGlob, normalizeRepositoryPath } from "../policy/path-policy.ts";
 import { runGit, systemGitRunner, type GitRunner } from "./changes.ts";
@@ -38,7 +39,7 @@ export class WorktreeSeedError extends Error {
 
 function isContained(root: string, candidate: string): boolean {
   const fromRoot = relative(root, candidate);
-  return fromRoot === "" || (fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot));
+  return isContainedRelativePath(fromRoot);
 }
 
 function errorDetail(error: unknown): string {

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   assertClean,
+  canonicalCheckoutDirt,
   captureChangeSet,
   changedPaths,
   invalidateStaleResults,
@@ -25,6 +26,11 @@ function runner(outputs: Record<string, string[]>): GitRunner {
     return { status: 0, stdout, stderr: "", error: null };
   };
 }
+
+test("canonical dirt lists both paths of a rename without splitting a quoted path", () => {
+  const git = runner({ "status --porcelain --untracked-files=all": ['R  "old -> name.txt" -> "new name.txt"\n?? other.txt\n'] });
+  assert.equal(canonicalCheckoutDirt(git), '"old -> name.txt", "new name.txt", other.txt');
+});
 
 test("system git uses the named checkout despite ambient repository redirects", () => {
   const root = mkdtempSync(join(tmpdir(), "awsf-git-env-"));

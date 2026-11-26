@@ -162,7 +162,9 @@ export function finishClosureCheckout(repository: string, record: ClosureRecord,
   }
   // No checkout filters or hooks can transform the proved after bytes.
   for (const blob of record.blobs) writeFileSync(join(repository, blob.path), after.tree.get(blob.path)!);
-  runGit(git, ["read-tree", record.commitSha]);
+  // Keep cached stats for unchanged entries. The exact worktree bytes were
+  // proved above and installed by the host, so merge the index only.
+  runGit(git, ["read-tree", "-m", "-i", record.commitSha]);
   const dirty = canonicalCheckoutDirt(git);
   if (dirty !== null) throw new Error(`interrupted closure: canonical checkout is not clean after completion: ${dirty}`);
 }

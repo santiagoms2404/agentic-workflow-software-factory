@@ -12,7 +12,8 @@ import { ledgerGovernanceFailure, planAdoptedMeasurement, planCommandRecovery, p
 import type { VerifyCandidateLedgerVerdict } from "../../workflow/host-validation.ts";
 import { occurrenceKeyForMeasurement, readCommandLedger, retainedOutputDigest } from "../../workflow/command-ledger-store.ts";
 import type { OwnerTerminal } from "../tty.ts";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { isContainedRelativePath } from "../../persistence/path-containment.ts";
 import type {
   AgentPhaseProcessRegistration,
   BrokerProcessRegistration,
@@ -1023,7 +1024,7 @@ export function productionPhaseRegistration(input: {
 /** True when `path` is strictly below `root`; `..notes.json` is a name, not a climb. */
 function strictlyWithin(root: string, path: string): boolean {
   const fromRoot = relative(root, path);
-  return fromRoot !== "" && fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
+  return fromRoot !== "" && isContainedRelativePath(fromRoot);
 }
 
 export class ConfiguredCommandOutputRejected extends Error {
@@ -1683,6 +1684,11 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
   if (status.worktree === null || status.baseSha === null) throw new Error("PREPARED attempt has no managed worktree or base SHA");
   if (options.config.project.slug !== status.project) throw new Error("attempt and config project do not match");
   assertProductionConfigSnapshot(options.config, status.configSnapshotJson);
+  // This checks the owner's selection, not the bytes in the author's pinned
+  // worktree. Refuse while PREPARED, before L4 or any phase can seal the run.
+  if (recovery === undefined && recipe.id === PLAN_AUTHOR_WORKFLOW_ID) {
+    await assertSelectedTicketFiles(status.repository, status.ticketSelection!.tickets);
+  }
 
   const seed = recovery === undefined ? await verifiedTargetSeed(options.attemptDir, status) : assertSeedTarget(status);
   if (seed !== null && recovery === undefined) await validateSeedStartup(seed, status, options.config, options.configPath, options.attemptDir);
@@ -2868,7 +2874,7 @@ async function executeProductionCommand(options: ProductionRunOptions, operation
       if (reconciliation.outcome === "not-committed") return null;
       return { candidateSha: reconciliation.commitSha, verified };
     };
-    const planAuthorSuffix = phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID ? await planAuthorPromptSuffix(status, runtimeDir) : "";
+    const planAuthorSuffix = phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID ? planAuthorPromptSuffix(status, runtimeDir) : "";
     const rolePrompt = renderProductionRolePrompt(phase, previous, designContext, status.request, route.agent);
     const grantContext = protectedPromptContext(phaseGrant);
     const originalPrompt = rolePrompt + seedContext(status) + resumeInstructionContext(instructions) + grantContext +
@@ -4499,6 +4505,11 @@ async function preflightRecovery(options: ProductionRunOptions): Promise<Recover
     if (phase?.id !== checkpoint.pending.phaseKey || phase.schemaId !== inspected.pendingEnvelope?.schemaId) throw new Error("saved reply does not match the compiled phase");
   }
   const remaining = recipe.phases.slice(checkpoint.prefix.length).filter(phase => phase.kind === "agent" && phase.id !== checkpoint.pending?.phaseKey);
+  // Run this before confirmation and again under the execution lease. A saved
+  // author reply is not a new call and must not depend on the current ticket.
+  if (remaining.some(phase => phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID)) {
+    await assertSelectedTicketFiles(status.repository, status.ticketSelection!.tickets);
+  }
   const coldHeadroom = options.config.risk.correction_allowance.auto > 0 && remaining.some(phase =>
     phase.maxCorrections > 0 && options.config.agents.find(agent => agent.name === phase.owner)?.harness.continuity === "none") ? 1 : 0;
   const ledger = new CallBudget({ taskId: status.taskId, tier: status.tier, allowance: status.budget.allowance,
@@ -4575,9 +4586,8 @@ async function readRecoveryQuota(options: ProductionRunOptions, inspected: Recov
     threshold: threshold.minutes, observedAt, readoutDigest: recoveryDigest(row) };
 }
 
-async function planAuthorPromptSuffix(status: AttemptStatus, runtimeDir: string): Promise<string> {
+function planAuthorPromptSuffix(status: AttemptStatus, runtimeDir: string): string {
   const selection = status.ticketSelection!; // Recipe compilation requires a sealed spine selection.
-  await assertSelectedTicketFiles(status.repository, selection.tickets);
   return `\nHost-sealed spine selection: ${JSON.stringify(selection)}\nHost-provided session-runtime output directory: ${runtimeDir}\nWrite plan.html, build-prompts.md and tickets.json here only.\n`;
 }
 
@@ -4611,7 +4621,7 @@ export async function prepareResumeInstruction(options: ProductionRunOptions, in
   const visual = bound === null || !bound.phases.includes(phase.id) ? ""
     : visualReferencePrompt(plannedDelivery(bound, deliveryDirectory(options.attemptDir, `${inspected.status.sessionId}:${phase.id}:run`)));
   const planAuthorSuffix = phase.schemaId === PLAN_AUTHOR_OUTPUT_SCHEMA_ID
-    ? await planAuthorPromptSuffix(inspected.status, join(options.attemptDir, "private", PLAN_AUTHOR_WORKFLOW_ID))
+    ? planAuthorPromptSuffix(inspected.status, join(options.attemptDir, "private", PLAN_AUTHOR_WORKFLOW_ID))
     : "";
   const originalPrompt = renderProductionRolePrompt(phase, previous, design ?? null, inspected.status.request, agent) +
     seedContext(inspected.status) + resumeInstructionContext(inspected.instructions) + protectedPromptContext(protectedGrantForPhase(options.attemptDir, phase.id)) + visual +

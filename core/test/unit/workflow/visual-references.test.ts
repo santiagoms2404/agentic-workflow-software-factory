@@ -233,9 +233,9 @@ test("B6-26: a reference frame under a root-level directory whose name starts wi
   const library = referenceLibrary();
   try {
     const bytes = library.images.f1!;
-    mkdirSync(join(library.root, "..archive"), { recursive: true });
-    writeFileSync(join(library.root, "..archive", "f1.png"), bytes);
-    writeFileSync(library.indexPath, JSON.stringify({ version: 1, frames: [{ id: "f1", image: "..archive/f1.png" }], ticketFrames: { T01: ["f1"] } }));
+    mkdirSync(join(library.root, "..x"), { recursive: true });
+    writeFileSync(join(library.root, "..x", "f1.png"), bytes);
+    writeFileSync(library.indexPath, JSON.stringify({ version: 1, frames: [{ id: "f1", image: "..x/f1.png" }], ticketFrames: { T01: ["f1"] } }));
     library.writeDigests(); library.commit("test: dotted directory name");
     const verified = await verify(library, { frames: ["f1"] });
     assert.equal(verified.bound.frames[0]?.sha256, sha256(bytes));

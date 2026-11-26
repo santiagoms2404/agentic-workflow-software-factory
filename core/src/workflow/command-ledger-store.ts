@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { join, relative, resolve } from "node:path";
+import { isContainedRelativePath } from "../persistence/path-containment.ts";
 import { assertCommandDispatchIntent, assertCommandDispatchResult,
   assertCommandOccurrenceClosed, assertCommandOccurrenceOpened, type CommandDispatchIntent,
   type CommandDispatchResult, type CommandOccurrenceClosed,
@@ -122,7 +123,7 @@ async function observeRetained(attemptDir: string, intentId: string, outputRef: 
   // The journal names the file, so it must stay inside this attempt. A reference that
   // climbs out would measure a host file as the retained output (B6-15).
   const rel = relative(resolve(attemptDir), absolute);
-  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return { intentId, bytes: null, digest: null };
+  if (!isContainedRelativePath(rel)) return { intentId, bytes: null, digest: null };
   try {
     const info = await stat(absolute);
     if (!info.isFile()) return { intentId, bytes: null, digest: null };
