@@ -10,10 +10,9 @@
 // The LivenessMonitor that measures the right thing (group CPU and output byte
 // counts) was built only by tests.
 //
-// These runs go through the real `runProductionCommand` with the configured
-// window at its 1 s schema floor, on scripted routes behind a broker that
-// spawns nothing. The broker exposes the supervisor a real broker exposes,
-// `controller.groupCpu`, so a test can say whether the group is working.
+// These runs go through the real `runProductionCommand` on scripted routes
+// behind a broker that spawns nothing. The stub exposes `controller.groupCpu`
+// like a real broker, so a test can say whether the group is working.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -30,8 +29,10 @@ import type { BrokerOptions } from "../../../src/execution/transport-broker.ts";
 import { AT, ReplayStub, box, draft, prepare, run, start } from "../../fixtures/trap-world.ts";
 
 const SILENCE = "configured silence timeout elapsed";
-/** Three windows: a run that is cut off at all is cut off well inside this. */
-const WORK_MS = 3_000;
+const DEFAULT_WINDOW_SECONDS = 1;
+// T33: The launch window is as long as the silence window and is armed before
+// startProcess returns. Give the two CPU census tests time to reach the monitor.
+const CENSUS_WINDOW_SECONDS = 5;
 
 interface Provider {
   /** What the group's CPU counter does: moves, stays put, cannot be read, or there is no supervisor at all. */
@@ -53,7 +54,7 @@ interface Observed {
 
 const quiet: Provider = { cpu: "still", writeEveryMs: null, thinkEveryMs: null, launches: true };
 
-function scripted(provider: Provider) {
+function scripted(provider: Provider, workMs: number) {
   const observed: Observed = { cancels: [], abortedSeen: null, cpuReads: 0 };
 
   const createBroker = (options: BrokerOptions): TransportBroker => {
@@ -77,7 +78,7 @@ function scripted(provider: Provider) {
         const reservation = options.ledger.spendOnGo(reservationIdOf(registration));
         await options.onSpent?.(record, reservation);
         let closed = false;
-        const until = Date.now() + WORK_MS;
+        const until = Date.now() + workMs;
         const stdout = (async function* () {
           while (!closed && Date.now() < until) {
             await delay(provider.writeEveryMs ?? 25);
@@ -87,7 +88,7 @@ function scripted(provider: Provider) {
         return {
           runId: registration.runId, identity: record.identity,
           stdout, stderr: (async function* () {})(),
-          exit: delay(WORK_MS).then(() => ({ code: 0, signal: null })),
+          exit: delay(workMs).then(() => ({ code: 0, signal: null })),
           cancel: async (reason: string) => {
             observed.cancels.push(reason);
             closed = true;
@@ -106,7 +107,7 @@ function scripted(provider: Provider) {
       const runId = registration.runId;
       if (!provider.launches) {
         // Stuck before launch: nothing exists to be active, so only the clock can end this.
-        const until = Date.now() + WORK_MS;
+        const until = Date.now() + workMs;
         while (!signal.aborted && Date.now() < until) await delay(25);
         observed.abortedSeen = signal.aborted;
         return;
@@ -115,7 +116,7 @@ function scripted(provider: Provider) {
       yield { kind: "run.started", seq: 1, runId, hostAt: AT, providerAt: null, adapter: this.id, requestedModel: request.model };
       let seq = 2;
       if (provider.thinkEveryMs !== null) {
-        const until = Date.now() + WORK_MS;
+        const until = Date.now() + workMs;
         while (!signal.aborted && Date.now() < until) {
           await delay(provider.thinkEveryMs);
           yield { kind: "thinking.delta", seq: seq++, runId, hostAt: AT, providerAt: null, text: "considering the next step" };
@@ -132,20 +133,21 @@ function scripted(provider: Provider) {
   return { observed, createBroker, adapterFor: (_entry: unknown, id: string) => new Scripted(id) };
 }
 
-async function produce(provider: Provider): Promise<Observed> {
-  const b = box((config) => { config.runtime.silence_timeout_seconds = 1; });
+async function produce(provider: Provider, windowSeconds = DEFAULT_WINDOW_SECONDS): Promise<Observed> {
+  const b = box((config) => { config.runtime.silence_timeout_seconds = windowSeconds; });
   try {
     const created = await draft(b);
     await prepare(b, created.attemptDir);
     await start(b, created.attemptDir);
-    const script = scripted(provider);
+    // Three windows: a run that is cut off at all is cut off well inside this.
+    const script = scripted(provider, 3 * windowSeconds * 1_000);
     await run(b, created.attemptDir, { ...b.infrastructure, createBroker: script.createBroker, adapterFor: script.adapterFor });
     return script.observed;
   } finally { b.close(); }
 }
 
 test("B1-13: a provider whose group keeps burning CPU through a long silent tool call is not cut off as silent", async () => {
-  const observed = await produce({ ...quiet, cpu: "moving" });
+  const observed = await produce({ ...quiet, cpu: "moving" }, CENSUS_WINDOW_SECONDS);
   assert.deepEqual(observed.cancels.filter((reason) => reason === SILENCE), [],
     "a working group was cancelled as silent: the window never read its CPU");
   assert.equal(observed.abortedSeen, false, "the provider ran its work to the end");
@@ -171,7 +173,7 @@ test("a provider that neither writes nor works trips the window", async () => {
 });
 
 test("a census that cannot see the group is not activity: the quiet provider still trips", async () => {
-  const observed = await produce({ ...quiet, cpu: "blind" });
+  const observed = await produce({ ...quiet, cpu: "blind" }, CENSUS_WINDOW_SECONDS);
   assert.equal(observed.cancels[0], SILENCE);
   assert.equal(observed.abortedSeen, true);
   assert.ok(observed.cpuReads > 0, "the census was attempted");
