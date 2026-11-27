@@ -795,7 +795,13 @@
   background: var(--neu-surface);
   box-shadow: var(--neu-raised);
 }
-.backlog-shell .backlog-groups { grid-area: board; min-width: 0; }
+.backlog-shell > .backlog-content {
+  grid-area: board;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 24px;
+}
 /* Always the four ticket states, so fixed tracks beat auto-fill's empty column. */
 .backlog-shell .backlog-board { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .backlog-column { padding: 14px; }

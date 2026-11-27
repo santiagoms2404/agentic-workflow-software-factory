@@ -120,30 +120,32 @@ function closeTicket(): void {
       <BacklogMetricsRow :groups="groups" :projected-cost="backlog.projectedCost" />
     </div>
     <PlanCardRow v-model:selected="selectedPlans" v-model:filter="planFilter" :plans="backlog.plans" />
-    <BacklogBoard
-      :groups="groups"
-      :collapsed="collapsedPlans"
-      :expanded-columns="expandedColumns"
-      @toggle-plan="toggleCollapsedPlan"
-      @toggle-column="toggleExpandedColumn"
-      @open="openTicket"
-    />
-    <BacklogBoard
-      v-if="light"
-      :groups="[light]"
-      label="Light tickets"
-      :collapsed="lightCollapsed ? [light.plan.id] : []"
-      :expanded-columns="lightExpandedColumns"
-      @toggle-plan="lightCollapsed = !lightCollapsed"
-      @toggle-column="lightExpandedColumns = togglePlan(lightExpandedColumns, $event)"
-      @open="openLightTicket"
-    />
-    <ul v-if="backlog.light?.invalid.length" class="ticket-source-error" aria-label="Invalid light tickets">
-      <li v-for="entry in backlog.light.invalid" :key="entry.file">
-        <code>{{ entry.file }}</code> — invalid: {{ entry.violations.join('; ') }}
-      </li>
-    </ul>
-    <p v-if="backlog.light?.error" class="ticket-source-error">Light tickets unavailable: {{ backlog.light.error }}</p>
+    <div class="backlog-content">
+      <BacklogBoard
+        :groups="groups"
+        :collapsed="collapsedPlans"
+        :expanded-columns="expandedColumns"
+        @toggle-plan="toggleCollapsedPlan"
+        @toggle-column="toggleExpandedColumn"
+        @open="openTicket"
+      />
+      <BacklogBoard
+        v-if="light"
+        :groups="[light]"
+        label="Light tickets"
+        :collapsed="lightCollapsed ? [light.plan.id] : []"
+        :expanded-columns="lightExpandedColumns"
+        @toggle-plan="lightCollapsed = !lightCollapsed"
+        @toggle-column="lightExpandedColumns = togglePlan(lightExpandedColumns, $event)"
+        @open="openLightTicket"
+      />
+      <ul v-if="backlog.light?.invalid.length" class="ticket-source-error" aria-label="Invalid light tickets">
+        <li v-for="entry in backlog.light.invalid" :key="entry.file">
+          <code>{{ entry.file }}</code> — invalid: {{ entry.violations.join('; ') }}
+        </li>
+      </ul>
+      <p v-if="backlog.light?.error" class="ticket-source-error">Light tickets unavailable: {{ backlog.light.error }}</p>
+    </div>
     <TicketSourceOverlay
       v-if="activeTicket"
       :ticket="activeTicket.ticket"
