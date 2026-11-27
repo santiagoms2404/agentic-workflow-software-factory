@@ -5,6 +5,7 @@ import { BUILD_PROMPT_HEADING, ticketSourceView } from "../backlog-view.ts";
 
 const props = defineProps<{
   ticket: BacklogTicket;
+  label?: string;
   source: string | undefined;
   loading: boolean;
   error: string | undefined;
@@ -102,7 +103,7 @@ onUnmounted(() => {
       >
         <header class="ticket-source-dialog-head">
           <div>
-            <p class="eyebrow">{{ ticket.plan }} · {{ ticket.id }}</p>
+            <p class="eyebrow">{{ label ?? ticket.plan }} · {{ ticket.id }}</p>
             <h2 id="ticket-source-title">{{ ticket.title }}</h2>
           </div>
           <button ref="closeControl" type="button" class="ticket-source-close" aria-label="Close ticket source" @click="emit('close')">close</button>

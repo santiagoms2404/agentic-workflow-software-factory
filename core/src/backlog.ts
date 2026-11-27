@@ -1,5 +1,5 @@
 import { basename, dirname } from "node:path";
-import type { CostAuthority } from "../../dashboard/shared/types.ts";
+import type { CostAuthority, LightBacklog } from "../../dashboard/shared/types.ts";
 import { TICKET_STATES, type Ticket, type TicketState, type TicketWorkflow } from "./contracts/ticket.ts";
 import type { PlanTicketReader } from "./persistence/plan-tickets.ts";
 import { TicketDependencyCycleError, type StoredTicket, type TicketStore } from "./persistence/ticket-store.ts";
@@ -161,6 +161,40 @@ function tallyTickets(rows: readonly { readonly state: TicketState; readonly mil
     if (row.tier !== undefined) tier[`T${row.tier}`] += 1;
   }
   return { state, milestone, tier };
+}
+
+function lightBacklog(records: readonly StoredTicket[]): LightBacklog {
+  const tickets = withReadiness(records.flatMap(({ ticket }) => ticket === null ? [] : [{
+    uid: `light/${ticket.id}`,
+    plan: "light",
+    id: ticket.id,
+    title: ticket.title,
+    milestone: ticket.milestone,
+    state: ticket.state,
+    depends_on: ticket.depends_on,
+    tier: ticket.tier,
+    workflow: ticket.workflow,
+  }]));
+  const invalid = records.filter((record) => record.ticket === null).map((record) => ({
+    file: basename(record.path),
+    violations: record.violations.map(({ path, message }) => `${path} ${message}`),
+  }));
+  return {
+    label: "light tier · belongs to no plan",
+    tickets,
+    ready: tickets.filter((ticket) => ticket.ready),
+    counts: { ...tallyTickets(tickets), invalid: invalid.length },
+    invalid,
+  };
+}
+
+export function emptyLightBacklog(): LightBacklog {
+  return lightBacklog([]);
+}
+
+/** Light tickets have their own readiness and do not contribute to plan totals. */
+export async function queryLightBacklog(store: TicketStore): Promise<LightBacklog> {
+  return lightBacklog(await store.load());
 }
 
 /** Plan-aware dashboard projection; dependencies and duplicate ids stay plan-scoped. */

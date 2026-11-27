@@ -495,7 +495,22 @@ export interface BacklogPlan {
   readonly ticketCount: number;
 }
 
+export interface LightTicketInvalid {
+  readonly file: string;
+  readonly violations: readonly string[];
+}
+
+export interface LightBacklog {
+  readonly label: string;
+  readonly tickets: readonly BacklogTicket[];
+  readonly ready: readonly BacklogTicket[];
+  readonly counts: TicketsResponse["counts"] & { readonly invalid: number };
+  readonly invalid: readonly LightTicketInvalid[];
+  readonly error?: string;
+}
+
 export interface TicketsResponse {
+  readonly light: LightBacklog;
   readonly plans: readonly BacklogPlan[];
   readonly tickets: readonly BacklogTicket[];
   readonly ready: readonly BacklogTicket[];
@@ -514,6 +529,14 @@ export interface TicketsResponse {
 export interface TicketSourceResponse {
   readonly uid: string;
   readonly plan: string;
+  readonly ticket: string;
+  /** Complete UTF-8 markdown file, including frontmatter fences. */
+  readonly source: string;
+}
+
+export interface LightTicketSourceResponse {
+  readonly uid: string;
+  readonly light: true;
   readonly ticket: string;
   /** Complete UTF-8 markdown file, including frontmatter fences. */
   readonly source: string;

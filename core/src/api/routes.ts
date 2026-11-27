@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
-import { queryPlanBacklog } from "../backlog.ts";
+import { emptyLightBacklog, queryLightBacklog, queryPlanBacklog } from "../backlog.ts";
+import { lightTicketStore } from "../cli/commands/ticket-selection.ts";
 import { adapterFor } from "../adapters/registry.ts";
 import { PlanTicketReader } from "../persistence/plan-tickets.ts";
 import { loadCatalog } from "../registry/catalog.ts";
@@ -56,6 +58,7 @@ import type {
   GateSummary,
   HealthResponse,
   LifecycleState,
+  LightTicketSourceResponse,
   MetricsResponse,
   PhaseDetailResponse,
   PhaseStatus,
@@ -426,8 +429,8 @@ export function resolveTicketPlanSources(repository = process.cwd()): readonly R
 
 /**
  * The board's resolution. Unlike the CLI's, a checkout with no catalog is not
- * an empty plan set: the board reads catalog plans only, so a light-tier
- * checkout would otherwise show an empty board with nothing said (B2-02).
+ * an empty plan set: the board needs a catalog to locate both its plan sets
+ * and the plans root's separate light store (B2-02).
  */
 interface BoardPlanResolution {
   readonly sources: readonly ResolvedPlanSource[];
@@ -438,8 +441,8 @@ function resolveBoardPlanSources(repository: string): BoardPlanResolution {
   const catalogPath = resolve(repository, CATALOG_FILE);
   const text = readCatalogText(catalogPath);
   if (text === null) {
-    throw new Error(`no ${CATALOG_FILE} in this checkout: the board shows catalog plans only, `
-      + "so light-tier tickets under specs/tickets are listed by `awsf backlog`, not here");
+    throw new Error(`no ${CATALOG_FILE} in this checkout: the board shows catalog plans and their plans root's light tickets, `
+      + "so the flat specs/tickets set here is listed by `awsf backlog --light` and `awsf ticket list --light`, not here");
   }
   const catalog = loadCatalog(text);
   const plansRoot = resolve(repository, catalog.plans.root);
@@ -748,9 +751,32 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
     }),
     settings: safely(() => jsonResponse({ settings: buildEffectiveConfig(options.config) } satisfies SettingsResponse)),
     tickets: safely(async (request) => {
-      const params = searchParams(request, ["plan", "ticket"]);
+      const params = searchParams(request, ["plan", "ticket", "light"]);
       const plan = params.get("plan");
       const ticket = params.get("ticket");
+      const lightId = params.get("light");
+      const repository = options.repository !== undefined || options.planSources === undefined
+        ? resolve(options.repository ?? process.cwd())
+        : null;
+      if (lightId !== null) {
+        if (plan !== null || ticket !== null) {
+          throw new ApiRequestError(400, "invalid-query", "light cannot be supplied with plan or ticket");
+        }
+        if (!/^T\d\d$/u.test(lightId)) {
+          throw new ApiRequestError(400, "invalid-query", "light must be a zero-padded Tnn id");
+        }
+        requireCatalog(currentPlans());
+        if (repository !== null) {
+          const store = await lightTicketStore(repository);
+          try {
+            const source = await readFile(resolve(store.directory, `${lightId}.md`), "utf8");
+            return verbatimJsonResponse({ uid: `light/${lightId}`, light: true, ticket: lightId, source } satisfies LightTicketSourceResponse);
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          }
+        }
+        throw new ApiRequestError(404, "ticket-not-found", "light ticket not found");
+      }
       if ((plan === null) !== (ticket === null)) {
         throw new ApiRequestError(400, "invalid-query", "plan and ticket must be supplied together");
       }
@@ -771,7 +797,15 @@ export function createApiRouter(options: ApiRouterOptions): ApiRouter {
         requireCatalog(planRead).reader,
         backlogSessionCosts(readDb).map((row) => ({ taskId: row.task_id, estimatedCostUsd: row.estimated_cost_usd, costAuthority: row.cost_authority })),
       );
-      return jsonResponse({ ...backlog, ...planReadFlags(planRead) } satisfies TicketsResponse);
+      let light = emptyLightBacklog();
+      if (repository !== null) {
+        try {
+          light = await queryLightBacklog(await lightTicketStore(repository));
+        } catch (error) {
+          light = { ...light, error: planResolutionError(error, repository).message };
+        }
+      }
+      return jsonResponse({ ...backlog, light, ...planReadFlags(planRead) } satisfies TicketsResponse);
     }),
     groups: safely(async (request) => {
       // One route, two shapes, exactly as `tickets` above: the list without a

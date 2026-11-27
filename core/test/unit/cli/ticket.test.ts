@@ -103,8 +103,11 @@ test("catalog default preserves the captured v1 list and backlog baselines after
       argv: ["ticket", "show", "T17", "--state-root", stateRoot], cwd,
       writeOut: (line) => { shown.push(line); }, writeError: (line) => { errors.push(line); },
     }), 0, errors.join("\n"));
-    assert.deepEqual(listed, V1_LIST_BASELINE);
-    assert.deepEqual(backlogged, V1_BACKLOG_BASELINE);
+    const lightCount = /^light tier: todo=\d+ wip=\d+ done=\d+ failed=\d+( invalid=\d+)? in specs\/tickets, which belongs to no plan; read them with --light$/u;
+    assert.deepEqual(listed.slice(0, -1), V1_LIST_BASELINE);
+    assert.deepEqual(backlogged.slice(0, -1), V1_BACKLOG_BASELINE);
+    assert.match(listed.at(-1) ?? "", lightCount);
+    assert.match(backlogged.at(-1) ?? "", lightCount);
     assert.match(shown[0] ?? "", /^T17\tdone\tT2\tPermission profiles, path policy, sandbox broker$/);
     assert.deepEqual(errors, []);
   } finally {

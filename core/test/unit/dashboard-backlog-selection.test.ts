@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { queryPlanBacklog } from "../../src/backlog.ts";
+import { emptyLightBacklog, queryPlanBacklog } from "../../src/backlog.ts";
 import { PlanTicketReader } from "../../src/persistence/plan-tickets.ts";
 import { loadCatalog } from "../../src/registry/catalog.ts";
 import { resolvePlanSources } from "../../src/registry/plan-source.ts";
 import type { BacklogPlan, BacklogTicket, TicketState } from "../../../dashboard/shared/types.ts";
 import {
+  lightGroup,
   selectAllState,
   toggleAllPlans,
   togglePlan,
@@ -63,6 +64,19 @@ test("no selection renders no groups for every filter; full selection reproduces
     groups.map((group) => group.plan.id),
     fullSelection,
   );
+});
+
+test("light group is labelled separately and hides only a store with no valid or invalid files", () => {
+  const empty = emptyLightBacklog();
+  assert.equal(lightGroup(undefined), null);
+  assert.equal(lightGroup(empty), null);
+  const invalidOnly = lightGroup({ ...empty, invalid: [{ file: "T22.md", violations: ["/ missing YAML frontmatter"] }] });
+  assert.equal(invalidOnly?.label, "light tier · belongs to no plan");
+  assert.deepEqual(invalidOnly?.tickets, []);
+  const lightTicket = { ...tickets[0]!, uid: "light/T01", plan: "light" };
+  const group = lightGroup({ ...empty, tickets: [lightTicket], counts: { ...empty.counts, state: counts(1) } });
+  assert.deepEqual(group?.tickets, [lightTicket]);
+  assert.equal(group?.plan.counts.todo, 1);
 });
 
 test("selecting one card renders exactly its group and deselecting it empties the board", () => {

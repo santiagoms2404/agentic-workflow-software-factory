@@ -95,7 +95,10 @@ test("once the default plan's ticket directory exists, only its own tickets are 
     writeFileSync(join(root, "specs", "tickets", "alpha", "T01.md"), ticket("T01", "Alpha first"));
     const { code, output, errors } = await drive(["ticket", "list"], root);
     assert.equal(code, 0, errors.join("\n"));
-    assert.deepEqual(output, ["T01\tdone\tT0\tAlpha first"]);
+    assert.deepEqual(output, [
+      "T01\tdone\tT0\tAlpha first",
+      "light tier: todo=0 wip=0 done=1 failed=0 in specs/tickets, which belongs to no plan; read them with --light",
+    ]);
     assert.deepEqual(errors, []);
   } finally {
     rmSync(root, { recursive: true, force: true });

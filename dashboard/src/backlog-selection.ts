@@ -1,4 +1,4 @@
-import type { BacklogPlan, BacklogTicket } from "../shared/types.ts";
+import type { BacklogPlan, BacklogTicket, LightBacklog } from "../shared/types.ts";
 import {
   selectAllState as filterSelectAllState,
   toggleAllFilterValues,
@@ -12,6 +12,25 @@ export type { SelectAllState } from "./session-filters.ts";
 export interface BacklogGroup {
   readonly plan: BacklogPlan;
   readonly tickets: readonly BacklogTicket[];
+  readonly label?: string;
+}
+
+/** Adapt the light store for the board renderer, not for plan selection or totals. */
+export function lightGroup(light: LightBacklog | undefined): BacklogGroup | null {
+  if (light === undefined || (light.tickets.length === 0 && light.invalid.length === 0)) return null;
+  return {
+    label: light.label,
+    tickets: light.tickets,
+    plan: {
+      id: "light",
+      name: "Light tickets",
+      kind: "spine",
+      parentSpine: null,
+      parentSpineName: null,
+      counts: light.counts.state,
+      ticketCount: light.tickets.length,
+    },
+  };
 }
 
 export function visiblePlans(

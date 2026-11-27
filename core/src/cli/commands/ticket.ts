@@ -40,7 +40,7 @@ export function ticketStoreForPlan(resolved: readonly ResolvedPlanSource[], plan
   return new TicketStore(source.ticketsPath);
 }
 
-function summary(record: StoredTicket): string {
+export function ticketSummary(record: StoredTicket): string {
   if (record.ticket === null) {
     return `${record.path} — invalid: ${record.violations.map((violation) => `${violation.path} ${violation.message}`).join("; ")}`;
   }
@@ -49,13 +49,17 @@ function summary(record: StoredTicket): string {
 
 /** Read commands deliberately expose invalid retained files instead of hiding them. */
 export async function listTickets(store: TicketStore): Promise<readonly string[]> {
-  return (await store.load()).map(summary);
+  return (await store.load()).map(ticketSummary);
+}
+
+export async function findStoredTicket(store: TicketStore, id: string): Promise<StoredTicket | undefined> {
+  return (await store.load()).find((candidate) => candidate.ticket?.id === id || candidate.path.endsWith(`/${id}.md`) || candidate.path.endsWith(`\\${id}.md`));
 }
 
 export async function showTicket(store: TicketStore, id: string): Promise<readonly string[]> {
-  const record = (await store.load()).find((candidate) => candidate.ticket?.id === id || candidate.path.endsWith(`/${id}.md`) || candidate.path.endsWith(`\\${id}.md`));
+  const record = await findStoredTicket(store, id);
   if (record === undefined) throw new TicketNotFound(id);
-  return [summary(record), record.body.trimEnd()];
+  return [ticketSummary(record), record.body.trimEnd()];
 }
 
 /**

@@ -48,7 +48,14 @@ const roleColors = computed(() => readRoleColors(settings.value));
 const backlogPlan = ref<string | null>(null);
 /** The driving session whose tree the groups screen is showing. */
 const selectedGroup = ref<string | null>(null);
-const emptyBacklog = (): TicketsResponse => ({ plans: [], tickets: [], ready: [], counts: { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } }, projectedCost: { usd: null, authority: "unavailable", partial: true } });
+const emptyBacklog = (): TicketsResponse => {
+  const counts = { state: { todo: 0, wip: 0, done: 0, failed: 0 }, milestone: {}, tier: { T0: 0, T1: 0, T2: 0 } };
+  return {
+    plans: [], tickets: [], ready: [], counts,
+    projectedCost: { usd: null, authority: "unavailable", partial: true },
+    light: { label: "light tier · belongs to no plan", tickets: [], ready: [], counts: { ...counts, invalid: 0 }, invalid: [] },
+  };
+};
 const backlog = ref<TicketsResponse>(emptyBacklog());
 /** Said over the board when its catalog does not resolve: refused, or stale (O4). */
 const backlogBanner = ref<PlanBanner | null>(null);

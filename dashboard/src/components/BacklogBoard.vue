@@ -7,6 +7,7 @@ const props = defineProps<{
   groups: readonly BacklogGroup[];
   collapsed: readonly string[];
   expandedColumns: readonly string[];
+  label?: string;
 }>();
 const emit = defineEmits<{
   open: [ticket: BacklogTicket];
@@ -29,7 +30,7 @@ function isColumnExpanded(planId: string, state: TicketState): boolean {
 </script>
 
 <template>
-  <section class="backlog-groups" aria-label="Selected plan backlogs">
+  <section class="backlog-groups" :aria-label="props.label ?? 'Selected plan backlogs'">
     <article
       v-for="group in props.groups"
       :key="group.plan.id"
@@ -47,9 +48,10 @@ function isColumnExpanded(planId: string, state: TicketState): boolean {
             {{ group.plan.name }}
           </button>
         </h2>
+        <span v-if="group.label && isPlanCollapsed(group.plan.id)" class="plan-label">{{ group.label }}</span>
         <template v-if="!isPlanCollapsed(group.plan.id)">
-          <span class="plan-label">{{ group.plan.kind }}</span>
-          <span v-if="group.plan.kind === 'deep'" class="parent-spine-label">parent: {{ group.plan.parentSpineName ?? group.plan.parentSpine }}</span>
+          <span class="plan-label">{{ group.label ?? group.plan.kind }}</span>
+          <span v-if="!group.label && group.plan.kind === 'deep'" class="parent-spine-label">parent: {{ group.plan.parentSpineName ?? group.plan.parentSpine }}</span>
         </template>
         <span v-else class="collapsed-plan-counts" aria-label="Ticket state counts">
           <span v-for="state in states" :key="state"><b>{{ group.plan.counts[state] }}</b> {{ state }}</span>

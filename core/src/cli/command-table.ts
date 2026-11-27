@@ -5,4 +5,4 @@ export const CLI_COMMANDS = Object.freeze([
 ]);
 
 /** Flags that take no value; documentation reconciles against this too. */
-export const CLI_BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence", "json", "advise"]);
+export const CLI_BOOLEAN_FLAGS: ReadonlySet<string> = new Set(["evidence", "json", "advise", "light"]);

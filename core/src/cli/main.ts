@@ -20,6 +20,7 @@ import { SHIFT_TIER_FLOOR, SHIFT_WORKFLOW_ID } from "../workflow/shift/compile.t
 import { processOwnerTerminal, type OwnerTerminal } from "./tty.ts";
 import { adoptCommand } from "./commands/adopt.ts";
 import { backlogCommand } from "./commands/backlog.ts";
+import { alsoLightLine, alsoPlanLine, lightBacklogLines, lightCountLine, lightTierLabel } from "./commands/light-tickets.ts";
 import { cancelCommand } from "./commands/cancel.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { gatherDoctorRows } from "../doctor/gather.ts";
@@ -218,13 +219,13 @@ export class DefaultPlanTicketsMissing extends Error {
 
 interface TicketListing {
   readonly store: ReturnType<typeof ticketStoreFor>;
+  readonly plan?: string;
   /** Printed before the listing when the store is not a resolved plan's set. */
   readonly label?: string;
 }
 
 /** Uses a catalog when present, while retaining the original self-placed store otherwise. */
 async function ticketStoreForList(repository: string, requestedPlan: string | undefined): Promise<TicketListing> {
-  const listing = (store: ReturnType<typeof ticketStoreFor>): TicketListing => ({ store });
   let source: string;
   try {
     source = await readFile(resolve(repository, "awsf.project.yaml"), "utf8");
@@ -243,7 +244,8 @@ async function ticketStoreForList(repository: string, requestedPlan: string | un
   if (planStem === undefined) {
     if (candidates.length > 1) throw new PlanSelectionRequiredError(candidates);
     if (candidates.length === 0) throw new Error(`catalog ${JSON.stringify(resolve(repository, "awsf.project.yaml"))} resolved no plan sources`);
-    return listing(ticketStoreForPlan(resolved, candidates[0]!));
+    const plan = candidates[0]!;
+    return { store: ticketStoreForPlan(resolved, plan), plan };
   }
 
   const store = ticketStoreForPlan(resolved, planStem);
@@ -255,7 +257,19 @@ async function ticketStoreForList(repository: string, requestedPlan: string | un
   if (!existsSync(store.directory) && planStem === catalog.plans.default) {
     throw new DefaultPlanTicketsMissing(planStem, store.directory);
   }
-  return listing(store);
+  return { store, plan: planStem };
+}
+
+async function ticketReadSelection(repository: string, flags: ParsedArgs["flags"]): Promise<TicketListing> {
+  if (flags.light !== "true") return ticketStoreForList(repository, flags.plan);
+  if (flags.plan !== undefined) {
+    throw new Error("--light reads the flat light store, which belongs to no plan; it cannot be combined with --plan");
+  }
+  const store = await lightTicketStore(repository);
+  const label = existsSync(resolve(repository, "awsf.project.yaml"))
+    ? lightTierLabel(repository, store)
+    : lightTierListingLabel(undefined);
+  return { store, label };
 }
 
 function ownerTerminal(provided: OwnerTerminal | undefined): OwnerTerminal {
@@ -413,11 +427,18 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       return 0;
     }
     if (command === "backlog") {
-      if (parsed.positionals.length !== 0) throw new Error("usage: awsf backlog [--state-root PATH] [--plan <stem>]");
+      if (parsed.positionals.length !== 0) throw new Error("usage: awsf backlog [--state-root PATH] [--plan <stem> | --light]");
       try {
-        const listing = await ticketStoreForList(cwd, parsed.flags.plan);
+        const listing = await ticketReadSelection(cwd, parsed.flags);
         if (listing.label !== undefined) out(listing.label);
-        for (const line of await backlogCommand(listing.store, resolve(stateRoot, "awsf.db"))) out(line);
+        const lines = listing.plan === undefined
+          ? await lightBacklogLines(listing.store)
+          : await backlogCommand(listing.store, resolve(stateRoot, "awsf.db"));
+        for (const line of lines) out(line);
+        if (listing.plan !== undefined) {
+          const light = await lightCountLine(cwd);
+          if (light !== null) out(light);
+        }
         return 0;
       } catch (error) {
         if (!(error instanceof PlanSelectionRequiredError)) throw error;
@@ -429,9 +450,13 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
       const action = parsed.positionals[0];
       if (action === "list" && parsed.positionals.length === 1) {
         try {
-          const listing = await ticketStoreForList(cwd, parsed.flags.plan);
+          const listing = await ticketReadSelection(cwd, parsed.flags);
           if (listing.label !== undefined) out(listing.label);
           for (const line of await listTickets(listing.store)) out(line);
+          if (listing.plan !== undefined) {
+            const light = await lightCountLine(cwd);
+            if (light !== null) out(light);
+          }
           return 0;
         } catch (error) {
           if (!(error instanceof PlanSelectionRequiredError)) throw error;
@@ -440,13 +465,27 @@ export async function main(options: CliMainOptions = {}): Promise<number> {
         }
       }
       if (action === "show" && parsed.positionals.length === 2) {
-        const listing = await ticketStoreForList(cwd, parsed.flags.plan);
+        const listing = await ticketReadSelection(cwd, parsed.flags);
+        const id = parsed.positionals[1]!;
         if (listing.label !== undefined) out(listing.label);
-        for (const line of await showTicket(listing.store, parsed.positionals[1]!)) out(line);
+        for (const line of await showTicket(listing.store, id)) out(line);
+        if (listing.plan !== undefined) {
+          const other = await alsoLightLine(cwd, listing.plan, id);
+          if (other !== null) out(other);
+        } else if (parsed.flags.light === "true") {
+          // An explicit light read does not depend on plan resolution succeeding.
+          try {
+            const plan = await ticketStoreForList(cwd, undefined);
+            if (plan.plan !== undefined) {
+              const other = await alsoPlanLine(plan.store, plan.plan, id);
+              if (other !== null) out(other);
+            }
+          } catch { /* No readable default plan to name. */ }
+        }
         return 0;
       }
       if (action !== "new" && action !== "refine") {
-        throw new Error("usage: awsf ticket <new ID INTENT|refine ID INTENT|list|show ID>");
+        throw new Error("usage: awsf ticket <new ID INTENT|refine ID INTENT|list [--light]|show ID [--light]>");
       }
       const id = parsed.positionals[1] ?? "";
       const intent = parsed.positionals.slice(2).join(" ");

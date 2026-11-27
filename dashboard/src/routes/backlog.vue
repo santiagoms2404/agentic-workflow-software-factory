@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { BacklogTicket, TicketSourceResponse, TicketsResponse } from "../../shared/types.ts";
-import { initialPlanSelection, togglePlan, visibleGroups as selectVisibleGroups, type PlanFilter } from "../backlog-selection.ts";
+import type { BacklogTicket, LightTicketSourceResponse, TicketSourceResponse, TicketsResponse } from "../../shared/types.ts";
+import { initialPlanSelection, lightGroup, togglePlan, visibleGroups as selectVisibleGroups, type PlanFilter } from "../backlog-selection.ts";
 import { admitNewFilterValues } from "../session-filters.ts";
 import BacklogBoard from "../components/BacklogBoard.vue";
 import BacklogMetricsRow from "../components/BacklogMetricsRow.vue";
@@ -17,7 +17,9 @@ let hasSeededSelection = false;
 /** The plan the URL named when the selection was last seeded. */
 let appliedRequest: string | null = null;
 const planFilter = ref<PlanFilter>("both");
-const activeTicket = ref<BacklogTicket | null>(null);
+const activeTicket = ref<{ ticket: BacklogTicket; light: boolean } | null>(null);
+const lightCollapsed = ref(false);
+const lightExpandedColumns = ref<readonly string[]>([]);
 const ticketSources = ref<Readonly<Record<string, string>>>({});
 const loadingSources = ref<readonly string[]>([]);
 const sourceErrors = ref<Readonly<Record<string, string>>>({});
@@ -49,29 +51,42 @@ const groups = computed(() => selectVisibleGroups(
   planFilter.value,
 ));
 
-async function loadSource(ticket: BacklogTicket, refresh = false): Promise<void> {
-  if (!refresh && ticketSources.value[ticket.uid] !== undefined) return;
-  if (loadingSources.value.includes(ticket.uid)) return;
+const light = computed(() => lightGroup(props.backlog.light));
+
+function sourceKey(ticket: BacklogTicket, light: boolean): string {
+  return `${light ? "light" : "plan"}:${ticket.uid}`;
+}
+
+const activeSourceKey = computed(() => activeTicket.value === null ? "" : sourceKey(activeTicket.value.ticket, activeTicket.value.light));
+
+async function loadSource(ticket: BacklogTicket, refresh = false, light = false): Promise<void> {
+  const key = sourceKey(ticket, light);
+  if (!refresh && ticketSources.value[key] !== undefined) return;
+  if (loadingSources.value.includes(key)) return;
   if (refresh) {
-    const { [ticket.uid]: _priorSource, ...remainingSources } = ticketSources.value;
+    const { [key]: _priorSource, ...remainingSources } = ticketSources.value;
     ticketSources.value = remainingSources;
   }
-  loadingSources.value = [...loadingSources.value, ticket.uid];
-  const { [ticket.uid]: _priorError, ...remainingErrors } = sourceErrors.value;
+  loadingSources.value = [...loadingSources.value, key];
+  const { [key]: _priorError, ...remainingErrors } = sourceErrors.value;
   sourceErrors.value = remainingErrors;
   try {
-    const response = await fetch(`/api/v1/tickets?plan=${encodeURIComponent(ticket.plan)}&ticket=${encodeURIComponent(ticket.id)}`);
+    const response = await fetch(light
+      ? `/api/v1/tickets?light=${encodeURIComponent(ticket.id)}`
+      : `/api/v1/tickets?plan=${encodeURIComponent(ticket.plan)}&ticket=${encodeURIComponent(ticket.id)}`);
     if (!response.ok) throw new Error("Ticket source unavailable");
-    const payload = await response.json() as TicketSourceResponse;
-    if (payload.uid !== ticket.uid) throw new Error("Ticket source did not match the selected ticket");
-    ticketSources.value = { ...ticketSources.value, [ticket.uid]: payload.source };
+    const payload = await response.json() as TicketSourceResponse | LightTicketSourceResponse;
+    if (payload.uid !== ticket.uid || ("light" in payload) !== light) {
+      throw new Error("Ticket source did not match the selected ticket");
+    }
+    ticketSources.value = { ...ticketSources.value, [key]: payload.source };
   } catch (error) {
     sourceErrors.value = {
       ...sourceErrors.value,
-      [ticket.uid]: error instanceof Error ? error.message : "Ticket source unavailable",
+      [key]: error instanceof Error ? error.message : "Ticket source unavailable",
     };
   } finally {
-    loadingSources.value = loadingSources.value.filter((uid) => uid !== ticket.uid);
+    loadingSources.value = loadingSources.value.filter((pending) => pending !== key);
   }
 }
 
@@ -84,8 +99,13 @@ function toggleExpandedColumn(columnId: string): void {
 }
 
 function openTicket(ticket: BacklogTicket): void {
-  activeTicket.value = ticket;
   void loadSource(ticket, true);
+  activeTicket.value = { ticket, light: false };
+}
+
+function openLightTicket(ticket: BacklogTicket): void {
+  activeTicket.value = { ticket, light: true };
+  void loadSource(ticket, true, true);
 }
 
 function closeTicket(): void {
@@ -108,12 +128,29 @@ function closeTicket(): void {
       @toggle-column="toggleExpandedColumn"
       @open="openTicket"
     />
+    <BacklogBoard
+      v-if="light"
+      :groups="[light]"
+      label="Light tickets"
+      :collapsed="lightCollapsed ? [light.plan.id] : []"
+      :expanded-columns="lightExpandedColumns"
+      @toggle-plan="lightCollapsed = !lightCollapsed"
+      @toggle-column="lightExpandedColumns = togglePlan(lightExpandedColumns, $event)"
+      @open="openLightTicket"
+    />
+    <ul v-if="backlog.light?.invalid.length" class="ticket-source-error" aria-label="Invalid light tickets">
+      <li v-for="entry in backlog.light.invalid" :key="entry.file">
+        <code>{{ entry.file }}</code> — invalid: {{ entry.violations.join('; ') }}
+      </li>
+    </ul>
+    <p v-if="backlog.light?.error" class="ticket-source-error">Light tickets unavailable: {{ backlog.light.error }}</p>
     <TicketSourceOverlay
       v-if="activeTicket"
-      :ticket="activeTicket"
-      :source="ticketSources[activeTicket.uid]"
-      :loading="loadingSources.includes(activeTicket.uid)"
-      :error="sourceErrors[activeTicket.uid]"
+      :ticket="activeTicket.ticket"
+      :label="activeTicket.light ? light?.label ?? 'light tier' : activeTicket.ticket.plan"
+      :source="ticketSources[activeSourceKey]"
+      :loading="loadingSources.includes(activeSourceKey)"
+      :error="sourceErrors[activeSourceKey]"
       @close="closeTicket"
     />
   </main>
