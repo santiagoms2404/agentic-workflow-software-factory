@@ -19,7 +19,7 @@ The order of Q40 stands: A12, W04, W08, W16.
 
 ## 2. Rulings
 
-Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this record was read, and section 7 keeps their alternatives. Q136 to Q138 came from the first two tickets. Q139 to Q143 came from T22, T23 and OC4, and were ruled as recommended on 2026-11-26.
+Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this record was read, and section 7 keeps their alternatives. Q136 to Q138 came from the first two tickets. Q139 to Q143 came from T22, T23 and OC4, and were ruled as recommended on 2026-11-26. Q144 and Q145 came from T31 and T33, and were ruled as recommended on 2026-11-27.
 
 | Code | Question | Ruling |
 | --- | --- | --- |
@@ -50,6 +50,8 @@ Made on 2026-11-25, all as recommended. Q130 to Q135 were ruled after this recor
 | Q141 | T23's ratchet: does "the list may only shrink" need a check against the previous list? | No. The ratchet holds an exact list, and review catches a list that grows. T25, its first user, decides whether to compare with the base commit's list. |
 | Q142 | Where does the fix for close's index go? | T32. Until it lands, one plain `git status` after each close. |
 | Q143 | Do the land, close and publish commands join tier 2 with their folders? | Yes, by file, in OC4. |
+| Q144 | T31's first candidate drew the light group over a plan's group: land and follow up, or rework? | One raise and an owner rework, which re-runs only the builder. |
+| Q145 | A third silence test races its launch (F1 of T33) | Light ticket T34. |
 
 ## 3. Corrections and findings
 
@@ -103,6 +105,17 @@ T22 landed as `3d4b505` and closed in `88d698b`. T23's second attempt landed as 
 
 Measured: the unit gate took 315 s in T22's run, 408 s in T23's first attempt and 326 s in its second.
 
+### What T32, T33 and T31 showed
+
+T32 landed as `53fa568` and closed in `68f21b3`. Its review accepted with no finding, and each of seven changes the driver planted in its code turned a test red. T33 landed as `fea350b` and closed in `86d9214`. Under a 2 s stall in the stub's launch, its two tests fail at the base and pass at the candidate. T31 landed as `e00506f` with the rework `97c59c4` and closed in `94c1a33`. T33 and T31 are tier 1, so the driver's check took the review's place. The builder of all three was `gpt-6.2-sol` at high.
+
+| Code | Finding | Answer |
+| --- | --- | --- |
+| F1 of T33 | The output-bytes test at `liveness-silence-b1-13.test.ts:163` also races its 1 s launch window. Under a 2 s stall it fails at the base and at `fea350b`. T33's ticket counted two such tests. | T34 (Q145) |
+| F1 of T31 | The first candidate put a second backlog board in the plan board's grid cell (`morphism.css:798`), so the light group hid awsf-plan's group, and the list of invalid light files fell under the rail. | Q144. The rework puts both boards and the list in one element in the board area. |
+| F2 of T31 | The rework's commit carries AWSF's generic message, "fix: address owner rework request", and not what changed. | recorded, no ticket yet |
+| Ask during T31 | The owner asked for a light choice in the backlog's filter, beside all, spine and deep. It stayed out of the rework, which had one call. | T35 |
+
 ## 4. Order
 
 | Step | What | Who | Codes |
@@ -116,7 +129,8 @@ Measured: the unit gate took 315 s in T22's run, 408 s in T23's first attempt an
 | 7 | T22 | done | LC1, LS1, LS2, NF29 |
 | 8 | T23 | done | LC3, K47, invariants 1, 2 and 13 |
 | 8a | OC4: the risk map and the credential patterns | done, `258ca3c` and `0921029`, with no attempt open | IM13, Q143 |
-| 9 | T32, then T33, then T31 | factory | F1 to F4 of T20, F1 of T22, F1 and F4 of T23, NF36 |
+| 9 | T32, then T33, then T31 | done | F1 to F4 of T20, F1 of T22, F1 and F4 of T23, NF36 |
+| 9a | T34 and T35, in any gap | factory | F1 of T33, the owner's ask during T31 |
 | 10 | W04's deep plan, authored through the factory | factory | |
 | 11 | OC2: linter and its configuration | owner commit | IM5 |
 | 12 | T24 to T30, in any gap | factory | IM2, IM5, IM6, IM12, Q121, DC4, Q113, Q129 |
@@ -166,7 +180,9 @@ Nothing of the evaluation, the October sort or the open questions is left out.
 | F1 to F4 of T20 | A ticket edit never costs a paid reply | T32, before W04 | journeys and mutants | |
 | F1 of T22 | Every spelling of a raw containment prefix | T32 | fence 4, with each spelling planted | 8 sites |
 | F4 of T23 | Close keeps the index's file stats | T32 | a test that reads the index after a close | 18 s against 3 s |
-| F1 of T23 | The silence tests race their own launch | T33 | a planted 2 s stall | 2 tests |
+| F1 of T23 | The silence tests race their own launch | T33, done | a planted 2 s stall | 2 tests |
+| F1 of T33 | The third silence test that must not trip | T34 | a planted 2 s stall | 1 test |
+| Ask during T31 | A light choice in the backlog's filter | T35 | the selection tests, one per choice | 3 choices |
 | NF36 | Light tickets can be seen | T31 | the list, the route and the screen | 0 of 13 |
 | Q129 | Publish after close | T30 | the publish fences | |
 
